@@ -34,7 +34,8 @@ Decision rule
 * Exit 0: every scan complete, no finding at or above ``--level`` (default
   ``high``) except those covered by a valid exception.
 * Exit 1: at least one blocking finding or an expired exception.
-* Exit 2: the check is incomplete — app image given without a valid digest or
+* Exit 2: the check is incomplete — exceptions file unusable (see below),
+  app image given without a valid digest or
   missing despite ``--require-app-image``, scanner image not
   pinned, no third-party image in the compose file, failed index lookup or a
   mandatory platform not published, docker/Trivy, database or registry error,
@@ -45,10 +46,13 @@ Decision rule
 * Findings with severity ``UNKNOWN`` are listed as unrated and do not block.
 
 Exceptions live in ``scripts/image_scan_exceptions.json``: ``vulnerability``
-(CVE/GHSA id), optional ``image`` (repository without tag/digest) and
-``package``, ``target`` (the binary, e.g. ``/usr/local/bin/gosu``; required to
-cover a finding outside the OS packages), plus ``reason`` and ``expires`` (``YYYY-MM-DD``, valid through
-that day). An expired entry fails the gate even if the finding is gone.
+(CVE/GHSA id), ``image`` (repository without tag/digest) and ``package`` (both
+required, so an entry never covers an id in every image), ``target`` (the
+binary, e.g. ``/usr/local/bin/gosu``; required to cover a finding outside the
+OS packages), plus ``reason`` and ``expires`` (``YYYY-MM-DD``, valid through
+that day, at most ``MAX_EXCEPTION_DAYS`` days after the current UTC date). An
+expired entry fails the gate even if the finding is gone; an entry without
+image or package or with a longer runtime makes the check incomplete (exit 2).
 
 Reports: ``image-scan-report.json`` (machine-readable), ``image-scan-summary.txt``
 (short text) and the raw Trivy output per scan in ``--out-dir``.
@@ -79,6 +83,8 @@ APP_REPOSITORY = "ghcr.io/anlaufstelle/app"
 APP_NOT_SCANNED = "not scanned here — required in the release workflow before signing"
 COMPOSE_FILE = ROOT / "docker-compose.prod.yml"
 EXCEPTIONS_FILE = ROOT / "scripts" / "image_scan_exceptions.json"
+# An exception is a decision with a deadline, not a permanent waiver.
+MAX_EXCEPTION_DAYS = 90
 DEFAULT_PLATFORMS = ("linux/amd64", "linux/arm64")
 SEVERITIES = ("low", "medium", "high", "critical")
 SUPERCRONIC = "usr/local/bin/supercronic"
@@ -146,7 +152,7 @@ def published_platforms(ref: str) -> set[str]:
     return platforms
 
 
-def load_exceptions(path: Path) -> list[dict]:
+def load_exceptions(path: Path, today: dt.date) -> list[dict]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -156,13 +162,19 @@ def load_exceptions(path: Path) -> list[dict]:
         raise IncompleteScanError(f"exceptions file {path}: 'exceptions' list missing")
     parsed = []
     for index, entry in enumerate(entries):
-        fields = ("vulnerability", "reason", "expires")
+        fields = ("vulnerability", "image", "package", "reason", "expires")
         if not isinstance(entry, dict) or any(not str(entry.get(f, "")).strip() for f in fields):
             raise IncompleteScanError(f"exceptions file {path}: entry {index} needs non-empty {', '.join(fields)}")
         try:
             expires = dt.date.fromisoformat(entry["expires"])
         except (TypeError, ValueError) as exc:
             raise IncompleteScanError(f"exceptions file {path}: entry {index} has no valid expiry date") from exc
+        latest = today + dt.timedelta(days=MAX_EXCEPTION_DAYS)
+        if expires > latest:
+            raise IncompleteScanError(
+                f"exceptions file {path}: entry {index} expires {expires.isoformat()}, more than "
+                f"{MAX_EXCEPTION_DAYS} days after {today.isoformat()} (latest allowed: {latest.isoformat()})"
+            )
         if "target" in entry and not str(entry["target"]).strip():
             raise IncompleteScanError(f"exceptions file {path}: entry {index} has an empty target")
         parsed.append({**entry, "expires": expires})
@@ -273,7 +285,7 @@ def _covers(entry: dict, finding: dict, repository: str, today: dt.date) -> bool
     """
     if entry["vulnerability"] != finding["id"] or entry["expires"] < today:
         return False
-    if entry.get("image", repository) != repository or entry.get("package", finding["package"]) != finding["package"]:
+    if entry["image"] != repository or entry["package"] != finding["package"]:
         return False
     target = str(entry.get("target", "")).lstrip("/")
     if finding.get("class") != "os-pkgs" and not target:
@@ -369,7 +381,7 @@ def main(argv: list[str] | None = None) -> int:
             raise IncompleteScanError(
                 "app image missing — --require-app-image needs --app-image <repo>@sha256:<digest>"
             )
-        exceptions = load_exceptions(args.exceptions)
+        exceptions = load_exceptions(args.exceptions, today)
         # Third-party images are scanned on the platforms their index publishes;
         # linux/amd64 and, for the app image, every requested platform are mandatory.
         plan: list[tuple[str, str, list[str]]] = []
@@ -414,7 +426,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     expired = [
-        f"{e['vulnerability']} ({e.get('image', 'any image')}) expired on {e['expires'].isoformat()}"
+        f"{e['vulnerability']} ({e['image']}) expired on {e['expires'].isoformat()}"
         for e in exceptions
         if e["expires"] < today
     ]

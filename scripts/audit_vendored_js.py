@@ -14,8 +14,10 @@ never narrowed down locally.
 
 Exceptions live in ``scripts/vendor_js_advisory_exceptions.json``: package,
 advisory (GHSA id or numeric registry id), reason and an expiry date
-(``YYYY-MM-DD``, valid through that day). An expired entry fails the gate even
-when the advisory is gone — the file has to be cleaned up.
+(``YYYY-MM-DD``, valid through that day, at most ``MAX_EXCEPTION_DAYS`` days
+after the current UTC date; a longer runtime makes the check incomplete). An
+expired entry fails the gate even when the advisory is gone — the file has to
+be cleaned up.
 
 Exit codes: 0 = no blocking finding · 1 = blocking finding or expired
 exception · 2 = check incomplete (inventory, exceptions file, network, HTTP or
@@ -48,6 +50,8 @@ EXCEPTIONS_FILE = ROOT / "scripts" / "vendor_js_advisory_exceptions.json"
 # npm's severity ladder; ``--audit-level=X`` blocks X and everything above it.
 SEVERITIES = ("info", "low", "moderate", "high", "critical")
 GHSA_RE = re.compile(r"GHSA(?:-[0-9a-z]{4}){3}")
+# An exception is a decision with a deadline, not a permanent waiver.
+MAX_EXCEPTION_DAYS = 90
 
 Fetch = Callable[[str, bytes, float], bytes]
 
@@ -95,7 +99,7 @@ def advisory_key(advisory: dict) -> str:
     return match.group(0) if match else str(advisory["id"])
 
 
-def load_exceptions(path: Path) -> list[dict]:
+def load_exceptions(path: Path, today: dt.date) -> list[dict]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -112,6 +116,12 @@ def load_exceptions(path: Path) -> list[dict]:
             expires = dt.date.fromisoformat(entry["expires"])
         except (TypeError, ValueError) as exc:
             raise IncompleteCheckError(f"exceptions file {path}: entry {index} has no valid expiry date") from exc
+        latest = today + dt.timedelta(days=MAX_EXCEPTION_DAYS)
+        if expires > latest:
+            raise IncompleteCheckError(
+                f"exceptions file {path}: entry {index} expires {expires.isoformat()}, more than "
+                f"{MAX_EXCEPTION_DAYS} days after {today.isoformat()} (latest allowed: {latest.isoformat()})"
+            )
         parsed.append({**entry, "expires": expires})
     return parsed
 
@@ -196,7 +206,7 @@ def main(argv: list[str] | None = None, *, fetch: Fetch = http_post) -> int:
     exceptions_path = args.exceptions or args.root / EXCEPTIONS_FILE.relative_to(ROOT)
     today = dt.datetime.now(dt.UTC).date()
     try:
-        exceptions = load_exceptions(exceptions_path)
+        exceptions = load_exceptions(exceptions_path, today)
         if args.check_exceptions:
             expired = [e for e in exceptions if e["expires"] < today]
             for entry in expired:

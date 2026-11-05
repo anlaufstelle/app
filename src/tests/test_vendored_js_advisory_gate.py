@@ -12,6 +12,7 @@ HTTP and JSON errors as well as an unusable inventory exit with code 2.
 
 from __future__ import annotations
 
+import datetime as dt
 import http.client
 import http.server
 import importlib.util
@@ -30,6 +31,8 @@ pytestmark = pytest.mark.architecture
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "audit_vendored_js.py"
 INVENTORY = REPO_ROOT / "scripts" / "vendor_js_inventory.json"
+# Exceptions may run at most 90 days; fixtures expire well inside that window.
+VALID_UNTIL = (dt.datetime.now(dt.UTC).date() + dt.timedelta(days=30)).isoformat()
 
 
 def _module():
@@ -301,7 +304,7 @@ class TestExceptions:
             "package": "sortablejs",
             "advisory": "GHSA-aaaa-bbbb-cccc",
             "reason": "Affected API is not used; upstream fix pending.",
-            "expires": "2999-12-31",
+            "expires": VALID_UNTIL,
         }
         return entry | overrides
 
@@ -310,7 +313,7 @@ class TestExceptions:
         assert _run(tmp_path, registry, exceptions=[self._entry()]) == 0
         out = capsys.readouterr().out
         assert "GHSA-aaaa-bbbb-cccc" in out
-        assert "2999-12-31" in out
+        assert VALID_UNTIL in out
         assert "Affected API is not used" in out
 
     def test_expired_exception_blocks(self, tmp_path, capsys):
@@ -332,6 +335,28 @@ class TestExceptions:
     )
     def test_malformed_exception_fails(self, tmp_path, overrides):
         assert _run(tmp_path, FakeRegistry({}), exceptions=[self._entry(**overrides)]) == 2
+
+    def test_expiry_far_in_the_future_fails(self, tmp_path, capsys):
+        registry = FakeRegistry({"sortablejs": [_advisory("critical")]})
+        assert _run(tmp_path, registry, exceptions=[self._entry(expires="9999-12-31")]) == 2
+        assert "more than 90 days" in capsys.readouterr().err
+        assert registry.requests == []
+
+    def test_expiry_far_in_the_future_fails_the_exceptions_check(self, tmp_path):
+        path = _exceptions_file(tmp_path, [self._entry(expires="9999-12-31")])
+        argv = ["--audit-level", "moderate", "--check-exceptions", "--exceptions", str(path)]
+        assert _module().main(argv, fetch=FakeRegistry({})) == 2
+
+    @pytest.mark.parametrize(("days", "valid"), [(0, True), (90, True), (91, False), (3650, False)])
+    def test_expiry_is_capped_at_90_days_after_today(self, tmp_path, days, valid):
+        module = _module()
+        today = dt.date(2026, 11, 5)
+        path = _exceptions_file(tmp_path, [self._entry(expires=(today + dt.timedelta(days=days)).isoformat())])
+        if valid:
+            assert module.load_exceptions(path, today)[0]["expires"] == today + dt.timedelta(days=days)
+        else:
+            with pytest.raises(module.IncompleteCheckError, match="more than 90 days"):
+                module.load_exceptions(path, today)
 
     def test_missing_exceptions_file_fails(self, tmp_path):
         argv = ["--audit-level", "moderate", "--exceptions", str(tmp_path / "absent.json")]

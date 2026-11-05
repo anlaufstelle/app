@@ -12,6 +12,7 @@ supercronic) exits with code 2 and never looks like a clean result.
 
 from __future__ import annotations
 
+import datetime as dt
 import importlib.util
 import json
 import os
@@ -31,6 +32,8 @@ COMPOSE = REPO_ROOT / "docker-compose.prod.yml"
 APP = "ghcr.io/anlaufstelle/app@sha256:" + "a" * 64
 TRIVY = "aquasec/trivy@sha256:" + "b" * 64
 PLATFORMS = ("linux/amd64", "linux/arm64")
+# Exceptions may run at most 90 days; fixtures expire well inside that window.
+VALID_UNTIL = (dt.datetime.now(dt.UTC).date() + dt.timedelta(days=30)).isoformat()
 
 STUB = r"""#!/usr/bin/env python3
 import json, os, sys
@@ -183,6 +186,13 @@ def _run(tmp_path, *args, scans=None, env=None, app=APP, trivy=TRIVY, exceptions
     return result, calls, out
 
 
+def _load_module():
+    spec = importlib.util.spec_from_file_location("scan_images_under_test", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _scan_calls(calls):
     return sorted((c[-1], c[c.index("--platform") + 1]) for c in calls if "--platform" in c)
 
@@ -282,7 +292,7 @@ class TestExceptions:
             "image": "ghcr.io/anlaufstelle/app",
             "package": "openssl",
             "reason": "Not reachable: the affected function is unused; fixed package pending.",
-            "expires": "2999-12-31",
+            "expires": VALID_UNTIL,
         } | overrides
 
     def _scans(self):
@@ -292,7 +302,7 @@ class TestExceptions:
         result, _, out = _run(tmp_path, scans=self._scans(), exceptions=[self._entry()])
         assert result.returncode == 0, result.stderr
         summary = (out / "image-scan-summary.txt").read_text()
-        assert "2999-12-31" in summary and "Not reachable" in summary
+        assert VALID_UNTIL in summary and "Not reachable" in summary
 
     def test_expired_exception_blocks(self, tmp_path):
         result, _, _ = _run(tmp_path, scans=self._scans(), exceptions=[self._entry(expires="2000-01-01")])
@@ -307,6 +317,39 @@ class TestExceptions:
         result, _, _ = _run(tmp_path, exceptions=[self._entry(reason="")])
         assert result.returncode == 2
 
+    @pytest.mark.parametrize("field", ["image", "package"])
+    @pytest.mark.parametrize("value", [None, "", "  "], ids=["absent", "empty", "blank"])
+    def test_exception_without_image_or_package_is_rejected(self, tmp_path, field, value):
+        """An entry without image or package would cover the id in every image and package."""
+        entry = self._entry()
+        if value is None:
+            del entry[field]
+        else:
+            entry[field] = value
+        result, calls, _ = _run(tmp_path, scans=self._scans(), exceptions=[entry])
+        assert result.returncode == 2, result.stdout + result.stderr
+        assert "needs non-empty" in result.stderr and field in result.stderr
+        assert not _scan_calls(calls)
+
+    def test_expiry_far_in_the_future_is_rejected(self, tmp_path):
+        result, calls, _ = _run(tmp_path, scans=self._scans(), exceptions=[self._entry(expires="9999-12-31")])
+        assert result.returncode == 2, result.stdout + result.stderr
+        assert "more than 90 days" in result.stderr
+        assert not _scan_calls(calls)
+
+    @pytest.mark.parametrize(("days", "valid"), [(0, True), (90, True), (91, False), (3650, False)])
+    def test_expiry_is_capped_at_90_days_after_today(self, tmp_path, days, valid):
+        module = _load_module()
+        today = dt.date(2026, 11, 5)
+        path = tmp_path / "exceptions.json"
+        entry = self._entry(expires=(today + dt.timedelta(days=days)).isoformat())
+        path.write_text(json.dumps({"exceptions": [entry]}))
+        if valid:
+            assert module.load_exceptions(path, today)[0]["expires"] == today + dt.timedelta(days=days)
+        else:
+            with pytest.raises(module.IncompleteScanError, match="more than 90 days"):
+                module.load_exceptions(path, today)
+
     def test_versioned_exceptions_file_is_valid(self, tmp_path):
         data = json.loads((REPO_ROOT / "scripts" / "image_scan_exceptions.json").read_text())
         assert isinstance(data["exceptions"], list)
@@ -316,7 +359,8 @@ class TestExceptions:
         spec = importlib.util.spec_from_file_location("scan_images_exc", SCRIPT)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        entries = module.load_exceptions(REPO_ROOT / "scripts" / "image_scan_exceptions.json")
+        today = dt.datetime.now(dt.UTC).date()
+        entries = module.load_exceptions(REPO_ROOT / "scripts" / "image_scan_exceptions.json", today)
         compose_repos = {ref.split("@")[0].split(":")[0] for ref in _compose_images()}
         for entry in entries:
             assert entry.get("image") in compose_repos, entry
@@ -600,7 +644,7 @@ class TestBinaryScopedExceptions:
             "package": "stdlib",
             "target": "/usr/local/bin/gosu",
             "reason": "Helper that only runs in the entrypoint.",
-            "expires": "2999-12-31",
+            "expires": VALID_UNTIL,
         } | overrides
 
     def _scans(self, targets):
