@@ -620,20 +620,24 @@ Alle `uses:`-Referenzen in allen Workflows zeigen auf **40-stellige Commit-SHAs*
 
 ### Branch-Schutz und Maintainer-Nachweis
 
-Branch-Schutz/Rulesets stehen für das private Dev-Repo ohne GitHub Pro nicht zur Verfügung; Ersatz sind lokale Gates, signierte Tags und der Release-Dry-Run. Für das öffentliche app-Repo ist ein Ruleset vorgesehen: kein Force-Push, keine Löschung.
+Branch-Schutz/Rulesets stehen für das private Dev-Repo ohne GitHub Pro nicht zur Verfügung; Ersatz sind lokale Gates, signierte Tags und der Release-Dry-Run. Für das öffentliche app-Repo ist ein Ruleset vorgesehen: kein Force-Push, keine Löschung. Eingerichtet sind dafür zwei Rulesets auf dem Default-Branch (`~DEFAULT_BRANCH`, also `refs/heads/main`), beide mit `enforcement: active`.
 
-Der Nachweis der aktiven Einstellung erfolgt über die Maintainer-Checkliste #1597. Der lokale Quellbaum belegt keine aktive GitHub-Einstellung; diese Dokumentation behauptet keine eigene Prüfung des Rulesets. Vorgesehen sind zwei getrennte Rulesets auf `refs/heads/main`; die Tabelle ist eine Sollvorgabe, kein Aktivierungsnachweis:
+Der Nachweis der aktiven Einstellung erfolgt über die Maintainer-Checkliste #1597. Der lokale Quellbaum belegt keine aktive GitHub-Einstellung; diese Dokumentation beschreibt den eingerichteten Stand und behauptet keine eigene Prüfung des Rulesets. Die Tabelle ersetzt den Nachweis am Ticket nicht:
 
-| Ruleset / Regel | Vorgesehener Wert |
-|---|---|
-| `main-integrity` | Block force pushes (`non_fast_forward`) und Restrict deletions (`deletion`); keine Bypass-Liste |
-| `main-pr` | Pull Request (`pull_request`) und erforderliche Status-Checks (`required_status_checks`) |
-| `main-pr` Bypass | Nur die konkret benannte Release-Identität, Modus „Always“; keine Restrict-updates-Regel (`update`) |
-| Erforderliche Status-Checks | `lint`, `licenses`, `translation-versions`, `translations-coverage`, `typecheck`; `test (1)`, `test (2)`, `test (3)`, `coverage`, `check`, `audit`, `lock-check`; `E2E-Scheibe 1` bis `E2E-Scheibe 8` |
+| Ruleset (ID) | Regeln | Bypass |
+|---|---|---|
+| `main-integrity` (26607015) | Restrict deletions (`deletion`), Block force pushes (`non_fast_forward`) | Keine Bypass-Liste; gilt auch für Admins |
+| `main-protection` (26602264) | Restrict deletions (`deletion`), Block force pushes (`non_fast_forward`), Require linear history (`required_linear_history`), erforderliche Status-Checks (`required_status_checks`, strikt: Branch muss aktuell sein) | Rolle „Repository admin“, Modus „Always“ |
 
-Die Check-Liste ist aus Job-IDs, Job-`name` und Matrix-Schema der ausgelieferten [Lint](../.github/workflows/lint.yml)-, [Test](../.github/workflows/test.yml)- und [E2E](../.github/workflows/e2e.yml)-Workflows abgeleitet; gegen die Check-Namen eines App-Laufs abgleichen, bevor sie als erforderlich gesetzt wird. CodeQL liefert zusätzlich `Analyze (python)` und `Analyze (javascript)`; der Tag-Workflow `release.yml` liefert `build-and-push` und ist kein PR-Check.
+Keines der beiden Rulesets enthält eine Pull-Request-Regel (`pull_request`); es gibt auch keine Restrict-updates-Regel (`update`).
 
-Der Maintainer prüft `enforcement = active`, das Ziel sowie Regeln und Bypass-Felder mit `gh api repos/anlaufstelle/app/rulesets` und je ID `gh api repos/anlaufstelle/app/rulesets/$ID`. Bietet GitHub für die benannte Identitätsart keinen Bypass an, ist eine Rückfrage erforderlich; eine Admin-Rolle ist kein Ersatz.
+Erforderliche Status-Checks in `main-protection` (22, alle aus GitHub Actions): `lint`, `check`, `typecheck`, `lock-check`, `audit`, `licenses`, `translation-versions`, `translations-coverage`; `test (1)`, `test (2)`, `test (3)`, `coverage`; `E2E-Scheibe 1` bis `E2E-Scheibe 8`; `Analyze (javascript)`, `Analyze (python)`.
+
+Die Check-Namen folgen aus Job-IDs, Job-`name` und Matrix-Schema der ausgelieferten [Lint](../.github/workflows/lint.yml)-, [Test](../.github/workflows/test.yml)-, [E2E](../.github/workflows/e2e.yml)- und [CodeQL](../.github/workflows/codeql.yml)-Workflows. Wird ein Job umbenannt, muss die Liste im Ruleset nachgezogen werden; sonst ist der Pflicht-Check nicht mehr erfüllbar. Der Tag-Workflow `release.yml` liefert `build-and-push` und ist kein Pflicht-Check.
+
+**Warum ein Admin-Bypass:** Der Release-Weg ist ein direkter Fast-Forward-Push auf `main`, kein Pull Request; deshalb gibt es keine Pull-Request-Regel. Der Bypass auf `main-protection` betrifft praktisch nur die Pflicht-Checks und die lineare Historie, die ein Fast-Forward-Push ohnehin einhält. Löschen und Force-Push sperrt `main-integrity` ohne Bypass für alle, auch für Admins. Einzelne Personen lässt GitHub in einer Organisation nicht als Bypass zu, nur Rollen, Teams oder Apps. Ein Ruleset `main-pr` mit Pull-Request-Regel und einer benannten Release-Identität als einzigem Bypass gibt es deshalb nicht; es gilt die Aufteilung oben: Integritätsregeln ohne Bypass, Admin-Bypass nur auf dem Ruleset mit Pflicht-Checks und linearer Historie.
+
+Der Maintainer prüft `enforcement = active`, das Ziel sowie Regeln und Bypass-Felder mit `gh api repos/anlaufstelle/app/rulesets` und je ID `gh api repos/anlaufstelle/app/rulesets/$ID` (26607015, 26602264). Erwartet sind bei `main-integrity` eine leere `bypass_actors`-Liste und bei `main-protection` genau ein Eintrag `RepositoryRole` (Rolle „Repository admin“) mit `bypass_mode: always`. Weitere Bypass-Einträge, eine fehlende Regel, eine abweichende Check-Liste oder ein anderer Wert als `active` gehen als Abweichung an #1597.
 
 ### Trigger für Re-Evaluation
 

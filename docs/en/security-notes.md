@@ -22,7 +22,7 @@ The endpoint guard recursively walks the active URL resolver at runtime for POST
 
 Branch protection/rulesets are unavailable for the private development repository without GitHub Pro; the substitutes are local gates, signed tags and the release dry run. For the public app repository, a ruleset is planned: no force pushes and no branch deletion. Evidence of active settings is provided through the maintainer checklist #1597. The local source tree does not prove active GitHub settings; this excerpt makes no claim that the ruleset has been checked.
 
-Two separate rulesets are planned for `refs/heads/main`: `main-integrity` blocks force pushes and deletions without bypass actors; `main-pr` requires pull requests and status checks, with an “Always” bypass only for the named release identity and no restrict-updates rule; check names must be compared with an app run before configuration.
+Two rulesets are configured for the default branch (`~DEFAULT_BRANCH`, i.e. `refs/heads/main`), both with `enforcement: active`. `main-integrity` (ID 26607015) restricts deletions and blocks force pushes without any bypass actors, which also binds admins. `main-protection` (ID 26602264) repeats both rules and adds required linear history and 22 strict required status checks (`lint`, `check`, `typecheck`, `lock-check`, `audit`, `licenses`, `translation-versions`, `translations-coverage`, `test (1)` to `test (3)`, `coverage`, `E2E-Scheibe 1` to `E2E-Scheibe 8`, `Analyze (javascript)`, `Analyze (python)`), with an “Always” bypass for the “Repository admin” role. Neither ruleset has a pull request rule or a restrict-updates rule. The bypass exists because a release is a direct fast-forward push to `main`, not a pull request; in practice it only affects the required checks and linear history. GitHub does not accept individual people as bypass actors in an organization, only roles, teams or apps, so there is no `main-pr` ruleset with a pull request rule and a named release identity as the only bypass. This describes the configured state; the evidence of the active settings remains with #1597.
 
 ## Plaintext free text outside the sensitivity model
 
@@ -40,5 +40,5 @@ Marks contain no source text: only target, field, date, account, timestamp and a
 
 <!-- translation-source: docs/security-notes.md -->
 <!-- translation-version: v0.99.9 -->
-<!-- source-hash: 95ab855fdf8675dfe56f7cf14fb17287560e30d0 -->
+<!-- source-hash: 243959f2a46994488cc061d8d3256c9ae49cb231 -->
 <!-- translation-date: 2026-11-04 -->
