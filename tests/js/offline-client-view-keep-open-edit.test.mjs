@@ -348,3 +348,89 @@ describe("offline client view keeps an open inline edit across a rebuild", () =>
         expect(eventByPk(component, PK_EVENT_B).data_fields.note).toBe("b2");
     });
 });
+
+// Refs #2688: while the view is unavailable (key cleared by logout, quick exit
+// or idle wipe in another tab, a failed read, an expired bundle) the open form
+// and its unsaved input must not stay in memory. Otherwise a later rebuild
+// with the same token revives the previous session's draft, possibly for
+// another person signed in on the same device, and saving would submit it
+// under that account. Soft assertions report every leftover piece of state.
+const UNAVAILABLE_PHASES = [
+    ["the key was cleared (store returns null)", async () => null],
+    [
+        "the read failed",
+        async () => {
+            throw new Error("no key");
+        },
+    ],
+    ["the bundle expired", async () => Object.assign(bundle(), { expiresAt: "2020-01-01T00:00:00Z" })],
+];
+
+describe("offline client view drops the edit state when the view becomes unavailable", () => {
+    let consoleError;
+
+    afterEach(() => {
+        if (consoleError) consoleError.mockRestore();
+        consoleError = undefined;
+    });
+
+    it.each(UNAVAILABLE_PHASES)("keeps the event form closed and empty after %s", async (_label, unavailableRead) => {
+        consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+        const component = await makeLoadedComponent();
+        component.startEdit(eventByPk(component, PK_EVENT_A));
+        component.editValues.note = "draft of the previous session";
+
+        window.offlineClient.getOfflineClient.mockImplementationOnce(unavailableRead);
+        await component.load();
+        expect.soft(component.available).toBe(false);
+        expect.soft(component.data).toBe(null);
+        expect.soft(component.editFields).toEqual([]);
+        expect.soft(component.editValues).toEqual({});
+
+        await component.load();
+
+        expect.soft(component.available).toBe(true);
+        expect.soft(component.data.events.every((e) => e.editing === false)).toBe(true);
+        expect.soft(component.editFields).toEqual([]);
+        expect.soft(component.editValues).toEqual({});
+    });
+
+    it.each(UNAVAILABLE_PHASES)("keeps the task form closed and empty after %s", async (_label, unavailableRead) => {
+        consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+        const component = await makeLoadedComponent();
+        component.startEditWorkItem(workItemByPk(component, PK_WI_A));
+        component.wiValues.title = "draft of the previous session";
+
+        window.offlineClient.getOfflineClient.mockImplementationOnce(unavailableRead);
+        await component.load();
+        expect.soft(component.available).toBe(false);
+        expect.soft(component.data).toBe(null);
+        expect.soft(component.wiValues).toEqual({});
+
+        await component.load();
+
+        expect.soft(component.available).toBe(true);
+        expect.soft(component.data.workitems.every((w) => w.editing === false)).toBe(true);
+        expect.soft(component.wiValues).toEqual({});
+    });
+
+    it("drops the open create forms as well", async () => {
+        const component = await makeLoadedComponent();
+        component.startCreate();
+        component.createDocTypePk = "dt1";
+        component.onCreateDocTypeChange();
+        component.editValues.note = "draft of the previous session";
+        component.creatingWorkItem = true;
+        component.wiValues = { title: "draft of the previous session" };
+
+        window.offlineClient.getOfflineClient.mockImplementationOnce(async () => null);
+        await component.load();
+
+        expect.soft(component.creating).toBe(false);
+        expect.soft(component.creatingWorkItem).toBe(false);
+        expect.soft(component.createDocTypePk).toBe("");
+        expect.soft(component.editFields).toEqual([]);
+        expect.soft(component.editValues).toEqual({});
+        expect.soft(component.wiValues).toEqual({});
+    });
+});
