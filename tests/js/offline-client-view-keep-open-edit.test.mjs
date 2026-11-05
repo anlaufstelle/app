@@ -468,34 +468,35 @@ describe("offline client view closes the form when another tab changed the entry
         expect(workItemByPk(component, PK_WI_A).editing).toBe(false);
     });
 
-    it("closes the form when an already modified entry got other values", async () => {
+    // One open form per case: the UI never shows both at the same time.
+    const OPEN_FORMS = [
+        ["event", (c) => c.startEdit(eventByPk(c, PK_EVENT_A)), (c) => eventByPk(c, PK_EVENT_A)],
+        ["task", (c) => c.startEditWorkItem(workItemByPk(c, PK_WI_A)), (c) => workItemByPk(c, PK_WI_A)],
+    ];
+
+    it.each(OPEN_FORMS)("closes the %s form when an already modified entry got other values", async (_kind, open, entry) => {
         const component = await makeLoadedComponent();
         window.offlineClient.getOfflineClient.mockImplementation(async () => bundle({ statusA: "modified" }));
         await component.load();
-        component.startEdit(eventByPk(component, PK_EVENT_A));
-        component.startEditWorkItem(workItemByPk(component, PK_WI_A));
-        eventByPk(component, PK_EVENT_A).editing = true;
+        open(component);
         window.offlineClient.getOfflineClient.mockImplementation(async () =>
             bundle({ statusA: "modified", noteA: "stored by the other tab", titleA: "stored by the other tab" })
         );
 
         await component._reconcile();
 
-        expect(eventByPk(component, PK_EVENT_A).editing).toBe(false);
-        expect(workItemByPk(component, PK_WI_A).editing).toBe(false);
+        expect(entry(component).editing).toBe(false);
     });
 
-    it("keeps a modified entry open while its stored values stay the same", async () => {
+    it.each(OPEN_FORMS)("keeps the %s form of a modified entry open while its stored values stay the same", async (_kind, open, entry) => {
         const component = await makeLoadedComponent();
         window.offlineClient.getOfflineClient.mockImplementation(async () => bundle({ statusA: "modified" }));
         await component.load();
-        component.startEditWorkItem(workItemByPk(component, PK_WI_A));
-        eventByPk(component, PK_EVENT_A).editing = true;
+        open(component);
 
         await component._reconcile();
         await component._reconcile();
 
-        expect(eventByPk(component, PK_EVENT_A).editing).toBe(true);
-        expect(workItemByPk(component, PK_WI_A).editing).toBe(true);
+        expect(entry(component).editing).toBe(true);
     });
 });
