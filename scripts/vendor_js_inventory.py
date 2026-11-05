@@ -10,12 +10,16 @@ the release SBOM all read it; nobody keeps a second version list.
 The version in the inventory is only trusted after it was compared with the
 banner of the shipped file: a replaced build without an inventory update is a
 drift, not a silent mismatch between what is shipped and what is audited.
+The banner only proves the version, so every entry also carries the SHA-256 of
+the complete shipped file: a changed body behind an unchanged banner is
+reported as well, and the release SBOM passes the hash on.
 
 Stdlib only; the module is also loaded from a built release tree.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from dataclasses import dataclass
@@ -25,11 +29,21 @@ from urllib.parse import quote
 INVENTORY_RELPATH = Path("scripts") / "vendor_js_inventory.json"
 # The banner sits in the leading license comment; reading the head is enough.
 BANNER_BYTES = 2000
-REQUIRED_FIELDS = ("package", "table_name", "version", "path", "version_pattern", "license_marker", "scope")
+REQUIRED_FIELDS = (
+    "package",
+    "table_name",
+    "version",
+    "path",
+    "sha256",
+    "version_pattern",
+    "license_marker",
+    "scope",
+)
 # CycloneDX scope in the release SBOM: ``required`` = loaded by production pages,
 # ``optional`` = shipped with the static files but only used by the test suite.
 SCOPES = ("required", "optional")
 EXACT_VERSION_RE = re.compile(r"\d+\.\d+\.\d+")
+SHA256_RE = re.compile(r"[0-9a-f]{64}")
 
 
 class InventoryError(Exception):
@@ -42,6 +56,7 @@ class VendoredLibrary:
     table_name: str
     version: str
     path: str
+    sha256: str
     version_pattern: str
     license_marker: str
     scope: str
@@ -76,6 +91,10 @@ def load_inventory(root: Path) -> list[VendoredLibrary]:
             raise InventoryError(f"{entry['package']}: scope {entry['scope']!r} is not one of {', '.join(SCOPES)}")
         if not EXACT_VERSION_RE.fullmatch(entry["version"]):
             raise InventoryError(f"{entry['package']}: version {entry['version']!r} is not an exact x.y.z version")
+        if not SHA256_RE.fullmatch(entry["sha256"]):
+            raise InventoryError(
+                f"{entry['package']}: sha256 {entry['sha256']!r} is not a lowercase hex SHA-256 digest"
+            )
         try:
             pattern = re.compile(entry["version_pattern"])
         except re.error as exc:
@@ -108,7 +127,11 @@ def shipped_version(root: Path, library: VendoredLibrary) -> str | None:
 
 
 def drift_errors(root: Path, libraries: list[VendoredLibrary]) -> list[str]:
-    """One message per library whose shipped banner does not carry the inventory version."""
+    """One message per library whose shipped file does not match its inventory entry.
+
+    The banner must carry the inventory version and the whole file must hash to
+    the inventory ``sha256``.
+    """
     errors = []
     for lib in libraries:
         try:
@@ -123,6 +146,11 @@ def drift_errors(root: Path, libraries: list[VendoredLibrary]) -> list[str]:
         elif found != lib.version:
             errors.append(
                 f"{lib.package}: DRIFT — {INVENTORY_RELPATH} lists v{lib.version}, but {lib.path} ships v{found}"
+            )
+        elif hashlib.sha256((root / lib.path).read_bytes()).hexdigest() != lib.sha256:
+            errors.append(
+                f"{lib.package}: changed: {lib.path} — review version and license, "
+                f"then update sha256 in {INVENTORY_RELPATH}"
             )
     return errors
 

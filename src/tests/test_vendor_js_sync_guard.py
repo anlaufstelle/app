@@ -530,6 +530,33 @@ def test_vendored_file_that_is_not_utf8_is_reported(tmp_path: Path) -> None:
     assert "sortablejs" in result.stderr and "UTF-8" in result.stderr
 
 
+@pytest.mark.parametrize("rel", ["vendor/sortable.min.js", "vendor/axe.min.js"])
+def test_changed_library_body_with_kept_banner_is_detected(tmp_path: Path, rel: str) -> None:
+    """The banner only proves the version; the body is anchored by the inventory hash."""
+    mirror = _mirror_repo(tmp_path / "repo")
+    path = mirror / VENDOR_REL / rel
+    path.write_text(path.read_text(encoding="utf-8") + ";window.__marker=1;", encoding="utf-8")
+    result = _run(mirror)
+    assert result.returncode == 1
+    assert f"changed: src/static/js/{rel} — review version and license" in result.stderr
+    assert "DRIFT" not in result.stderr
+
+
+@pytest.mark.parametrize("value", [None, "", "abc", "A" * 64, 64])
+def test_missing_or_malformed_inventory_hash_is_detected(tmp_path: Path, value: object) -> None:
+    mirror = _mirror_repo(tmp_path / "repo")
+    path = mirror / INVENTORY_REL
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if value is None:
+        del data["libraries"][0]["sha256"]
+    else:
+        data["libraries"][0]["sha256"] = value
+    path.write_text(json.dumps(data), encoding="utf-8")
+    result = _run(mirror)
+    assert result.returncode == 1
+    assert "sha256" in result.stderr
+
+
 if __name__ == "__main__":
     # Eigenstaendiger Selbsttest OHNE pytest (Test-DB ist seriell/--reuse-db).
     # Baut die Szenarien manuell und prueft die Exit-Codes; gibt am Ende eine

@@ -1,11 +1,12 @@
 {
-  "description": "Manually vendored JavaScript libraries without a package.json entry. Single source for the license guard (scripts/verify_vendor_js_sync.py), the advisory gate (scripts/audit_vendored_js.py) and the release SBOM. The version must match the banner of the shipped file. scope is the CycloneDX scope in the SBOM: required = loaded by production pages, optional = shipped but only used by the test suite.",
+  "description": "Manually vendored JavaScript libraries without a package.json entry. Single source for the license guard (scripts/verify_vendor_js_sync.py), the advisory gate (scripts/audit_vendored_js.py) and the release SBOM. The version must match the banner of the shipped file; sha256 is the hash of the complete shipped file. scope is the CycloneDX scope in the SBOM: required = loaded by production pages, optional = shipped but only used by the test suite.",
   "libraries": [
     {
       "package": "sortablejs",
       "table_name": "SortableJS",
       "version": "1.15.7",
       "path": "src/static/js/vendor/sortable.min.js",
+      "sha256": "bf4241bc73fef7f11c59a283a69fe8051cdd31c6d8ff5a2b9ba219e7831fcf76",
       "version_pattern": "Sortable (\\d+\\.\\d+\\.\\d+)",
       "license_marker": "",
       "scope": "required"
@@ -15,6 +16,7 @@
       "table_name": "axe-core",
       "version": "4.13.0",
       "path": "src/static/js/vendor/axe.min.js",
+      "sha256": "c24f097bd2f451d4f933e8bc7d8d539f8672a2ebcb5cc9f9f3eec8ca9470a0c1",
       "version_pattern": "axe v(\\d+\\.\\d+\\.\\d+)",
       "license_marker": "Mozilla Public",
       "scope": "optional"
