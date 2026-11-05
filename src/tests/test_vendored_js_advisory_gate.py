@@ -285,6 +285,14 @@ class TestIncompleteCheckIsNeverGreen:
         assert _run(tmp_path, registry, root=_tree(tmp_path, text)) == 2
         assert registry.requests == []
 
+    def test_changed_file_body_with_unchanged_banner_fails_without_querying(self, tmp_path):
+        root = _tree(tmp_path, INVENTORY.read_text(encoding="utf-8"))
+        shipped = root / "src" / "static" / "js" / "vendor" / "sortable.min.js"
+        shipped.write_bytes(shipped.read_bytes() + b"\n/* tampered */\n")
+        registry = FakeRegistry({})
+        assert _run(tmp_path, registry, root=root) == 2
+        assert registry.requests == []
+
     def test_shipped_file_that_is_not_utf8_fails_without_querying(self, tmp_path):
         root = _tree(tmp_path, INVENTORY.read_text(encoding="utf-8"))
         (root / "src" / "static" / "js" / "vendor" / "sortable.min.js").write_bytes(b"/*! Sortable \xff\xfe */")
