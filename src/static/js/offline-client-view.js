@@ -77,6 +77,9 @@
             // Flag merkt es vor, load() prueft es nach seinem Abschluss
             // garantiert nach (siehe load()/_onRevocationsApplied unten).
             _revocationCheckPending: false,
+            // Refs #2688: key epoch the current ``data`` was read with (see
+            // load()); null while nothing is shown.
+            _dataKeyEpoch: null,
             // Refs #1323: Offline-Erfassung eines neuen Ereignisses.
             creating: false,
             createDocTypePk: "",
@@ -284,6 +287,17 @@
                             });
                         });
                     }
+                    // Refs #2688: an open form may only survive a rebuild under
+                    // the key it was opened with. Not every key change reaches
+                    // this view as a rebuild (an idle wipe or expiry in this
+                    // tab only notifies other tabs, the boot gate adopts a key
+                    // another tab derived meanwhile, a counter signal during a
+                    // running load() is dropped), so compare the epoch instead
+                    // of relying on an unavailable phase in between. Read it
+                    // after the data: a change during the read then counts as
+                    // a change. An unreadable epoch fails closed.
+                    const keyEpoch = await this._readKeyEpoch();
+                    if (keyEpoch === null || keyEpoch !== this._dataKeyEpoch) this._discardEditState();
                     // Refs #2688: keep an open inline edit across the rebuild.
                     // The sync counter events also fire with unchanged values
                     // right after page load, and the rebuild above resets every
@@ -315,6 +329,7 @@
                     const keepWorkItem = openWorkItem && (cached.workitems || []).find(sameEntry(openWorkItem, WORKITEM_FINGERPRINT_KEYS));
                     if (keepWorkItem) keepWorkItem.editing = true;
                     this.data = cached;
+                    this._dataKeyEpoch = keyEpoch;
                     this.lastSynced = cached.lastSynced;
                     this.lastSyncedRel = this.relativeTime(cached.lastSynced);
                     this.available = true;
@@ -345,6 +360,13 @@
             _markUnavailable() {
                 this.available = false;
                 this.data = null;
+                this._dataKeyEpoch = null;
+                this._discardEditState();
+            },
+            // Refs #2688: close every open form and drop its unsaved input.
+            _discardEditState() {
+                this._setEditing(null);
+                this._setEditingWorkItem(null);
                 this.editFields = [];
                 this.editValues = {};
                 this.editError = "";
@@ -357,6 +379,19 @@
                 this.wiValues = {};
                 this.wiError = "";
                 this.wiValidationActive = false;
+            },
+            // Refs #2688: epoch of the persisted session key; null when there
+            // is none or it cannot be read. Without the crypto session API
+            // (component tests) a constant stands in for it.
+            async _readKeyEpoch() {
+                const session = window.crypto_session;
+                if (!session || typeof session.keyEpoch !== "function") return "";
+                try {
+                    const epoch = await session.keyEpoch();
+                    return typeof epoch === "string" && epoch ? epoch : null;
+                } catch (_e) {
+                    return null;
+                }
             },
             formatTs(iso) {
                 // Refs #1828: gemeinsamer Formatter (offline-form-fields.js).
