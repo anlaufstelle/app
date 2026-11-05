@@ -1505,6 +1505,27 @@
     "rationale": "The release strip list excludes docs/dev; this node checks that excluded artifact."
   },
   {
+    "nodeid": "src/tests/test_image_scan_gate.py::TestReleaseGatesResult::test_result_line_is_plain_with_app_image",
+    "profile": "public",
+    "reason": "dev-ops/ nicht im Public-Snapshot — Guard nur im Dev-Repo relevant",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_image_scan_gate.py::TestReleaseGatesResult::test_result_line_marks_the_partial_scan_without_app_image",
+    "profile": "public",
+    "reason": "dev-ops/ nicht im Public-Snapshot — Guard nur im Dev-Repo relevant",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_image_scan_gate.py::TestWiring::test_release_gates_list_the_scan",
+    "profile": "public",
+    "reason": "dev-ops/ nicht im Public-Snapshot — Guard nur im Dev-Repo relevant",
+    "exclusion": "dev-ops",
+    "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
+  },
+  {
     "nodeid": "src/tests/test_initial_setup_fresh_install.py::test_staging_compose_requires_the_caddy_health_token",
     "profile": "public",
     "reason": "docker-compose.staging.yml fehlt in diesem Baum — Staging-Guard nicht anwendbar",
