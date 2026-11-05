@@ -397,6 +397,7 @@ def test_shipped_files_name_no_internal_release_wave(relative):
 def test_the_database_prefix_keeps_worktrees_from_reseeding_each_other(nightly, tmp_path, monkeypatch):
     runner, commands = reuse_runner(nightly, tmp_path, monkeypatch, migrate_exit=0, db_prefix="branch_x")
     seen = []
+    monkeypatch.setattr(nightly, "database_exists", lambda connection, database: False)
     monkeypatch.setattr(runner, "seed_stamp", lambda connection, database: seen.append(database) or None)
     monkeypatch.setattr(runner, "rebuild_seed", lambda connection, database, scale, log: seen.append(database) or 0)
     envs = []
@@ -413,3 +414,87 @@ def test_the_database_prefix_defaults_to_the_shared_name_and_rejects_unsafe_valu
     assert parser_args.db_prefix == "anlaufstelle_nightly"
     with pytest.raises(SystemExit):
         nightly.parse_args(["--db-prefix", "x; DROP DATABASE postgres"])
+
+
+class RecordingCursor:
+    def __init__(self, statements):
+        self.statements = statements
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def execute(self, query, params=None):
+        self.statements.append(repr(query))
+
+
+class RecordingConnection(MaintenanceConnectionStub):
+    def __init__(self):
+        self.statements = []
+
+    def cursor(self):
+        return RecordingCursor(self.statements)
+
+
+def build_runner(nightly, tmp_path, monkeypatch, *, stamp, exists):
+    runner, _ = reuse_runner(nightly, tmp_path, monkeypatch, migrate_exit=0)
+    monkeypatch.setattr(runner, "seed_stamp", lambda connection, database: stamp)
+    monkeypatch.setattr(nightly, "database_exists", lambda connection, database: exists)
+    rebuilt = []
+    monkeypatch.setattr(runner, "rebuild_seed", lambda connection, database, scale, log: rebuilt.append(database) or 0)
+    return runner, rebuilt
+
+
+def test_a_foreign_database_of_the_same_name_is_never_dropped(nightly, tmp_path, monkeypatch):
+    runner, rebuilt = build_runner(nightly, tmp_path, monkeypatch, stamp=None, exists=True)
+
+    result = runner.perf("medium")
+
+    assert result.status == nightly.FAIL
+    assert "anlaufstelle_nightly_medium" in result.detail and "NIGHTLY_DB_PREFIX" in result.detail
+    assert "not created by the nightly guards" in result.detail
+    assert rebuilt == []  # nothing was dropped or rebuilt
+
+
+def test_a_stale_database_with_a_nightly_stamp_is_rebuilt_as_before(nightly, tmp_path, monkeypatch):
+    stale = nightly.SeedStamp("medium", datetime.now(UTC) - timedelta(days=30), "", "000000000000")
+    runner, rebuilt = build_runner(nightly, tmp_path, monkeypatch, stamp=stale, exists=True)
+
+    result = runner.perf("medium")
+
+    assert rebuilt == ["anlaufstelle_nightly_medium"] and result.status == nightly.PASS
+
+
+def test_a_missing_database_is_built(nightly, tmp_path, monkeypatch):
+    runner, rebuilt = build_runner(nightly, tmp_path, monkeypatch, stamp=None, exists=False)
+
+    assert runner.perf("medium").status == nightly.PASS
+    assert rebuilt == ["anlaufstelle_nightly_medium"]
+
+
+def test_a_rebuild_stamps_the_database_before_the_long_seed_so_an_aborted_run_stays_recognisable(
+    nightly, tmp_path, monkeypatch
+):
+    runner, _ = reuse_runner(nightly, tmp_path, monkeypatch, migrate_exit=0)
+    connection = RecordingConnection()
+    order = []
+    monkeypatch.setattr(runner, "run", lambda command, log, **kw: order.append("run " + command[-1]) or 0)
+    monkeypatch.setattr(runner, "write_stamp", lambda conn, database, stamp: order.append(f"stamp {stamp.seeded.year}"))
+
+    assert runner.rebuild_seed(connection, "anlaufstelle_nightly_medium", "medium", tmp_path / "seed.log") == 0
+
+    assert "DROP DATABASE" in connection.statements[0] and "CREATE DATABASE" in connection.statements[1]
+    # first an epoch stamp (never fresh, but ours), then migrate and seed, then the real stamp
+    assert order[0] == "stamp 1970" and order[1].startswith("run") and order[-1].startswith("stamp 20")
+    assert order[-1] != "stamp 1970"
+
+
+def test_the_epoch_stamp_of_an_aborted_rebuild_is_recognised_but_never_fresh(nightly):
+    epoch = nightly.SeedStamp("large", datetime(1970, 1, 1, tzinfo=UTC))
+
+    parsed = nightly.parse_seed_stamp(epoch.render())
+
+    assert parsed == epoch
+    assert not nightly.seed_is_fresh(parsed, "large", 7)

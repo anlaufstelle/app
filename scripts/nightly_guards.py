@@ -228,6 +228,12 @@ def ensure_database(connection, database: str) -> bool:
     return True
 
 
+def database_exists(connection, database: str) -> bool:
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT 1 FROM pg_database WHERE datname = %s", (database,))
+        return cursor.fetchone() is not None
+
+
 def git_head() -> str:
     result = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True)
     return result.stdout.strip() if result.returncode == 0 else ""
@@ -306,6 +312,15 @@ class Runner:
             return Result(name, SKIP, detail=NO_DATABASE)
         with connection, self.lock():
             stamp = self.seed_stamp(connection, database)
+            if stamp is None and database_exists(connection, database):
+                # Only a database stamped by these guards may be dropped and rebuilt (a rebuild stamps it
+                # before the long seed, so an aborted run stays recognisable).
+                return Result(
+                    name,
+                    FAIL,
+                    detail=f"database {database} exists but was not created by the nightly guards (no nightly-seed "
+                    "stamp); nothing was dropped - choose another NIGHTLY_DB_PREFIX or drop it by hand",
+                )
             if seed_is_fresh(stamp, scale, self.seed_max_age_days, code=seed_code_hash()):
                 age = datetime.now(UTC) - stamp.seeded
                 seed_note = f"seed reused ({age.days} d old)"
@@ -370,6 +385,8 @@ class Runner:
         with connection.cursor() as cursor:
             cursor.execute(sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(identifier))
             cursor.execute(sql.SQL("CREATE DATABASE {}").format(identifier))
+        # An epoch stamp is never fresh but marks the database as ours while the seed runs.
+        self.write_stamp(connection, database, SeedStamp(scale, datetime(1970, 1, 1, tzinfo=UTC)))
         env = {**os.environ, "POSTGRES_DB": database, "DJANGO_SETTINGS_MODULE": PERF_SETTINGS}
         manage = [self.python, "src/manage.py"]
         log.write_text("")
@@ -377,10 +394,21 @@ class Runner:
             code = self.run(command, log, env=env, append=True)
             if code != 0:
                 return code
-        stamp = SeedStamp(scale, datetime.now(UTC).replace(microsecond=0), git_head(), seed_code_hash())
-        with connection.cursor() as cursor:
-            cursor.execute(sql.SQL("COMMENT ON DATABASE {} IS {}").format(identifier, sql.Literal(stamp.render())))
+        self.write_stamp(
+            connection,
+            database,
+            SeedStamp(scale, datetime.now(UTC).replace(microsecond=0), git_head(), seed_code_hash()),
+        )
         return 0
+
+    @staticmethod
+    def write_stamp(connection, database: str, stamp: SeedStamp) -> None:
+        from psycopg import sql
+
+        with connection.cursor() as cursor:
+            cursor.execute(
+                sql.SQL("COMMENT ON DATABASE {} IS {}").format(sql.Identifier(database), sql.Literal(stamp.render()))
+            )
 
     @staticmethod
     def perf_detail(output: Path) -> str:
