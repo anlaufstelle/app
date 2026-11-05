@@ -1942,7 +1942,7 @@ neuem Tag weiterhin den alten Digest.
 
 (Refs #2623) Die Lockfile-Gates (`pip-audit`, `npm audit`) sehen weder die Debian-Pakete des App-Images noch das eingebettete `supercronic` noch die Fremdimages. Diese prüft `scripts/scan_images.py` mit Trivy:
 
-- Trivy läuft als Container-Image, gepinnt per Digest (`TRIVY_IMAGE` im Skript). Gepinnt ist Trivy 0.76.1 (Digest des Multi-Arch-Index); ein auf den Platzhalter aus Nullen zurückgesetzter Digest bricht mit Exit 2 ab.
+- Trivy läuft als Container-Image, gepinnt per Digest (`TRIVY_IMAGE` im Skript; die Umgebungsvariable `IMAGE_SCAN_TRIVY_IMAGE` ersetzt das Scanner-Image, auch sie nur mit Digest, und der Bericht nennt das tatsächlich verwendete Image). Gepinnt ist Trivy 0.76.1 (Digest des Multi-Arch-Index); ein Digest aus Nullen (Platzhalter), im Skript wie in der Umgebungsvariable, bricht mit Exit 2 ab.
 - Die Schwachstellendatenbank wird einmal je Lauf geladen; alle Scans nutzen genau diesen Stand.
 - Das App-Image wird unter seinem Digest geprüft, je Plattform ein eigener Lauf (`linux/amd64`, `linux/arm64`). Die von Trivy gemeldete Architektur muss zur Plattform passen.
 - Die Fremdimages kommen aus `docker-compose.prod.yml` (PostgreSQL, Redis, ClamAV, Caddy); jedes muss per Digest gepinnt sein, und die Datei muss mindestens eines nennen. Geprüft werden sie auf den Plattformen aus `linux/amd64` und `linux/arm64`, die ihr Index veröffentlicht (ermittelt mit `docker buildx imagetools inspect --raw`). Fehlt `linux/amd64`, endet der Lauf mit Exit 2; fehlt nur `linux/arm64`, meldet die Zusammenfassung `<image>: not published for linux/arm64 (not scanned)`. Das App-Image muss beide Plattformen veröffentlichen.

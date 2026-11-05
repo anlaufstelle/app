@@ -1924,7 +1924,7 @@ the new tag.
 
 (Refs #2623) The lock-file gates (`pip-audit`, `npm audit`) see neither the Debian packages of the app image nor the embedded `supercronic` nor the third-party images. `scripts/scan_images.py` checks them with Trivy:
 
-- Trivy runs as a container image pinned by digest (`TRIVY_IMAGE` in the script). The pin is Trivy 0.76.1 (digest of the multi-arch index); a digest reset to the all-zero placeholder aborts with exit 2.
+- Trivy runs as a container image pinned by digest (`TRIVY_IMAGE` in the script; the environment variable `IMAGE_SCAN_TRIVY_IMAGE` replaces the scanner image, also only with a digest, and the report names the image actually used). The pin is Trivy 0.76.1 (digest of the multi-arch index); an all-zero (placeholder) digest, in the script or in the environment variable, aborts with exit 2.
 - The vulnerability database is downloaded once per run; all scans use exactly that state.
 - The app image is checked under its digest, with a separate run per platform (`linux/amd64`, `linux/arm64`). The architecture reported by Trivy must match the platform.
 - The third-party images come from `docker-compose.prod.yml` (PostgreSQL, Redis, ClamAV, Caddy); each must be pinned by digest, and the file must name at least one. They are checked on those of `linux/amd64` and `linux/arm64` that their index publishes (looked up with `docker buildx imagetools inspect --raw`). If `linux/amd64` is missing, the run ends with exit 2; if only `linux/arm64` is missing, the summary reports `<image>: not published for linux/arm64 (not scanned)`. The app image must publish both platforms.
@@ -3337,4 +3337,4 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.9 -->
 <!-- translation-date: 2026-11-05 -->
-<!-- source-hash: b286c14024974439e5d38020c4525a6886bf12a5 -->
+<!-- source-hash: 2890551410e56ee1a92b37bb3001b998a42d962f -->
