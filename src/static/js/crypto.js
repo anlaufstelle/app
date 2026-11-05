@@ -870,7 +870,12 @@
         // race the new key into an immediate idle wipe (#1065).
         _assertKeyGeneration(generation);
         await _touchActivity(true);
-        const row = { key: KEY_NAME, cryptoKey: key, createdAt, expiresAt, checkedAt: createdAt };
+        // Refs #2688: unique per derivation, so the same password deriving
+        // the same key again (re-login, other account) still yields a new
+        // epoch; see keyEpoch(). An identifier, not a secret: it only decides
+        // whether an open draft may stay open.
+        const epoch = createdAt.toString(36) + "." + Math.random().toString(36).slice(2);
+        const row = { key: KEY_NAME, cryptoKey: key, createdAt, expiresAt, checkedAt: createdAt, epoch };
         try {
             await _idbPut(row, generation, marker.value);
         } catch (error) {
@@ -1012,6 +1017,25 @@
         }
     }
 
+    /** Identifier of the currently persisted key derivation (Refs #2688).
+     *
+     * Changes with every derivation (sign-in) and is ``null`` while no key
+     * exists (logout, idle wipe, expiry, quick exit). It reads the shared
+     * IndexedDB row, not this tab's memory, so a change this tab never saw as
+     * an event (own wipe without a rebuild, a foreign key adopted by the boot
+     * gate) shows up as well. Views holding decrypted data bind open drafts to
+     * it. Carries no key material; read errors and legacy rows without an
+     * epoch return ``null``.
+     */
+    async function keyEpoch() {
+        try {
+            const row = await _idbGet(KEY_NAME);
+            return row && row.cryptoKey && typeof row.epoch === "string" ? row.epoch : null;
+        } catch (_e) {
+            return null;
+        }
+    }
+
     function hasSessionKey() {
         // Synchronous boolean reflecting the in-memory cache. Callers that
         // need certainty after a fresh page load should `await ready()` first.
@@ -1046,6 +1070,9 @@
         // Rueckgabewert — die Oberflaechen-Minimierung aus #1476 (R8) bleibt
         // unberuehrt.
         hasPersistedSessionKey: hasPersistedSessionKey,
+        // Refs #2688: read-only derivation identifier without key material
+        // (see keyEpoch).
+        keyEpoch: keyEpoch,
         wipeOfflineState: wipeOfflineState,
         // Refs #1324: exponiert fuer den deterministischen Idle-Wipe-Trigger
         // (Interval/visibilitychange rufen es intern; Tests treiben es gezielt).
