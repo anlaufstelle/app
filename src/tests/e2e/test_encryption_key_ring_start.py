@@ -23,6 +23,7 @@ import pytest
 from cryptography.fernet import Fernet, InvalidToken
 
 from ._helpers import SEED_PASSWORD, django_shell, python_bin
+from ._selectors import save_button
 
 pytestmark = pytest.mark.e2e
 
@@ -166,7 +167,7 @@ def test_ring_with_new_key_first_reads_old_data_and_writes_with_the_new_key(
         # A new value goes out under the first entry.
         page.goto(f"{base_url}/clients/{pk}/edit/", wait_until="domcontentloaded")
         page.fill(f"textarea[name='{NOTE_FIELD}']", "Notiz unter dem neuen Schluessel")
-        page.locator("button[type='submit']:has-text('Speichern')").first.click()
+        save_button(page).click()
         page.wait_for_url(f"**/clients/{pk}/")
         assert "Notiz unter dem neuen Schluessel" in page.locator("body").inner_text()
     finally:
