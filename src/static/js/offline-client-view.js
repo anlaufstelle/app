@@ -253,6 +253,28 @@
                             });
                         });
                     }
+                    // Refs #2688: keep an open inline edit across the rebuild.
+                    // The sync counter events also fire with unchanged values
+                    // right after page load, and the rebuild above resets every
+                    // editing flag, so a form opened just before it vanished
+                    // with the user's input (editFields/editValues/wiValues
+                    // live on the component and survive anyway). Read the open
+                    // entry only now, right before the assignment: a load()
+                    // that started while the form was open must not revive it
+                    // after saveEdit()/cancelEdit() closed it meanwhile. An
+                    // entry that is gone or no longer editable (e.g. turned
+                    // into a conflict) stays closed, and so does one whose
+                    // updated_at changed: saving sends that token, so the old
+                    // field values would overwrite the newer server state
+                    // without the server's conflict check noticing.
+                    const sameEntry = (open) => (next) =>
+                        next.pk === open.pk && next.can_edit_ui && (next.updated_at || "") === (open.updated_at || "");
+                    const openEvent = ((this.data && this.data.events) || []).find((e) => e.editing);
+                    const keepEvent = openEvent && (cached.events || []).find(sameEntry(openEvent));
+                    if (keepEvent) keepEvent.editing = true;
+                    const openWorkItem = ((this.data && this.data.workitems) || []).find((w) => w.editing);
+                    const keepWorkItem = openWorkItem && (cached.workitems || []).find(sameEntry(openWorkItem));
+                    if (keepWorkItem) keepWorkItem.editing = true;
                     this.data = cached;
                     this.lastSynced = cached.lastSynced;
                     this.lastSyncedRel = this.relativeTime(cached.lastSynced);
