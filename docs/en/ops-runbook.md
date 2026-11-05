@@ -1855,7 +1855,7 @@ funding, public procurement, supplier audits) and lists all direct and
 transitive Python dependencies with versions, licenses, and CVE status at
 build time.
 
-**Durable release artifact (Refs #1895):** The CI artifact expires after 90 days; the proof of which components a release contains is meant to stay available permanently. The release build therefore additionally produces a **durable** SBOM `sbom-vX.Y.Z.json` (CycloneDX 1.6) from the lock files of the built tree — offline, without network access, and byte-identical on repetition. Scope: all Python distributions from `requirements.txt` (direct **and** transitive) plus all npm packages from `package-lock.json`. The four vendored frontend libs (htmx, Alpine CSP, Dexie, Chart.js) are listed in it as `required`, even though they are marked `dev` in the lockfile — they are shipped (`src/static/js/`) and run in users' browsers. Build/test tooling stays `optional`. When creating the GitHub release, the maintainer attaches the file as a **release asset** to the release page of [`anlaufstelle/app`](https://github.com/anlaufstelle/app/releases). Operators download it there; if the asset is missing on a release, the SBOM is available via the contact in [SECURITY.md](../../SECURITY.md).
+**Durable release artifact (Refs #1895):** The CI artifact expires after 90 days; the proof of which components a release contains is meant to stay available permanently. The release build therefore additionally produces a **durable** SBOM `sbom-vX.Y.Z.json` (CycloneDX 1.6) from the lock files of the built tree — offline, without network access, and byte-identical on repetition. Scope: all Python distributions from `requirements.txt` (direct **and** transitive) plus all npm packages from `package-lock.json`. The four vendored frontend libs (htmx, Alpine CSP, Dexie, Chart.js) are listed in it as `required`, even though they are marked `dev` in the lockfile — they are shipped (`src/static/js/`) and run in users' browsers. Build/test tooling stays `optional`. SortableJS and axe-core have no lock entry; they enter the SBOM from the vendor inventory `scripts/vendor_js_inventory.json` (Refs #2621) with version, npm purl and shipped path. The version is checked against the banner of the file. SortableJS is listed as `required`, axe-core as `optional` (shipped, but only loaded by the test suite). If the inventory is unusable or a library from `scripts/sync_vendor_js.py` lacks its lock entry, generation aborts. When creating the GitHub release, the maintainer attaches the file as a **release asset** to the release page of [`anlaufstelle/app`](https://github.com/anlaufstelle/app/releases). Operators download it there; if the asset is missing on a release, the SBOM is available via the contact in [SECURITY.md](../../SECURITY.md).
 
 ```bash
 # Download the release SBOM of the installed version
@@ -1889,7 +1889,7 @@ The project therefore creates three distinct, complementary SBOMs:
 | SBOM | Scope and retention |
 |------|---------------------|
 | CI artifact from the `audit` job | Python dependencies; 90 days |
-| Durable release SBOM `sbom-vX.Y.Z.json` | Python and npm dependencies from the lock files; durable evidence of the dependencies per release |
+| Durable release SBOM `sbom-vX.Y.Z.json` | Python and npm dependencies from the lock files and the manually vendored JavaScript libraries from the vendor inventory; durable evidence of the dependencies per release |
 | Image SBOM as an attestation | Additionally covers base-image layers and system packages on the image manifest |
 
 The image SBOM does not replace the durable release SBOM. Multi-platform
@@ -3313,4 +3313,4 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.9 -->
 <!-- translation-date: 2026-11-05 -->
-<!-- source-hash: f757b51dec3be51f91166788c7b41b8ec119b5f6 -->
+<!-- source-hash: 00dac6fc918ecc0faaccab294f2e599aa068cd3e -->

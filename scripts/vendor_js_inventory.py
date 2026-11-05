@@ -25,7 +25,10 @@ from urllib.parse import quote
 INVENTORY_RELPATH = Path("scripts") / "vendor_js_inventory.json"
 # The banner sits in the leading license comment; reading the head is enough.
 BANNER_BYTES = 2000
-REQUIRED_FIELDS = ("package", "table_name", "version", "path", "version_pattern", "license_marker")
+REQUIRED_FIELDS = ("package", "table_name", "version", "path", "version_pattern", "license_marker", "scope")
+# CycloneDX scope in the release SBOM: ``required`` = loaded by production pages,
+# ``optional`` = shipped with the static files but only used by the test suite.
+SCOPES = ("required", "optional")
 EXACT_VERSION_RE = re.compile(r"\d+\.\d+\.\d+")
 
 
@@ -41,6 +44,7 @@ class VendoredLibrary:
     path: str
     version_pattern: str
     license_marker: str
+    scope: str
 
     @property
     def purl(self) -> str:
@@ -68,6 +72,8 @@ def load_inventory(root: Path) -> list[VendoredLibrary]:
         missing += [f for f in REQUIRED_FIELDS if f not in missing and f != "license_marker" and not entry[f].strip()]
         if missing:
             raise InventoryError(f"{INVENTORY_RELPATH}: entry {index} lacks {', '.join(missing)}")
+        if entry["scope"] not in SCOPES:
+            raise InventoryError(f"{entry['package']}: scope {entry['scope']!r} is not one of {', '.join(SCOPES)}")
         if not EXACT_VERSION_RE.fullmatch(entry["version"]):
             raise InventoryError(f"{entry['package']}: version {entry['version']!r} is not an exact x.y.z version")
         try:
