@@ -17,6 +17,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+from tests._skip_profile import DEFAULT_PROFILE
+
 pytestmark = pytest.mark.architecture
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -76,6 +78,19 @@ def test_audit_row_names_every_free_text_key() -> None:
 
 
 CHECKLIST_URL = "#1597"
+
+
+def _checklist_reference(label: str) -> str:
+    """The checklist reference as the docs of this tree carry it.
+
+    The development tree links the ticket by its full URL. The release build
+    drops that link and keeps the ticket number as plain text, ending the
+    sentence; the public form is therefore pinned without the link.
+    """
+    if DEFAULT_PROFILE == "public":
+        return f"{label} #1597."
+    return f"[{label} #1597]({CHECKLIST_URL})"
+
 
 # Required status checks of the app ruleset ``main-protection`` (ID 26602264),
 # copied from the maintainer's read-only export of that ruleset.
@@ -207,7 +222,7 @@ def test_required_checks_are_produced_by_the_shipped_workflows() -> None:
 
 def test_branch_protection_names_the_evidence_boundary() -> None:
     section = _german_branch_section()
-    assert f"[Maintainer-Checkliste #1597]({CHECKLIST_URL})" in section
+    assert _checklist_reference("Maintainer-Checkliste") in section
     assert "Quellbaum belegt keine aktive GitHub-Einstellung" in section
 
 
@@ -241,7 +256,7 @@ def test_english_branch_protection_excerpt_mirrors_the_configured_rulesets() -> 
         "The release push gets past the required checks only through the bypass, "
         "because they run on `main` after the push; a fast-forward push keeps linear history anyway."
     ) in section
-    assert f"[maintainer checklist #1597]({CHECKLIST_URL})" in section
+    assert _checklist_reference("maintainer checklist") in section
     assert "does not prove active GitHub settings" in section
 
 
