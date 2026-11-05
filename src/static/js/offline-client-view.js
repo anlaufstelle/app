@@ -16,6 +16,37 @@
         return (patterns && patterns.extractClientPk(path)) || "";
     }
 
+    // Refs #2688: what an open inline form was prefilled from. A local
+    // modification keeps the server token as updated_at, so the token alone
+    // misses a change another tab of the same account stored for the entry.
+    // Object keys are sorted so a mere reordering of data_fields does not count.
+    const EVENT_FINGERPRINT_KEYS = ["localStatus", "document_type_pk", "occurred_at", "data_fields"];
+    const WORKITEM_FINGERPRINT_KEYS = [
+        "localStatus",
+        "item_type",
+        "title",
+        "priority",
+        "due_date",
+        "remind_at",
+        "recurrence",
+        "assigned_to_pk",
+    ];
+    function _sortedJson(value) {
+        return JSON.stringify(value, (_key, v) =>
+            v && typeof v === "object" && !Array.isArray(v)
+                ? Object.keys(v)
+                      .sort()
+                      .reduce((acc, k) => {
+                          acc[k] = v[k];
+                          return acc;
+                      }, {})
+                : v
+        );
+    }
+    function _entryFingerprint(entry, keys) {
+        return _sortedJson(keys.map((key) => (entry[key] === undefined ? null : entry[key])));
+    }
+
     // Refs #1828: Die Datums-Input-, WorkItem-Form- und Datei-Marker-Helfer
     // (frueher hier + als Spiegel in offline-create.js) leben genau einmal in
     // offline-form-fields.js (window.offlineFormFields); offline_detail.html
@@ -266,14 +297,22 @@
                     // into a conflict) stays closed, and so does one whose
                     // updated_at changed: saving sends that token, so the old
                     // field values would overwrite the newer server state
-                    // without the server's conflict check noticing.
-                    const sameEntry = (open) => (next) =>
-                        next.pk === open.pk && next.can_edit_ui && (next.updated_at || "") === (open.updated_at || "");
+                    // without the server's conflict check noticing. The same
+                    // holds when the local status or the stored values changed
+                    // under the same token (another tab saved a local change):
+                    // the open entry of the previous rebuild still shows what
+                    // the form was prefilled from, so comparing against it
+                    // compares against the state at opening time.
+                    const sameEntry = (open, keys) => (next) =>
+                        next.pk === open.pk &&
+                        next.can_edit_ui &&
+                        (next.updated_at || "") === (open.updated_at || "") &&
+                        _entryFingerprint(next, keys) === _entryFingerprint(open, keys);
                     const openEvent = ((this.data && this.data.events) || []).find((e) => e.editing);
-                    const keepEvent = openEvent && (cached.events || []).find(sameEntry(openEvent));
+                    const keepEvent = openEvent && (cached.events || []).find(sameEntry(openEvent, EVENT_FINGERPRINT_KEYS));
                     if (keepEvent) keepEvent.editing = true;
                     const openWorkItem = ((this.data && this.data.workitems) || []).find((w) => w.editing);
-                    const keepWorkItem = openWorkItem && (cached.workitems || []).find(sameEntry(openWorkItem));
+                    const keepWorkItem = openWorkItem && (cached.workitems || []).find(sameEntry(openWorkItem, WORKITEM_FINGERPRINT_KEYS));
                     if (keepWorkItem) keepWorkItem.editing = true;
                     this.data = cached;
                     this.lastSynced = cached.lastSynced;
