@@ -163,12 +163,12 @@
                 try {
                     await window.crypto_session?.awaitReady?.();
                     if (!window.offlineClient) {
-                        this.available = false;
+                        this._markUnavailable();
                         return;
                     }
                     const cached = await window.offlineClient.getOfflineClient(this._pk);
                     if (!cached) {
-                        this.available = false;
+                        this._markUnavailable();
                         return;
                     }
                     // F-04/F-10 (#1110): Defense-in-Depth — niemals ein
@@ -178,7 +178,7 @@
                     // anderen Pfad doch ein Bundle mit `expiresAt` in der
                     // Vergangenheit zurueckkommt.
                     if (this.isExpired(cached.expiresAt)) {
-                        this.available = false;
+                        this._markUnavailable();
                         return;
                     }
                     if (cached.client) {
@@ -282,7 +282,7 @@
                 } catch (e) {
                     // eslint-disable-next-line no-console
                     console.error("[offline-viewer]", e);
-                    this.available = false;
+                    this._markUnavailable();
                 } finally {
                     this.loading = false;
                     // Refs #2382: ein waehrend dieses load() eingegangenes
@@ -294,6 +294,30 @@
                         await this._checkRevocationDiscarded();
                     }
                 }
+            },
+            // Refs #2688: the view lost its data (key cleared by logout, quick
+            // exit or idle wipe in another tab, failed read, expired or deleted
+            // bundle). Drop every open form with its unsaved input and release
+            // the decrypted record: a later rebuild must not revive a draft of
+            // the previous session, possibly for another account signed in on
+            // this device meanwhile. The available subtree of the template is
+            // already torn down here (load() set ``loading`` before its first
+            // await), so ``data = null`` is safe for the template.
+            _markUnavailable() {
+                this.available = false;
+                this.data = null;
+                this.editFields = [];
+                this.editValues = {};
+                this.editError = "";
+                this.creating = false;
+                this.createDocTypePk = "";
+                this.createDocTypeName = "";
+                this.createOccurredAt = "";
+                this.createCasePk = "";
+                this.creatingWorkItem = false;
+                this.wiValues = {};
+                this.wiError = "";
+                this.wiValidationActive = false;
             },
             formatTs(iso) {
                 // Refs #1828: gemeinsamer Formatter (offline-form-fields.js).
