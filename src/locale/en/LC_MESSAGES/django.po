@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-26 20:51+0100\n"
+"POT-Creation-Date: 2026-11-05 10:39+0100\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -15014,3 +15014,49 @@ msgstr "This guidance does not copy or decrypt anything and changes neither the 
 #: src/templates/core/free_text_review/target.html:6
 msgid "Freitext prüfen"
 msgstr "Review free text"
+
+#: src/core/views/workitems.py:37
+msgid "Ungültiger Zuweisungsfilter"
+msgstr "Invalid assignment filter"
+
+#: src/templates/auth/mfa_backup_codes.html:8
+msgid "Die Backup-Codes wurden in die Zwischenablage kopiert."
+msgstr "The backup codes were copied to the clipboard."
+
+#: src/templates/auth/mfa_backup_codes.html:9
+msgid "Kopieren nicht möglich. Laden Sie die Codes stattdessen als Datei herunter, drucken Sie sie aus oder markieren Sie sie und kopieren Sie sie von Hand."
+msgstr "Copying is not possible. Download the codes as a file, print them, or select them and copy them manually instead."
+
+#: src/templates/base.html:70 src/templates/offline_base.html:74
+msgid "Person lokal gespeichert, aber Offline-Seiten sind auf diesem Gerät derzeit nicht verfügbar."
+msgstr "Person stored locally, but offline pages are currently unavailable on this device."
+
+#: src/templates/base.html:156 src/templates/offline_base.html:138
+msgid "Stand der wartenden Änderungen unklar. Bitte erneut versuchen."
+msgstr "Status of the pending changes unclear. Please try again."
+
+#: src/templates/base.html:194 src/templates/offline_base.html:163
+msgid "Stand der wartenden Änderungen unklar."
+msgstr "Status of the pending changes unclear."
+
+#: src/templates/components/_offline_auth_pending.html:27
+msgid "Anmeldung erforderlich – lokal gespeicherte Änderungen bleiben erhalten, ihre Anzahl ist derzeit unklar. Melden Sie sich erneut an; danach wird die Übertragung fortgesetzt."
+msgstr "Sign-in required – locally stored changes are kept, but their number is currently unclear. Sign in again; the transfer then continues."
+
+#: src/templates/components/_offline_auth_pending.html:28
+msgid "Passwortwechsel erforderlich – lokal gespeicherte Änderungen sind noch nicht übertragen und lassen sich vorher nicht übertragen, ihre Anzahl ist derzeit unklar. Der Passwortwechsel löscht die lokal gespeicherten Offline-Daten: Sichern Sie die Inhalte, bevor Sie das neue Passwort bestätigen."
+msgstr "Password change required – locally stored changes have not been transferred yet and cannot be transferred beforehand; their number is currently unclear. Changing the password deletes the offline data stored on this device: save the content before you confirm the new password."
+
+#: src/templates/core/config/document_types/list.html:24
+msgid "Dokumentationstypen durchsuchen"
+msgstr "Search document types"
+
+#: src/templates/core/config/field_templates/list.html:24
+msgid "Feldvorlagen durchsuchen"
+msgstr "Search field templates"
+
+#: src/templates/core/zeitstrom/index.html:222
+#: src/templates/core/zeitstrom/offline_zeitstrom.html:167
+#: src/templates/core/zeitstrom/tally_form.html:28
+msgid "Lokal wartende Kontakte konnten nicht gelesen werden. Angezeigt ist der letzte bestätigte Serverstand."
+msgstr "Contacts waiting locally could not be read. The last confirmed server state is shown."
