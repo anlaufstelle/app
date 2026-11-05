@@ -149,3 +149,39 @@ describe("bundle expiry fails closed", () => {
         else expect(await store.listOfflineClientsDetailed()).toEqual([]);
     });
 });
+
+// Refs #2688: views holding decrypted data bind open drafts to the key they
+// were read with. The epoch identifies one derivation across tabs: it is
+// stable while that key lives and differs after any wipe, expiry or new
+// sign-in, even when the same password derives the same key in the same
+// millisecond.
+describe("key epoch", () => {
+    it("is stable while the key lives and null without a key", async () => {
+        const epoch = await window.crypto_session.keyEpoch();
+        expect(typeof epoch).toBe("string");
+        expect(epoch.length).toBeGreaterThan(0);
+        now = START + 600_000;
+        expect((await store.getOfflineEvent(PK)).data.note).toBe("kept");
+        expect(await window.crypto_session.keyEpoch()).toBe(epoch);
+
+        await window.crypto_session.clearSessionKey();
+        expect(await window.crypto_session.keyEpoch()).toBeNull();
+    });
+
+    it("changes with every new derivation of the same key", async () => {
+        const first = await window.crypto_session.keyEpoch();
+        await window.crypto_session.clearSessionKey();
+        await window.crypto_session.deriveSessionKey(PASSWORD, SALT);
+        const second = await window.crypto_session.keyEpoch();
+
+        expect(second).not.toBeNull();
+        expect(second).not.toBe(first);
+        expect((await store.getOfflineEvent(PK)).data.note).toBe("kept");
+    });
+
+    it("is null once the absolute lifetime expired the key", async () => {
+        now = START + 3600_000;
+        await assertLocked();
+        expect(await window.crypto_session.keyEpoch()).toBeNull();
+    });
+});
