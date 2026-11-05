@@ -9,6 +9,8 @@ Reset (``--flush --scale demo``, wie ``dev-ops/deploy/demo-reseed.sh`` es
 stündlich aufruft).
 """
 
+import dataclasses
+
 import pytest
 from django.core.management import call_command
 
@@ -116,7 +118,7 @@ def test_scenario_solo_offers_only_the_roles_it_actually_seeds():
 def test_scenario_is_frozen_dataclass():
     """Der Katalog ist eine feste Konfiguration, kein Laufzeitzustand."""
     scenario = SCENARIOS[0]
-    with pytest.raises(Exception):  # noqa: B017 — dataclasses.FrozenInstanceError ist eine AttributeError-Unterklasse
+    with pytest.raises(dataclasses.FrozenInstanceError):
         scenario.key = "anders"  # type: ignore[misc]
 
 

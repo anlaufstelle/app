@@ -15,6 +15,9 @@ from django.utils import timezone
 from core.models import Attachment, FieldTemplate
 from core.models.attachment import OWNER_FIELDS, owner_field_name
 
+# CheckConstraint on ``Attachment`` (core/models/attachment.py); named in the database error.
+OWNER_CONSTRAINT = "attachment_exactly_one_owner"
+
 
 def _attachment_kwargs(facility):
     ft = FieldTemplate.objects.create(
@@ -47,8 +50,9 @@ class TestExactlyOneOwner:
         assert att.pk is not None
 
     def test_ohne_owner_verboten(self, facility):
-        with pytest.raises(IntegrityError), transaction.atomic():
-            Attachment.objects.create(**_attachment_kwargs(facility))
+        kwargs = _attachment_kwargs(facility)  # setup stays outside the expected-error scope
+        with pytest.raises(IntegrityError, match=OWNER_CONSTRAINT), transaction.atomic():
+            Attachment.objects.create(**kwargs)
 
     @pytest.mark.parametrize("owner_combo", ["event_client", "event_case", "client_case", "alle_drei"])
     def test_mehrfach_owner_verboten(self, facility, sample_event, client_identified, case_open, owner_combo):
@@ -61,8 +65,9 @@ class TestExactlyOneOwner:
             "client_case": {"client": client_identified, "case": case_open},
             "alle_drei": {"event": sample_event, "client": client_identified, "case": case_open},
         }
-        with pytest.raises(IntegrityError), transaction.atomic():
-            Attachment.objects.create(**combos[owner_combo], **_attachment_kwargs(facility))
+        kwargs = _attachment_kwargs(facility)  # setup stays outside the expected-error scope
+        with pytest.raises(IntegrityError, match=OWNER_CONSTRAINT), transaction.atomic():
+            Attachment.objects.create(**combos[owner_combo], **kwargs)
 
 
 @pytest.mark.django_db

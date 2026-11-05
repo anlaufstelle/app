@@ -29,6 +29,7 @@ from django_otp.oath import totp as oath_totp
 from django_otp.plugins.otp_totp.models import TOTPDevice
 
 from core.models import EncryptedTOTPDevice
+from core.services.file_vault import EncryptionError
 from core.services.security.totp import (
     decrypt_totp_key,
     encrypt_totp_key,
@@ -101,7 +102,7 @@ class TestMultiFernetRotation:
         # Alter Schlüssel entfernt: neues Token weiter lesbar, altes nicht mehr.
         with override_settings(ENCRYPTION_KEYS=new_key):
             assert decrypt_totp_key(token_new) == plain
-            with pytest.raises(Exception):
+            with pytest.raises(EncryptionError):
                 decrypt_totp_key(token_old)
 
 
@@ -389,9 +390,9 @@ class TestReencryptTotpRewrapRace:
         # Harter Beweis: Alt-Schlüssel entfernt → neues Token lesbar, beide Alt-Tokens tot.
         with override_settings(ENCRYPTION_KEYS=new_key):
             assert decrypt_totp_key(raw_after) == plain
-            with pytest.raises(Exception):
+            with pytest.raises(EncryptionError):
                 decrypt_totp_key(raw_before)
-            with pytest.raises(Exception):
+            with pytest.raises(EncryptionError):
                 decrypt_totp_key(stale_old_token)
 
     def test_persistent_contention_is_reported_not_silently_dropped(self, staff_user, monkeypatch):
@@ -445,7 +446,7 @@ class TestReencryptTotpRewrapRace:
 
         with override_settings(ENCRYPTION_KEYS=new_key):
             assert decrypt_totp_key(raw_after) == plain
-            with pytest.raises(Exception):
+            with pytest.raises(EncryptionError):
                 decrypt_totp_key(raw_before)
 
 

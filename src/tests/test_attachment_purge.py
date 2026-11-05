@@ -165,10 +165,18 @@ class TestPurgeRemovesFilesRowsAndMarker:
         event, head, old, _ft = event_chain
         paths = [get_attachment_path(head), get_attachment_path(old)]
 
-        with pytest.raises(RuntimeError), transaction.atomic():
-            purge_attachment_chain(event, head.entry_id)
-            raise RuntimeError("Abbruch nach dem Purge")
+        class AbortAfterPurge(Exception):
+            """Own sentinel: no foreign error can pass for the intended rollback."""
 
+        purged = None
+        with pytest.raises(AbortAfterPurge), transaction.atomic():
+            purged = purge_attachment_chain(event, head.entry_id)
+            # The purge ran to completion inside the transaction before it is rolled back.
+            assert purged == 2
+            assert not Attachment.objects.filter(entry_id=head.entry_id).exists()
+            raise AbortAfterPurge
+
+        assert purged == 2
         assert all(path.exists() for path in paths), "Dateien wurden trotz Rollback entfernt"
         assert Attachment.objects.filter(entry_id=head.entry_id).count() == 2
 

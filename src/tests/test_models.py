@@ -1,7 +1,7 @@
 """Model constraint and logic tests."""
 
 import pytest
-from django.db import IntegrityError
+from django.db import DatabaseError, IntegrityError
 from django.utils import timezone
 
 from core.models import AuditLog, Case, Client, Event, EventHistory, Settings
@@ -434,7 +434,7 @@ class TestEventHistoryDBTrigger:
             action=EventHistory.Action.CREATE,
             data_after={"test": "data"},
         )
-        with pytest.raises(Exception), connection.cursor() as cursor:
+        with pytest.raises(DatabaseError, match=r"append-only.*UPDATE not allowed"), connection.cursor() as cursor:
             cursor.execute(
                 "UPDATE core_eventhistory SET action = 'update' WHERE id = %s",
                 [str(history.pk)],
@@ -449,7 +449,7 @@ class TestEventHistoryDBTrigger:
             action=EventHistory.Action.CREATE,
             data_after={"test": "data"},
         )
-        with pytest.raises(Exception), connection.cursor() as cursor:
+        with pytest.raises(DatabaseError, match=r"append-only.*DELETE not allowed"), connection.cursor() as cursor:
             cursor.execute(
                 "DELETE FROM core_eventhistory WHERE id = %s",
                 [str(history.pk)],

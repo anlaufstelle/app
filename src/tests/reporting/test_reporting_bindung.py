@@ -81,7 +81,7 @@ class TestBindungsEintrag:
 
     def test_eintrag_ist_frozen(self):
         eintrag = BindungsEintrag("contact", "Kontakt")
-        with pytest.raises(Exception):  # noqa: B017 — FrozenInstanceError ist dataclass-intern
+        with pytest.raises(dataclasses.FrozenInstanceError):
             eintrag.key = "andere"  # type: ignore[misc]
 
 
