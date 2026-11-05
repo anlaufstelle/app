@@ -1,4 +1,5 @@
 {
+  "test_a11y_followup_browser.py": 46.151829,
   "test_a11y_reach_and_contrast.py": 76.779816,
   "test_accessibility.py": 74.87655,
   "test_account_profile.py": 26.158842,
@@ -52,6 +53,7 @@
   "test_dynamic_field_plaintext_hint.py": 44.225115,
   "test_edit_conflicts.py": 68.687247,
   "test_edit_upload_errors.py": 29.574393,
+  "test_encryption_key_ring_start.py": 28.361359,
   "test_english_surfaces_acceptance.py": 76.934733,
   "test_episodes.py": 8.033553,
   "test_event_create_case_context.py": 134.55648,
@@ -87,6 +89,7 @@
   "test_logout_cleanup.py": 14.119578,
   "test_mfa_backup_codes.py": 23.222796,
   "test_mfa_factor_change_sudo.py": 26.918673,
+  "test_mfa_policy_browser.py": 91.307482,
   "test_mfa_role_enforcement.py": 5.783568,
   "test_mfa_session_revocation.py": 53.549643,
   "test_mfa_setup_flow.py": 15.580224,
@@ -144,6 +147,7 @@
   "test_statistics_export_bar.py": 37.910403,
   "test_statistics_snapshot.py": 5.864715,
   "test_super_admin.py": 11.72943,
+  "test_sw_registration_and_read_errors.py": 27.615126,
   "test_sw_robustness.py": 29.493246,
   "test_sw_update_keeps_unsent_queue.py": 9.700755,
   "test_sync_orchestrator.py": 15.115473,
@@ -168,7 +172,7 @@
   "test_zeitstrom_events.py": 49.765242,
   "test_zeitstrom_filter_bug.py": 3.186864,
   "_meta": {
-    "source": "e2e-2cpu-durations.csv",
+    "source": "e2e-2cpu-durations.csv, pass1+pass2 junit (4 specs, scaled 0.8991 to the common specs)",
     "measured_at": "2026-11-04",
     "head": "ff45ee7f650a958f02c9f7678ca223797213986d",
     "scale": 0.7377
