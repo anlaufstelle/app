@@ -57,6 +57,8 @@ def _stub_env(
     inherited_source_code_version: str | None,
     container_source_code_version: str | None,
     source_code_version_lines: int,
+    deploy_pull: str = "never",
+    pull_fails: bool = False,
 ) -> tuple[dict[str, str], Path, Path]:
     stack_dir = tmp_path / "stack"
     stack_dir.mkdir()
@@ -100,14 +102,23 @@ services:
     image: clamav/clamav:stable
   db:
     image: postgres:18-alpine@sha256:db
+  maintenance:
+    image: ghcr.io/anlaufstelle/app:main
+    pull_policy: always
   web:
     image: ghcr.io/anlaufstelle/app:main
+    pull_policy: always
 networks:
   internal: {}
 YAML
     exit 0
     ;;
 esac
+
+if [[ "$*" == *" pull" || "$*" == *" pull "* ]] && [[ -n "${DEPLOY_TEST_PULL_FAIL:-}" ]]; then
+  echo "simulated pull failure" >&2
+  exit 1
+fi
 
 if [[ "$1" == image && "$2" == inspect ]]; then
   if [[ "$3" == ghcr.io/anlaufstelle/app:main && -n "${DEPLOY_TEST_IMAGE_VERSION:-}" ]]; then
@@ -159,9 +170,11 @@ exit 0
         "DEPLOY_TEST_DOCKER_LOG": str(docker_log),
         "DEPLOY_TEST_IMAGE_VERSION": image_version,
         "DEPLOY_TEST_STATE": str(state_dir),
-        "DEPLOY_PULL": "never",
+        "DEPLOY_PULL": deploy_pull,
         "APP_VERSION": "main-durchgereicht",
     }
+    if pull_fails:
+        env["DEPLOY_TEST_PULL_FAIL"] = "1"
     if allow_unverified is not None:
         env["DEPLOY_ALLOW_UNVERIFIED_IMAGE"] = allow_unverified
     if inherited_source_code_version is not None:
@@ -179,6 +192,8 @@ def _run_remote(
     inherited_source_code_version: str | None = None,
     container_source_code_version: str | None = None,
     source_code_version_lines: int = 1,
+    deploy_pull: str = "never",
+    pull_fails: bool = False,
 ) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
     bash = shutil.which("bash")
     if bash is None:
@@ -190,6 +205,8 @@ def _run_remote(
         inherited_source_code_version=inherited_source_code_version,
         container_source_code_version=container_source_code_version,
         source_code_version_lines=source_code_version_lines,
+        deploy_pull=deploy_pull,
+        pull_fails=pull_fails,
     )
     result = subprocess.run(  # noqa: S603 — fester bash-Pfad, docker/sudo sind gestubbt
         [bash, "-s"],
@@ -356,3 +373,61 @@ def test_deploy_script_hat_gueltige_bash_syntax() -> None:
         check=False,
     )
     assert result.returncode == 0, result.stderr
+
+
+def _pull_calls(log_file: Path) -> list[str]:
+    return [call for call in _docker_calls(log_file) if re.search(r" pull(\s|\||$)", call.split("|SCV:")[0])]
+
+
+def test_never_path_pulls_only_third_party_services_before_run(tmp_path: Path) -> None:
+    result, _, log_file = _run_remote(tmp_path, deploy_pull="never")
+
+    assert result.returncode == 0, result.stderr
+    calls = _docker_calls(log_file)
+    pulls = _pull_calls(log_file)
+    assert len(pulls) == 1, pulls
+    args = pulls[0].split("|SCV:")[0].split(" pull ", 1)[1].split()
+    assert sorted(args) == ["caddy", "clamav", "db"], pulls[0]
+    pull_index = calls.index(pulls[0])
+    run_index = next(i for i, call in enumerate(calls) if " run " in call)
+    assert pull_index < run_index
+
+
+def test_never_path_does_not_pull_the_app_image(tmp_path: Path) -> None:
+    result, _, log_file = _run_remote(tmp_path, deploy_pull="never")
+
+    assert result.returncode == 0, result.stderr
+    for pull in _pull_calls(log_file):
+        assert "web" not in pull.split()
+        assert "maintenance" not in pull.split()
+        assert "anlaufstelle" not in pull
+    assert any("--pull never" in call for call in _docker_calls(log_file) if " run " in call)
+    assert any("--pull never" in call for call in _docker_calls(log_file) if " up " in call)
+
+
+def test_never_path_logs_the_pulled_third_party_images(tmp_path: Path) -> None:
+    result, _, _ = _run_remote(tmp_path, deploy_pull="never")
+
+    assert result.returncode == 0, result.stderr
+    assert "db -> postgres:18-alpine@sha256:db" in result.stdout
+    assert "caddy -> caddy:2-alpine@sha256:caddy" in result.stdout
+    assert "clamav -> clamav/clamav:stable" in result.stdout
+    assert "web ->" not in result.stdout
+
+
+def test_never_path_aborts_when_the_third_party_pull_fails(tmp_path: Path) -> None:
+    result, _, log_file = _run_remote(tmp_path, deploy_pull="never", pull_fails=True)
+
+    assert result.returncode != 0
+    assert not any(" run " in call or " up " in call for call in _docker_calls(log_file))
+
+
+def test_always_path_pulls_the_whole_stack_unchanged(tmp_path: Path) -> None:
+    result, _, log_file = _run_remote(tmp_path, deploy_pull="always")
+
+    assert result.returncode == 0, result.stderr
+    pulls = _pull_calls(log_file)
+    assert len(pulls) == 1, pulls
+    assert pulls[0].split("|SCV:")[0].endswith(" pull"), pulls[0]
+    assert any("--pull always" in call for call in _docker_calls(log_file) if " run " in call)
+    assert "Fremdimages" not in result.stdout
