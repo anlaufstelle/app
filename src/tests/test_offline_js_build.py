@@ -80,3 +80,15 @@ def test_check_rejects_drift_without_writing(build_tree, drift):
     assert result.returncode == 1, result.stdout + result.stderr
     assert "offline-store.min.js" in result.stdout + result.stderr
     assert (artifact.read_bytes() if artifact.exists() else None) == before
+
+
+def test_delivered_crypto_exports_key_epoch():
+    """Refs #2688: the pages ship the minified crypto session, so the key epoch
+    that offline views bind open drafts to must be part of that artifact. A
+    stale artifact silently disables the binding even with an updated source."""
+    templates = ROOT / "src/templates"
+    sources = {path.relative_to(templates).as_posix(): path.read_text() for path in templates.rglob("*.html")}
+    loaders = sorted(name for name, text in sources.items() if "js/crypto.min.js" in text)
+    assert loaders, "no template loads crypto.min.js"
+    assert not [name for name, text in sources.items() if "'js/crypto.js'" in text or '"js/crypto.js"' in text]
+    assert "keyEpoch" in (ROOT / "src/static/js/crypto.min.js").read_text()
