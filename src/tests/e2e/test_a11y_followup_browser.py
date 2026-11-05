@@ -16,9 +16,16 @@ from playwright.sync_api import expect
 
 from ._axe import format_violations, run_axe, serious_or_critical
 from ._helpers import SEED_PASSWORD
+from ._helpers import do_real_login as _do_real_login
 from .test_config_ui import FORM_SUBMIT, _delete_doctype
 from .test_goals_htmx import _create_case, _create_goal_in_case, _goal_card_locator
 from .test_mfa_setup_flow import _cleanup_totp, _ensure_no_totp, _generate_totp_code
+from .test_offline_detail_touch_targets import (
+    _cache_bundle,
+    _open_offline_detail,
+    _seed_client_with_event_and_workitem,
+)
+from .test_retention_dashboard import _ensure_proposals
 
 pytestmark = pytest.mark.e2e
 
@@ -28,10 +35,6 @@ MIN_CONTRAST = 4.5
 def _assert_axe_clean(page, base_url) -> None:
     blocking = serious_or_critical(run_axe(page, base_url).violations)
     assert not blocking, format_violations(blocking)
-
-
-def _active_element_id(page) -> str:
-    return page.evaluate("() => (document.activeElement && document.activeElement.id) || ''")
 
 
 class TestCaseDetailNames:
@@ -310,3 +313,37 @@ class TestZZMfaSetupBrowser:
         finally:
             context.close()
             _cleanup_totp("admin", e2e_env)
+
+
+class TestHoldAndOfflineContactLabels:
+    def test_click_on_the_hold_reason_label_focuses_the_textarea(self, authenticated_page, base_url, e2e_env):
+        pks = _ensure_proposals(e2e_env)
+        page = authenticated_page
+        page.goto(f"{base_url}/retention/", wait_until="domcontentloaded")
+        card = page.locator(f"#proposal-{pks[0]}")
+        card.locator("button:has-text('Hold setzen')").click()
+        field = card.get_by_role("textbox", name=re.compile(r"^Begründung"))
+        expect(field).to_be_visible()
+        card.locator("label", has_text="Begründung").click()
+        expect(field).to_be_focused()
+
+    def test_offline_contact_form_names_the_document_type_and_focuses_it_from_its_label(
+        self, browser, base_url, e2e_env
+    ):
+        client_pk, _event_pk, _wi_pk = _seed_client_with_event_and_workitem(e2e_env)
+        context = browser.new_context(locale="de-DE")
+        page = context.new_page()
+        page.set_default_timeout(30000)
+        try:
+            _do_real_login(page, base_url)
+            assert _cache_bundle(page, client_pk)["ok"]
+            _open_offline_detail(page, base_url, client_pk)
+            page.locator("[data-testid='offline-new-event-btn']").click()
+            select = page.get_by_role("combobox", name="Dokumentationstyp", exact=True)
+            expect(select).to_have_count(1)
+            page.locator("label[for='offline-create-doctype']").click()
+            expect(select).to_be_focused()
+            _assert_axe_clean(page, base_url)
+        finally:
+            page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()
