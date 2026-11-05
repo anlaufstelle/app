@@ -14,6 +14,7 @@ import re
 import uuid
 
 import pytest
+from playwright.sync_api import expect
 
 pytestmark = pytest.mark.e2e
 
@@ -101,6 +102,13 @@ class TestSuche:
 class TestClientListFilter:
     """Klientel-Liste: Filterung nach Stage und Altersgruppe."""
 
+    @staticmethod
+    def _open_list(page, base_url, query):
+        """Opens the filtered list and waits for the list page itself (not an error page)."""
+        page.goto(f"{base_url}/clients/?{query}")
+        page.wait_for_load_state("domcontentloaded")
+        expect(page.locator("#main-content h1:has-text('Personen')")).to_be_visible()
+
     def test_filter_by_stage_qualified(self, authenticated_page, base_url):
         """Filter nach Stage 'qualified' zeigt nur qualifizierte Klientel."""
         page = authenticated_page
@@ -117,14 +125,15 @@ class TestClientListFilter:
     def test_filter_by_stage_identified(self, authenticated_page, base_url):
         """Filter nach Stage 'identified' zeigt nur identifizierte Klientel."""
         page = authenticated_page
-        page.goto(f"{base_url}/clients/?stage=identified")
-        page.wait_for_load_state("domcontentloaded")
 
-        # Identifizierte Klientel sichtbar
-        assert page.locator("a:has-text('Blitz-08')").first.is_visible()
-        assert page.locator("a:has-text('Regen-55')").first.is_visible()
+        # Identified clients are listed (found through a search, see above).
+        for pseudonym in ("Blitz-08", "Regen-55"):
+            self._open_list(page, base_url, f"stage=identified&q={pseudonym}")
+            assert page.locator(f"a:has-text('{pseudonym}')").first.is_visible()
 
-        # Qualifizierte Klientel nicht sichtbar
+        # Qualified clients are not listed: the search alone would find Stern-42, so only
+        # the stage filter can keep it out of the result.
+        self._open_list(page, base_url, "stage=identified&q=Stern-42")
         assert page.locator("a:has-text('Stern-42')").count() == 0
 
     def test_no_stage_filter_shows_all(self, authenticated_page, base_url):

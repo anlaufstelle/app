@@ -138,8 +138,10 @@ def test_episode_and_task_types_can_be_created_and_are_offered_by_their_forms(au
 def test_standard_types_of_the_four_carriers_are_visible_with_an_encrypted_text_area(authenticated_page, base_url):
     page = authenticated_page
     errors = track_console_errors(page)
-    page.goto(f"{base_url}/config/document-types/", wait_until="domcontentloaded")
     for entity, (name, label, field) in STANDARD.items():
+        # The list is paginated (25 per page, inactive types included): narrow it to the active
+        # type of this name instead of relying on its position on page 1.
+        page.goto(f"{base_url}/config/document-types/?q={name}&is_active=true", wait_until="domcontentloaded")
         link = page.get_by_role("link", name=name, exact=True)
         expect(link).to_have_count(1)
         link.click()
@@ -155,7 +157,6 @@ def test_standard_types_of_the_four_carriers_are_visible_with_an_encrypted_text_
         expect(page.locator(f'[data-testid="fieldtemplate-row"]:has-text("{field}")').first).to_contain_text(
             "Verschlüsselt"
         )
-        page.goto(f"{base_url}/config/document-types/", wait_until="domcontentloaded")
     assert errors == [], f"console errors: {errors}"
 
 
