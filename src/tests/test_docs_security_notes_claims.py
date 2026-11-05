@@ -15,6 +15,7 @@ import re
 from pathlib import Path
 
 import pytest
+import yaml
 
 pytestmark = pytest.mark.architecture
 
@@ -76,6 +77,28 @@ def test_audit_row_names_every_free_text_key() -> None:
 
 CHECKLIST_URL = "#1597"
 
+# Required status checks of the app ruleset ``main-protection`` (ID 26602264),
+# copied from the maintainer's read-only export of that ruleset.
+REQUIRED_CHECKS = (
+    "lint",
+    "check",
+    "typecheck",
+    "lock-check",
+    "audit",
+    "licenses",
+    "translation-versions",
+    "translations-coverage",
+    "test (1)",
+    "test (2)",
+    "test (3)",
+    "coverage",
+    *(f"E2E-Scheibe {n}" for n in range(1, 9)),
+    "Analyze (javascript)",
+    "Analyze (python)",
+)
+CHECK_WORKFLOWS = ("lint.yml", "test.yml", "e2e.yml", "codeql.yml")
+MATRIX_PLACEHOLDER = re.compile(r"\$\{\{\s*matrix\.(\w+)\s*\}\}")
+
 
 def _german_branch_section() -> str:
     text = SECURITY_NOTES.read_text(encoding="utf-8")
@@ -94,6 +117,31 @@ def _table_row(section: str, ruleset: str) -> str:
     return rows[0]
 
 
+def _backticked(text: str) -> list[str]:
+    return re.findall(r"`([^`]+)`", text)
+
+
+def _workflow_check_names() -> set[str]:
+    """Check-run names the shipped workflows produce (job ``name`` or ID, matrix expanded)."""
+    names: set[str] = set()
+    for workflow in CHECK_WORKFLOWS:
+        jobs = yaml.safe_load((REPO_ROOT / ".github/workflows" / workflow).read_text(encoding="utf-8"))["jobs"]
+        for job_id, job in jobs.items():
+            matrix = (job.get("strategy") or {}).get("matrix") or {}
+            template = job.get("name")
+            if not matrix:
+                names.add(template or job_id)
+                continue
+            assert len(matrix) == 1, f"{workflow}:{job_id} uses a multi-key matrix"
+            (values,) = matrix.values()
+            for value in values:
+                if template is None:
+                    names.add(f"{job_id} ({value})")
+                else:
+                    names.add(MATRIX_PLACEHOLDER.sub(lambda m, v=value: str(v), template))
+    return names
+
+
 def test_branch_protection_keeps_the_private_dev_repository_boundary() -> None:
     section = _german_branch_section()
     assert (
@@ -106,13 +154,55 @@ def test_branch_protection_describes_the_configured_app_rulesets() -> None:
     section = _german_branch_section()
     assert "`refs/heads/main`" in section
     integrity = _table_row(section, "main-integrity")
-    assert "Keine Bypass-Liste" in integrity
+    for rule in ("`deletion`", "`non_fast_forward`"):
+        assert rule in integrity
+    assert "Keine Bypass-Liste; gilt auch für Admins" in integrity
     assert "Repository admin" not in integrity
     protection = _table_row(section, "main-protection")
+    for rule in ("`deletion`", "`non_fast_forward`", "`required_linear_history`", "`required_status_checks`"):
+        assert rule in protection
+    assert "strikt: Branch muss aktuell sein" in protection
     assert "Rolle „Repository admin“" in protection
     assert "Modus „Always“" in protection
     assert "Keines der beiden Rulesets enthält eine Pull-Request-Regel (`pull_request`)" in section
     assert "keine Restrict-updates-Regel (`update`)" in section
+
+
+def test_branch_protection_names_the_expected_bypass_fields() -> None:
+    section = _german_branch_section()
+    assert "bei `main-integrity` eine leere `bypass_actors`-Liste" in section
+    assert (
+        "bei `main-protection` genau ein Eintrag `RepositoryRole` mit `actor_id: 5` "
+        "(Rolle „Repository admin“) und `bypass_mode: always`"
+    ) in section
+
+
+def test_branch_protection_explains_what_the_bypass_covers() -> None:
+    section = _german_branch_section()
+    assert (
+        "An den Pflicht-Checks kommt der Release-Push nur über den Bypass vorbei, "
+        "weil sie erst nach dem Push auf `main` laufen; "
+        "die lineare Historie hält ein Fast-Forward-Push ohnehin ein."
+    ) in section
+    assert "die ein Fast-Forward-Push ohnehin einhält" not in section
+
+
+def test_branch_protection_lists_exactly_the_required_checks() -> None:
+    lines = [
+        line
+        for line in _german_branch_section().splitlines()
+        if line.startswith("Erforderliche Status-Checks in `main-protection`")
+    ]
+    assert len(lines) == 1, f"expected one required-checks line, found {len(lines)}"
+    assert f"({len(REQUIRED_CHECKS)}, alle aus GitHub Actions)" in lines[0]
+    listed = [name for name in _backticked(lines[0]) if name != "main-protection"]
+    assert sorted(listed) == sorted(REQUIRED_CHECKS)
+    assert len(REQUIRED_CHECKS) == 22
+
+
+def test_required_checks_are_produced_by_the_shipped_workflows() -> None:
+    missing = sorted(set(REQUIRED_CHECKS) - _workflow_check_names())
+    assert missing == [], f"required checks no shipped workflow job produces: {missing}"
 
 
 def test_branch_protection_names_the_evidence_boundary() -> None:
@@ -135,13 +225,34 @@ def test_english_branch_protection_excerpt_mirrors_the_configured_rulesets() -> 
     assert "private development repository without GitHub Pro" in section
     assert "local gates, signed tags and the release dry run" in section
     assert "`refs/heads/main`" in section
-    assert "`main-integrity` (ID 26607015)" in section
-    assert "without any bypass actors" in section
-    assert "`main-protection` (ID 26602264)" in section
-    assert "an “Always” bypass for the “Repository admin” role" in section
+    assert (
+        "`main-integrity` (ID 26607015) restricts deletions and blocks force pushes "
+        "without any bypass actors, also for admins."
+    ) in section
+    assert (
+        "`main-protection` (ID 26602264) repeats both rules and adds required linear history "
+        f"and {len(REQUIRED_CHECKS)} strict required status checks ("
+    ) in section
+    assert (
+        "an “Always” bypass for the “Repository admin” role (`RepositoryRole`, `actor_id: 5`) as the only bypass actor"
+    ) in section
     assert "Neither ruleset has a pull request rule" in section
+    assert (
+        "The release push gets past the required checks only through the bypass, "
+        "because they run on `main` after the push; a fast-forward push keeps linear history anyway."
+    ) in section
     assert f"[maintainer checklist #1597]({CHECKLIST_URL})" in section
     assert "does not prove active GitHub settings" in section
+
+
+def test_english_branch_protection_excerpt_lists_exactly_the_required_checks() -> None:
+    section = _english_branch_section()
+    opener = "strict required status checks ("
+    assert opener in section, "English excerpt lacks the strict required-checks list"
+    start = section.index(opener)
+    assert "), with" in section[start:], "English required-checks list is not closed before the bypass clause"
+    end = section.index("), with", start)
+    assert sorted(_backticked(section[start:end])) == sorted(REQUIRED_CHECKS)
 
 
 def test_english_branch_protection_excerpt_drops_the_superseded_target() -> None:

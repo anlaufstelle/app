@@ -99,6 +99,28 @@ def test_dev_repository_guidance_does_not_claim_admin_ruleset_bypass():
 
 
 @pytest.mark.skipif(not (ROOT / "docs/dev").exists(), reason="docs/dev/ is absent from public snapshots")
+def test_platform_evidence_checks_the_configured_app_rulesets():
+    text = (ROOT / "docs/dev/release-checklist.md").read_text()
+    section = text.split("## 4.2 Plattform-Nachweise am Spiegel (Maintainer)", 1)[1].split("## Rollback", 1)[0]
+    rows = [line for line in section.splitlines() if line.startswith("| Am App-FF (6a) | #1597 Punkt 1:")]
+    assert len(rows) == 1, f"expected one ruleset evidence row, found {len(rows)}"
+    for claim in (
+        "beide Rulesets Active für `refs/heads/main`",
+        "`main-integrity` ohne Bypass",
+        "`main-protection` mit Pflicht-Checks und linearer Historie",
+        "genau ein Bypass (Rolle „Repository admin“, Always)",
+        "keine Pull-Request-Regel, kein `update`",
+        "Alt-/Neu-SHA und Ancestor-Nachweis",
+    ):
+        assert claim in rows[0], f"ruleset evidence row lacks: {claim}"
+    assert '"${PROTECTION_RULESET_ID:?fehlt}"' in section
+    assert "beide IDs (26607015, 26602264) einzeln prüfen" in section
+    assert "`main-pr`" not in section
+    assert "PR_RULESET_ID" not in section
+    assert not re.search(r"benannte\w*\s+Release-Identität", section)
+
+
+@pytest.mark.skipif(not (ROOT / "docs/dev").exists(), reason="docs/dev/ is absent from public snapshots")
 def test_platform_evidence_has_one_handoff_reference_and_read_only_commands():
     text = (ROOT / "docs/dev/release-checklist.md").read_text()
     section = text.split("## 4.2 Plattform-Nachweise am Spiegel (Maintainer)", 1)[1].split("## Rollback", 1)[0]
