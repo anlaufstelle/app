@@ -1,6 +1,7 @@
 """Verdict logic and database-less behaviour of the nightly guards, without seeding or browsers."""
 
 import argparse
+import ast
 import contextlib
 import os
 import re
@@ -498,3 +499,35 @@ def test_the_epoch_stamp_of_an_aborted_rebuild_is_recognised_but_never_fresh(nig
 
     assert parsed == epoch
     assert not nightly.seed_is_fresh(parsed, "large", 7)
+
+
+def imported_core_modules(path):
+    """Dotted names of every ``core.*`` module a file imports (also function-level imports)."""
+    tree = ast.parse(path.read_text())
+    names = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.level == 0 and (node.module or "").startswith("core"):
+            names.add(node.module)
+            names.update(f"{node.module}.{alias.name}" for alias in node.names)
+    return names
+
+
+def module_file(dotted):
+    base = ROOT / "src" / Path(*dotted.split("."))
+    for candidate in (base.with_suffix(".py"), base / "__init__.py"):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def test_the_seed_code_hash_covers_every_core_module_the_seed_imports(nightly):
+    """Keeps SEED_CODE_GLOBS honest: a module the seed starts importing must be hashed too."""
+    covered = {path for pattern in nightly.SEED_CODE_GLOBS for path in ROOT.glob(pattern)}
+    sources = [ROOT / "src/core/management/commands/seed.py", *sorted((ROOT / "src/core/seed").glob("*.py"))]
+    missing = {}
+    for source in sources:
+        for dotted in imported_core_modules(source):
+            file = module_file(dotted)
+            if file is not None and file not in covered:
+                missing.setdefault(file.relative_to(ROOT).as_posix(), source.name)
+    assert not missing, f"imported by the seed but not in SEED_CODE_GLOBS: {missing}"

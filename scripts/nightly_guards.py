@@ -65,6 +65,9 @@ SEED_CODE_GLOBS = (
     "src/core/services/events/fields.py",
     "src/core/demo.py",
     "src/core/constants.py",
+    # The models (defaults, save logic) and the k-threshold helpers the reserve size comes from.
+    "src/core/models/**/*.py",
+    "src/core/services/dashboard/external_report.py",
 )
 GUARD_ORDER = ("perf-medium", "perf-large", "demo", "public-skips", "docs-screens")
 PASS, FAIL, SKIP = "PASS", "FAIL", "SKIP"
