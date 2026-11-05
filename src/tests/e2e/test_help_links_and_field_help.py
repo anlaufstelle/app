@@ -53,7 +53,18 @@ class TestFieldConditionsHelpLink:
 
         help_block = page.locator('[data-context-help="document-conditions"]')
         expect(help_block).to_be_visible(timeout=15000)
+        # The live preview loads after the page and its swap moves the focus (and the
+        # viewport) to the pane: wait for it so the click cannot land in between (Refs #2688).
+        page.wait_for_function(
+            """() => {
+                const pane = document.querySelector('[data-testid="config-preview-pane"]');
+                if (pane && pane.textContent.includes('Vorschau wird geladen')) return false;
+                return !document.querySelector('.htmx-request, .htmx-swapping, .htmx-settling');
+            }""",
+            timeout=30000,
+        )
         help_block.locator("summary").click()
+        expect(help_block).to_have_attribute("open", "")
         help_block.get_by_role("link", name="Mehr erfahren").click()
 
         page.wait_for_url("**/hilfe/verwaltung/#feldbedingungen")

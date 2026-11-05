@@ -831,30 +831,57 @@ class TestFieldBoardDragAndDrop:
             _delete_doctype(page, base_url, pk)
 
     @staticmethod
-    def _center_for_drag(page, handle, target):
-        """Zentriert die Quellzeile und liefert stabile Bounding-Boxes (Quelle, Ziel).
+    def _wait_for_preview_settled(page):
+        """Waits until the live preview has loaded and no HTMX request is open.
 
-        Warum wiederholt zentriert wird: Nach jeder Board-Mutation lädt die
-        Live-Vorschau-Pane (P11) asynchron neu. Deren ``htmx:afterSwap`` fokussiert
-        über ``focus-management.js`` (Refs #1339) das getauschte Vorschau-Fragment
-        am SEITENENDE mit ``preventScroll:false`` — der Viewport springt ans Ende
-        (``document.activeElement`` == ``config-preview-pane``, ``scrollY`` == max).
-        Seit der Regel-Editor (M1 / Refs #1057) die Detailseite verlängert hat,
-        landet das Feld-Board bei diesem Scroll-Reflex OBERHALB des Viewports
-        (negative ``y`` → die Maus-Sequenz läuft ins Leere). Der Reflex feuert
-        genau EINMAL pro Mutation und kann ein einzelnes ``scrollIntoView``
-        überholen. Daher zentrieren, bis Quelle UND Ziel stabil im Viewport
-        liegen — das Re-Zentrieren nach dem einmaligen Fokus-Sprung hält.
+        The preview pane (``hx-trigger="load, refresh-preview from:body"``) loads
+        asynchronously after the page load and after every board mutation. Its
+        ``htmx:afterSwap`` moves the focus to the pane at the page end and so scrolls
+        the viewport. A fixed pause cannot tell whether that reply is still on its
+        way; under two CPUs it arrives in the middle of a mouse gesture (Refs #2688).
+        """
+        page.wait_for_function(
+            """() => {
+                const pane = document.querySelector('[data-testid="config-preview-pane"]');
+                if (pane && pane.textContent.includes('Vorschau wird geladen')) return false;
+                return !document.querySelector('.htmx-request, .htmx-swapping, .htmx-settling');
+            }""",
+            timeout=30000,
+        )
+
+    @classmethod
+    def _center_for_drag(cls, page, handle, target):
+        """Centres the source row and returns stable bounding boxes (source, target).
+
+        Why the preview is awaited first and the row centred afterwards: after every
+        board mutation (and once after the page load) the live preview pane reloads
+        asynchronously. Its ``htmx:afterSwap`` makes ``focus-management.js`` (Refs #1339)
+        focus the swapped preview fragment at the END of the page with
+        ``preventScroll: false``, so the viewport jumps to the bottom
+        (``document.activeElement`` is ``config-preview-pane``, ``scrollY`` is at its
+        maximum). Since the rule editor (Refs #1057) lengthened the detail page, this
+        scroll reflex leaves the field board ABOVE the viewport (negative ``y``, so the
+        mouse sequence hits nothing). The reflex fires exactly ONCE per reply. Therefore
+        every measurement waits until the preview has loaded and no HTMX request is open
+        (instead of a fixed pause), and the boxes must stay unchanged inside the
+        viewport across two frames (Refs #2688).
         """
         vh = page.viewport_size["height"]
         hb = tb = None
         for _ in range(12):
+            cls._wait_for_preview_settled(page)
             handle.evaluate("el => el.scrollIntoView({block: 'center'})")
-            page.wait_for_timeout(150)
-            hb = handle.bounding_box()
-            tb = target.bounding_box()
-            if hb and tb and 0 <= hb["y"] <= vh - hb["height"] and 0 <= tb["y"] <= vh - tb["height"]:
+            hb, tb = handle.bounding_box(), target.bounding_box()
+            page.evaluate("() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
+            hb2, tb2 = handle.bounding_box(), target.bounding_box()
+            in_view = hb2 and tb2 and 0 <= hb2["y"] <= vh - hb2["height"] and 0 <= tb2["y"] <= vh - tb2["height"]
+            if in_view and hb == hb2 and tb == tb2:
+                # A reply that arrived during the frames would have moved the boxes or
+                # left a request open: only accept a still settled page.
+                cls._wait_for_preview_settled(page)
+                hb, tb = handle.bounding_box(), target.bounding_box()
                 break
+            hb, tb = hb2, tb2
         return hb, tb
 
     @classmethod
@@ -896,7 +923,26 @@ class TestFieldBoardDragAndDrop:
             # Mehrstufige Bewegung, damit SortableJS die dragover-Events sieht.
             # Ziel-Offset mit Untergrenze: eine leere Ziel-Liste ist nur
             # min-h-[1.5rem] hoch — der Auftreffpunkt darf nicht auf der Kante liegen.
-            page.mouse.move(tb["x"] + tb["width"] / 2, tb["y"] + max(tb["height"] * y_frac, 10), steps=25)
+            tx, ty = tb["x"] + tb["width"] / 2, tb["y"] + max(tb["height"] * y_frac, 10)
+            page.mouse.move(tx, ty, steps=25)
+            # Follow the target while the pointer rests on it: SortableJS may park the
+            # dragged row in the enclosing blocks list while the pointer crosses the gap
+            # between two group cards. The parked row pushes the target down by its own
+            # height, so the pre-measured drop point now lies on the parked row itself and
+            # the drop never reaches the target list (``/reorder/move-field/`` with
+            # ``group=""`` answered 200, the field ended up free instead of in the group).
+            # Re-measure and move on until the target box is stable, then release
+            # (bounded rounds; Refs #2688).
+            for _ in range(6):
+                page.wait_for_timeout(150)
+                nb = target.bounding_box()
+                if not nb:
+                    break
+                nx, ny = nb["x"] + nb["width"] / 2, nb["y"] + max(nb["height"] * y_frac, 10)
+                if abs(nx - tx) < 1 and abs(ny - ty) < 1:
+                    break
+                tx, ty = nx, ny
+                page.mouse.move(tx, ty, steps=5)
             page.wait_for_timeout(300)
             page.mouse.up()
 
