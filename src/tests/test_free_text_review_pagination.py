@@ -11,7 +11,10 @@ from django.utils import timezone
 from core.models import DocumentType, DocumentTypeField, Event, FieldTemplate, FreeTextReview
 from core.services import free_text_review as review_service
 
-pytestmark = pytest.mark.django_db
+# The helpers spread change times over the minutes before ``now``; near
+# local midnight those rows fall on the previous day and date filters see
+# them. ``midday_clock`` keeps every row on the same local day.
+pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("midday_clock")]
 
 PAGE_SIZE = 50
 

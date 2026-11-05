@@ -1167,6 +1167,8 @@ def isolate_reporting_registry(monkeypatch, *, empty: bool = False) -> None:
 # run at 23:59 Europe/Berlin). ``midday_clock`` pins ``timezone.now()`` to
 # 12:00 local time of the current day, so these tests no longer depend on
 # the wall clock.
+# Tests that build rows minutes before ``now`` and filter by local date use
+# it for the same reason.
 
 
 def local_midday():
