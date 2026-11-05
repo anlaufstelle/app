@@ -13,11 +13,13 @@ HTTP and JSON errors as well as an unusable inventory exit with code 2.
 from __future__ import annotations
 
 import http.client
+import http.server
 import importlib.util
 import json
 import shutil
 import subprocess  # noqa: S404
 import sys
+import threading
 import urllib.error
 from pathlib import Path
 
@@ -73,10 +75,18 @@ def _exceptions_file(tmp_path: Path, entries: list[dict]) -> Path:
     return path
 
 
-def _run(tmp_path, fetch, *args, root: Path = REPO_ROOT, exceptions: list[dict] | None = None, level="moderate"):
+def _run(
+    tmp_path,
+    fetch,
+    *args,
+    root: Path = REPO_ROOT,
+    exceptions: list[dict] | None = None,
+    level="moderate",
+    module=None,
+):
     exc_path = _exceptions_file(tmp_path, exceptions or [])
     argv = ["--root", str(root), "--audit-level", level, "--exceptions", str(exc_path), *args]
-    return _module().main(argv, fetch=fetch)
+    return (module or _module()).main(argv, fetch=fetch)
 
 
 def _inventory_packages() -> dict[str, str]:
@@ -93,6 +103,72 @@ def _tree(tmp_path: Path, inventory_text: str | None) -> Path:
     if inventory_text is not None:
         (root / "scripts" / "vendor_js_inventory.json").write_text(inventory_text, encoding="utf-8")
     return root
+
+
+class _StubRegistryHandler(http.server.BaseHTTPRequestHandler):
+    """Loopback stand-in for the registry: the bulk path answers with ``status``,
+    every other path with an empty (clean) advisory list."""
+
+    status = 302
+    seen: list[tuple[str, str]] = []
+
+    def _answer(self) -> None:
+        type(self).seen.append((self.command, self.path))
+        length = int(self.headers.get("Content-Length") or 0)
+        if length:
+            self.rfile.read(length)
+        if self.path.endswith("/bulk") and self.status != 200:
+            self.send_response(self.status)
+            self.send_header("Location", "/elsewhere/clean")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        body = b"{}"
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    do_GET = _answer  # noqa: N815 - name required by BaseHTTPRequestHandler
+    do_POST = _answer  # noqa: N815 - name required by BaseHTTPRequestHandler
+
+    def log_message(self, *args) -> None:
+        pass
+
+
+@pytest.fixture
+def stub_registry():
+    """Start the loopback stub; yields ``(handler_class, bulk_url)``. No outside network."""
+    handler = type("Handler", (_StubRegistryHandler,), {"seen": []})
+    server = http.server.HTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield handler, f"http://127.0.0.1:{server.server_port}/-/npm/v1/security/advisories/bulk"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+class TestRedirectsAreNotFollowed:
+    @pytest.mark.parametrize("status", [301, 302, 303, 307, 308])
+    def test_redirect_of_the_endpoint_is_an_incomplete_check(self, tmp_path, capsys, stub_registry, status):
+        handler, url = stub_registry
+        handler.status = status
+        module = _module()
+        assert _run(tmp_path, module.http_post, "--url", url, "--timeout", "5", module=module) == 2
+        err = capsys.readouterr().err
+        assert "incomplete" in err and f"redirect ({status})" in err
+        assert handler.seen == [("POST", "/-/npm/v1/security/advisories/bulk")]
+
+    def test_direct_answer_through_the_real_transport_still_counts(self, tmp_path, capsys, stub_registry):
+        handler, url = stub_registry
+        handler.status = 200
+        module = _module()
+        assert _run(tmp_path, module.http_post, "--url", url, "--timeout", "5", module=module) == 0
+        assert handler.seen == [("POST", "/-/npm/v1/security/advisories/bulk")]
 
 
 class TestBlocking:

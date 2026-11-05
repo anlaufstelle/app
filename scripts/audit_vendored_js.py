@@ -19,7 +19,8 @@ when the advisory is gone — the file has to be cleaned up.
 
 Exit codes: 0 = no blocking finding · 1 = blocking finding or expired
 exception · 2 = check incomplete (inventory, exceptions file, network, HTTP or
-response unusable). An incomplete check is never reported as "0 findings".
+response unusable, or a redirect of the endpoint, which is never followed). An
+incomplete check is never reported as "0 findings".
 
 Stdlib only. Usage::
 
@@ -55,15 +56,38 @@ class IncompleteCheckError(Exception):
     """The check could not be completed; the result must not count as clean."""
 
 
+class _RefuseRedirect(urllib.request.HTTPRedirectHandler):
+    """Never follow a redirect: the 3xx answer surfaces as ``HTTPError``."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 def http_post(url: str, body: bytes, timeout: float) -> bytes:
+    """POST to the bulk endpoint without following redirects.
+
+    The advisory answer only counts if it comes from the requested URL; a
+    redirect target could answer "no advisories" for anything. Every 3xx
+    answer is therefore an incomplete check.
+    """
     request = urllib.request.Request(  # noqa: S310 - URL is the fixed registry endpoint or an explicit override
         url,
         data=body,
         method="POST",
         headers={"Content-Type": "application/json", "Accept": "application/json"},
     )
-    with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
-        return response.read()
+    opener = urllib.request.build_opener(_RefuseRedirect)
+    try:
+        with opener.open(request, timeout=timeout) as response:
+            return response.read()
+    except urllib.error.HTTPError as exc:
+        if 300 <= exc.code < 400:
+            target = exc.headers.get("Location", "no location") if exc.headers else "no location"
+            exc.close()
+            raise IncompleteCheckError(
+                f"registry answered with a redirect ({exc.code}) to {target}; redirects are not followed"
+            ) from exc
+        raise
 
 
 def advisory_key(advisory: dict) -> str:
