@@ -40,6 +40,7 @@ afterEach(() => {
     liveComponents = [];
     delete window.offlineClient;
     delete window.offlineEdit;
+    delete window.crypto_session;
     document.body.innerHTML = "";
 });
 
@@ -498,5 +499,121 @@ describe("offline client view closes the form when another tab changed the entry
         await component._reconcile();
 
         expect(entry(component).editing).toBe(true);
+    });
+});
+
+// Refs #2688: the view does not see every key change as a rebuild. An idle
+// wipe or key expiry in this very tab only notifies other tabs, the boot gate
+// adopts a key another tab derived meanwhile without refreshing the view, and
+// a counter signal arriving during a running load() is dropped. In all three
+// cases the next rebuild may read the same entry with the same token under a
+// different sign-in, so an open form must not survive a change of the key
+// epoch, whatever happened in between.
+function keySession(initial) {
+    let epoch = initial;
+    window.crypto_session = {
+        awaitReady: async () => {},
+        keyEpoch: vi.fn(async () => epoch),
+    };
+    return {
+        set(next) {
+            epoch = next;
+        },
+    };
+}
+
+describe("offline client view binds an open form to the key it was read with", () => {
+    it("drops the event form after an own-tab wipe and a new sign-in without a rebuild in between", async () => {
+        const key = keySession("epoch-1");
+        const component = await makeLoadedComponent();
+        component.startEdit(eventByPk(component, PK_EVENT_A));
+        component.editValues.note = "draft of the previous session";
+
+        // Wipe in this tab (no event reaches the view), then a new sign-in
+        // takes the same person offline; its sync signal rebuilds the view.
+        key.set("epoch-2");
+        window.dispatchEvent(new CustomEvent("offline-unsynced-count", { detail: { count: 0 } }));
+        await flush();
+
+        expect(window.offlineClient.getOfflineClient).toHaveBeenCalledTimes(2);
+        expect(component.available).toBe(true);
+        expect(component.data.events.every((e) => e.editing === false)).toBe(true);
+        expect(component.editFields).toEqual([]);
+        expect(component.editValues).toEqual({});
+    });
+
+    it("drops the task form after the boot gate adopted another tab's key without a rebuild", async () => {
+        const key = keySession("epoch-1");
+        const component = await makeLoadedComponent();
+        component.startEditWorkItem(workItemByPk(component, PK_WI_A));
+        component.wiValues.title = "draft of the previous session";
+
+        key.set("epoch-2");
+        await component._reconcile();
+
+        expect(component.data.workitems.every((w) => w.editing === false)).toBe(true);
+        expect(component.wiValues).toEqual({});
+    });
+
+    it("drops the form when the key changed during a load that swallowed the counter signal", async () => {
+        const key = keySession("epoch-1");
+        const component = await makeLoadedComponent();
+        component.startEdit(eventByPk(component, PK_EVENT_A));
+        component.editValues.note = "draft of the previous session";
+        const pending = deferred();
+        window.offlineClient.getOfflineClient.mockImplementationOnce(() => pending.promise);
+
+        const loading = component.load();
+        key.set("epoch-2");
+        window.dispatchEvent(new CustomEvent("offline-unsynced-count", { detail: { count: 0 } }));
+        pending.resolve(bundle());
+        await loading;
+        await flush();
+
+        // The signal was dropped: no rebuild after the one in flight.
+        expect(window.offlineClient.getOfflineClient).toHaveBeenCalledTimes(2);
+        expect(component.data.events.every((e) => e.editing === false)).toBe(true);
+        expect(component.editValues).toEqual({});
+    });
+
+    it("drops an open create form when the key changed", async () => {
+        const key = keySession("epoch-1");
+        const component = await makeLoadedComponent();
+        component.startCreate();
+        component.createDocTypePk = "dt1";
+        component.onCreateDocTypeChange();
+        component.editValues.note = "draft of the previous session";
+
+        key.set("epoch-2");
+        await component.load();
+
+        expect(component.creating).toBe(false);
+        expect(component.createDocTypePk).toBe("");
+        expect(component.editValues).toEqual({});
+    });
+
+    it("fails closed when the key epoch cannot be read", async () => {
+        const key = keySession("epoch-1");
+        const component = await makeLoadedComponent();
+        component.startEditWorkItem(workItemByPk(component, PK_WI_A));
+
+        key.set(null);
+        await component.load();
+
+        expect(workItemByPk(component, PK_WI_A).editing).toBe(false);
+        expect(component.wiValues).toEqual({});
+    });
+
+    it("keeps the form open with its input while the key stays the same", async () => {
+        keySession("epoch-1");
+        const component = await makeLoadedComponent();
+        component.startEdit(eventByPk(component, PK_EVENT_A));
+        component.editValues.note = "typed by the user";
+
+        await component._reconcile();
+        await component.load();
+
+        expect(eventByPk(component, PK_EVENT_A).editing).toBe(true);
+        expect(component.editValues.note).toBe("typed by the user");
     });
 });
