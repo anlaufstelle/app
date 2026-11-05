@@ -1470,6 +1470,13 @@
     "rationale": "The release strip list excludes docs/dev; this node checks that excluded artifact."
   },
   {
+    "nodeid": "src/tests/test_dev_release_docs.py::test_platform_evidence_checks_the_configured_app_rulesets",
+    "profile": "public",
+    "reason": "docs/dev/ is absent from public snapshots",
+    "exclusion": "docs/dev",
+    "rationale": "The release strip list excludes docs/dev; this node checks that excluded artifact."
+  },
+  {
     "nodeid": "src/tests/test_dev_release_docs.py::test_platform_evidence_has_one_handoff_reference_and_read_only_commands",
     "profile": "public",
     "reason": "docs/dev/ is absent from public snapshots",
