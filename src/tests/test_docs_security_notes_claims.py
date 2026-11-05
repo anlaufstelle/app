@@ -11,6 +11,7 @@ not claim that audit entries contain no client PII (Refs #2486).
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 
 import pytest
@@ -73,42 +74,78 @@ def test_audit_row_names_every_free_text_key() -> None:
     assert missing == [], f"security-notes.md AuditLog.detail row does not name free-text keys: {missing}"
 
 
-def test_branch_protection_contract_names_the_maintainer_evidence() -> None:
+CHECKLIST_URL = "#1597"
+
+
+def _german_branch_section() -> str:
     text = SECURITY_NOTES.read_text(encoding="utf-8")
-    assert (
-        "Branch-Schutz/Rulesets stehen für das private Dev-Repo ohne GitHub Pro nicht zur Verfügung; "
-        "Ersatz sind lokale Gates, signierte Tags und der Release-Dry-Run. "
-        "Für das öffentliche app-Repo ist ein Ruleset vorgesehen: kein Force-Push, keine Löschung."
-    ) in text
-    assert "#1597" in text
+    return text.split("### Branch-Schutz und Maintainer-Nachweis", 1)[1].split("\n### ", 1)[0]
 
 
-def test_branch_protection_is_a_requirement_without_an_active_settings_claim() -> None:
-    text = SECURITY_NOTES.read_text(encoding="utf-8")
-    section = text.split("### Branch-Schutz und Maintainer-Nachweis", 1)[1].split("\n### ", 1)[0]
-    assert "Für das öffentliche app-Repo gilt ein Ruleset" not in section
-    assert "Der Nachweis der aktiven Einstellung erfolgt über die" in section
-    assert "keine aktive GitHub-Einstellung" in section
-
-
-def test_english_branch_protection_excerpt_preserves_the_evidence_boundary() -> None:
+def _english_branch_section() -> str:
     text = (REPO_ROOT / "docs/en/security-notes.md").read_text(encoding="utf-8")
     assert "## Branch protection and maintainer evidence" in text
-    assert "a ruleset is planned: no force pushes and no branch deletion" in text
-    assert "#1597" in text
-    assert "does not prove active GitHub settings" in text
-    assert "private development repository without GitHub Pro" in text
-    assert "local gates, signed tags and the release dry run" in text
+    return text.split("## Branch protection and maintainer evidence", 1)[1].split("\n## ", 1)[0]
 
 
-def test_branch_protection_separates_integrity_and_release_bypass() -> None:
-    text = SECURITY_NOTES.read_text(encoding="utf-8")
-    section = text.split("### Branch-Schutz und Maintainer-Nachweis", 1)[1].split("\n### ", 1)[0]
-    assert "main-integrity" in section
-    assert "main-pr" in section
+def _table_row(section: str, ruleset: str) -> str:
+    rows = [line for line in section.splitlines() if line.startswith(f"| `{ruleset}` ")]
+    assert len(rows) == 1, f"expected one table row for {ruleset}, found {len(rows)}"
+    return rows[0]
+
+
+def test_branch_protection_keeps_the_private_dev_repository_boundary() -> None:
+    section = _german_branch_section()
+    assert (
+        "Branch-Schutz/Rulesets stehen für das private Dev-Repo ohne GitHub Pro nicht zur Verfügung; "
+        "Ersatz sind lokale Gates, signierte Tags und der Release-Dry-Run."
+    ) in section
+
+
+def test_branch_protection_describes_the_configured_app_rulesets() -> None:
+    section = _german_branch_section()
+    assert "`refs/heads/main`" in section
+    integrity = _table_row(section, "main-integrity")
+    assert "Keine Bypass-Liste" in integrity
+    assert "Repository admin" not in integrity
+    protection = _table_row(section, "main-protection")
+    assert "Rolle „Repository admin“" in protection
+    assert "Modus „Always“" in protection
+    assert "Keines der beiden Rulesets enthält eine Pull-Request-Regel (`pull_request`)" in section
+    assert "keine Restrict-updates-Regel (`update`)" in section
+
+
+def test_branch_protection_names_the_evidence_boundary() -> None:
+    section = _german_branch_section()
+    assert f"[Maintainer-Checkliste #1597]({CHECKLIST_URL})" in section
+    assert "Quellbaum belegt keine aktive GitHub-Einstellung" in section
+
+
+def test_branch_protection_drops_the_superseded_target() -> None:
+    section = _german_branch_section()
+    assert "`main-pr`" not in section
+    assert not re.search(r"benannte\w*\s+Release-Identität", section)
+    assert "vorgesehen" not in section
+    assert "Für das öffentliche app-Repo gilt ein Ruleset" not in section
     assert "nur Repo-Admin" not in section
-    assert "refs/heads/main" in section
-    assert "Always" in section
-    assert "keine Restrict-updates-Regel" in section
-    english = (REPO_ROOT / "docs/en/security-notes.md").read_text()
-    assert "main-integrity" in english and "main-pr" in english
+
+
+def test_english_branch_protection_excerpt_mirrors_the_configured_rulesets() -> None:
+    section = _english_branch_section()
+    assert "private development repository without GitHub Pro" in section
+    assert "local gates, signed tags and the release dry run" in section
+    assert "`refs/heads/main`" in section
+    assert "`main-integrity` (ID 26607015)" in section
+    assert "without any bypass actors" in section
+    assert "`main-protection` (ID 26602264)" in section
+    assert "an “Always” bypass for the “Repository admin” role" in section
+    assert "Neither ruleset has a pull request rule" in section
+    assert f"[maintainer checklist #1597]({CHECKLIST_URL})" in section
+    assert "does not prove active GitHub settings" in section
+
+
+def test_english_branch_protection_excerpt_drops_the_superseded_target() -> None:
+    section = _english_branch_section()
+    assert "`main-pr`" not in section
+    assert "named release identity" not in section
+    assert "planned" not in section
