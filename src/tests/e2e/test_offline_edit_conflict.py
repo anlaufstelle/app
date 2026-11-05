@@ -584,6 +584,99 @@ class TestOfflineEditReplay:
                 page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
             context.close()
 
+    def test_open_edit_form_is_dropped_after_key_loss(self, browser, base_url, e2e_env):
+        """Refs #2688: while the stored data cannot be read (key cleared by a
+        logout, quick exit or idle wipe in another tab), the open inline form
+        and its unsaved input are dropped. A later rebuild with readable data
+        and an unchanged entry must not revive the previous session's draft.
+
+        The key loss is simulated at the store boundary: without a session key
+        ``getOfflineClient`` returns ``null``, so the view sees exactly that
+        for one rebuild before the real store answers again."""
+        client_pk, event_pk = _seed_client_with_event(e2e_env, notiz="Originalwert")
+        context = browser.new_context(locale="de-DE")
+        page = context.new_page()
+        page.set_default_timeout(30000)
+        try:
+            _do_real_login(page, base_url)
+            assert _cache_bundle(page, client_pk)["ok"]
+            _open_offline_detail(page, base_url, client_pk)
+            _go_offline(page)
+
+            page.locator(f"[data-testid='offline-edit-btn-{event_pk}']").click()
+            page.locator("[data-testid='offline-edit-form']").wait_for(state="visible", timeout=10000)
+            page.locator("[data-testid='offline-edit-input-notiz']").fill("Entwurf der vorherigen Sitzung")
+
+            phases = page.evaluate(
+                """async () => {
+                    const viewer = document.querySelector('[data-testid="offline-client-view"]');
+                    const state = window.Alpine.$data(viewer);
+                    const idle = async () => {
+                        const deadline = Date.now() + 10000;
+                        while (state.loading && Date.now() < deadline) {
+                            await new Promise((r) => setTimeout(r, 20));
+                        }
+                        await new Promise((r) => setTimeout(r, 50));
+                        return !state.loading;
+                    };
+                    const rebuild = async () => {
+                        window.dispatchEvent(new CustomEvent('offline-unsynced-count', {detail: {count: 0}}));
+                        const startedNow = state.loading;
+                        return (await idle()) && startedNow;
+                    };
+                    const snapshot = () => ({
+                        available: state.available,
+                        dataHeld: state.data !== null,
+                        editing: ((state.data && state.data.events) || []).some((e) => e.editing),
+                        editValues: Object.keys(state.editValues || {}).length,
+                        unavailableShown: Boolean(document.querySelector('[data-testid="offline-not-available"]')),
+                        formShown: Boolean(document.querySelector('[data-testid="offline-edit-form"]')),
+                    });
+                    if (!(await idle())) return {ok: false, reason: 'busy before'};
+                    const store = window.offlineClient;
+                    const realRead = store.getOfflineClient;
+                    store.getOfflineClient = async () => null;
+                    let lost;
+                    try {
+                        if (!(await rebuild())) return {ok: false, reason: 'no rebuild while key lost'};
+                        lost = snapshot();
+                    } finally {
+                        store.getOfflineClient = realRead;
+                    }
+                    if (!(await rebuild())) return {ok: false, reason: 'no rebuild after key returned'};
+                    return {ok: true, lost: lost, back: snapshot()};
+                }"""
+            )
+            assert phases.get("ok"), phases
+            assert phases["lost"] == {
+                "available": False,
+                "dataHeld": False,
+                "editing": False,
+                "editValues": 0,
+                "unavailableShown": True,
+                "formShown": False,
+            }, phases
+            assert phases["back"] == {
+                "available": True,
+                "dataHeld": True,
+                "editing": False,
+                "editValues": 0,
+                "unavailableShown": False,
+                "formShown": False,
+            }, phases
+
+            page.locator("[data-testid='offline-event']").first.wait_for(state="visible", timeout=10000)
+            assert page.locator("[data-testid='offline-edit-form']").count() == 0
+
+            # Reopening prefills from the stored entry, not from the old draft.
+            page.locator(f"[data-testid='offline-edit-btn-{event_pk}']").click()
+            page.locator("[data-testid='offline-edit-form']").wait_for(state="visible", timeout=10000)
+            assert page.locator("[data-testid='offline-edit-input-notiz']").input_value() == "Originalwert"
+        finally:
+            with suppress(Exception):
+                page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()
+
     def test_inplace_shell_offline_edit_syncs_despite_stale_csrf(self, browser, base_url, e2e_env):
         """Refs #1330: Offline-Edit auf der SW-servierten In-Place-Shell unter der
         kanonischen URL ``/clients/<pk>/`` (Refs #1322) muss beim Reconnect
