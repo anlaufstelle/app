@@ -152,6 +152,11 @@ def published_platforms(ref: str) -> set[str]:
     return platforms
 
 
+def _is_set(value: object) -> bool:
+    """A field counts as set only as a non-blank string; str(None) would read as "None"."""
+    return isinstance(value, str) and bool(value.strip())
+
+
 def load_exceptions(path: Path, today: dt.date) -> list[dict]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -163,7 +168,7 @@ def load_exceptions(path: Path, today: dt.date) -> list[dict]:
     parsed = []
     for index, entry in enumerate(entries):
         fields = ("vulnerability", "image", "package", "reason", "expires")
-        if not isinstance(entry, dict) or any(not str(entry.get(f, "")).strip() for f in fields):
+        if not isinstance(entry, dict) or any(not _is_set(entry.get(f)) for f in fields):
             raise IncompleteScanError(f"exceptions file {path}: entry {index} needs non-empty {', '.join(fields)}")
         try:
             expires = dt.date.fromisoformat(entry["expires"])
@@ -175,8 +180,8 @@ def load_exceptions(path: Path, today: dt.date) -> list[dict]:
                 f"exceptions file {path}: entry {index} expires {expires.isoformat()}, more than "
                 f"{MAX_EXCEPTION_DAYS} days after {today.isoformat()} (latest allowed: {latest.isoformat()})"
             )
-        if "target" in entry and not str(entry["target"]).strip():
-            raise IncompleteScanError(f"exceptions file {path}: entry {index} has an empty target")
+        if "target" in entry and not _is_set(entry["target"]):
+            raise IncompleteScanError(f"exceptions file {path}: entry {index}: target must be a non-empty string")
         parsed.append({**entry, "expires": expires})
     return parsed
 

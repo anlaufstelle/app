@@ -99,6 +99,11 @@ def advisory_key(advisory: dict) -> str:
     return match.group(0) if match else str(advisory["id"])
 
 
+def _is_set(value: object) -> bool:
+    """A field counts as set only as a non-blank string; str(None) would read as "None"."""
+    return isinstance(value, str) and bool(value.strip())
+
+
 def load_exceptions(path: Path, today: dt.date) -> list[dict]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -110,7 +115,7 @@ def load_exceptions(path: Path, today: dt.date) -> list[dict]:
     parsed = []
     for index, entry in enumerate(entries):
         fields = ("package", "advisory", "reason", "expires")
-        if not isinstance(entry, dict) or any(not str(entry.get(f, "")).strip() for f in fields):
+        if not isinstance(entry, dict) or any(not _is_set(entry.get(f)) for f in fields):
             raise IncompleteCheckError(f"exceptions file {path}: entry {index} needs non-empty {', '.join(fields)}")
         try:
             expires = dt.date.fromisoformat(entry["expires"])

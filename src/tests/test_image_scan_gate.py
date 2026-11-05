@@ -678,7 +678,7 @@ class TestBinaryScopedExceptions:
         """The target may be absent, but a present target must be a non-blank string."""
         result, calls, _ = _run(tmp_path, exceptions=[self._entry(), self._entry(target=value)])
         assert result.returncode == 2, result.stdout + result.stderr
-        assert "entry 1" in result.stderr and "target" in result.stderr
+        assert "entry 1: target must be a non-empty string" in result.stderr
         assert not _scan_calls(calls)
 
 
