@@ -31,6 +31,9 @@
  * Blocks-onEnd per elementFromPoint an der Loslass-Position erkannt und über
  * denselben move_field-Endpunkt persistiert. Der umgekehrte Weg (Gruppe→Top-
  * Level, Nachfahr→Vorfahr) funktioniert regulär über Fields-onEnd.
+ * Exception: SortableJS may already have handed the row to the group list on
+ * release (evt.to is that list); then this list is the target and the order is
+ * read from it (Refs #2688).
  *
  * Handle: EIN gemeinsamer Selektor `.drag-handle` deckt Gruppen-, freie-Feld-
  * und Gruppen-Feld-Handles ab. Dass ein Griff an einem inneren Feld-Handle
@@ -198,15 +201,24 @@
         animation: ANIMATION_MS,
         onEnd: function (evt) {
           // Freies Feld auf eine Gruppe fallen gelassen → in die Gruppe aufnehmen.
-          // (SortableJS routet den Vorfahr→Nachfahr-Drop nicht; Zielerkennung per
-          // elementFromPoint, Versand über denselben move_field-Endpunkt.)
+          // SortableJS usually does not route the ancestor-to-descendant drop (then
+          // the target comes from elementFromPoint), but it can hand the row to the
+          // nested group list after all (evt.to !== container, the row already sits
+          // in that list). Take this case first and read the order from the list as
+          // it stands: appending the row a second time, or missing it in ``blocks``,
+          // produced HTTP 400 and the full reload (Refs #2688).
           if (evt.item.hasAttribute("data-dtf-id")) {
-            var targetList = groupFieldListAtDrop(evt);
+            var movedId = evt.item.getAttribute("data-dtf-id");
+            var adoptedList =
+              evt.to !== container && evt.to.getAttribute("data-sortable") === "fields" ? evt.to : null;
+            var targetList = adoptedList || groupFieldListAtDrop(evt);
             if (targetList && targetList.getAttribute("data-move-url")) {
               var order = directAttrValues(targetList, "data-dtf-id");
-              order.push(evt.item.getAttribute("data-dtf-id"));
+              if (order.indexOf(movedId) === -1) {
+                order.push(movedId);
+              }
               postBatch(targetList.getAttribute("data-move-url"), {
-                moved: evt.item.getAttribute("data-dtf-id"),
+                moved: movedId,
                 group: targetList.getAttribute("data-group-id") || "",
                 order: order,
               });
