@@ -31,6 +31,7 @@ import pytest
 
 from ._helpers import do_real_login as _do_real_login
 from ._helpers import python_bin as _python
+from ._helpers import track_console_errors as _track_console_errors
 from ._helpers import wait_for_active_service_worker as _wait_for_active_service_worker
 from ._helpers import wait_until
 
@@ -601,11 +602,37 @@ class TestOfflineEditReplay:
             _do_real_login(page, base_url)
             assert _cache_bundle(page, client_pk)["ok"]
             _open_offline_detail(page, base_url, client_pk)
+
+            # The page runs the delivered minified crypto session, and that
+            # build carries the key epoch the open form is bound to.
+            crypto_scripts = page.evaluate(
+                "() => Array.from(document.scripts, (s) => s.src).filter((src) => /\\/js\\/crypto[.]/.test(src))"
+            )
+            assert len(crypto_scripts) == 1, crypto_scripts
+            assert re.search(r"/js/crypto\.min(\.[0-9a-f]+)?\.js$", crypto_scripts[0]), crypto_scripts
+            epoch = page.evaluate(
+                """async () => typeof window.crypto_session.keyEpoch === 'function'
+                    ? await window.crypto_session.keyEpoch()
+                    : 'missing'"""
+            )
+            assert isinstance(epoch, str) and epoch and epoch != "missing", epoch
+
             _go_offline(page)
 
             page.locator(f"[data-testid='offline-edit-btn-{event_pk}']").click()
             page.locator("[data-testid='offline-edit-form']").wait_for(state="visible", timeout=10000)
             page.locator("[data-testid='offline-edit-input-notiz']").fill("Entwurf der vorherigen Sitzung")
+
+            # Switching to "not available" and back must not log errors
+            # (e.g. template expressions reading the released data).
+            errors = _track_console_errors(page)
+            alpine_warnings = []
+
+            def _on_console(msg):
+                if msg.type == "warning" and "Alpine" in msg.text:
+                    alpine_warnings.append(msg.text)
+
+            page.on("console", _on_console)
 
             phases = page.evaluate(
                 """async () => {
@@ -667,6 +694,8 @@ class TestOfflineEditReplay:
 
             page.locator("[data-testid='offline-event']").first.wait_for(state="visible", timeout=10000)
             assert page.locator("[data-testid='offline-edit-form']").count() == 0
+            assert errors == [], errors
+            assert alpine_warnings == [], alpine_warnings
 
             # Reopening prefills from the stored entry, not from the old draft.
             page.locator(f"[data-testid='offline-edit-btn-{event_pk}']").click()
