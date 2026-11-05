@@ -191,7 +191,9 @@ def test_english_surfaces_are_translated_complete_and_fit(
                         problems += [f"{where} clipped: {text!r}" for text in result["clipped"]]
                     else:
                         found = serious_or_critical(run_axe(page, base_url).violations)
-                        problems += [f"{where} axe {v['id']} ({v['impact']})" for v in found]
+                        # ``_axe._normalise`` renames axe's ``id`` to ``rule``; ``v['id']`` raised ``KeyError``
+                        # as soon as a blocking violation appeared and hid page, rule and impact.
+                        problems += [f"{where} axe {v['rule']} ({v['impact']})" for v in found]
                 problems += [f"[{who} {width}px] console: {e}" for e in errors]
     finally:
         _set_language(e2e_env, username, previous)
