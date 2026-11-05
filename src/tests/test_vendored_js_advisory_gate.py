@@ -344,6 +344,21 @@ class TestExceptions:
     def test_malformed_exception_fails(self, tmp_path, overrides):
         assert _run(tmp_path, FakeRegistry({}), exceptions=[self._entry(**overrides)]) == 2
 
+    @pytest.mark.parametrize("field", ["package", "advisory", "reason", "expires"])
+    @pytest.mark.parametrize("value", ["", "  ", None, 0, []], ids=["empty", "blank", "null", "number", "list"])
+    def test_required_field_that_is_not_a_non_blank_string_fails(self, tmp_path, capsys, field, value):
+        """JSON null or a non-string value must not count as a set field (str(None) is "None")."""
+        # A valid entry comes first so the message must point at index 1, not 0.
+        entries = [self._entry(), self._entry(**{field: value})]
+        registry = FakeRegistry({"sortablejs": [_advisory("critical")]})
+        assert _run(tmp_path, registry, exceptions=entries) == 2
+        err = capsys.readouterr().err
+        assert "entry 1 needs non-empty" in err
+        assert registry.requests == []
+        path = _exceptions_file(tmp_path, entries)
+        argv = ["--audit-level", "moderate", "--check-exceptions", "--exceptions", str(path)]
+        assert _module().main(argv, fetch=FakeRegistry({})) == 2
+
     def test_expiry_far_in_the_future_fails(self, tmp_path, capsys):
         registry = FakeRegistry({"sortablejs": [_advisory("critical")]})
         assert _run(tmp_path, registry, exceptions=[self._entry(expires="9999-12-31")]) == 2

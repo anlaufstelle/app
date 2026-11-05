@@ -34,6 +34,7 @@ TRIVY = "aquasec/trivy@sha256:" + "b" * 64
 PLATFORMS = ("linux/amd64", "linux/arm64")
 # Exceptions may run at most 90 days; fixtures expire well inside that window.
 VALID_UNTIL = (dt.datetime.now(dt.UTC).date() + dt.timedelta(days=30)).isoformat()
+ABSENT = object()  # marks a field that is left out of an exceptions entry
 
 STUB = r"""#!/usr/bin/env python3
 import json, os, sys
@@ -317,18 +318,22 @@ class TestExceptions:
         result, _, _ = _run(tmp_path, exceptions=[self._entry(reason="")])
         assert result.returncode == 2
 
-    @pytest.mark.parametrize("field", ["image", "package"])
-    @pytest.mark.parametrize("value", [None, "", "  "], ids=["absent", "empty", "blank"])
-    def test_exception_without_image_or_package_is_rejected(self, tmp_path, field, value):
-        """An entry without image or package would cover the id in every image and package."""
+    @pytest.mark.parametrize("field", ["vulnerability", "image", "package", "reason", "expires"])
+    @pytest.mark.parametrize(
+        "value", [ABSENT, "", "  ", None, 0, []], ids=["absent", "empty", "blank", "null", "number", "list"]
+    )
+    def test_exception_without_a_required_field_is_rejected(self, tmp_path, field, value):
+        """An entry without image or package would cover the id in every image and package; JSON null
+        or a non-string value must not count as a set field (str(None) is "None")."""
         entry = self._entry()
-        if value is None:
+        if value is ABSENT:
             del entry[field]
         else:
             entry[field] = value
-        result, calls, _ = _run(tmp_path, scans=self._scans(), exceptions=[entry])
+        # A valid entry comes first so the message must point at index 1, not 0.
+        result, calls, _ = _run(tmp_path, scans=self._scans(), exceptions=[self._entry(), entry])
         assert result.returncode == 2, result.stdout + result.stderr
-        assert "needs non-empty" in result.stderr and field in result.stderr
+        assert "entry 1 needs non-empty" in result.stderr
         assert not _scan_calls(calls)
 
     def test_expiry_far_in_the_future_is_rejected(self, tmp_path):
@@ -668,9 +673,13 @@ class TestBinaryScopedExceptions:
         result, _, _ = _run(tmp_path, scans=self._scans(["usr/local/bin/gosu"]), exceptions=[entry])
         assert result.returncode == 1
 
-    def test_empty_target_is_rejected(self, tmp_path):
-        result, _, _ = _run(tmp_path, exceptions=[self._entry(target=" ")])
-        assert result.returncode == 2
+    @pytest.mark.parametrize("value", ["", " ", None, 0, []], ids=["empty", "blank", "null", "number", "list"])
+    def test_empty_target_is_rejected(self, tmp_path, value):
+        """The target may be absent, but a present target must be a non-blank string."""
+        result, calls, _ = _run(tmp_path, exceptions=[self._entry(), self._entry(target=value)])
+        assert result.returncode == 2, result.stdout + result.stderr
+        assert "entry 1" in result.stderr and "target" in result.stderr
+        assert not _scan_calls(calls)
 
 
 class TestNothingScanned:
