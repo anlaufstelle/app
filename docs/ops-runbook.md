@@ -1938,6 +1938,28 @@ Lücke. Bei jedem Versionswechsel müssen `APP_VERSION` und
 neuem Tag weiterhin den alten Digest.
 
 
+### 8.4b Schwachstellen-Scan der Images
+
+(Refs #2623) Die Lockfile-Gates (`pip-audit`, `npm audit`) sehen weder die Debian-Pakete des App-Images noch das eingebettete `supercronic` noch die Fremdimages. Diese prüft `scripts/scan_images.py` mit Trivy:
+
+- Trivy läuft als Container-Image, gepinnt per Digest (`TRIVY_IMAGE` im Skript). Gepinnt ist Trivy 0.76.1 (Digest des Multi-Arch-Index); ein auf den Platzhalter aus Nullen zurückgesetzter Digest bricht mit Exit 2 ab.
+- Die Schwachstellendatenbank wird einmal je Lauf geladen; alle Scans nutzen genau diesen Stand.
+- Das App-Image wird unter seinem Digest geprüft, je Plattform ein eigener Lauf (`linux/amd64`, `linux/arm64`). Die von Trivy gemeldete Architektur muss zur Plattform passen.
+- Die Fremdimages kommen aus `docker-compose.prod.yml` (PostgreSQL, Redis, ClamAV, Caddy); jedes muss per Digest gepinnt sein, und die Datei muss mindestens eines nennen. Geprüft werden sie auf den Plattformen aus `linux/amd64` und `linux/arm64`, die ihr Index veröffentlicht (ermittelt mit `docker buildx imagetools inspect --raw`). Fehlt `linux/amd64`, endet der Lauf mit Exit 2; fehlt nur `linux/arm64`, meldet die Zusammenfassung `<image>: not published for linux/arm64 (not scanned)`. Das App-Image muss beide Plattformen veröffentlichen.
+- ClamAV (`clamav/clamav:stable`) veröffentlicht upstream nur `linux/amd64`. Für arm64 wird der Virenscan-Sidecar deshalb nicht geprüft, und ein arm64-Betrieb mit diesem Sidecar ist im Projekt nicht abgedeckt; das ist eine bekannte Grenze.
+- `/usr/local/bin/supercronic` erscheint im Bericht mit seinen erkannten Go-Modulen. Erkennt Trivy dort kein Go-Binary, ist das eine Abdeckungslücke.
+
+Entscheidungsregel: Exit 0 ohne Treffer ab der Schwelle (Default `high`, `IMAGE_SCAN_LEVEL`), sofern keine gültige Ausnahme greift. Exit 1 bei blockierendem Treffer oder abgelaufener Ausnahme. Exit 2, wenn die Prüfung unvollständig ist: App-Image ohne gültigen Digest angegeben oder im Release-Workflow (`--require-app-image`) gar nicht angegeben, kein Fremdimage in der Compose-Datei, Index-Abfrage fehlgeschlagen oder Pflichtplattform nicht veröffentlicht, für ein Image keine der angefragten Plattformen veröffentlicht, Docker-, Trivy-, Datenbank- oder Registry-Fehler, unbrauchbare Ausgabe, falsche Architektur, kein `os-pkgs`-Ergebnis mit mindestens einem Paket (Trivy listet die Pakete dank `--list-all-pkgs` auch ohne Treffer) oder keine Go-Erkennung für `supercronic`. Die Schwelle liegt bei `high` und nicht bei `moderate` wie bei `npm audit`, weil Trivy die Schweregrade der Distributionen und der NVD übernimmt und Basis-Images regelmäßig offene `MEDIUM`-Befunde ohne verfügbaren Fix tragen. Treffer mit Schweregrad `UNKNOWN` werden als unbewertet aufgeführt und blockieren nicht. Befristete Ausnahmen stehen in `scripts/image_scan_exceptions.json` mit `vulnerability`, optional `image` (Repository ohne Tag/Digest), `package` und `target` (das betroffene Binary, z. B. `/usr/local/bin/gosu`; Pflicht, damit ein Eintrag einen Treffer außerhalb der Betriebssystempakete abdeckt, denselben Treffer in einem anderen Binary deckt er nicht), dazu `reason` und `expires` (`JJJJ-MM-TT`, gültig einschließlich dieses Tages).
+
+Berichte im Ausgabeverzeichnis: `image-scan-report.json` (Trivy-Version, Scanner-Image, Datenbankstand, Scanzeit, je Scan Rolle `app` oder `third-party`, Digest, Architektur, Ergebnis, Treffer samt angewendeter Ausnahme mit Begründung und Ablaufdatum, Go-Binaries, Abdeckungslücken, nicht veröffentlichte Plattformen), `image-scan-summary.txt` als Kurzfassung und die Rohausgabe von Trivy je Scan.
+
+Einbindung: `make scan-images APP_IMAGE=ghcr.io/anlaufstelle/app@sha256:<digest>` (Berichte in `IMAGE_SCAN_DIR`, Default `~/.cache/anlaufstelle-image-scan`); als Gate `image-scan` in `make release-gates` (ohne `APP_IMAGE` heißt es in der Ergebnisliste `image-scan (third-party images only)`); im Release-Workflow nach dem Image-Build und vor der Cosign-Signatur mit `--require-app-image`, der Bericht wird als Artefakt `image-scan-vX.Y.Z` hochgeladen. Schlägt der Schritt fehl, bleibt das Image unsigniert; `:vX.Y.Z` und `:latest` sind dann aber schon in die Registry gepusht, weil der Build-Schritt vor dem Scan pusht. In diesem Fall das Release nicht abschließen und nicht ankündigen (kein GitHub-Release); Fix oder Ausnahme wirken erst mit einem neuen Tag, weil der Workflow die Dateien des getaggten Stands liest. `make release-gates` läuft vor dem Tag, also vor dem Image-Build: Ohne `APP_IMAGE` prüft das Gate dort nur die Fremdimages, und die Zusammenfassung meldet `app image: not scanned here — required in the release workflow before signing`; die Prüfung des App-Images weisen der Workflow-Schritt und sein Artefakt nach.
+
+```bash
+make scan-images APP_IMAGE=ghcr.io/anlaufstelle/app@sha256:<digest>
+cat ~/.cache/anlaufstelle-image-scan/image-scan-summary.txt
+```
+
 ### 8.5 Troubleshooting
 
 | Problem | Ursache | Lösung |

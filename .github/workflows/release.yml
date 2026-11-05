@@ -53,6 +53,26 @@ jobs:
           build-args: |
             DJANGO_SECRET_KEY=build-only-collectstatic
             APP_VERSION=${{ github.ref_name }}
+      # Refs #2623: vulnerability gate before signing. Trivy (pinned by digest in
+      # scripts/scan_images.py) scans the pushed image under its digest for
+      # linux/amd64 and linux/arm64 plus the third-party images of
+      # docker-compose.prod.yml. A finding at or above the threshold, a scanner,
+      # database or registry error, or a missing Go detection for supercronic
+      # fails the job; the image then stays unsigned.
+      - name: Scan the image and the third-party images
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE: ghcr.io/${{ github.repository }}
+        run: python3 scripts/scan_images.py --require-app-image --app-image "${IMAGE}@${DIGEST}" --out-dir image-scan
+      - name: Upload the image scan report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: image-scan-${{ github.ref_name }}
+          path: |
+            image-scan/*.json
+            image-scan/*.txt
+          retention-days: 90
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
       - name: Sign the pushed image (cosign keyless)
         env:

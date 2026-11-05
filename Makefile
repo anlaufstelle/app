@@ -24,7 +24,7 @@ export CI_LOCK CI_LOCK_TIMEOUT
 # Lauf dann am Laufen, ohne dass jemand das Rezept patchen muss.
 AUDIT_LEVEL ?= moderate
 
-.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci ci-locked test-e2e-locked test-e2e-halves-locked test-e2e-slice test-e2e-slice-locked verify-fast build lint typecheck test test-js test-e2e test-e2e-halves test-focus test-parallel test-e2e-parallel test-e2e-smoke test-a11y test-a11y-locked check deps-lock deps-check audit-js maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status deploy-demo demo-seed demo-status demo-logs clean test-matrix-index test-matrix-index-check verify-matrix-drift verify-translation-versions verify-release-test-guard mutation mutation-report worktree worktree-rm ci-coverage docs-screens release-gates release-preflight release-verify-public release-verify-tags verify-vendor-js-sync verify-agent-docs-sync sync-vendor-js verify-css-fresh ci-release ci-release-locked test-parallel-cov test-e2e-parallel-locked changelog-check release-stamp release-stamp-check mutation-delta mutation-skipped dco-check
+.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci ci-locked test-e2e-locked test-e2e-halves-locked test-e2e-slice test-e2e-slice-locked verify-fast build lint typecheck test test-js test-e2e test-e2e-halves test-focus test-parallel test-e2e-parallel test-e2e-smoke test-a11y test-a11y-locked check deps-lock deps-check audit-js maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status deploy-demo demo-seed demo-status demo-logs clean test-matrix-index test-matrix-index-check verify-matrix-drift verify-translation-versions verify-release-test-guard mutation mutation-report worktree worktree-rm ci-coverage docs-screens release-gates release-preflight release-verify-public release-verify-tags verify-vendor-js-sync verify-agent-docs-sync sync-vendor-js verify-css-fresh ci-release ci-release-locked test-parallel-cov test-e2e-parallel-locked changelog-check release-stamp release-stamp-check mutation-delta mutation-skipped dco-check scan-images
 
 .PHONY: i18n-check i18n-update
 
@@ -340,6 +340,21 @@ audit-js:
 	fi
 	npm audit --audit-level=$(AUDIT_LEVEL)
 	$(PYTHON) scripts/audit_vendored_js.py --audit-level=$(AUDIT_LEVEL)
+
+# Image vulnerability gate (Refs #2623). Trivy (container image, pinned by digest
+# in scripts/scan_images.py) scans the app image under its digest for amd64 and
+# arm64 and the third-party images of docker-compose.prod.yml on the platforms
+# their index publishes (amd64 mandatory, a missing arm64 is reported).
+# Usage: make scan-images APP_IMAGE=ghcr.io/anlaufstelle/app@sha256:<digest>
+# Without APP_IMAGE only the third-party images are scanned (the summary names
+# the app image as not scanned). An invalid APP_IMAGE, a scanner/database/
+# registry error or a coverage gap (OS packages, Go detection for supercronic):
+# exit 2; a finding at or above IMAGE_SCAN_LEVEL without a valid exception
+# (scripts/image_scan_exceptions.json): exit 1. Reports in IMAGE_SCAN_DIR.
+IMAGE_SCAN_LEVEL ?= high
+IMAGE_SCAN_DIR ?= $(HOME)/.cache/anlaufstelle-image-scan
+scan-images:
+	$(PYTHON) scripts/scan_images.py --app-image "$(APP_IMAGE)" --level $(IMAGE_SCAN_LEVEL) --out-dir "$(IMAGE_SCAN_DIR)"
 
 # --timeout-method=thread wie bei ``test-e2e`` (Refs #1606): harter Kill des
 # Workers gegen den Greenlet-Endlos-Dreher bei totem Chromium — unter -n 2 auf
