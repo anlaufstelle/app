@@ -221,21 +221,69 @@ class TestCounterReadErrors:
 
             # Reload with every storage read failing from the first script on: the initial refresh
             # of the panel runs into the error without any trigger from the test. The failure is
-            # tied to a storage flag so that a later reload can run without it.
+            # tied to a storage flag so that it is in place before the first script of the reload.
             context.add_init_script("window.__failIdbReads = localStorage.getItem('failIdbReads') === '1';")
             page.evaluate("() => localStorage.setItem('failIdbReads', '1')")
+            page_errors: list[str] = []
+            failed_attempts: list[str] = []
+            page.on(
+                "console",
+                lambda message: (
+                    failed_attempts.append(message.text)
+                    if "[offline-tally] local state unavailable" in message.text
+                    else None
+                ),
+            )
+            page.on("pageerror", lambda error: page_errors.append(str(error)))
+            page.on(
+                "console",
+                lambda message: (
+                    page_errors.append(message.text)
+                    if message.type == "error" and "TypeError" in message.text
+                    else None
+                ),
+            )
             page.reload(wait_until="domcontentloaded")
             notice = page.locator("#tally-panel [data-offline-tally-unknown]")
             expect(notice).to_have_count(1)
             expect(notice).to_have_attribute("role", "alert")
             assert _tally_counts(page) == counts_before
 
-            # The store failed to open at page load, so the retry button of the notice cannot
-            # recover on this page; a reload without the failure does.
-            page.evaluate("() => localStorage.removeItem('failIdbReads')")
-            page.reload(wait_until="domcontentloaded")
-            expect(page.locator("#tally-panel")).to_have_count(1)
-            expect(page.locator("#tally-panel [data-offline-tally-unknown]")).to_have_count(0)
+            # Other triggers also refresh the panel in the background (queue counter, sync, htmx
+            # swaps) and would recover the notice without the button. Muting these leaves the button
+            # as the trigger of the recovery below.
+            page.evaluate(
+                """() => {
+                    for (const type of ['offline-queue-count', 'offline-sync-finished',
+                                        'zeitstrom:tally-counts-updated', 'htmx:afterSwap', 'online']) {
+                        window.addEventListener(type, (event) => event.stopImmediatePropagation(), true);
+                    }
+                }"""
+            )
+
+            # While the failure persists, the retry keeps the single notice.
+            attempts_before = len(failed_attempts)
+            notice.get_by_role("button", name="Erneut versuchen").click()
+            # A refresh of the panel runs into the failure again and logs it; the notice must come back
+            # or stay. Which trigger ran it is not told here, the final step pins the button itself.
+            for _ in range(100):
+                if len(failed_attempts) > attempts_before:
+                    break
+                page.wait_for_timeout(100)
+            assert len(failed_attempts) > attempts_before, "the retry click did not run a new refresh attempt"
+            expect(notice).to_have_count(1)
             assert _tally_counts(page) == counts_before
+
+            # The failure is lifted: the retry button of the notice opens the store again on this
+            # very page, without a reload. Lifting the failure and the click happen in one task.
+            page.evaluate(
+                """() => {
+                    window.__failIdbReads = false;
+                    document.querySelector('#tally-panel [data-offline-tally-unknown] button').click();
+                }"""
+            )
+            expect(notice).to_have_count(0)
+            assert _tally_counts(page) == counts_before
+            assert not page_errors, page_errors
         finally:
             context.close()

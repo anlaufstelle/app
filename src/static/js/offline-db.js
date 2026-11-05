@@ -610,6 +610,42 @@
         window.dispatchEvent(new CustomEvent("offline-db-update-required"));
     }
 
+    // Refs #2626: a failed open must not stay cached. Dexie swallows an error of
+    // its post-open schema read and reports a successful open although the table
+    // handles were never initialised (`table.core` stays undefined) — every later
+    // access then fails with a TypeError and only a reload helped. The ready hook
+    // turns that state into a regular failed open. After ANY failed open the
+    // handle is reset (one macrotask later, so that accesses already waiting on
+    // the failed open settle first and cannot spin) and the next access opens the
+    // store again; a repeated failure rejects again and reaches the caller as before.
+    // The ready hook is deliberately not sticky: it only guards the first successful
+    // open, later re-openings are not checked by it.
+    db.on("ready", function () {
+        if (db.tables.some(function (table) { return !table.core; })) {
+            throw new Error("StoreOpenIncomplete");
+        }
+    });
+
+    let _resettingFailedOpen = false;
+    db.on("close", function () {
+        // hasFailed() is true here only for a close caused by a failed open. A
+        // deliberate db.close() on a handle that had failed before would be reopened
+        // by the reset below; this is safe because the app never calls close() or
+        // delete() on this Dexie handle itself.
+        if (_resettingFailedOpen || !db.hasFailed()) return;
+        _resettingFailedOpen = true;
+        window.setTimeout(function () {
+            try {
+                // A version conflict is permanent until the app is updated.
+                if (db.hasFailed() && !_updateRequiredReported) {
+                    db.close({ disableAutoOpen: false });
+                }
+            } finally {
+                _resettingFailedOpen = false;
+            }
+        }, 0);
+    });
+
     /*
      * Refs #2060: Das Oeffnen ist der EINE Ort, an dem der Versionskonflikt
      * entsteht — hier abgefangen statt in acht Aufrufern erraten. Dexie
