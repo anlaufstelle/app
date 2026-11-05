@@ -12,6 +12,7 @@ supercronic) exits with code 2 and never looks like a clean result.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import re
@@ -309,6 +310,21 @@ class TestExceptions:
     def test_versioned_exceptions_file_is_valid(self, tmp_path):
         data = json.loads((REPO_ROOT / "scripts" / "image_scan_exceptions.json").read_text())
         assert isinstance(data["exceptions"], list)
+
+    def test_versioned_exceptions_are_scoped_to_a_third_party_image_and_package(self):
+        """No global entry and none for the app image; every entry parses with reason and expiry."""
+        spec = importlib.util.spec_from_file_location("scan_images_exc", SCRIPT)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        entries = module.load_exceptions(REPO_ROOT / "scripts" / "image_scan_exceptions.json")
+        compose_repos = {ref.split("@")[0].split(":")[0] for ref in _compose_images()}
+        for entry in entries:
+            assert entry.get("image") in compose_repos, entry
+            assert entry.get("package"), entry
+            if entry["package"] == "stdlib" or entry["package"].startswith("github.com/"):
+                assert entry.get("target", "").startswith("/"), f"binary finding without target: {entry}"
+        keys = [(e["image"], e["package"], e["vulnerability"]) for e in entries]
+        assert len(keys) == len(set(keys))
 
 
 class TestIncompleteScanIsNeverGreen:
