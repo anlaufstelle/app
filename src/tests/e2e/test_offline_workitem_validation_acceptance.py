@@ -6,6 +6,7 @@ error and never confirmed as saved or queued; a corrected input is saved normall
 
 from __future__ import annotations
 
+import time
 import uuid
 from contextlib import suppress
 
@@ -28,6 +29,7 @@ pytestmark = pytest.mark.e2e
 FIELD_ERROR = {
     "unicode-whitespace-title": "#wi-error-offline-wi-create-title",
     "title-too-long": "#wi-error-offline-wi-create-title",
+    "padded-title": "#wi-error-offline-wi-create-title",
     "reminder-after-due": "#wi-error-offline-wi-create-remind-at",
 }
 UNSYNCED = "[data-testid='workitem-unsynced-badge']"
@@ -52,7 +54,7 @@ def _browser_date(page, days):
 
 @pytest.mark.parametrize(
     "case",
-    ["empty-title", "unicode-whitespace-title", "title-too-long", "reminder-after-due"],
+    ["empty-title", "unicode-whitespace-title", "title-too-long", "padded-title", "reminder-after-due"],
 )
 def test_invalid_offline_task_is_not_confirmed_as_saved(browser, base_url, e2e_env, case):
     client_pk = _seed_client(e2e_env)
@@ -75,10 +77,15 @@ def test_invalid_offline_task_is_not_confirmed_as_saved(browser, base_url, e2e_e
             title = "\u0085  "
         elif case == "title-too-long":
             title = "T" * 201
+        elif case == "padded-title":
+            # Tens of thousands of spaces between two letters, as pasted from the clipboard: the
+            # length message must appear at once instead of the page freezing while trimming.
+            title = "a" + " " * 150000 + "b"
         page.locator("[data-testid='offline-wi-input-title']").fill(title)
         if case == "reminder-after-due":
             fill_date(page, "[data-testid='offline-wi-input-due_date']", _browser_date(page, 5))
             fill_date(page, "[data-testid='offline-wi-input-remind_at']", _browser_date(page, 10))
+        started = time.monotonic()
         page.locator("[data-testid='offline-wi-create-save']").click()
 
         if case == "empty-title":
@@ -89,6 +96,10 @@ def test_invalid_offline_task_is_not_confirmed_as_saved(browser, base_url, e2e_e
             error = page.locator(FIELD_ERROR[case])
             expect(error).to_be_visible(timeout=10000)
             assert error.inner_text().strip(), "the field error must name the problem"
+            if case == "padded-title":
+                # A blocked main thread delays click and assertion instead of failing them, so the
+                # elapsed time is the evidence: the quadratic trim needed about 18 s for this input.
+                assert time.monotonic() - started < 5, "trimming a long space run must not freeze the page"
         expect(page.locator(UNSYNCED)).to_have_count(0)
         expect(page.locator("[data-testid='offline-wi-create-form']")).to_be_visible()
 
