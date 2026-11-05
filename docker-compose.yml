@@ -25,7 +25,7 @@ name: anlaufstelle-dev
 services:
   db:
     logging: *default-logging
-    image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+    image: postgres:18-alpine@sha256:10a5c69a83035ab5239f5620d708520e8b28f5aa1f2b20143e6024532edadfb5
     environment:
       POSTGRES_DB: anlaufstelle
       POSTGRES_USER: anlaufstelle
@@ -167,7 +167,7 @@ services:
 
   clamav:
     logging: *default-logging
-    image: clamav/clamav:stable@sha256:ebec5bc138401b36ae987caa1a3fa3c3b2a21ed3d51f0bfa5852825e663e67b0
+    image: clamav/clamav:stable@sha256:6d87c712e3391e13c1ba6e05dfb074d4b1ddb5a6834b23bb9da990d2a4ef042a
     # Opt-in per Profil (Refs #1062): ``CLAMAV_ENABLED`` ist im lokalen
     # web-Dienst ungesetzt, der Scanner also ohnehin unbenutzt. Als
     # profilloser Dienst lud ``docker compose up`` trotzdem ein ~1-GB-Image
