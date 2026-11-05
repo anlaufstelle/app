@@ -1937,7 +1937,8 @@ Shipped exceptions: `scripts/image_scan_exceptions.json` contains 30 time-limite
 
 Reports in the output directory: `image-scan-report.json` (Trivy version, scanner image, database state, scan time, per scan the role `app` or `third-party`, digest, architecture, result, findings including the applied exception with reason and expiry date, Go binaries, coverage gaps, platforms not published), `image-scan-summary.txt` as a short version, and Trivy's raw output per scan.
 
-Integration: `make scan-images APP_IMAGE=ghcr.io/anlaufstelle/app@sha256:<digest>` (reports in `IMAGE_SCAN_DIR`, default `~/.cache/anlaufstelle-image-scan`); as the `image-scan` gate in `make release-gates` (without `APP_IMAGE`, the result list reads `image-scan (third-party images only)`); in the release workflow after the image build and before the cosign signature with `--require-app-image`, with the report uploaded as the artifact `image-scan-vX.Y.Z`. If the step fails, the image stays unsigned; `:vX.Y.Z` and `:latest` have already been pushed to the registry by then, because the build step pushes before the scan. In that case do not complete or announce the release (no GitHub release); a fix or an exception only takes effect with a new tag, because the workflow reads the files of the tagged state. `make release-gates` runs before the tag, i.e. before the image build: without `APP_IMAGE` the gate only checks the third-party images there, and the summary reports `app image: not scanned here — required in the release workflow before signing`; the check of the app image is evidenced by the workflow step and its artifact.
+Integration: `make scan-images APP_IMAGE=ghcr.io/anlaufstelle/app@sha256:<digest>` (reports in `IMAGE_SCAN_DIR`, default `~/.cache/anlaufstelle-image-scan`); in the release workflow after the image build and before the cosign signature with `--require-app-image`, with the report uploaded as the artifact `image-scan-vX.Y.Z`. If the step fails, the image stays unsigned; `:vX.Y.Z` and `:latest` have already been pushed to the registry by then, because the build step pushes before the scan. In that case do not complete or announce the release (no GitHub release); a fix or an exception only takes effect with a new tag, because the workflow reads the files of the tagged state. The check of the app image is evidenced by the workflow step and its artifact.
+
 
 ```bash
 make scan-images APP_IMAGE=ghcr.io/anlaufstelle/app@sha256:<digest>
@@ -3337,4 +3338,4 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.9 -->
 <!-- translation-date: 2026-11-05 -->
-<!-- source-hash: da45196c2f6869973da45628974acb3c36b39bce -->
+<!-- source-hash: 5cc7aca88285cdc8621ca7840d742a7087c17cd4 -->
