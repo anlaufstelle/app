@@ -434,3 +434,68 @@ describe("offline client view drops the edit state when the view becomes unavail
         expect.soft(component.wiValues).toEqual({});
     });
 });
+
+// Refs #2688: a local modification keeps the server token as updated_at, so
+// the token alone does not notice when a second tab of the same account
+// stores a change of the same entry. Saving the still open form would then
+// silently replace that unsent change.
+describe("offline client view closes the form when another tab changed the entry locally", () => {
+    it("closes the event form when the entry got a local modification under the same token", async () => {
+        const component = await makeLoadedComponent();
+        component.startEdit(eventByPk(component, PK_EVENT_A));
+        component.editValues.note = "typed in this tab";
+        window.offlineClient.getOfflineClient.mockImplementation(async () =>
+            bundle({ noteA: "stored by the other tab", statusA: "modified" })
+        );
+
+        await component._reconcile();
+
+        expect(eventByPk(component, PK_EVENT_A).data_fields.note).toBe("stored by the other tab");
+        expect(eventByPk(component, PK_EVENT_A).editing).toBe(false);
+    });
+
+    it("closes the task form when the task got a local modification under the same token", async () => {
+        const component = await makeLoadedComponent();
+        component.startEditWorkItem(workItemByPk(component, PK_WI_A));
+        component.wiValues.title = "typed in this tab";
+        window.offlineClient.getOfflineClient.mockImplementation(async () =>
+            bundle({ titleA: "stored by the other tab", statusA: "modified" })
+        );
+
+        await component._reconcile();
+
+        expect(workItemByPk(component, PK_WI_A).title).toBe("stored by the other tab");
+        expect(workItemByPk(component, PK_WI_A).editing).toBe(false);
+    });
+
+    it("closes the form when an already modified entry got other values", async () => {
+        const component = await makeLoadedComponent();
+        window.offlineClient.getOfflineClient.mockImplementation(async () => bundle({ statusA: "modified" }));
+        await component.load();
+        component.startEdit(eventByPk(component, PK_EVENT_A));
+        component.startEditWorkItem(workItemByPk(component, PK_WI_A));
+        eventByPk(component, PK_EVENT_A).editing = true;
+        window.offlineClient.getOfflineClient.mockImplementation(async () =>
+            bundle({ statusA: "modified", noteA: "stored by the other tab", titleA: "stored by the other tab" })
+        );
+
+        await component._reconcile();
+
+        expect(eventByPk(component, PK_EVENT_A).editing).toBe(false);
+        expect(workItemByPk(component, PK_WI_A).editing).toBe(false);
+    });
+
+    it("keeps a modified entry open while its stored values stay the same", async () => {
+        const component = await makeLoadedComponent();
+        window.offlineClient.getOfflineClient.mockImplementation(async () => bundle({ statusA: "modified" }));
+        await component.load();
+        component.startEditWorkItem(workItemByPk(component, PK_WI_A));
+        eventByPk(component, PK_EVENT_A).editing = true;
+
+        await component._reconcile();
+        await component._reconcile();
+
+        expect(eventByPk(component, PK_EVENT_A).editing).toBe(true);
+        expect(workItemByPk(component, PK_WI_A).editing).toBe(true);
+    });
+});
