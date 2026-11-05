@@ -381,11 +381,14 @@
                 this.wiValidationActive = false;
             },
             // Refs #2688: epoch of the persisted session key; null when there
-            // is none or it cannot be read. Without the crypto session API
-            // (component tests) a constant stands in for it.
+            // is none or it cannot be read. A crypto session without keyEpoch
+            // (e.g. a stale cached script) fails closed as well. Only with no
+            // crypto session at all (component tests) does a constant stand
+            // in; without it the view cannot decrypt anything anyway.
             async _readKeyEpoch() {
                 const session = window.crypto_session;
-                if (!session || typeof session.keyEpoch !== "function") return "";
+                if (!session) return "";
+                if (typeof session.keyEpoch !== "function") return null;
                 try {
                     const epoch = await session.keyEpoch();
                     return typeof epoch === "string" && epoch ? epoch : null;
