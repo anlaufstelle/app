@@ -604,6 +604,20 @@ describe("offline client view binds an open form to the key it was read with", (
         expect(component.wiValues).toEqual({});
     });
 
+    it("closes the form when the crypto session offers no key epoch", async () => {
+        // A stale cached crypto script without keyEpoch next to this view must
+        // not switch the binding off silently.
+        window.crypto_session = { awaitReady: async () => {} };
+        const component = await makeLoadedComponent();
+        component.startEdit(eventByPk(component, PK_EVENT_A));
+        component.editValues.note = "draft of the previous session";
+
+        await component._reconcile();
+
+        expect(eventByPk(component, PK_EVENT_A).editing).toBe(false);
+        expect(component.editValues).toEqual({});
+    });
+
     it("keeps the form open with its input while the key stays the same", async () => {
         keySession("epoch-1");
         const component = await makeLoadedComponent();
