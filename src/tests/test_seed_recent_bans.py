@@ -29,7 +29,11 @@ from core.services.dashboard.external_report import DEFAULT_K_THRESHOLD
 ROOT = Path(__file__).resolve().parents[2]
 EVENTS = 120
 K_THRESHOLD = DEFAULT_K_THRESHOLD
-MARGIN = 2
+#: Active bans the seed allows (see ``_build_event``); the margin must absorb all of them becoming active,
+#: because an active reserved ban no longer counts as "ended in the period".
+MAX_ACTIVE_BANS = 2
+#: The margin the scales actually ship with (not a test constant).
+MARGIN = SCALE_CONFIG["medium"]["recent_bans_margin"]
 #: The longest a nightly seed is reused (``NIGHTLY_SEED_MAX_AGE_DAYS`` default in the Makefile).
 NIGHTLY_REUSE_DAYS = 7
 #: Seeds of ``manage.py seed`` (42) and a spread of others.
@@ -122,12 +126,14 @@ def test_reserved_bans_do_not_end_before_they_were_issued(facility):
 
 
 @pytest.mark.django_db
-def test_published_figures_survive_the_nightly_reuse_window(facility):
+@pytest.mark.parametrize("scale", ["medium", "large"])
+def test_published_figures_survive_the_nightly_reuse_window(facility, scale):
     """A seeded database ages up to NIGHTLY_SEED_MAX_AGE_DAYS before it is rebuilt: the 30-day period of the
     ban overview then ends that many days after the seed day and must still hold k bans per figure."""
     users, clients = _prepare(facility, clients=40)
     today = timezone.localdate()
-    cfg = {"events_per_facility": 750, "zeitraum_days": 365, "recent_bans_margin": MARGIN}
+    # The shipped configuration of the scale, with fewer events per facility to keep the test fast.
+    cfg = {**SCALE_CONFIG[scale], "events_per_facility": 750}
     for seed in SEEDS:
         Event.objects.filter(facility=facility).delete()
         random.seed(seed)
@@ -154,4 +160,4 @@ def test_scale_without_the_key_is_generated_exactly_as_before_the_reserve(facili
 def test_only_medium_and_large_opt_in():
     opted_in = {name for name, cfg in SCALE_CONFIG.items() if cfg.get("recent_bans_margin")}
     assert opted_in == {"medium", "large"}
-    assert all(SCALE_CONFIG[name]["recent_bans_margin"] >= 1 for name in opted_in)
+    assert all(SCALE_CONFIG[name]["recent_bans_margin"] >= MAX_ACTIVE_BANS for name in opted_in)
