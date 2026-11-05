@@ -154,7 +154,9 @@
     board_response) — CSP-konform, kein Inline-JS. Der Ein-/Ausklapp-Zustand
     liegt in der ``configPreview``-Alpine-Komponente (nur benannte Property-/
     Methoden-Pfade). Inaktive Typen filtert das Partial (is_active=True) weg →
-    Hinweis statt Pane.
+    Hinweis statt Pane. ``data-hx-no-focus`` on the pane: reloading the preview must
+    not pull the focus to the end of the page (``focus-management.js``) while the person
+    works on the field board (Refs #2688).
     {% endcomment %}
     <div class="mt-8" x-data="configPreview" data-start-open="true" data-testid="config-preview">
         <button type="button" @click="toggle" aria-expanded="true" :aria-expanded="ariaExpanded"
@@ -178,7 +180,7 @@
             {% else %}
             {% url 'core:event_fields_partial' as preview_partial_url %}
             {% endif %}
-            <div class="card p-5" data-testid="config-preview-pane"
+            <div class="card p-5" data-testid="config-preview-pane" data-hx-no-focus
                  hx-get="{{ preview_partial_url }}?document_type={{ doc_type.pk }}"
                  hx-trigger="load, refresh-preview from:body"
                  hx-swap="innerHTML">

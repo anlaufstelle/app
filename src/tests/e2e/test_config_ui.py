@@ -690,6 +690,66 @@ class TestFieldBoard:
             _delete_doctype(page, base_url, pk)
 
 
+class TestFieldBoardKeepsFocusPlace:
+    """A board action reloads the live preview without moving the focus or the viewport."""
+
+    @staticmethod
+    def _state(page):
+        return page.evaluate(
+            """() => ({
+                scrollY: Math.round(window.scrollY),
+                boardTop: Math.round(document.getElementById('field-board').getBoundingClientRect().top),
+                inPreview: !!document.activeElement
+                    && !!document.activeElement.closest('[data-testid="config-preview-pane"]'),
+            })"""
+        )
+
+    @staticmethod
+    def _wait_for_preview_settled(page):
+        page.wait_for_function(
+            """() => {
+                const pane = document.querySelector('[data-testid="config-preview-pane"]');
+                if (pane && pane.textContent.includes('Vorschau wird geladen')) return false;
+                return !document.querySelector('.htmx-request, .htmx-swapping, .htmx-settling');
+            }""",
+            timeout=30000,
+        )
+
+    def test_assigning_a_field_does_not_move_focus_to_the_preview(self, authenticated_page, base_url):
+        page = authenticated_page
+        pk = _create_doctype(page, base_url, _cfg_name("DT-FOCUS"))
+        try:
+            group = _cfg_name("GRP")
+            _add_group(page, group)
+            self._wait_for_preview_settled(page)
+            page.evaluate("document.getElementById('field-board').scrollIntoView({block: 'start'})")
+            before = self._state(page)
+
+            # Count the swaps of the preview pane, so that the measurement below waits for the
+            # reload that the assignment triggers instead of a state that is merely idle.
+            page.evaluate(
+                """() => {
+                    window.__previewSwaps = 0;
+                    document.body.addEventListener('htmx:afterSwap', (event) => {
+                        const pane = document.querySelector('[data-testid="config-preview-pane"]');
+                        if (pane && event.detail.target === pane) window.__previewSwaps += 1;
+                    });
+                }"""
+            )
+            _assign_field(page, "Notiz", group)
+            page.wait_for_function("() => window.__previewSwaps >= 1", timeout=30000)
+            self._wait_for_preview_settled(page)
+            after = self._state(page)
+
+            # The preview swap must not take the focus (it sits at the page end) ...
+            assert after["inPreview"] is False, f"focus moved into the preview: {after}"
+            # ... and must not scroll the board out of view.
+            assert abs(after["scrollY"] - before["scrollY"]) <= 40, f"viewport jumped: {before} -> {after}"
+            assert abs(after["boardTop"] - before["boardTop"]) <= 40, f"board moved: {before} -> {after}"
+        finally:
+            _delete_doctype(page, base_url, pk)
+
+
 # ---------------------------------------------------------------------------
 # Drag-and-Drop-Sortierung
 # ---------------------------------------------------------------------------
@@ -835,10 +895,9 @@ class TestFieldBoardDragAndDrop:
         """Waits until the live preview has loaded and no HTMX request is open.
 
         The preview pane (``hx-trigger="load, refresh-preview from:body"``) loads
-        asynchronously after the page load and after every board mutation. Its
-        ``htmx:afterSwap`` moves the focus to the pane at the page end and so scrolls
-        the viewport. A fixed pause cannot tell whether that reply is still on its
-        way; under two CPUs it arrives in the middle of a mouse gesture (Refs #2688).
+        asynchronously after the page load and after every board mutation. A fixed pause
+        cannot tell whether that reply is still on its way; under two CPUs it arrives in
+        the middle of a mouse gesture (Refs #2688).
         """
         page.wait_for_function(
             """() => {
@@ -853,18 +912,14 @@ class TestFieldBoardDragAndDrop:
     def _center_for_drag(cls, page, handle, target):
         """Centres the source row and returns stable bounding boxes (source, target).
 
-        Why the preview is awaited first and the row centred afterwards: after every
-        board mutation (and once after the page load) the live preview pane reloads
-        asynchronously. Its ``htmx:afterSwap`` makes ``focus-management.js`` (Refs #1339)
-        focus the swapped preview fragment at the END of the page with
-        ``preventScroll: false``, so the viewport jumps to the bottom
-        (``document.activeElement`` is ``config-preview-pane``, ``scrollY`` is at its
-        maximum). Since the rule editor (Refs #1057) lengthened the detail page, this
-        scroll reflex leaves the field board ABOVE the viewport (negative ``y``, so the
-        mouse sequence hits nothing). The reflex fires exactly ONCE per reply. Therefore
-        every measurement waits until the preview has loaded and no HTMX request is open
-        (instead of a fixed pause), and the boxes must stay unchanged inside the
-        viewport across two frames (Refs #2688).
+        After every board mutation (and once after the page load) the live preview pane
+        reloads asynchronously. The pane opts out of the global focus handling
+        (``data-hx-no-focus``), so the reload no longer scrolls the viewport to the end of
+        the page. This helper stays as a safeguard: every measurement still waits until the
+        preview has loaded and no HTMX request is open (instead of a fixed pause), and the
+        boxes must stay unchanged inside the viewport across two frames, so that a late
+        reply or a layout change cannot move the board between measuring and dragging
+        (Refs #2688).
         """
         vh = page.viewport_size["height"]
         hb = tb = None
