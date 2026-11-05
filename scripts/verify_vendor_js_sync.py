@@ -32,6 +32,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from minify_offline_js import SOURCES as OFFLINE_SOURCES
+from vendor_js_inventory import InventoryError, VendoredLibrary, drift_errors, load_inventory
 
 ROOT = Path(__file__).resolve().parent.parent
 PACKAGE_JSON = ROOT / "package.json"
@@ -186,12 +187,9 @@ def _is_exact_version(spec: str) -> bool:
     return re.fullmatch(r"\d+\.\d+\.\d+", spec) is not None
 
 
-# Vendored builds outside package.json: (file, version regex, required header marker).
-# An empty marker skips the header check.
-UNMANAGED_BUILDS: dict[str, tuple[str, str, str]] = {
-    "SortableJS": ("vendor/sortable.min.js", r"Sortable (\d+\.\d+\.\d+)", ""),
-    "axe-core": ("vendor/axe.min.js", r"axe v(\d+\.\d+\.\d+)", "Mozilla Public"),
-}
+# Vendored builds outside package.json come from scripts/vendor_js_inventory.json, the
+# source the advisory gate and the release SBOM read as well (Refs #2622). An empty
+# license marker skips the header check.
 
 # Self-hosted fonts: sha256 per file. A replaced font changes the hash, which forces
 # a review of the version and license rows below.
@@ -380,10 +378,11 @@ def _check_license_texts() -> list[str]:
     return errors
 
 
-def _discover_shipped() -> list[str]:
+def _discover_shipped(unmanaged: list[VendoredLibrary]) -> list[str]:
     """Shipped third-party files that are not registered."""
     errors: list[str] = []
-    registered = {lib.vendored_filename for lib in VENDOR_LIBS} | {entry[0] for entry in UNMANAGED_BUILDS.values()}
+    registered = {lib.vendored_filename for lib in VENDOR_LIBS}
+    registered |= {(ROOT / lib.path).relative_to(VENDOR_DIR).as_posix() for lib in unmanaged}
     # First-party builds have their own byte-for-byte drift guard (Refs #2011).
     registered |= {f"{name}.min.js" for name in OFFLINE_SOURCES}
     shipped = {p.relative_to(VENDOR_DIR).as_posix() for p in VENDOR_DIR.glob("*.min.js")}
@@ -418,19 +417,22 @@ def _discover_shipped() -> list[str]:
 
 def check_licenses(pinned: dict[str, str]) -> list[str]:
     """Every shipped third-party work has its license text in the repo and a complete row in THIRDPARTY-LICENSES.md."""
-    errors = _discover_shipped() + _check_license_texts()
+    try:
+        unmanaged = load_inventory(ROOT)
+    except InventoryError as exc:
+        return [str(exc)]
+    errors = _discover_shipped(unmanaged) + _check_license_texts() + drift_errors(ROOT, unmanaged)
 
     versions: dict[str, str] = {lib.table_name: pinned.get(lib.package, "") for lib in VENDOR_LIBS}
-    for name, (fname, pattern, marker) in UNMANAGED_BUILDS.items():
-        path = VENDOR_DIR / fname
-        head = path.read_text(encoding="utf-8")[:2000] if path.is_file() else ""
-        match = re.search(pattern, head)
-        versions[name] = match.group(1) if match else ""
-        if not match:
-            errors.append(f"{name}: no version header in {fname}")
+    for lib in unmanaged:
+        name, fname, marker = lib.table_name, lib.path, lib.license_marker
+        path = ROOT / fname
+        # Undecodable bytes are already reported by drift_errors; replace them here.
+        head = path.read_text(encoding="utf-8", errors="replace")[:2000] if path.is_file() else ""
+        versions[name] = lib.version
         if marker and marker not in head:
             errors.append(f"{name}: license header ({marker}) missing in {fname}")
-        if name == "axe-core":
+        if lib.package == "axe-core":
             comment = head[: head.index("*/") + 2] if "*/" in head else head
             header = comment.split("\n", 1)[-1]
             if hashlib.sha256(header.encode("utf-8")).hexdigest() != AXE_HEADER_SHA256:

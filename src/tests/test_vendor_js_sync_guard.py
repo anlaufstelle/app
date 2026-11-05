@@ -61,6 +61,8 @@ def _mirror_repo(dest: Path, *, mutate: dict[str, str] | None = None) -> Path:
         "package.json",
         "scripts/verify_vendor_js_sync.py",
         "scripts/minify_offline_js.py",
+        "scripts/vendor_js_inventory.py",
+        "scripts/vendor_js_inventory.json",
         "THIRDPARTY-LICENSES.md",
     ]
     files += [p.relative_to(REPO_ROOT).as_posix() for p in (REPO_ROOT / VENDOR_REL).glob("*.min.js")]
@@ -486,6 +488,46 @@ def test_unknown_root_minified_script_with_source_is_still_rejected(tmp_path: Pa
     result = _run(mirror)
     assert result.returncode == 1
     assert "unknown.min.js: shipped vendor file is not registered" in result.stderr
+
+
+INVENTORY_REL = "scripts/vendor_js_inventory.json"
+
+
+def test_inventory_version_drift_is_detected(tmp_path: Path) -> None:
+    """The shared inventory feeds advisory gate and SBOM; its version must match the shipped banner."""
+    mirror = _mirror_repo(tmp_path / "repo", mutate={INVENTORY_REL: '"1.15.7"\x00"1.15.6"'})
+    result = _run(mirror)
+    assert result.returncode == 1
+    assert "sortablejs: DRIFT" in result.stderr
+
+
+def test_missing_inventory_is_detected(tmp_path: Path) -> None:
+    mirror = _mirror_repo(tmp_path / "repo")
+    (mirror / INVENTORY_REL).unlink()
+    result = _run(mirror)
+    assert result.returncode == 1
+    assert "vendor_js_inventory.json: file missing" in result.stderr
+
+
+def test_vendored_file_outside_the_inventory_is_still_rejected(tmp_path: Path) -> None:
+    """Dropping a library from the inventory leaves its shipped file unregistered."""
+    mirror = _mirror_repo(tmp_path / "repo")
+    path = mirror / INVENTORY_REL
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["libraries"] = [lib for lib in data["libraries"] if lib["package"] != "axe-core"]
+    path.write_text(json.dumps(data), encoding="utf-8")
+    result = _run(mirror)
+    assert result.returncode == 1
+    assert "vendor/axe.min.js: shipped vendor file is not registered" in result.stderr
+
+
+def test_vendored_file_that_is_not_utf8_is_reported(tmp_path: Path) -> None:
+    mirror = _mirror_repo(tmp_path / "repo")
+    (mirror / VENDOR_REL / "vendor" / "sortable.min.js").write_bytes(b"/*! Sortable \xff\xfe */")
+    result = _run(mirror)
+    assert result.returncode == 1
+    assert "Traceback" not in result.stderr
+    assert "sortablejs" in result.stderr and "UTF-8" in result.stderr
 
 
 if __name__ == "__main__":

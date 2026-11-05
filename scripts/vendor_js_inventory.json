@@ -1,0 +1,21 @@
+{
+  "description": "Manually vendored JavaScript libraries without a package.json entry. Single source for the license guard (scripts/verify_vendor_js_sync.py), the advisory gate (scripts/audit_vendored_js.py) and the release SBOM. The version must match the banner of the shipped file.",
+  "libraries": [
+    {
+      "package": "sortablejs",
+      "table_name": "SortableJS",
+      "version": "1.15.7",
+      "path": "src/static/js/vendor/sortable.min.js",
+      "version_pattern": "Sortable (\\d+\\.\\d+\\.\\d+)",
+      "license_marker": ""
+    },
+    {
+      "package": "axe-core",
+      "table_name": "axe-core",
+      "version": "4.13.0",
+      "path": "src/static/js/vendor/axe.min.js",
+      "version_pattern": "axe v(\\d+\\.\\d+\\.\\d+)",
+      "license_marker": "Mozilla Public"
+    }
+  ]
+}

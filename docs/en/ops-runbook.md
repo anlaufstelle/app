@@ -1843,6 +1843,8 @@ job reports CVEs, follow this process:
 # 4. Commit with a "security:" prefix, reference the advisory
 ```
 
+**JavaScript advisories (Refs #1968, #2622):** `make audit-js` (part of `make ci`, mirrored in the `audit` job) checks in two steps. First, `npm audit --audit-level=$(AUDIT_LEVEL)` runs against `package-lock.json` including the devDependencies. Then `scripts/audit_vendored_js.py` checks the manually vendored libraries without a lock entry (SortableJS, axe-core). Name, version and path of these libraries are listed in `scripts/vendor_js_inventory.json`; before the check, every version is compared with the banner of the shipped file. The script queries the same registry endpoint as `npm audit` (bulk advisories) and blocks at the same threshold (default `moderate`). Every advisory the registry returns for the requested version counts as a finding. Exit 1 means a blocking finding or an expired exception. Exit 2 means an incomplete check: inventory missing or unreadable, a version missing or differing from the banner, network or HTTP error, unusable response. An incomplete check never shows up as "0 findings". Time-limited exceptions live in `scripts/vendor_js_advisory_exceptions.json` with package, advisory (GHSA id or numeric registry id), reason and expiry date (`YYYY-MM-DD`, valid through that day). From the following day on the gate is red, even if the advisory is no longer reported. Whoever vendors a new version of such a library replaces the file and updates the version in the inventory and in `THIRDPARTY-LICENSES.md`; otherwise `make verify-vendor-js-sync` reports the mismatch.
+
 ### 8.4 SBOM (Software Bill of Materials)
 
 The `audit` job additionally generates an SBOM in CycloneDX JSON format
@@ -3310,5 +3312,5 @@ Check lock-file drift     make deps-check
 
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.9 -->
-<!-- translation-date: 2026-10-26 -->
-<!-- source-hash: c44efb327544f5fce6c796f357765380bfdfcfc5 -->
+<!-- translation-date: 2026-11-05 -->
+<!-- source-hash: f757b51dec3be51f91166788c7b41b8ec119b5f6 -->

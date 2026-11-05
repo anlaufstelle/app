@@ -328,12 +328,18 @@ test-js:
 # Advisory nicht jeden Commit blockiert, bis ein Patch erscheint.
 # Kein ``--omit=dev``: saemtliche Node-Pakete des Projekts sind
 # devDependencies (Tailwind-CLI + Vitest-Toolchain), das Gate waere sonst leer.
+#
+# Second step (Refs #2622): SortableJS and axe-core are vendored without a lock
+# entry (scripts/vendor_js_inventory.json) and invisible to ``npm audit``.
+# ``audit_vendored_js.py`` queries their shipped versions at the same registry
+# endpoint with the same threshold; network or response errors = exit 2.
 audit-js:
 	@if [ ! -f package-lock.json ]; then \
 		echo "audit-js: package-lock.json fehlt — ohne Lockfile ist kein Advisory-Abgleich moeglich." >&2; \
 		exit 1; \
 	fi
 	npm audit --audit-level=$(AUDIT_LEVEL)
+	$(PYTHON) scripts/audit_vendored_js.py --audit-level=$(AUDIT_LEVEL)
 
 # --timeout-method=thread wie bei ``test-e2e`` (Refs #1606): harter Kill des
 # Workers gegen den Greenlet-Endlos-Dreher bei totem Chromium — unter -n 2 auf

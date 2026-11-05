@@ -206,6 +206,10 @@ jobs:
           node-version: "24"
       - name: JavaScript-Advisories pruefen
         run: npm audit --audit-level=moderate
+      # Manually vendored libraries without a lock entry (Refs #2622), same
+      # threshold as above; mirrors the second step of ``audit-js``.
+      - name: Check advisories of the manually vendored JavaScript libraries
+        run: python scripts/audit_vendored_js.py --audit-level=moderate
       - name: SBOM (CycloneDX) generieren
         run: pip-audit -r requirements.txt --format cyclonedx-json -o sbom.json
       - name: SBOM als Artefakt

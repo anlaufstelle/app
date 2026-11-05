@@ -100,3 +100,23 @@ class TestJsAuditGate:
         # Bis zum Beginn des naechsten Top-Level-Jobs lesen.
         body = re.split(r"\n  \w[\w-]*:\n", audit_stage[1])[0]
         assert "npm audit" in body, "audit-Job prueft keine JavaScript-Advisories (Refs #1968)"
+
+
+class TestVendoredJsAdvisoryGate:
+    """SortableJS and axe-core are vendored without a lock entry; ``npm audit``
+    never sees them. The vendored-library check hangs in the same target, with
+    the same threshold, and the workflow mirror runs it as well."""
+
+    def test_audit_target_also_checks_the_vendored_libraries(self) -> None:
+        recipe = _recipe(MAKEFILE.read_text(encoding="utf-8"), "audit-js")
+        assert "scripts/audit_vendored_js.py --audit-level=$(AUDIT_LEVEL)" in recipe
+        assert recipe.index("npm audit") < recipe.index("audit_vendored_js.py"), (
+            "the lock-file audit including devDependencies stays in place"
+        )
+        assert "|| true" not in recipe
+
+    def test_workflow_audit_stage_checks_the_vendored_libraries(self) -> None:
+        text = WORKFLOW.read_text(encoding="utf-8")
+        body = re.split(r"\n  \w[\w-]*:\n", text.split("\n  audit:\n", 1)[1])[0]
+        assert "npm audit --audit-level=moderate" in body
+        assert "scripts/audit_vendored_js.py --audit-level=moderate" in body
