@@ -1645,6 +1645,13 @@
     "rationale": "The release strip list excludes dev-ops; this node checks that excluded artifact."
   },
   {
+    "nodeid": "src/tests/test_ops_deploy_dev.py::test_always_path_pulls_the_whole_stack_unchanged",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-dev.sh nicht im Public-Snapshot (Refs #1987)",
+    "exclusion": "deploy/deploy-dev.sh",
+    "rationale": "The release strip list excludes deploy/deploy-dev.sh; this node checks that excluded artifact."
+  },
+  {
     "nodeid": "src/tests/test_ops_deploy_dev.py::test_ausnahme_akzeptiert_nur_explizite_eins",
     "profile": "public",
     "reason": "dev-ops/deploy/deploy-dev.sh nicht im Public-Snapshot (Refs #1987)",
@@ -1709,6 +1716,34 @@
   },
   {
     "nodeid": "src/tests/test_ops_deploy_dev.py::test_lokaler_teil_reicht_die_ausnahme_durch",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-dev.sh nicht im Public-Snapshot (Refs #1987)",
+    "exclusion": "deploy/deploy-dev.sh",
+    "rationale": "The release strip list excludes deploy/deploy-dev.sh; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_deploy_dev.py::test_never_path_aborts_when_the_third_party_pull_fails",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-dev.sh nicht im Public-Snapshot (Refs #1987)",
+    "exclusion": "deploy/deploy-dev.sh",
+    "rationale": "The release strip list excludes deploy/deploy-dev.sh; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_deploy_dev.py::test_never_path_does_not_pull_the_app_image",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-dev.sh nicht im Public-Snapshot (Refs #1987)",
+    "exclusion": "deploy/deploy-dev.sh",
+    "rationale": "The release strip list excludes deploy/deploy-dev.sh; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_deploy_dev.py::test_never_path_logs_the_pulled_third_party_images",
+    "profile": "public",
+    "reason": "dev-ops/deploy/deploy-dev.sh nicht im Public-Snapshot (Refs #1987)",
+    "exclusion": "deploy/deploy-dev.sh",
+    "rationale": "The release strip list excludes deploy/deploy-dev.sh; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_ops_deploy_dev.py::test_never_path_pulls_only_third_party_services_before_run",
     "profile": "public",
     "reason": "dev-ops/deploy/deploy-dev.sh nicht im Public-Snapshot (Refs #1987)",
     "exclusion": "deploy/deploy-dev.sh",
