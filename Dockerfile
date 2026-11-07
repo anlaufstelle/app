@@ -3,7 +3,7 @@
 # @sha256 friert die Manifest-Liste (multi-arch) ein — ein umgehaengtes Tag
 # (Index-/Registry-MITM) kann so keinen anderen Inhalt unterschieben.
 # Bump: `docker buildx imagetools inspect <image>` -> .Manifest.Digest.
-FROM python:3.14-slim@sha256:cea0e6040540fb2b965b6e7fb5ffa00871e632eef63719f0ea54bca189ce14a6 AS builder
+FROM python:3.14-slim@sha256:af8a5aa14780025dbfbcfbc81bd8a91ebd87711dd5b0f48ed71090949dd7cb1d AS builder
 WORKDIR /build
 COPY requirements.txt .
 # --require-hashes verifiziert JEDES von PyPI geladene Artefakt gegen die
@@ -37,7 +37,7 @@ COPY src/static/css/input.css src/static/css/input.css
 RUN npm ci && npx @tailwindcss/cli -i src/static/css/input.css -o src/static/css/styles.css --minify
 
 # Stage 3: Runtime
-FROM python:3.14-slim@sha256:cea0e6040540fb2b965b6e7fb5ffa00871e632eef63719f0ea54bca189ce14a6 AS final
+FROM python:3.14-slim@sha256:af8a5aa14780025dbfbcfbc81bd8a91ebd87711dd5b0f48ed71090949dd7cb1d AS final
 
 # WeasyPrint + libmagic (file-upload magic-bytes validation, Refs #610) system dependencies
 # libharfbuzz-subset0: von WeasyPrint >= 70 beim Import geladen (Font-Subsetting);
@@ -60,7 +60,11 @@ WORKDIR /app
 # Der Wheel-Ordner enthaelt die vollstaendige transitive Huelle, daher ist
 # --no-deps korrekt und schliesst jeden Netzwerk-Fallback aus. Refs #1373.
 COPY --from=builder /build/wheels /tmp/wheels
-RUN pip install --no-cache-dir --no-index --no-deps /tmp/wheels/* && rm -rf /tmp/wheels
+# pip is removed afterwards: nothing in the running container installs packages
+# (entrypoint, compose services and ops scripts call python/manage.py only), and
+# the copies vendored inside pip would otherwise ship as scanner findings.
+RUN pip install --no-cache-dir --no-index --no-deps /tmp/wheels/* && rm -rf /tmp/wheels \
+    && pip uninstall -y pip
 
 # supercronic-Binary aus dem Builder uebernehmen (dort gegen den sha256-Pin
 # verifiziert, Mode 0755). Nur der ``cron``-Sidecar startet es; fuer den
