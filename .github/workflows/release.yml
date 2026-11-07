@@ -56,9 +56,12 @@ jobs:
       # Refs #2623: vulnerability gate before signing. Trivy (pinned by digest in
       # scripts/scan_images.py) scans the pushed image under its digest for
       # linux/amd64 and linux/arm64 plus the third-party images of
-      # docker-compose.prod.yml. A finding at or above the threshold, a scanner,
-      # database or registry error, or a missing Go detection for supercronic
-      # fails the job; the image then stays unsigned.
+      # docker-compose.prod.yml. A blocking finding, a scanner, database or
+      # registry error, or a missing Go detection for supercronic fails the job;
+      # the image then stays unsigned. In the app image a finding at or above the
+      # threshold blocks only with an available fix; one without a fix (no fixed
+      # version and a no-fix status) is counted and listed as unfixed and does not
+      # block, while an unclear fix status blocks.
       - name: Scan the image and the third-party images
         env:
           DIGEST: ${{ steps.build.outputs.digest }}

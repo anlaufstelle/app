@@ -31,8 +31,19 @@ How it scans
 
 Decision rule
 =============
-* Exit 0: every scan complete, no finding at or above ``--level`` (default
-  ``high``) except those covered by a valid exception.
+* Exit 0: every scan complete, no blocking finding.
+* A finding at or above ``--level`` (default ``high``) blocks unless a valid
+  exception covers it. In the app image (the image given with
+  ``--app-image``, whatever its repository) a finding without a published fix
+  does not block: it is counted and listed as unfixed. "Without a fix" means
+  Trivy reports no fixed version (``FixedVersion`` absent or empty) and a
+  no-fix ``Status`` (``NO_FIX_STATUSES``). Any other combination — status
+  missing or unknown, ``fixed`` without a fixed version, a fixed version that
+  is not a string — blocks and is marked "fix status unknown". An app
+  finding with a fix blocks; the versioned exceptions file carries no entry
+  for the app image.
+  Third-party images keep the plain rule: every finding at or above the
+  threshold blocks unless an exception covers it.
 * Exit 1: at least one blocking finding or an expired exception.
 * Exit 2: the check is incomplete — exceptions file unusable (see below),
   app image given without a valid digest or
@@ -44,6 +55,9 @@ Decision rule
   ``/usr/local/bin/supercronic`` in the app image. A coverage gap is never a
   clean result.
 * Findings with severity ``UNKNOWN`` are listed as unrated and do not block.
+* The summary line of every scan reads ``blocking n, excepted n, unfixed n
+  (not blocking), below threshold n, unrated n``; the JSON report carries the
+  same lists per scan (``unfixed`` is always empty for third-party images).
 
 Exceptions live in ``scripts/image_scan_exceptions.json``: ``vulnerability``
 (CVE/GHSA id), ``image`` (repository without tag/digest) and ``package`` (both
@@ -88,6 +102,11 @@ MAX_EXCEPTION_DAYS = 90
 DEFAULT_PLATFORMS = ("linux/amd64", "linux/arm64")
 SEVERITIES = ("low", "medium", "high", "critical")
 SUPERCRONIC = "usr/local/bin/supercronic"
+# Trivy ``Status`` values that state there is no fixed version (yet). Only
+# together with an absent or empty ``FixedVersion`` does an app finding count as
+# unfixed; anything else is not trusted and blocks.
+NO_FIX_STATUSES = ("affected", "will_not_fix", "fix_deferred", "end_of_life", "under_investigation")
+FIX_STATUS_UNKNOWN = "fix status unknown"
 DIGEST_REF_RE = re.compile(r"^(?P<repo>[a-z0-9][a-z0-9._/:-]*?)(?::[\w.-]+)?@(?P<digest>sha256:[0-9a-f]{64})$")
 IMAGE_LINE_RE = re.compile(r"^\s*image:\s*['\"]?(?P<ref>[^'\"\s#]+)", re.MULTILINE)
 
@@ -266,7 +285,10 @@ def analyse(raw: str, ref: str, role: str, platform: str) -> dict:
                     "id": vuln.get("VulnerabilityID"),
                     "package": vuln.get("PkgName"),
                     "installed": vuln.get("InstalledVersion"),
-                    "fixed": vuln.get("FixedVersion") or "",
+                    # Trivy omits FixedVersion when there is no fix; keep any other value as
+                    # reported so that decide() can reject a malformed one.
+                    "fixed": "" if vuln.get("FixedVersion") is None else vuln.get("FixedVersion"),
+                    "status": vuln.get("Status"),
                     "severity": str(vuln.get("Severity", "UNKNOWN")).lower(),
                     "target": result.get("Target"),
                     "class": result.get("Class"),
@@ -298,9 +320,36 @@ def _covers(entry: dict, finding: dict, repository: str, today: dt.date) -> bool
     return not target or target == str(finding.get("target") or "").lstrip("/")
 
 
+def _app_fix_state(finding: dict) -> str:
+    """``fixed``, ``unfixed`` or ``unknown`` for a finding in the app image (fail-closed).
+
+    ``unfixed`` needs both signals Trivy gives for a missing fix: no fixed
+    version and a status from ``NO_FIX_STATUSES``. A non-string fixed version,
+    a missing or unknown status, or ``fixed`` without a fixed version is
+    ``unknown`` and must block.
+    """
+    fixed = finding["fixed"]
+    if not isinstance(fixed, str):
+        return "unknown"
+    if fixed.strip():
+        return "fixed"
+    return "unfixed" if finding.get("status") in NO_FIX_STATUSES else "unknown"
+
+
 def decide(scan: dict, exceptions: list[dict], level: str, today: dt.date) -> None:
+    """Sort the findings of one scan into blocking, excepted, unfixed, below threshold and unrated.
+
+    Only the app image (role ``app``) has the ``unfixed`` class: a finding at or
+    above the threshold without a published fix (no fixed version and a no-fix
+    status, see ``_app_fix_state``) is listed there and does not block, because
+    no package update exists that a rebuild could pull in. An app finding whose
+    fix status is unclear blocks with the reason "fix status unknown".
+    Third-party images have no such class; there a finding without fix blocks
+    unless an exception covers it.
+    """
     threshold = SEVERITIES.index(level)
-    scan["blocking"], scan["excepted"], scan["below_threshold"], scan["unrated"] = [], [], [], []
+    for key in ("blocking", "excepted", "unfixed", "below_threshold", "unrated"):
+        scan[key] = []
     for finding in scan.pop("findings"):
         severity = finding["severity"]
         if severity not in SEVERITIES:
@@ -309,6 +358,14 @@ def decide(scan: dict, exceptions: list[dict], level: str, today: dt.date) -> No
         if SEVERITIES.index(severity) < threshold:
             scan["below_threshold"].append(finding)
             continue
+        if scan["role"] == "app":
+            state = _app_fix_state(finding)
+            if state == "unfixed":
+                scan["unfixed"].append(finding)
+                continue
+            if state == "unknown":
+                scan["blocking"].append(finding | {"blocking_reason": FIX_STATUS_UNKNOWN})
+                continue
         match = next((e for e in exceptions if _covers(e, finding, scan["repository"], today)), None)
         if match is None:
             scan["blocking"].append(finding)
@@ -324,6 +381,14 @@ def _line(finding: dict) -> str:
     fixed = f" fixed in {finding['fixed']}" if finding["fixed"] else " no fix"
     where = "" if finding.get("class") == "os-pkgs" else f" in /{str(finding.get('target') or '').lstrip('/')}"
     return f"{finding['id']} [{finding['severity']}] {finding['package']} {finding['installed']}{where}{fixed}"
+
+
+def _blocking_line(finding: dict) -> str:
+    """A blocking finding, with the reason when its fix status could not be trusted."""
+    if finding.get("blocking_reason") != FIX_STATUS_UNKNOWN:
+        return _line(finding)
+    detail = f"status {finding.get('status')!r}, fixed version {finding['fixed']!r}"
+    return f"{_line(finding)} — {FIX_STATUS_UNKNOWN} ({detail})"
 
 
 def summary_text(report: dict) -> str:
@@ -342,10 +407,14 @@ def summary_text(report: dict) -> str:
         lines.append(
             f"[{scan['role']}] {scan['reference']} {scan['platform']} ({scan['architecture']}): {scan['result']} — "
             f"blocking {len(scan['blocking'])}, excepted {len(scan['excepted'])}, "
+            f"unfixed {len(scan['unfixed'])} (not blocking), "
             f"below threshold {len(scan['below_threshold'])}, unrated {len(scan['unrated'])}"
         )
-        lines += [f"    BLOCKING {_line(f)}" for f in scan["blocking"]]
+        lines += [f"    BLOCKING {_blocking_line(f)}" for f in scan["blocking"]]
         lines += [f"    excepted until {f['expires']}: {_line(f)} — {f['reason']}" for f in scan["excepted"]]
+        if scan["unfixed"]:
+            lines.append("    UNFIXED (no fix published, not blocking):")
+            lines += [f"      {_line(f)}" for f in scan["unfixed"]]
         lines += [f"    below threshold: {_line(f)}" for f in scan["below_threshold"]]
         lines += [f"    unrated: {_line(f)}" for f in scan["unrated"]]
         for target, modules in sorted(scan["go_binaries"].items()):
@@ -462,7 +531,7 @@ def main(argv: list[str] | None = None) -> int:
     for scan in scans:
         for finding in scan["blocking"]:
             where = f"[{scan['role']}] {scan['reference']} {scan['platform']}"
-            print(f"BLOCKING: {where}: {_line(finding)}", file=sys.stderr)
+            print(f"BLOCKING: {where}: {_blocking_line(finding)}", file=sys.stderr)
         for gap in scan["coverage_gaps"]:
             print(f"COVERAGE GAP: {scan['reference']} {scan['platform']}: {gap}", file=sys.stderr)
     for entry in expired:

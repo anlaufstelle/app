@@ -85,15 +85,30 @@ VERSION = {
 }
 
 
-def _vuln(severity: str, cve: str = "CVE-2026-0001", pkg: str = "openssl") -> dict:
-    return {
-        "VulnerabilityID": cve,
-        "PkgName": pkg,
-        "InstalledVersion": "3.0.0",
-        "FixedVersion": "3.0.1",
-        "Severity": severity,
-        "Title": "controlled test finding",
-    }
+TRIVY_STATUS = object()  # default: the Status Trivy reports for the given FixedVersion
+
+
+def _vuln(
+    severity: str,
+    cve: str = "CVE-2026-0001",
+    pkg: str = "openssl",
+    fixed: object = "3.0.1",
+    status: object = TRIVY_STATUS,
+) -> dict:
+    """A Trivy finding in the form Trivy writes it.
+
+    Trivy omits ``FixedVersion`` when there is no fix (``fixed=""`` or ``ABSENT``)
+    and reports ``Status: fixed`` with a fixed version, ``affected`` without.
+    ``status=ABSENT`` leaves the status out; any other value is used as given.
+    """
+    vuln = {"VulnerabilityID": cve, "PkgName": pkg, "InstalledVersion": "3.0.0"}
+    if not (fixed is ABSENT or fixed == ""):
+        vuln["FixedVersion"] = fixed
+    if status is TRIVY_STATUS:
+        status = "fixed" if "FixedVersion" in vuln else "affected"
+    if status is not ABSENT:
+        vuln["Status"] = status
+    return vuln | {"Severity": severity, "Title": "controlled test finding"}
 
 
 def _report(ref: str, platform: str, *, vulns=(), go: bool = True, arch: str | None = None) -> str:
@@ -284,6 +299,207 @@ class TestThreshold:
         scans = {f"{APP}|linux/amd64": _report(APP, "linux/amd64", vulns=[_vuln("MEDIUM")])}
         result, _, _ = _run(tmp_path, "--level", "medium", scans=scans)
         assert result.returncode == 1
+
+
+def _scan_line(summary: str, ref: str, platform: str) -> str:
+    return next(line for line in summary.splitlines() if line.startswith("[") and f"] {ref} {platform} " in line)
+
+
+class TestUnfixedFindingsInTheAppImage:
+    """In the app image a finding without a published fix is counted and listed
+    but does not block; a finding with a fix blocks. Third-party images keep
+    the plain rule."""
+
+    def _app_scans(self, *vulns):
+        return {f"{APP}|linux/amd64": _report(APP, "linux/amd64", vulns=list(vulns))}
+
+    def test_app_finding_without_fix_passes_and_is_listed_as_unfixed(self, tmp_path):
+        scans = self._app_scans(_vuln("CRITICAL", cve="CVE-2026-0100", pkg="libxml2", fixed=""))
+        result, _, out = _run(tmp_path, "--require-app-image", scans=scans)
+        assert result.returncode == 0, result.stdout + result.stderr
+        report = json.loads((out / "image-scan-report.json").read_text())
+        assert report["result"] == "pass"
+        app = next(s for s in report["scans"] if s["reference"] == APP and s["platform"] == "linux/amd64")
+        assert app["result"] == "pass"
+        assert app["blocking"] == []
+        assert [(f["id"], f["package"], f["fixed"]) for f in app["unfixed"]] == [("CVE-2026-0100", "libxml2", "")]
+        summary = (out / "image-scan-summary.txt").read_text()
+        assert summary.splitlines()[0] == "Image scan: PASS"
+        lines = summary.splitlines()
+        header = lines.index("    UNFIXED (no fix published, not blocking):")
+        assert lines[header + 1] == "      CVE-2026-0100 [critical] libxml2 3.0.0 no fix"
+        assert "BLOCKING" not in summary + result.stderr
+
+    def test_app_finding_with_fix_blocks(self, tmp_path):
+        scans = self._app_scans(_vuln("HIGH", cve="CVE-2026-0101", fixed="3.0.1"))
+        result, _, out = _run(tmp_path, "--require-app-image", scans=scans)
+        assert result.returncode == 1, result.stdout + result.stderr
+        assert "CVE-2026-0101" in result.stderr
+        report = json.loads((out / "image-scan-report.json").read_text())
+        app = next(s for s in report["scans"] if s["reference"] == APP and s["platform"] == "linux/amd64")
+        assert [f["id"] for f in app["blocking"]] == ["CVE-2026-0101"]
+        assert app["unfixed"] == []
+
+    def test_app_finding_without_fix_below_the_threshold_stays_below_threshold(self, tmp_path):
+        scans = self._app_scans(_vuln("MEDIUM", fixed=""))
+        result, _, out = _run(tmp_path, scans=scans)
+        assert result.returncode == 0, result.stderr
+        report = json.loads((out / "image-scan-report.json").read_text())
+        app = next(s for s in report["scans"] if s["reference"] == APP and s["platform"] == "linux/amd64")
+        assert app["unfixed"] == [] and len(app["below_threshold"]) == 1
+
+    def test_app_image_rule_does_not_depend_on_the_repository_name(self, tmp_path):
+        stage = "ghcr.io/anlaufstelle/stage@sha256:" + "a" * 64
+        scans = {}
+        for p in PLATFORMS:  # _report only adds supercronic for APP; reuse that report under the stage name
+            data = json.loads(_report(APP, p, vulns=[_vuln("HIGH", fixed="")]))
+            data["ArtifactName"] = stage
+            scans[f"{stage}|{p}"] = json.dumps(data)
+        result, _, out = _run(tmp_path, "--require-app-image", app=stage, scans=scans)
+        assert result.returncode == 0, result.stdout + result.stderr
+        report = json.loads((out / "image-scan-report.json").read_text())
+        stage_scans = [s for s in report["scans"] if s["reference"] == stage]
+        assert {s["role"] for s in stage_scans} == {"app"}
+        assert all(len(s["unfixed"]) == 1 and not s["blocking"] for s in stage_scans)
+
+    def test_third_party_finding_without_fix_still_blocks(self, tmp_path):
+        ref = _compose_images()[0]
+        scans = {f"{ref}|linux/amd64": _report(ref, "linux/amd64", vulns=[_vuln("HIGH", fixed="")])}
+        result, _, out = _run(tmp_path, scans=scans)
+        assert result.returncode == 1, result.stdout + result.stderr
+        report = json.loads((out / "image-scan-report.json").read_text())
+        third = next(s for s in report["scans"] if s["reference"] == ref and s["platform"] == "linux/amd64")
+        assert len(third["blocking"]) == 1 and third["unfixed"] == []
+        assert "UNFIXED" not in (out / "image-scan-summary.txt").read_text()
+
+    def test_third_party_finding_without_fix_also_blocks_without_app_image(self, tmp_path):
+        ref = _compose_images()[0]
+        scans = {f"{ref}|linux/amd64": _report(ref, "linux/amd64", vulns=[_vuln("HIGH", fixed="")])}
+        result, _, _ = _run(tmp_path, app="", scans=scans)
+        assert result.returncode == 1, result.stdout + result.stderr
+
+    def test_summary_line_counts_every_class(self, tmp_path):
+        scans = self._app_scans(
+            _vuln("HIGH", cve="CVE-2026-0201", fixed=""),
+            _vuln("CRITICAL", cve="CVE-2026-0202", fixed=""),
+            _vuln("HIGH", cve="CVE-2026-0203", fixed="3.0.1"),
+            _vuln("LOW", cve="CVE-2026-0204", fixed=""),
+            _vuln("UNKNOWN", cve="CVE-2026-0205", fixed=""),
+        )
+        result, _, out = _run(tmp_path, scans=scans)
+        assert result.returncode == 1, result.stdout + result.stderr
+        summary = (out / "image-scan-summary.txt").read_text()
+        line = _scan_line(summary, APP, "linux/amd64")
+        assert line.endswith(
+            ": fail — blocking 1, excepted 0, unfixed 2 (not blocking), below threshold 1, unrated 1"
+        ), line
+        clean = _scan_line(summary, APP, "linux/arm64")
+        assert clean.endswith(
+            ": pass — blocking 0, excepted 0, unfixed 0 (not blocking), below threshold 0, unrated 0"
+        ), clean
+        third = _scan_line(summary, _compose_images()[0], "linux/amd64")
+        assert "unfixed 0 (not blocking)" in third
+
+    def test_incomplete_scan_with_unfixed_findings_stays_exit_2(self, tmp_path):
+        scans = {f"{APP}|linux/amd64": _report(APP, "linux/amd64", vulns=[_vuln("HIGH", fixed="")], go=False)}
+        result, _, out = _run(tmp_path, scans=scans)
+        assert result.returncode == 2, result.stdout + result.stderr
+        assert json.loads((out / "image-scan-report.json").read_text())["result"] == "incomplete"
+
+
+NO_FIX_STATUSES = ("affected", "will_not_fix", "fix_deferred", "end_of_life", "under_investigation")
+
+
+def _app_amd64(out: Path) -> dict:
+    report = json.loads((out / "image-scan-report.json").read_text())
+    return next(s for s in report["scans"] if s["reference"] == APP and s["platform"] == "linux/amd64")
+
+
+class TestFixStatusOfAppFindingsIsFailClosed:
+    """An app finding counts as unfixed only with both of Trivy's no-fix signals:
+    no fixed version and a no-fix status. Every other combination blocks and is
+    marked "fix status unknown"; third-party images keep the plain rule."""
+
+    def _run_app(self, tmp_path, vuln):
+        scans = {f"{APP}|linux/amd64": _report(APP, "linux/amd64", vulns=[vuln])}
+        return _run(tmp_path, "--require-app-image", scans=scans)
+
+    def _assert_blocks_with_unknown_status(self, result, out, status_repr, fixed_repr):
+        assert result.returncode == 1, result.stdout + result.stderr
+        app = _app_amd64(out)
+        assert app["unfixed"] == []
+        assert [f["blocking_reason"] for f in app["blocking"]] == ["fix status unknown"]
+        reason = f"fix status unknown (status {status_repr}, fixed version {fixed_repr})"
+        assert reason in result.stderr
+        summary = (out / "image-scan-summary.txt").read_text()
+        assert f"    BLOCKING CVE-2026-0300 [high] openssl 3.0.0 no fix — {reason}" in summary.splitlines()
+        assert json.loads((out / "image-scan-report.json").read_text())["result"] == "fail"
+
+    def test_stub_has_the_trivy_form(self):
+        without_fix, with_fix = _vuln("HIGH", fixed=""), _vuln("HIGH")
+        assert "FixedVersion" not in without_fix and without_fix["Status"] == "affected"
+        assert with_fix["FixedVersion"] == "3.0.1" and with_fix["Status"] == "fixed"
+
+    @pytest.mark.parametrize("status", NO_FIX_STATUSES)
+    def test_missing_fixed_version_with_a_no_fix_status_is_unfixed(self, tmp_path, status):
+        result, _, out = self._run_app(tmp_path, _vuln("HIGH", cve="CVE-2026-0300", fixed="", status=status))
+        assert result.returncode == 0, result.stdout + result.stderr
+        app = _app_amd64(out)
+        assert app["blocking"] == []
+        assert [(f["id"], f["status"], f["fixed"]) for f in app["unfixed"]] == [("CVE-2026-0300", status, "")]
+
+    def test_empty_fixed_version_with_a_no_fix_status_is_unfixed(self, tmp_path):
+        vuln = _vuln("HIGH", cve="CVE-2026-0300", fixed="") | {"FixedVersion": ""}
+        result, _, out = self._run_app(tmp_path, vuln)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert len(_app_amd64(out)["unfixed"]) == 1
+
+    def test_status_fixed_without_fixed_version_blocks(self, tmp_path):
+        result, _, out = self._run_app(tmp_path, _vuln("HIGH", cve="CVE-2026-0300", fixed="", status="fixed"))
+        self._assert_blocks_with_unknown_status(result, out, "'fixed'", "''")
+
+    def test_missing_status_without_fixed_version_blocks(self, tmp_path):
+        result, _, out = self._run_app(tmp_path, _vuln("HIGH", cve="CVE-2026-0300", fixed="", status=ABSENT))
+        self._assert_blocks_with_unknown_status(result, out, "None", "''")
+
+    @pytest.mark.parametrize(
+        "status", ["new_status", "Affected", "", 3, ["affected"]], ids=["unknown", "case", "empty", "number", "list"]
+    )
+    def test_unknown_status_without_fixed_version_blocks(self, tmp_path, status):
+        result, _, out = self._run_app(tmp_path, _vuln("HIGH", cve="CVE-2026-0300", fixed="", status=status))
+        self._assert_blocks_with_unknown_status(result, out, repr(status), "''")
+
+    @pytest.mark.parametrize(
+        "fixed", [0, [], {}, False, ["3.0.1"]], ids=["zero", "list", "dict", "false", "list-value"]
+    )
+    def test_fixed_version_that_is_not_a_string_blocks(self, tmp_path, fixed):
+        vuln = _vuln("HIGH", cve="CVE-2026-0300", fixed=fixed, status="affected")
+        result, _, out = self._run_app(tmp_path, vuln)
+        assert result.returncode == 1, result.stdout + result.stderr
+        app = _app_amd64(out)
+        assert app["unfixed"] == []
+        assert [f["blocking_reason"] for f in app["blocking"]] == ["fix status unknown"]
+        assert "fix status unknown" in result.stderr
+
+    def test_fixed_version_blocks_whatever_the_status(self, tmp_path):
+        vuln = _vuln("HIGH", cve="CVE-2026-0300", fixed="3.0.1", status="affected")
+        result, _, out = self._run_app(tmp_path, vuln)
+        assert result.returncode == 1, result.stdout + result.stderr
+        app = _app_amd64(out)
+        assert [f["id"] for f in app["blocking"]] == ["CVE-2026-0300"]
+        assert "blocking_reason" not in app["blocking"][0]
+        assert "fix status unknown" not in result.stderr
+
+    def test_third_party_finding_with_unclear_status_blocks_without_the_app_marker(self, tmp_path):
+        ref = _compose_images()[0]
+        vuln = _vuln("HIGH", cve="CVE-2026-0300", fixed="", status="fixed")
+        scans = {f"{ref}|linux/amd64": _report(ref, "linux/amd64", vulns=[vuln])}
+        result, _, out = _run(tmp_path, scans=scans)
+        assert result.returncode == 1, result.stdout + result.stderr
+        report = json.loads((out / "image-scan-report.json").read_text())
+        third = next(s for s in report["scans"] if s["reference"] == ref and s["platform"] == "linux/amd64")
+        assert len(third["blocking"]) == 1 and "blocking_reason" not in third["blocking"][0]
+        assert "fix status unknown" not in result.stderr
 
 
 class TestExceptions:

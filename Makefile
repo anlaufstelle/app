@@ -350,7 +350,10 @@ audit-js:
 # the app image as not scanned). An invalid APP_IMAGE, a scanner/database/
 # registry error or a coverage gap (OS packages, Go detection for supercronic):
 # exit 2; a finding at or above IMAGE_SCAN_LEVEL without a valid exception
-# (scripts/image_scan_exceptions.json): exit 1. Reports in IMAGE_SCAN_DIR.
+# (scripts/image_scan_exceptions.json): exit 1. In the app image a finding
+# without an available fix (no fixed version and a no-fix status) is listed as
+# unfixed and does not block; an unclear fix status blocks.
+# Reports in IMAGE_SCAN_DIR.
 IMAGE_SCAN_LEVEL ?= high
 IMAGE_SCAN_DIR ?= $(HOME)/.cache/anlaufstelle-image-scan
 scan-images:
