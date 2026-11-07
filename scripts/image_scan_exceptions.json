@@ -17,6 +17,14 @@
       "expires": "2026-12-05"
     },
     {
+      "vulnerability": "CVE-2026-78661",
+      "image": "caddy",
+      "package": "golang.org/x/net",
+      "target": "/usr/bin/caddy",
+      "reason": "golang.org/x/net v0.60.0 in /usr/bin/caddy; the fixed version 0.62.0 is published, the upstream caddy:2-alpine image has not been rebuilt with it yet.",
+      "expires": "2026-12-05"
+    },
+    {
       "vulnerability": "CVE-2026-111497",
       "image": "postgres",
       "package": "brotli-libs",
