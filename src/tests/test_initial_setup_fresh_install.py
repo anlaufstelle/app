@@ -37,11 +37,16 @@ def _caddy_environment(compose_path: Path) -> str:
     return "\n".join(f"      {name}: probe" for name in names)
 
 
-def _stat_with_app_group() -> str:
-    return """#!/bin/bash
-mode="$(/usr/bin/stat -c %a "${!#}")" || exit $?
-printf '1000 %s\n' "$mode"
+def _stat_with_group(gid: int) -> str:
+    # Report a fixed group so the result does not depend on the caller's primary group.
+    return f"""#!/bin/bash
+mode="$(/usr/bin/stat -c %a "${{!#}}")" || exit $?
+printf '{gid} %s\n' "$mode"
 """
+
+
+def _stat_with_app_group() -> str:
+    return _stat_with_group(1000)
 
 
 def _run_setup(
@@ -292,6 +297,7 @@ def test_existing_backup_directory_with_wrong_group_prints_repair_command(tmp_pa
     result, commands, _ = _run_setup(
         tmp_path,
         backup_dir=backup_dir,
+        stat_stub=_stat_with_group(4242),
     )
     assert result.returncode != 0
     assert f'sudo chgrp 1000 "{backup_dir}" && sudo chmod 2750 "{backup_dir}"' in result.stderr
