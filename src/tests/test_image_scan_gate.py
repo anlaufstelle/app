@@ -725,6 +725,44 @@ class TestWiring:
         assert re.search(r"@[0-9a-f]{40}$", upload["uses"])
 
 
+def _final_stage_apt_run() -> str:
+    """The ``RUN`` instruction of the final Dockerfile stage that installs OS packages."""
+    text = (REPO_ROOT / "Dockerfile").read_text(encoding="utf-8").replace("\\\n", " ")
+    final = re.search(r"^FROM [^\n]* AS final$", text, re.MULTILINE)
+    assert final is not None, "Dockerfile has no 'AS final' stage"
+    run = re.search(r"^RUN [^\n]*apt-get install[^\n]*$", text[final.end() :], re.MULTILINE)
+    assert run is not None, "final stage installs no OS packages with apt-get"
+    return re.sub(r"\s+", " ", run.group(0))
+
+
+@pytest.mark.skipif(not (REPO_ROOT / "Dockerfile").exists(), reason="tree without Dockerfile")
+class TestAppImageAppliesDebianSecurityFixes:
+    """The app image gate blocks every finding with a published fix.
+
+    The base image is pinned by digest, so Debian security updates released after the
+    pin would otherwise end up in the image as blocking findings. The final stage
+    therefore upgrades the installed packages before it installs the application's
+    OS packages, and drops the package lists in the same layer.
+    """
+
+    def test_final_stage_upgrades_before_installing(self):
+        run = _final_stage_apt_run()
+        update = run.find("apt-get update")
+        upgrade = run.find("apt-get upgrade -y")
+        install = run.find("apt-get install")
+        assert 0 <= update < upgrade < install, run
+
+    def test_package_lists_are_removed_in_the_same_layer(self):
+        run = _final_stage_apt_run()
+        assert run.rfind("rm -rf /var/lib/apt/lists/*") > run.rfind("apt-get install"), run
+
+    def test_release_build_never_reuses_a_cached_final_stage(self):
+        workflow = yaml.safe_load((REPO_ROOT / ".github" / "workflows" / "release.yml").read_text())
+        build = next(s for s in workflow["jobs"]["build-and-push"]["steps"] if s.get("id") == "build")
+        filters = [f.strip() for f in str(build["with"].get("no-cache-filters", "")).replace("\n", ",").split(",")]
+        assert "final" in filters, build["with"]
+
+
 def _clamav() -> str:
     return next(ref for ref in _compose_images() if ref.startswith("clamav/"))
 

@@ -47,6 +47,9 @@ jobs:
           # GitHub Actions Cache spart Layer-Rebuilds zwischen Releases
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # The final stage runs apt-get upgrade; a cached layer would freeze the
+          # Debian package state of an earlier build, so it is always rebuilt.
+          no-cache-filters: final
           tags: |
             ghcr.io/${{ github.repository }}:${{ github.ref_name }}
             ghcr.io/${{ github.repository }}:latest

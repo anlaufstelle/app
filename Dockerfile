@@ -42,7 +42,13 @@ FROM python:3.14-slim@sha256:af8a5aa14780025dbfbcfbc81bd8a91ebd87711dd5b0f48ed71
 # WeasyPrint + libmagic (file-upload magic-bytes validation, Refs #610) system dependencies
 # libharfbuzz-subset0: von WeasyPrint >= 70 beim Import geladen (Font-Subsetting);
 # ohne das Paket DeprecationWarning, kuenftige Versionen setzen es voraus.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+#
+# Debian updates released between the digest pin above and the build, security
+# fixes included, are applied with ``apt-get upgrade``: the pinned base is a
+# snapshot, and the app image gate blocks every finding that has a published fix. ``upgrade`` never
+# installs new packages. The lists are deleted again in the same layer.
+RUN apt-get update && apt-get upgrade -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends \
     libpango-1.0-0 libpangocairo-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 \
     libcairo2 libgdk-pixbuf-2.0-0 libffi-dev \
     libglib2.0-0 shared-mime-info \
