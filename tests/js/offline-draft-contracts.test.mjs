@@ -120,7 +120,7 @@ it("editing after a submitted snapshot creates a token that old confirmation can
     p.w.document.querySelector("textarea").dispatchEvent(new p.w.Event("input", { bubbles: true }));
     await tick(p);
     const success = await page(marker(token)); await start(success);
-    expect((await p.store.getDecrypted("drafts", key))?.data.notes).toBe("Later input");
+    await vi.waitFor(async () => expect((await p.store.getDecrypted("drafts", key))?.data.notes).toBe("Later input"));
 });
 
 it("failed second contact survives reopening the same serial-entry URL", async () => {
@@ -224,7 +224,7 @@ it.each([true, false])("removing a template discards the draft, including typed 
         p.w.document.querySelector("textarea").value = "Unsaved template text";
         p.w.document.querySelector("textarea").dispatchEvent(new p.w.Event("input", { bubbles: true }));
         await tick(p);
-        expect((await p.store.getDecrypted("drafts", key)).data.notes).toBe("Unsaved template text");
+        await vi.waitFor(async () => expect((await p.store.getDecrypted("drafts", key))?.data.notes).toBe("Unsaved template text"));
     }
     p.w.document.querySelector("a").click();
     await new Promise(resolve => setTimeout(resolve, 30));
@@ -336,7 +336,7 @@ it("a programmatic field update in another tab cannot create a new draft version
     p.w.document.querySelector("textarea").value = "Programmatic default";
     await tick(p);
     const success = await page(marker(oldToken)); await start(success);
-    expect(await p.store.getDecrypted("drafts", key)).toBeNull();
+    await vi.waitFor(async () => expect(await p.store.getDecrypted("drafts", key)).toBeNull());
 });
 
 it("a stale tab's submit and confirmation retain another tab's newer unsaved draft", async () => {
@@ -346,7 +346,7 @@ it("a stale tab's submit and confirmation retain another tab's newer unsaved dra
     const field = second.w.document.querySelector("textarea");
     field.value = "New unsaved B";
     field.dispatchEvent(new second.w.Event("input", { bubbles: true })); await tick(second);
-    expect((await second.store.getDecrypted("drafts", key)).data.notes).toBe("New unsaved B");
+    await vi.waitFor(async () => expect((await second.store.getDecrypted("drafts", key))?.data.notes).toBe("New unsaved B"));
     const form = first.w.document.querySelector("form");
     const sent = vi.fn(() => Object.fromEntries(new first.w.FormData(form)));
     form.requestSubmit = sent;
@@ -365,21 +365,24 @@ it("a stale tab's autosave cannot replace a newer stored version", async () => {
     for (const [p, text] of [[second, "Newer saved B"], [first, "Stale input A"]]) {
         const field = p.w.document.querySelector("textarea"); field.value = text;
         field.dispatchEvent(new p.w.Event("input", { bubbles: true })); await tick(p);
+        // The first (newer) save must have landed before the stale tab writes.
+        if (p === second) await vi.waitFor(async () => expect((await second.store.getDecrypted("drafts", key))?.data.notes).toBe(text));
     }
+    await vi.waitFor(() => expect(first.w.document.querySelector("#autosave-error-banner")).not.toBeNull());
     expect((await first.store.getDecrypted("drafts", key)).data.notes).toBe("Newer saved B");
     expect(first.w.document.querySelector("textarea").value).toBe("Stale input A");
-    expect(first.w.document.querySelector("#autosave-error-banner")).not.toBeNull();
 });
 
 it("new input remains recoverable after another tab confirms and deletes the previous draft", async () => {
     const first = await page(formHtml());
     await seed(first, { notes: "Already submitted A", __submissionToken: oldToken }); await start(first);
     const success = await page(marker(oldToken)); await start(success);
-    expect(await first.store.getDecrypted("drafts", key)).toBeNull();
+    await vi.waitFor(async () => expect(await first.store.getDecrypted("drafts", key)).toBeNull());
     const field = first.w.document.querySelector("textarea");
     field.value = "New unsaved text after confirmation";
     field.dispatchEvent(new first.w.Event("input", { bubbles: true }));
     await tick(first); await tick(first);
+    await vi.waitFor(async () => expect((await first.store.getDecrypted("drafts", key))?.data.notes).toBe("New unsaved text after confirmation"));
     const draft = await first.store.getDecrypted("drafts", key);
     expect(draft?.data.notes).toBe("New unsaved text after confirmation");
     expect(draft.data.__submissionToken).not.toBe(oldToken);
@@ -414,6 +417,7 @@ it("retrying an older confirmation after deletion failure preserves new unconfir
     await start(p);
     const field = p.w.document.querySelector("textarea"); field.value = "New unsaved input";
     field.dispatchEvent(new p.w.Event("input", { bubbles: true })); await tick(p);
+    await vi.waitFor(async () => expect((await p.store.getDecrypted("drafts", key))?.data.notes).toBe("New unsaved input"));
     const next = await page(formHtml()); await start(next);
     expect(next.w.document.querySelector("textarea").value).toBe("New unsaved input");
 });
@@ -422,7 +426,7 @@ it.each([false, true])("selecting the first person after autosave retains the fi
     let p = await page(formHtml()); await start(p);
     let field = p.w.document.querySelector("textarea"); field.value = "Initial text before person";
     field.dispatchEvent(new p.w.Event("input", { bubbles: true })); await tick(p);
-    expect((await p.store.getDecrypted("drafts", key)).data.notes).toBe("Initial text before person");
+    await vi.waitFor(async () => expect((await p.store.getDecrypted("drafts", key))?.data.notes).toBe("Initial text before person"));
     if (reopened) { p = await page(formHtml()); await start(p); field = p.w.document.querySelector("textarea"); }
     const client = p.w.document.querySelector('[name="client"]'); client.value = "person-a";
     client.dispatchEvent(new p.w.Event("change", { bubbles: true })); field.value = "Final text for selected person";
@@ -540,8 +544,9 @@ it.each([true, false])("a live draft bound to person A pauses for B and resumes 
     }
     field.value = "Confidential person A notes";
     field.dispatchEvent(new p.w.Event("input", { bubbles: true })); await tick(p);
+    // The save is asynchronous (encrypt + IndexedDB); wait for the state instead of a fixed delay.
+    await vi.waitFor(async () => expect((await p.store.getDecrypted("drafts", key))?.data).toMatchObject({ notes: "Confidential person A notes", __personPk: "person-a" }));
     const original = (await p.store.getDecrypted("drafts", key)).data;
-    expect(original).toMatchObject({ notes: "Confidential person A notes", __personPk: "person-a" });
     client.value = "person-b";
     client.dispatchEvent(new p.w.Event("change", { bubbles: true })); await tick(p);
     expect((await p.store.getDecrypted("drafts", key)).data).toEqual(original);
@@ -555,7 +560,7 @@ it.each([true, false])("a live draft bound to person A pauses for B and resumes 
     expect(other.w.document.body.textContent).toContain("Other person's draft retained");
     client.value = "person-a";
     client.dispatchEvent(new p.w.Event("change", { bubbles: true })); await tick(p);
-    expect((await p.store.getDecrypted("drafts", key)).data).toMatchObject({ __personPk: "person-a", notes: "Confidential person A notes further typing" });
+    await vi.waitFor(async () => expect((await p.store.getDecrypted("drafts", key))?.data).toMatchObject({ __personPk: "person-a", notes: "Confidential person A notes further typing" }));
     const own = await page(formHtml("", "person-a")); await start(own);
     expect(own.w.document.querySelector("textarea").value).toBe("Confidential person A notes further typing");
 });
