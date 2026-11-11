@@ -5,7 +5,7 @@ from importlib import import_module
 import pytest
 from django.contrib.auth import HASH_SESSION_KEY
 from django.test import Client
-from django_otp.oath import totp
+from django_otp.oath import hotp
 
 from core.models import EncryptedTOTPDevice, User
 from tests.test_mfa_session_revocation import _browser, _prepare
@@ -43,10 +43,11 @@ def test_initiating_session_survives_next_authentication(action, next_auth, sess
     else:
         token = "invalid"
         if pending and next_auth == "own_sudo":
-            # Setup already consumed the current time step; use the next valid step.
-            token = str(totp(pending.bin_key, step=pending.step, t0=pending.t0, digits=pending.digits, drift=1)).zfill(
-                pending.digits
-            )
+            # Setup already consumed a time step; use the window after the device's last accepted one.
+            # Relative to the device, not the clock: a confirmation posted across a window boundary
+            # stores a drift of -1, and "now + 1" would then fall outside the tolerance.
+            pending.refresh_from_db()
+            token = str(hotp(pending.bin_key, pending.last_t + 1, digits=pending.digits)).zfill(pending.digits)
         response = current.post("/sudo/", {"password": "testpass123", "otp_token": token, "next": "/mfa/settings/"})
         assert response.status_code == (403 if pending and next_auth == "wrong_otp_sudo" else 302)
 
