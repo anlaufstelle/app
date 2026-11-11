@@ -143,6 +143,20 @@ _FAIL_IDB_READS = """
 """
 
 
+# Stops the triggers that refresh the tally panel in the background. Events dispatched on the
+# window itself (queue counter, sync, live-watch counts) are dropped at the dispatch, so the
+# result does not depend on the order of listeners. htmx swaps are dispatched on elements and
+# reach a capture listener on the window before they reach the page's own listeners.
+_MUTE_BACKGROUND_TALLY_REFRESH = """() => {
+    const muted = new Set(['offline-queue-count', 'offline-sync-finished', 'zeitstrom:tally-counts-updated']);
+    const dispatch = window.dispatchEvent;
+    window.dispatchEvent = function (event) {
+        return muted.has(event.type) ? false : dispatch.call(this, event);
+    };
+    window.addEventListener('htmx:afterSwap', (event) => event.stopImmediatePropagation(), true);
+}"""
+
+
 def _tally_counts(page) -> list[str]:
     """Texts of the confirmed counts in the tally panel, in row order."""
     return page.locator('#tally-panel [data-testid^="tally-count-"]').all_inner_texts()
@@ -203,6 +217,11 @@ class TestCounterReadErrors:
             expect(notice).to_have_count(1)
             assert _tally_counts(page) == counts_before
 
+            # Background triggers (live-watch poll, queue counter, sync, htmx swaps) refresh the panel
+            # on their own. Once the storage is readable again, such a refresh removes the notice with
+            # its button before the click below lands. Muting them leaves the button as the only
+            # trigger of the recovery; the muting comes after the last explicit trigger above.
+            page.evaluate(_MUTE_BACKGROUND_TALLY_REFRESH)
             page.evaluate("() => { window.__failIdbReads = false; }")
             notice.get_by_role("button", name="Erneut versuchen").click()
             expect(notice).to_have_count(0)
@@ -252,14 +271,7 @@ class TestCounterReadErrors:
             # Other triggers also refresh the panel in the background (queue counter, sync, htmx
             # swaps) and would recover the notice without the button. Muting these leaves the button
             # as the trigger of the recovery below.
-            page.evaluate(
-                """() => {
-                    for (const type of ['offline-queue-count', 'offline-sync-finished',
-                                        'zeitstrom:tally-counts-updated', 'htmx:afterSwap', 'online']) {
-                        window.addEventListener(type, (event) => event.stopImmediatePropagation(), true);
-                    }
-                }"""
-            )
+            page.evaluate(_MUTE_BACKGROUND_TALLY_REFRESH)
 
             # While the failure persists, the retry keeps the single notice.
             attempts_before = len(failed_attempts)
