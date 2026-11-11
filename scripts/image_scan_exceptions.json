@@ -32,10 +32,136 @@
       "expires": "2026-12-05"
     },
     {
+      "vulnerability": "CVE-2026-107364",
+      "image": "postgres",
+      "package": "krb5-libs",
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
+      "expires": "2026-12-05"
+    },
+    {
+      "vulnerability": "CVE-2026-112315",
+      "image": "postgres",
+      "package": "krb5-libs",
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
+      "expires": "2026-12-05"
+    },
+    {
+      "vulnerability": "CVE-2026-112316",
+      "image": "postgres",
+      "package": "krb5-libs",
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
+      "expires": "2026-12-05"
+    },
+    {
+      "vulnerability": "CVE-2026-112317",
+      "image": "postgres",
+      "package": "krb5-libs",
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
+      "expires": "2026-12-05"
+    },
+    {
+      "vulnerability": "CVE-2026-112318",
+      "image": "postgres",
+      "package": "krb5-libs",
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
+      "expires": "2026-12-05"
+    },
+    {
+      "vulnerability": "CVE-2026-112319",
+      "image": "postgres",
+      "package": "krb5-libs",
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
+      "expires": "2026-12-05"
+    },
+    {
+      "vulnerability": "CVE-2026-112320",
+      "image": "postgres",
+      "package": "krb5-libs",
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
+      "expires": "2026-12-05"
+    },
+    {
+      "vulnerability": "CVE-2026-112321",
+      "image": "postgres",
+      "package": "krb5-libs",
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
+      "expires": "2026-12-05"
+    },
+    {
+      "vulnerability": "CVE-2026-112322",
+      "image": "postgres",
+      "package": "krb5-libs",
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
+      "expires": "2026-12-05"
+    },
+    {
+      "vulnerability": "CVE-2026-112323",
+      "image": "postgres",
+      "package": "krb5-libs",
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
+      "expires": "2026-12-05"
+    },
+    {
+      "vulnerability": "CVE-2026-118380",
+      "image": "postgres",
+      "package": "krb5-libs",
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
+      "expires": "2026-12-05"
+    },
+    {
+      "vulnerability": "CVE-2026-119079",
+      "image": "postgres",
+      "package": "krb5-libs",
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
+      "expires": "2026-12-05"
+    },
+    {
+      "vulnerability": "CVE-2026-40355",
+      "image": "postgres",
+      "package": "krb5-libs",
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
+      "expires": "2026-12-05"
+    },
+    {
+      "vulnerability": "CVE-2026-40356",
+      "image": "postgres",
+      "package": "krb5-libs",
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
+      "expires": "2026-12-05"
+    },
+    {
+      "vulnerability": "CVE-2026-71199",
+      "image": "postgres",
+      "package": "krb5-libs",
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
+      "expires": "2026-12-05"
+    },
+    {
+      "vulnerability": "CVE-2026-71200",
+      "image": "postgres",
+      "package": "krb5-libs",
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
+      "expires": "2026-12-05"
+    },
+    {
       "vulnerability": "CVE-2026-92392",
       "image": "postgres",
       "package": "libcurl",
       "reason": "Alpine package libcurl 8.22.0-r0 in the upstream postgres:18-alpine image; Alpine ships the fixed version 8.23.0-r0, the upstream image has not been rebuilt yet.",
+      "expires": "2026-12-05"
+    },
+    {
+      "vulnerability": "CVE-2026-87636",
+      "image": "postgres",
+      "package": "libxslt",
+      "reason": "Alpine package libxslt 1.1.43-r3 in the upstream postgres:18-alpine image, loaded only by the contrib extension xml2, which the application never installs; Alpine ships the fixed version 1.1.43-r4, the upstream image has not been rebuilt yet.",
+      "expires": "2026-12-05"
+    },
+    {
+      "vulnerability": "CVE-2026-9947",
+      "image": "postgres",
+      "package": "libxslt",
+      "reason": "Alpine package libxslt 1.1.43-r3 in the upstream postgres:18-alpine image, loaded only by the contrib extension xml2, which the application never installs; Alpine ships the fixed version 1.1.43-r4, the upstream image has not been rebuilt yet.",
       "expires": "2026-12-05"
     },
     {
