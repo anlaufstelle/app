@@ -74,6 +74,6 @@ Only metadata is exported, without file contents. `owner` identifies `client`, `
 User references (`created_by_id`, `lead_user_id`, `assigned_to_id`) are UUID strings without a separate `users` section. Employee master data is outside this facility export.
 
 <!-- translation-source: docs/facility-export-schema.md -->
-<!-- translation-version: v0.99.9 -->
+<!-- translation-version: v0.99.10 -->
 <!-- source-hash: d4111994967cda932cd756ef231ccf4315b32667 -->
 <!-- translation-date: 2026-10-26 -->

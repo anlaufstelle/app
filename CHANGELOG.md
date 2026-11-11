@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Erforderliche Betreiber-Aktionen
 
+- Keine.
+
+## [0.99.10] - 2026-11-11
+
+Weiterer Release-Kandidat vor 1.0: bündelt neue Basis-Image-Digests für PostgreSQL, Redis, ClamAV und Caddy (Betreiber-Aktion), einen Schwachstellen-Scan für App- und Fremdimages als Release-Gate mit befristeten Ausnahmen, die Advisory- und SBOM-Prüfung manuell vendorter JavaScript-Bibliotheken, ein offen bleibendes Offline-Bearbeitungsformular, Barrierefreiheits-Korrekturen, einen gehärteten Sprachcookie sowie Sicherheitsupdates für Entwicklungsabhängigkeiten.
+
+### Erforderliche Betreiber-Aktionen
+
 - **Neue Basis-Image-Digests der Compose-Dateien übernehmen** (#2623) — Die Digest-Pins von PostgreSQL, Redis, ClamAV und Caddy sind auf den aktuellen Stand der Tags `18-alpine`, `8-alpine`, `stable` und `2-alpine` angehoben. Beim Update vorher ein Backup anlegen (PostgreSQL-Image), dann im Produktivstack `docker compose -f docker-compose.prod.yml pull db redis clamav caddy` und `docker compose -f docker-compose.prod.yml up -d` ausführen; die Umgebungswerte liest Compose aus der `.env` im Projektverzeichnis, und wer `compose.legal.yml` oder `compose.override.yml` einsetzt, hängt beide wie im [Ops-Runbook § 1.2](https://github.com/anlaufstelle/app/blob/main/docs/ops-runbook.md) in dieser Reihenfolge mit `-f` an. Dev-, Demo- und Staging-Stack nutzen ihre Datei samt `--env-file`, z. B. `docker compose -f docker-compose.dev.yml --env-file .env.dev pull db clamav caddy` und danach `docker compose -f docker-compose.dev.yml --env-file .env.dev up -d` (Demo: `docker-compose.demo.yml` mit `.env.demo`; Staging: `docker-compose.staging.yml` mit `.env.staging`, Dienste `db caddy`). Die lokale Entwicklungs-Compose zieht die neuen Images mit `docker compose pull db clamav` und `docker compose up -d`.
 
 ### Changed

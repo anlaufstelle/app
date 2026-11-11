@@ -317,6 +317,12 @@ The largest collective pre-release to date — the configurability milestones M0
 - **Operations signal what they cannot see**: missing backup signals or an unmeasurable disk degrade the health status, audit high-water marks are anchored offsite and checked in the restore drill, host scripts use the host backup path, and compliance warns about unlimited audit retention.
 - **Time and speed**: the nights of the clock change keep their real hours (shift end and event form both explain the doubled or skipped hour), person search uses trigram-friendly matching, and the timeline checks event visibility only within the own facility. The test suite was restructured with identical coverage.
 
+### v0.99.10 (2026-11-11)
+
+- **Operator action: new base image digests**: the digest pins of PostgreSQL, Redis, ClamAV and Caddy in all Compose files move to the current index digests of their tags, so operators take a backup first, then pull the four images and restart the stack as described in the runbook; open upstream findings in the PostgreSQL and Caddy images are exempted only until 2026-12-05, and the application image has no exemption.
+- **Supply-chain gates**: a new image scan checks the application image per platform and the third-party images with a digest-pinned Trivy, blocking findings from high severity (in the application image every one with an available fix or an unclear fix status, while those without a fix are listed without blocking; in the third-party images every one without a valid time-limited exemption), and the advisory gate now also covers the manually vendored SortableJS and axe-core, which the release SBOM lists as well; network errors, unusable inventories and exemptions with empty required fields turn the gates red instead of passing silently.
+- **Offline, accessibility, hardening and dependencies**: an open edit form in the offline person view no longer closes itself while the same offline key applies, the stored data stays available and the entry is unchanged, but still closes and discards unsaved input when the key changes or expires; further fixes cover drag-and-drop into field groups, contrast, accessible names and focus, the language cookie is hardened in production, and key rotation also covers text equal to the display placeholder; the application image moves to Debian 13.7 and supercronic 0.2.51 and no longer ships pip, the bundled frontend libraries (Chart.js, Dexie.js, Alpine.js CSP), development dependencies and Actions pins are updated, Python production dependencies stay unchanged.
+
 ### v0.99.9 (2026-11-01)
 
 - **Encrypted standard fields replace fixed free-text columns**: person notes, case descriptions and the descriptions of episodes and tasks move into type-bound standard fields that the bundled packages encrypt at field level, and the old columns are dropped without content migration — operators back up the database before updating, load the standard types after updating, switch export consumers to facility schema 2 and reload offline person bundles with schema 3; task details can only be entered online.
@@ -365,6 +371,6 @@ The largest collective pre-release to date — the configurability milestones M0
 - **Quick exit joins the glossary**: a header-bar action (button + keyboard shortcut) on every signed-in page that hides the content, ends the session and opens a neutral page, kept distinct from the separate opt-in privacy screen shown on window or tab switch.
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
-<!-- translation-version: v0.99.9 -->
+<!-- translation-version: v0.99.10 -->
 <!-- source-hash: e6b01e8c18ce39fbb629831cce6817c0ba6a0c7d -->
-<!-- translation-date: 2026-11-01 -->
+<!-- translation-date: 2026-11-11 -->

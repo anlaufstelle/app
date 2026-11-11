@@ -81,6 +81,6 @@ Templates included:
 | `async-pdf-evaluation.md` (dev-only) | _Historical_ — async PDF queue evaluation, superseded by [ADR-010](../adr/010-sync-pdf-generation.md) |
 
 <!-- translation-source: docs/README.md -->
-<!-- translation-version: v0.99.9 -->
+<!-- translation-version: v0.99.10 -->
 <!-- source-hash: fffbbac9f692c6434c917495c7d591396b76cd59 -->
 <!-- translation-date: 2026-10-26 -->

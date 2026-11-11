@@ -2578,6 +2578,6 @@ All five shipped packages provide person, case, episode and task types with norm
 Person anonymization clears these dynamic fields as well as related titles and goal text. Art. 15 exports include documentation types, decrypted standard/additional fields and orphaned values; they do not use separate person-note or case/episode/task description columns. The [facility export uses schema v2](facility-export-schema.md). Update, backup, manual text saving and key-ring/restore steps are listed in the [changelog](../../CHANGELOG.md#unreleased).
 
 <!-- translation-source: docs/admin-guide.md -->
-<!-- translation-version: v0.99.9 -->
+<!-- translation-version: v0.99.10 -->
 <!-- source-hash: 2b1bf45c76efb9dcb36c25552d3b91866708db9c -->
 <!-- translation-date: 2026-10-30 -->

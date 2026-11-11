@@ -9,6 +9,6 @@ A backup-code sign-in confirms the existing factor and does not change devices. 
 Anonymous backup-code unlocking uses 5/min per IP and 10/h per normalized username without increasing device throttling; authenticated device throttling remains. Admin MFA reset is independent of the bounded session scan. A user-to-session index remains a post-1.0 idea.
 
 <!-- translation-source: docs/adr/015-mfa-totp.md -->
-<!-- translation-version: v0.99.9 -->
+<!-- translation-version: v0.99.10 -->
 <!-- translation-date: 2026-10-23 -->
 <!-- source-hash: aca86ddd895399dff2e710b679b121cebfc44625 -->

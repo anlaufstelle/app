@@ -39,6 +39,6 @@ Online review is an organisational aid exclusively for configured unencrypted ev
 Marks contain no source text: only target, field, date, account, timestamp and a purpose-separated HMAC bound to content and target. Validity is checked against current content and date; changing `SECRET_KEY` invalidates earlier HMACs. Restoring exactly the previous text produces the same content fingerprint. This does not prove a complete modification history. RLS isolates facilities' metadata rather than encrypting source text. Marking and revocation log neither text values nor matched snippets. The review does not display person notes or write a `VIEW_QUALIFIED` read entry; only opening the detail page of a person with additional details writes that entry. Suggestions about contact creation, sensitivity and neutralisation do not change data themselves. Review responses carry `no-store`; no separate offline review data store is created.
 
 <!-- translation-source: docs/security-notes.md -->
-<!-- translation-version: v0.99.9 -->
+<!-- translation-version: v0.99.10 -->
 <!-- source-hash: 3a5c0bef6fcb97ddb4e057fdfe92b3051f262d6d -->
 <!-- translation-date: 2026-11-04 -->
