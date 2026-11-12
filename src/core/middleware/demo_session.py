@@ -1,29 +1,23 @@
-"""Keep requests with replaced session keys from wiping a newer cookie.
+"""Keep late responses with revoked session keys from replacing newer cookies.
 
-Session-ID rotation after privilege elevation and demo scenario switches
-invalidate the previous key (Refs #2034, #2531). Requests already sent with
-that key, such as service-worker precache fetches, may arrive afterwards.
-Django's ``SessionMiddleware`` deletes the cookie for an empty session; a
-late response can therefore erase the newer cookie in the browser.
+Unknown, unmodified empty sessions leave the cookie untouched (Refs #2531).
+Django also flushes still-stored sessions when their auth hash is rejected.
+Resolve its cached user before downstream writes so that these responses
+neither clear the cookie nor publish an anonymous successor (Refs #2736).
+An explicit successful login may publish its authenticated session.
 
-``DemoSessionMiddleware`` skips that deletion in every installation when a
-cookie is present and the session was read, unmodified and empty. The response
-keeps ``Vary: Cookie`` without touching the possibly newer cookie. All other
-responses retain Django's behavior:
-
-* logout and ``flush()`` mark the session as modified and delete the cookie;
-* ``clear()`` stays with Django: an empty key deletes the cookie, an existing
-  key saves cleared session data and sets the cookie;
-* a request that creates or saves a session still sets the cookie;
-* the absolute session deadline still logs out and flushes the session;
-* an expired idle session stays anonymous; its inert cookie may remain until
-  browser expiry because loading an expired key does not modify the session.
-
-The old key never inherits authentication, ``sudo_until`` or ``mfa_verified``.
-Server-side session lookup and privilege handling remain unchanged.
+Before saving an unchanged authenticated key, recheck its existence and auth
+revision: a request authenticated before rotation may finish after revocation.
+Explicit logout, session clearing, absolute expiry and new session creation
+retain Django's cookie behavior. Expired idle sessions remain anonymous even
+when their inert cookie stays until browser expiry. Skipped cookie writes
+still retain Vary: Cookie for caches.
 """
 
 from django.conf import settings
+from django.contrib.auth import SESSION_KEY
+from django.contrib.auth import get_user as get_session_user
+from django.contrib.auth.middleware import get_user
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.utils.cache import patch_vary_headers
 
@@ -31,13 +25,42 @@ from django.utils.cache import patch_vary_headers
 class DemoSessionMiddleware(SessionMiddleware):
     """Protect newer cookies from stale requests in demo and regular installations."""
 
+    def process_request(self, request):
+        super().process_request(request)
+        request._session_auth_rejected = False
+        if settings.SESSION_COOKIE_NAME in request.COOKIES:
+            # Use Django's own hash/fallback checks and cache the result for
+            # AuthenticationMiddleware. Only auth rejection flushes here;
+            # explicit logout, expiry and view writes have not run yet.
+            user = get_user(request)
+            request._session_auth_rejected = not user.is_authenticated and request.session.modified
+
     def process_response(self, request, response):
-        if self._is_unknown_key_request(request):
+        rejected = getattr(request, "_session_auth_rejected", False)
+        authenticated = getattr(getattr(request, "user", None), "is_authenticated", False)
+        if (
+            (rejected and not authenticated)
+            or self._is_unknown_key_request(request)
+            or self._is_revoked_key_response(request)
+        ):
             # Django varies on the cookie whenever it deletes it or the session
             # was accessed; keep that for caches.
             patch_vary_headers(response, ("Cookie",))
             return response
         return super().process_response(request, response)
+
+    @staticmethod
+    def _is_revoked_key_response(request):
+        session = getattr(request, "session", None)
+        incoming_key = request.COOKIES.get(settings.SESSION_COOKIE_NAME)
+        if session is None or not incoming_key or session.session_key != incoming_key:
+            return False
+        if not (session.modified or settings.SESSION_SAVE_EVERY_REQUEST) or SESSION_KEY not in session:
+            return False
+        # Do not recreate or refresh a predecessor removed by another request.
+        # A still-stored predecessor can already have a rejected auth revision;
+        # bypass the request's cached user for Django's current hash check.
+        return not session.exists(incoming_key) or not get_session_user(request).is_authenticated
 
     @staticmethod
     def _is_unknown_key_request(request):
