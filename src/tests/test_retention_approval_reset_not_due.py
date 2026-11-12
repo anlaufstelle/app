@@ -509,3 +509,30 @@ def test_reset_sweep_reads_the_current_period(approved, facility, qualified_peri
     assert reset_approvals_with_moved_deadline(facility, stale, timezone.now()) == 1
     assert not Event.objects.get(pk=event.pk).is_deleted
     _assert_reset(proposal)
+
+
+def test_hold_on_a_final_approval_clears_it_for_good(approved, facility, lead_user, admin_user):
+    from core.retention.legal_holds import create_legal_hold, dismiss_legal_hold
+
+    event, proposal = approved
+    # The earlier approvals were given before the current deadline.
+    RetentionProposal.objects.filter(pk=proposal.pk).update(
+        first_approved_at=timezone.now() - timedelta(days=21),
+        approved_at=timezone.now() - timedelta(days=20),
+    )
+    proposal.refresh_from_db()
+    hold = create_legal_hold(proposal, lead_user, "Court order")
+    proposal.refresh_from_db()
+    assert proposal.status == RetentionProposal.Status.HELD
+    assert (proposal.approved_by_id, proposal.approved_at, proposal.auto_approved_at) == (None, None, None)
+    assert (proposal.first_approved_by_id, proposal.first_approved_at) == (None, None)
+    dismiss_legal_hold(hold, lead_user)
+    proposal.refresh_from_db()
+    assert proposal.status == RetentionProposal.Status.PENDING
+    # A new first approval given while the event is due survives the next run.
+    approve_proposal(proposal, lead_user)
+    _run(facility)
+    proposal.refresh_from_db()
+    assert proposal.first_approved_by_id == lead_user.pk
+    assert not _reset_rows(proposal).exists()
+    assert not Event.objects.get(pk=event.pk).is_deleted

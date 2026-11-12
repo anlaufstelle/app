@@ -591,10 +591,15 @@ def create_legal_hold(proposal, user, reason, expires_at=None):
             raise ValidationError(PROPOSAL_ALREADY_HELD_MESSAGE)
         if competing:
             raise ValidationError(PROPOSAL_OTHER_ACTIVE_MESSAGE)
+        # A hold voids a final approval as well (Refs #2714); the first one is
+        # cleared with its audit row by ``create_hold_for_target``.
         locked.status = RetentionProposal.Status.HELD
+        locked.approved_by = None
+        locked.approved_at = None
+        locked.auto_approved_at = None
         try:
             with transaction.atomic():
-                locked.save(update_fields=["status"])
+                locked.save(update_fields=["status", "approved_by", "approved_at", "auto_approved_at"])
         except IntegrityError as exc:
             # A proposal run inserted a new active proposal of the target after
             # the lock above; the database waited for it and refuses a second
@@ -620,6 +625,9 @@ def create_legal_hold(proposal, user, reason, expires_at=None):
     proposal.status = locked.status
     proposal.first_approved_by = locked.first_approved_by
     proposal.first_approved_at = locked.first_approved_at
+    proposal.approved_by = locked.approved_by
+    proposal.approved_at = locked.approved_at
+    proposal.auto_approved_at = locked.auto_approved_at
     return hold
 
 
@@ -649,13 +657,14 @@ def dismiss_legal_hold(hold, user):
     hold.dismissed_at = locked.dismissed_at
     hold.dismissed_by = locked.dismissed_by
 
-    # Revert associated proposal to pending
+    # Revert associated proposal to pending. A held proposal carries no valid
+    # approval; clearing here also covers rows held with stale approval fields.
     RetentionProposal.objects.filter(
         facility_id=locked.facility_id,
         target_type=locked.target_type,
         target_id=locked.target_id,
         status=RetentionProposal.Status.HELD,
-    ).update(status=RetentionProposal.Status.PENDING)
+    ).update(status=RetentionProposal.Status.PENDING, approved_by=None, approved_at=None, auto_approved_at=None)
 
     audit_retention_decision(
         hold.facility,
