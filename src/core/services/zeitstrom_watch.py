@@ -407,13 +407,19 @@ def _tally_topology_projection(facility, user, state: ZeitstromState, *, summary
     )
 
 
-def build_current_shift_summary(facility, user, state: ZeitstromState):
-    """Renderer-only helper used by full page and current-shift partial."""
+def build_current_shift_summary(facility, user, state: ZeitstromState, *, summary_builder=None):
+    """Renderer-only helper used by full page and current-shift partial.
+
+    *summary_builder* ``(target_date, time_filter) -> summary`` lets the full
+    page reuse a summary it already built for the same shift in this request.
+    """
 
     from core.services.case import build_handover_summary
 
     if state.live_context.time_filter is None:
         return None
+    if summary_builder is not None:
+        return summary_builder(state.live_context.shift_date, state.live_context.time_filter)
     return build_handover_summary(
         facility,
         state.live_context.shift_date,

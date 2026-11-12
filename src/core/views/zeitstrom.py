@@ -75,6 +75,144 @@ def _contacts_navigation_context(user, state):
     }
 
 
+#: Feed type pills (design: als-screens.jsx filter pills).
+_FEED_FILTER_OPTIONS = (
+    ("", _("Alle")),
+    ("events", _("Kontakte")),
+    ("activities", _("Aktivitäten")),
+    ("workitems", _("Aufgaben")),
+    ("bans", _("Hausverbote")),
+)
+
+
+class HandoverSummaries:
+    """Request-scoped reuse of ``build_handover_summary`` (Refs #1997).
+
+    The feed's shift summary, the handover view and the current-shift box can
+    ask for the same facility, user, date and shift within one request. Each
+    distinct shift is built once; the key carries every shift attribute the
+    summary reads, so two different shifts never share a result. One instance
+    lives for one request only.
+    """
+
+    def __init__(self, facility, user):
+        self._facility = facility
+        self._user = user
+        self._built = {}
+
+    @staticmethod
+    def _shift_key(time_filter):
+        if time_filter is None:
+            return None
+        return (time_filter.pk, time_filter.label, time_filter.start_time, time_filter.end_time)
+
+    def __call__(self, target_date, time_filter):
+        key = (target_date, self._shift_key(time_filter))
+        if key not in self._built:
+            self._built[key] = build_handover_summary(self._facility, target_date, time_filter, self._user)
+        return self._built[key]
+
+
+def _feed_context(facility, user, state):
+    """Feed cards with previews for the resolved date, shift and filters."""
+    feed_items = build_feed_items(
+        facility,
+        state.target_date,
+        state.feed_type,
+        time_filter=state.time_filter,
+        user=user,
+        # The document-type filter (from Timeline) runs in the query, before
+        # the feed cap.
+        document_type_id=state.doc_type_id or None,
+    )
+    enrich_events_with_preview(feed_items, user)
+    return {"feed_items": feed_items}
+
+
+def _filter_context(facility, user, state, *, today):
+    """Date navigation, shift and type filters, and the document-type choices."""
+    from core.services.compliance import allowed_sensitivities_for_user
+
+    document_types = (
+        DocumentType.objects.for_facility(facility)
+        .filter(
+            is_active=True,
+            # M2 (Refs #1058): event types only; client and case types do not
+            # belong in the event filter dropdown (decision E21).
+            entity_type=DocumentType.EntityType.EVENT,
+            sensitivity__in=allowed_sensitivities_for_user(user),
+        )
+        .order_by("name")
+    )
+    return {
+        "time_filters": state.time_filters,
+        "selected_filter": state.time_filter,
+        "selected_filter_id": state.time_filter_id,
+        "target_date": state.target_date,
+        "prev_date": state.target_date - timedelta(days=1),
+        "next_date": state.target_date + timedelta(days=1),
+        "today": today,
+        "selected_type": state.feed_type,
+        "filter_options": list(_FEED_FILTER_OPTIONS),
+        "document_types": document_types,
+        "selected_doc_type": state.doc_type_id or "",
+        "events_partial_url": "core:zeitstrom_feed_partial",
+        "zeitstrom_filter_state": state.params,
+    }
+
+
+def _sidebar_context(facility, user, state, summaries):
+    """Team focus box, current-shift box and active house bans."""
+    return {
+        # Team focus box (Refs #1128): open and running tasks grouped by
+        # urgency instead of a flat top-5 list.
+        "focus_box": build_focus_box(facility),
+        # Refs #1138: always the shift running now, independent of the date
+        # and shift selected in the Zeitstrom.
+        "current_shift_summary": build_current_shift_summary(facility, user, state, summary_builder=summaries),
+        "active_bans": get_active_bans(facility, user=user),
+    }
+
+
+def _cockpit_context(facility, user):
+    """Role cockpit at the top of the start page for staff and assistants (Refs #1124)."""
+    if user.is_lead_or_admin or user.is_super_admin:
+        return {}
+    return {"show_cockpit": True, "cockpit": staff_dashboard_context(user, facility)}
+
+
+def _handover_context(facility, user, state, summaries, *, now):
+    """Shift summary of the selected shift; in handover mode also the notes (Refs #1124)."""
+    selected_filter = state.time_filter
+    context = {
+        "handover_summary": summaries(state.target_date, selected_filter) if selected_filter else None,
+    }
+    if not state.is_handover:
+        return context
+    # Refs #2042: the manual shift note sits at the top of the handover, for
+    # the displayed (latest completed) shift and the running one; ``None``
+    # for roles without read access. The form carries the displayed
+    # coordinates as hidden fields so the HTMX swap after saving shows the
+    # same handover as the previous GET (#2042).
+    displayed_shift = Shift(state.target_date, selected_filter)
+    context.update(
+        {
+            "uebergabe_mode": True,
+            "uebergabe_summary": summaries(state.target_date, selected_filter),
+            "handover_notes": build_handover_note_context(facility, user, displayed_shift, now=now),
+            "handover_note_display": displayed_shift,
+        }
+    )
+    return context
+
+
+def _tally_context(facility, user, state):
+    """Live tally panel; the costly summary is built only when the panel is shown."""
+    show_tally_panel = state.is_live_tally_context
+    tally_summary = build_tally_summary(facility, user, context=state.live_context) if show_tally_panel else None
+    return {"show_tally_panel": show_tally_panel, "tally_summary": tally_summary}
+
+
 class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
     """Unified activity stream combining Dashboard + Aktivitätslog + Timeline."""
 
@@ -89,159 +227,34 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         facility = self.request.current_facility
+        user = self.request.user
+        # One instant and one resolved state for every context part.
         today = timezone.localdate()
         now = timezone.localtime()
-        live_context = current_tally_context(facility)
         state = resolve_zeitstrom_state(
             self.request.GET,
             facility,
             today=today,
             now=now,
-            live_context=live_context,
+            live_context=current_tally_context(facility),
         )
-        target_date = state.target_date
-        feed_type = state.feed_type
-        live_context = state.live_context
-        time_filters = state.time_filters
-        selected_filter = state.time_filter
-        selected_filter_id = state.time_filter_id
+        summaries = HandoverSummaries(facility, user)
 
-        # Build feed items; the document-type filter (from Timeline) runs in
-        # the query, before the feed cap.
-        doc_type_id = state.doc_type_id
-        feed_items = build_feed_items(
-            facility,
-            target_date,
-            feed_type,
-            time_filter=selected_filter,
-            user=self.request.user,
-            document_type_id=doc_type_id or None,
-        )
-        enrich_events_with_preview(feed_items, self.request.user)
+        context.update(_feed_context(facility, user, state))
+        context.update(_filter_context(facility, user, state, today=today))
+        context.update(_sidebar_context(facility, user, state, summaries))
+        context.update(_handover_context(facility, user, state, summaries, now=now))
+        context.update(_contacts_navigation_context(user, state))
+        context.update(_cockpit_context(facility, user))
+        context.update(_tally_context(facility, user, state))
 
-        from core.services.compliance import allowed_sensitivities_for_user
-
-        document_types = (
-            DocumentType.objects.for_facility(facility)
-            .filter(
-                is_active=True,
-                # M2 (Refs #1058): nur event-Typen — client-/case-Typen gehoeren
-                # nicht in den Event-Filter-Dropdown (Entscheid E21).
-                entity_type=DocumentType.EntityType.EVENT,
-                sensitivity__in=allowed_sensitivities_for_user(self.request.user),
-            )
-            .order_by("name")
-        )
-
-        # Sidebar: Team-Fokusbox für Handlungsbedarf (Refs #1128).
-        # Gruppiert offene/laufende Aufgaben der Einrichtung nach Druckstufe
-        # (überfällig, heute, dringend/wichtig, in Bearbeitung) statt einer
-        # flachen Top-5-Liste; select_related deckt client/assigned_to für die
-        # Zeilen-Partials ab.
-        focus_box = build_focus_box(facility)
-
-        # Handover summary (when a shift filter is active)
-        handover_summary = None
-        if selected_filter:
-            handover_summary = build_handover_summary(facility, target_date, selected_filter, self.request.user)
-
-        # Dienst-Übersicht der aktuell *laufenden* Schicht (Refs #1138).
-        # Bewusst unabhängig von der Datums-/Schicht-Auswahl im Zeitstrom:
-        # Die Box bezieht sich immer auf den gerade laufenden Dienst, damit sie
-        # beim Durchklicken anderer Tage/Schichten nicht mitwechselt.
-        current_shift_summary = build_current_shift_summary(facility, self.request.user, state)
-
-        # Die teure Eignungs-/Count-Summary wird erst gebaut, wenn das Panel
-        # im finalen Kontext tatsächlich gerendert wird.
-        tally_summary = None
-        show_tally_panel = False
-
-        # Active bans (from Dashboard)
-        active_bans = get_active_bans(facility, user=self.request.user)
-
-        # Pills für die Type-Filter im Zeitstrom (Design: als-screens.jsx Filter-Pills)
-        filter_options = [
-            ("", _("Alle")),
-            ("events", _("Kontakte")),
-            ("activities", _("Aktivitäten")),
-            ("workitems", _("Aufgaben")),
-            ("bans", _("Hausverbote")),
-        ]
-        context.update(
-            {
-                "feed_items": feed_items,
-                "handover_summary": handover_summary,
-                "current_shift_summary": current_shift_summary,
-                "tally_summary": tally_summary,
-                "show_tally_panel": show_tally_panel,
-                "time_filters": time_filters,
-                "selected_filter": selected_filter,
-                "selected_filter_id": selected_filter_id,
-                "target_date": target_date,
-                "prev_date": target_date - timedelta(days=1),
-                "next_date": target_date + timedelta(days=1),
-                "today": today,
-                "selected_type": feed_type,
-                "filter_options": filter_options,
-                "document_types": document_types,
-                "selected_doc_type": doc_type_id or "",
-                "events_partial_url": "core:zeitstrom_feed_partial",
-                "focus_box": focus_box,
-                "active_bans": active_bans,
-                "zeitstrom_filter_state": state.params,
-                **_contacts_navigation_context(self.request.user, state),
-            }
-        )
-
-        # Rollen-Cockpit als Kopf der Start-Seite — nur Fachkraft/Assistenz
-        # (Leitung/Admin behalten /start/). Refs #1124.
-        if not self.request.user.is_lead_or_admin and not self.request.user.is_super_admin:
-            context["show_cockpit"] = True
-            context["cockpit"] = staff_dashboard_context(self.request.user, facility)
-
-        # Übergabe-Modus: Schicht-Zusammenfassung als Primärinhalt (Refs #1124).
-        if state.is_handover:
-            uebergabe_filter = selected_filter
-            context["uebergabe_mode"] = True
-            context["uebergabe_summary"] = build_handover_summary(
-                facility, target_date, uebergabe_filter, self.request.user
-            )
-            context["selected_filter"] = uebergabe_filter
-            context["selected_filter_id"] = str(uebergabe_filter.pk) if uebergabe_filter else "all"
-            context["zeitstrom_filter_state"] = state.params
-            # Refs #2042: die manuelle Schichtnotiz sitzt oben in der
-            # Uebergabe — zur angezeigten (zuletzt abgeschlossenen) Schicht
-            # und zur laufenden. ``None`` fuer Rollen ohne Leserecht.
-            angezeigte_schicht = Shift(target_date, uebergabe_filter)
-            context["handover_notes"] = build_handover_note_context(
-                facility,
-                self.request.user,
-                angezeigte_schicht,
-                now=now,
-            )
-            # Refs #2042 (E-04): das Formular fuehrt die ANZEIGE-Koordinaten
-            # als Hidden-Fields mit, damit der HTMX-Austausch nach dem
-            # Speichern dieselbe Uebergabe zeigt wie der vorherige GET.
-            context["handover_note_display"] = angezeigte_schicht
-        else:
-            show_tally_panel = state.is_live_tally_context
-            if show_tally_panel:
-                tally_summary = build_tally_summary(facility, self.request.user, context=live_context)
-            context["show_tally_panel"] = show_tally_panel
-            context["tally_summary"] = tally_summary
-
-        context["tally_next"] = f"{self.request.path}?{urlencode(context['zeitstrom_filter_state'])}"
+        # URLs and watch validators stay at the HTTP boundary.
+        context["tally_next"] = f"{self.request.path}?{urlencode(state.params)}"
         if context["tally_summary"] is not None:
-            self._add_tally_action_urls(
-                context["tally_summary"], context["zeitstrom_filter_state"], context["tally_next"]
-            )
-
-        context["zeitstrom_page_scope"] = build_zeitstrom_page_scope(
-            self.request.user,
-            facility,
-        )
+            self._add_tally_action_urls(context["tally_summary"], state.params, context["tally_next"])
+        context["zeitstrom_page_scope"] = build_zeitstrom_page_scope(user, facility)
         context["zeitstrom_tally_topology"] = build_zeitstrom_tally_topology_validator(
-            self.request.user,
+            user,
             facility,
             state,
             tally_summary=context["tally_summary"],
@@ -682,32 +695,13 @@ class ZeitstromFeedPartialView(AssistantOrAboveRequiredMixin, ZeitstromWatchFoll
         context = super().get_context_data(**kwargs)
         facility = self.request.current_facility
         state = getattr(self, "_watch_state", None) or resolve_zeitstrom_state(self.request.GET, facility)
-        live_context = state.live_context
-        target_date = state.target_date
-        feed_type = state.feed_type
-        time_filter = state.time_filter
 
-        feed_items = build_feed_items(
-            facility,
-            target_date,
-            feed_type,
-            time_filter=time_filter,
-            user=self.request.user,
-            document_type_id=state.doc_type_id or None,
-        )
-        enrich_events_with_preview(feed_items, self.request.user)
-
-        context["feed_items"] = feed_items
-        show_tally_panel = state.is_live_tally_context
-        tally_summary = (
-            build_tally_summary(facility, self.request.user, context=live_context) if show_tally_panel else None
-        )
+        context.update(_feed_context(facility, self.request.user, state))
+        context.update(_tally_context(facility, self.request.user, state))
         filter_state = state.params
         tally_next = f"{reverse('core:zeitstrom')}?{urlencode(filter_state)}"
-        if tally_summary is not None:
-            ZeitstromView._add_tally_action_urls(tally_summary, filter_state, tally_next)
-        context["tally_summary"] = tally_summary
-        context["show_tally_panel"] = show_tally_panel
+        if context["tally_summary"] is not None:
+            ZeitstromView._add_tally_action_urls(context["tally_summary"], filter_state, tally_next)
         context["tally_filter_state"] = filter_state
         context["tally_next"] = tally_next
         # Beim durch eine Tally-Aktion ausgelösten Feed-Refresh darf #1910
