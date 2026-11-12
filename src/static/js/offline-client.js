@@ -108,7 +108,10 @@
         const etag = response.headers.get("ETag");
         const saveResult = await store.saveClientBundle(bundle, etag);
         await _emitCountEvent();
-        await window.syncOrchestrator?.requestRevocationCheck?.();
+        // Refs #2730: the bundle is saved; do not hold its notice behind the
+        // exclusive revocation lock. The orchestrator still checks and reports
+        // pending revocations, and replay keeps its own mandatory check.
+        window.syncOrchestrator?.requestRevocationCheck?.();
         // Refs #1356: Aufrufer (Badge/Listen-Toggle) haengen bei Verweigerung
         // einen dezenten Hinweis an ihre Erfolgsmeldung. `null` (API fehlt/
         // Fehler) zaehlt NICHT als Verweigerung.

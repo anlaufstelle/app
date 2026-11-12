@@ -30,7 +30,7 @@ afterEach(() => { vi.restoreAllMocks(); });
 
 it("checks revocations immediately after storing a take even after a recent boot check", async () => {
     await window.offlineClient.takeClientOffline("client-1");
-    expect(window.offlineStore.applyClientRevocations).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(window.offlineStore.applyClientRevocations).toHaveBeenCalledTimes(1));
     expect(window.offlineQueue.replayQueue).not.toHaveBeenCalled();
     expect(window.offlineEdit.replayAllModifiedEvents).not.toHaveBeenCalled();
     expect(window.offlineStore.saveClientBundle.mock.invocationCallOrder[0]).toBeLessThan(
@@ -46,7 +46,7 @@ it("coalesces rapid repeated takes while the revocation request is pending", asy
     await vi.waitFor(() => expect(window.offlineStore.applyClientRevocations).toHaveBeenCalledTimes(1));
     release({ status: "ok" });
     await Promise.all([first, second]);
-    expect(window.offlineStore.applyClientRevocations).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(window.offlineStore.applyClientRevocations).toHaveBeenCalledTimes(1));
 });
 
 it("waits for key preparation before fetching a bundle", async () => {
@@ -64,8 +64,8 @@ it("retains the pending notice on a failed check without starting replay", async
     document.body.innerHTML = '<div data-offline-revocation-pending hidden></div>';
     window.offlineStore.applyClientRevocations.mockResolvedValue({ status: "error" });
     await window.offlineClient.takeClientOffline("client-1");
-    expect(window.offlineStore.applyClientRevocations).toHaveBeenCalledTimes(1);
-    expect(document.querySelector("[data-offline-revocation-pending]").hidden).toBe(false);
+    await vi.waitFor(() => expect(window.offlineStore.applyClientRevocations).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(document.querySelector("[data-offline-revocation-pending]").hidden).toBe(false));
     expect(window.offlineQueue.replayQueue).not.toHaveBeenCalled();
     expect(window.offlineEdit.replayAllModifiedEvents).not.toHaveBeenCalled();
 });
