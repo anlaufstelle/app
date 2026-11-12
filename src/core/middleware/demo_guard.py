@@ -58,7 +58,7 @@ class DemoGuardMiddleware:
             # Routes with a dynamic part (e.g. another account's pk) are blocked
             # by URL name, so the rest of their section stays usable.
             blocked_names = frozenset(getattr(settings, "DEMO_GUARD_BLOCKED_URL_NAMES", ()))
-            if (blocked and request.path.startswith(blocked)) or (
+            if (blocked and request.path_info.startswith(blocked)) or (
                 blocked_names and _view_name(request) in blocked_names
             ):
                 messages.error(request, _("Diese Aktion ist im Demo-Modus deaktiviert."))

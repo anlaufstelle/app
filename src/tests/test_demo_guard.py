@@ -480,3 +480,30 @@ def test_admin_password_change_still_works_outside_the_demo(client, admin_user):
     assert response.status_code == 302
     assert response.url == reverse("admin:password_change_done")
     assert admin_user.check_password(new_password)
+
+
+@pytest.mark.django_db
+def test_demo_blocks_2fa_setup_under_a_script_prefix(client, staff_user):
+    """Prefixes match the routed path, so mounting the app below a prefix keeps them."""
+    from django_otp.oath import totp
+
+    from core.models import EncryptedTOTPDevice
+
+    mount = {"SCRIPT_NAME": "/mounted"}
+    with override_settings(DEMO_MODE=True, **_demo_guard_settings()):
+        client.force_login(staff_user)
+        page = client.get("/mfa/setup/", **mount)
+        device = EncryptedTOTPDevice.objects.get(user=staff_user, confirmed=False)
+        token = f"{totp(device.bin_key, step=device.step, t0=device.t0, digits=device.digits):0{device.digits}d}"
+        setup = client.post("/mfa/setup/", {"token": token}, HTTP_REFERER="/mounted/mfa/setup/", **mount)
+        acknowledgement = client.post("/mfa/backup-codes/", {"confirm_saved": "1"}, **mount)
+
+    device.refresh_from_db()
+    assert page.status_code == 200
+    assert device.confirmed is False
+    assert not EncryptedTOTPDevice.objects.filter(user=staff_user, confirmed=True).exists()
+    assert client.session.get("mfa_setup_pending") is None
+    assert setup.status_code == 302
+    assert setup.url == "/mounted/mfa/setup/"
+    assert _messages(setup) == [DEMO_REFUSAL]
+    assert acknowledgement.status_code == 302
