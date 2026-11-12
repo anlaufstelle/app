@@ -10,6 +10,7 @@ Integration laufen lassen (E2E-Port 8844).
 
 import re
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import pytest
 from playwright.sync_api import expect
@@ -139,45 +140,42 @@ class TestZeitstromCollapseToggle:
         expect(page.locator(TOGGLE)).to_have_attribute("aria-pressed", "false")
 
     def test_htmx_reloaded_cards_adopt_global_state(self, authenticated_page, base_url):
-        """Nach 'Alle aufklappen' übernehmen HTMX-nachgeladene Cards den Zustand."""
+        """HTMX-loaded cards adopt the global state after expanding all cards."""
         page = authenticated_page
 
-        # Mitternachts-Falle (Refs #1719): Im Nachtschicht-Fenster zeigt der
-        # Zeitstrom target_date=GESTERN (Midnight-Overlap der Auto-Schichtwahl),
-        # und der „Alle"-Tab übernimmt dieses Datum in seine hx-get-URL. Ein
-        # Event mit occurred_at=jetzt (HEUTE, 0–6 Uhr) läge außerhalb dieser
-        # Tagesansicht. Daher: Ziel-Datum aus dem Tab lesen und das Event in
-        # DESSEN Tag legen (spätestens 23:59, nie in der Zukunft).
+        # Midnight guard (Refs #1719): during the overnight shift the page
+        # selects yesterday. Read that date from the rendered filter state
+        # and create the event on that day, at or before 23:59 and never in
+        # the future. Use the application's timezone for the datetime field.
         page.goto(f"{base_url}/")
         page.wait_for_load_state("domcontentloaded")
-        all_tab_url = (
-            page.locator("[data-testid='time-filter-tabs']")
-            .locator("[data-testid='time-filter-all']")
-            .get_attribute("hx-get")
-        ) or ""
-        occurred = now = datetime.now()
-        date_match = re.search(r"date=(\d{4}-\d{2}-\d{2})", all_tab_url)
-        if date_match:
-            day_end = datetime.strptime(date_match.group(1), "%Y-%m-%d").replace(hour=23, minute=59)
-            occurred = min(now, day_end)
+        target_date = page.locator("#zeitstrom-filter-state input[name='date']").input_value()
+        now = datetime.now(ZoneInfo("Europe/Berlin"))
+        day_end = datetime.strptime(target_date, "%Y-%m-%d").replace(hour=23, minute=59, tzinfo=now.tzinfo)
+        occurred = min(now, day_end)
         _create_kontakt_event(page, base_url, occurred_at=occurred.strftime("%Y-%m-%dT%H:%M"))
 
         page.goto(f"{base_url}/")
         page.wait_for_load_state("domcontentloaded")
 
-        # Global aufklappen.
+        # Expand all cards globally.
         page.locator(TOGGLE).click()
         expect(page.locator(TOGGLE)).to_have_attribute("aria-pressed", "true")
 
-        # 'Alle'-Tab → HTMX-innerHTML-Swap von #feed-list (Tagesansicht, damit der
-        # eben erstellte Kontakt unabhängig von der aktuellen Schicht sichtbar ist).
-        # Refs #1059 (R-B2p-10): Zeitfilter sind aria-pressed-Knoepfe, kein role=tab mehr.
-        all_tab = page.locator("[data-testid='time-filter-tabs']").locator("[data-testid='time-filter-all']")
-        with page.expect_response(lambda r: "time_filter=all" in r.url):
-            all_tab.click()
+        # Selecting the whole day swaps #feed-list via HTMX, so the contact
+        # is visible regardless of the current shift.
+        shift_select = page.get_by_test_id("zeitstrom-shift-select")
+        with page.expect_response(
+            lambda r: (
+                "time_filter=all" in r.url
+                and r.request.headers.get("hx-request") == "true"
+                and r.request.headers.get("hx-target") == "feed-list"
+            )
+        ):
+            shift_select.select_option("all")
 
-        # Die frisch eingeswappte Card übernimmt per x-init den globalen
-        # (aufgeklappten) Zustand — ohne dass ein voller Reload nötig war.
+        # The newly swapped card adopts the expanded global state via x-init
+        # without a full page reload.
         card_button = page.locator(EVENT_CARD_BUTTON).first
         card_button.wait_for(state="visible", timeout=10_000)
         expect(card_button).to_have_attribute("aria-expanded", "true")
