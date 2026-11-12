@@ -847,7 +847,7 @@ class TestPrecachedShellBumpGuard:
     # this hash moves.
     # The included sign-in notice (_offline_auth_pending.html) now reports read
     # errors visibly; v67 is still unreleased, so only this hash moves.
-    _PINNED_SHELL_HASH = "e52a5e665a7029b19ec75f4381414d427c3dc6d343a13830639317e3601d7d4b"
+    _PINNED_SHELL_HASH = "f094df27b929aee5cd75d4ebe1a4fa345a0d44a4de775ce4d21423735d9cf765"
     # Refs #1904: SHA-256 over the Content-Security-Policy headers the server
     # delivers with the precached offline home (see _policy_fingerprint). Every
     # precached shell and every runtime entry keeps the policy it was stored

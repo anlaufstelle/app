@@ -83,11 +83,11 @@
       data-quick-exit-logout-url="{% url 'logout' %}">
 
     {# Refs #2136: focus:z-[80] statt focus:z-50 — die Quick-Exit-Leiste darunter #}
-    {# ist sticky und deckend; bei gleichem z-index gewaenne sie als spaeteres #}
-    {# Geschwister und verdeckte den fokussierten Skip-Link (mobil ueber die volle #}
-    {# Breite). Nur hier und in offline_base.html noetig — die eigenstaendigen #}
-    {# Seiten tragen keine Leiste. Der Abstand bleibt: die Leiste steht hier seit #}
-    {# dem Nachzug auf z-30 (Begruendung unten), in offline_base.html auf z-50. #}
+    {# ist sticky; bei gleichem z-index gewaenne sie als spaeteres Geschwister #}
+    {# und verdeckte den fokussierten Skip-Link. Nur hier und in #}
+    {# offline_base.html noetig — die eigenstaendigen Seiten tragen den Knopf #}
+    {# nicht. Der Abstand bleibt: der Wrapper steht hier seit dem Nachzug auf #}
+    {# z-30 (Begruendung unten), in offline_base.html auf z-50. #}
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[80] focus:bg-accent focus:text-white focus:px-4 focus:py-2 focus:rounded-md">
         {% trans "Zum Inhalt springen" %}
     </a>
@@ -97,11 +97,15 @@
     Der Knopf steht direkt hinter dem Skip-Link und ist damit das erste
     fokussierbare Element der Seite (WCAG 2.1.1) — wer die Anwendung in
     Gegenwart einer gefaehrdenden Person bedient, erreicht ihn mit einem Tab.
-    Die Leiste klebt oben (sticky) und ist auf JEDER angemeldeten Seite
+    Der Knopf klebt oben rechts (sticky) und ist auf JEDER angemeldeten Seite
     sichtbar, auch mobil: die Bottom-Nav behaelt ihre fuenf Slots, und im
-    "Mehr"-Menue waere der Knopf hinter einem Tap versteckt. Auf Desktop
-    rueckt die Leiste hinter die fixierte Sidebar (md:ml-60), damit sie deren
-    Kopf nicht ueberdeckt.
+    "Mehr"-Menue waere der Knopf hinter einem Tap versteckt. Refs #2660: Es
+    gibt keine eigene Zeile und keine deckende Flaeche mehr — ``#quick-exit-bar``
+    ist 0 px hoch (``h-0``), der 44 px hohe Knopf ragt darunter in den Inhalt
+    und ueberdeckt beim Scrollen nur seine eigene Flaeche. Mobil steht
+    "Verlassen", ab md der Volltext; ``aria-label`` haelt den zugaenglichen
+    Namen auf "Schnell verlassen". Die Offline-Banner im Wrapper (``pr-32``/``md:pr-48``) und die
+    erste Inhaltszeile mit Titel (mobil ``pr-28``) lassen rechts Platz.
 
     Der Sticky-Wrapper umschliesst jetzt AUCH den Offline-Statusbalken (der
     ihn vorher selbst trug, Refs #1495): zwei getrennte sticky-Elemente auf
@@ -111,24 +115,26 @@
     ``fixed inset-x-0 top-0 z-[60]``, aber INNERHALB der Bottom-Nav
     (``partials/_navigation_mobile.html``), und die spannt mit ``z-40`` einen
     eigenen Stapelkontext auf — sein ``z-[60]`` wirkt nur nav-intern, nach
-    aussen zaehlt die ``40``. Die Leiste ueberlappt das Overlay geometrisch
-    (Leiste 0-44 px, Suchfeld ca. 16-58 px) und fing auf ``z-50`` jeden Tap
+    aussen zaehlt die ``40``. Der Knopf ueberlappt das Overlay geometrisch
+    (Knopf ca. 4-48 px, Suchfeld ca. 16-58 px) und fing auf ``z-50`` jeden Tap
     ins Suchfeld ab. Der Wrapper trug das ``z-50`` schon vor #2136, blieb
-    ohne sichtbaren Offline-Banner aber 0 px hoch; erst die stets sichtbare
-    Leiste macht die Ueberlappung real. ``z-30`` haelt sie weiter ueber dem
+    ohne sichtbaren Offline-Banner aber 0 px hoch; erst der stets sichtbare
+    Knopf macht die Ueberlappung real. ``z-30`` haelt ihn weiter ueber dem
     gesamten Seiteninhalt (unpositioniert bzw. ``z-10``) und ueber der
     Desktop-Sidebar (``z-index: auto``), ordnet sie aber unter die Nav und
     deren Overlays ein. Gegen Dialoge/Toasts aus ``<main>`` (``z-50``,
     spaeteres Geschwister) verlor sie ohnehin schon.
     {% endcomment %}
     <div class="sticky top-0 z-30">
-        <div id="quick-exit-bar" class="md:ml-60 flex justify-end bg-canvas px-4 md:px-8">
+        <div id="quick-exit-bar" class="flex h-0 items-start justify-end px-4 md:px-8">
             <button type="button" id="quick-exit-button" data-testid="quick-exit-button"
                     aria-keyshortcuts="Control+Shift+X Shift+Escape"
+                    aria-label="{% trans 'Schnell verlassen' %}"
                     title="{% trans 'Verdeckt den Inhalt sofort, beendet die Sitzung und öffnet eine neutrale Seite. Ungespeicherte Eingaben gehen dabei verloren. Tastenkürzel: Strg+Umschalt+X oder Umschalt+Esc.' %}"
-                    class="inline-flex items-center gap-1.5 min-h-[44px] px-3 rounded-md border border-red-200 text-[13px] font-semibold text-red-700 hover:bg-red-50">
+                    class="mt-1 inline-flex items-center justify-center gap-1.5 min-h-[44px] min-w-[44px] px-3 rounded-md border border-red-200 bg-red-50 text-[13px] font-semibold text-red-700 hover:bg-red-100">
                 <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9"/></svg>
-                {% trans "Schnell verlassen" %}
+                <span class="md:hidden">{% trans "Verlassen" %}</span>
+                <span class="hidden md:inline">{% trans "Schnell verlassen" %}</span>
             </button>
         </div>
         {# Offline-Banner und Sync-Indikator. Refs #1495: nimmt Platz im #}
@@ -152,7 +158,7 @@
              data-sync-complete-message="{% trans 'Übertragung beendet.' %}"
              data-queue-unknown-message="{% trans 'Stand der wartenden Änderungen unklar. Bitte erneut versuchen.' %}"
              data-conflict-message="{% trans 'Neuer Konflikt. Öffnen Sie die Seite „Konflikte“ über den Link im Konfliktbanner zur Auflösung.' %}"
-             id="offline-status" class="md:ml-60">
+             id="offline-status" class="pr-32 md:ml-60 md:pr-48">
             <span class="sr-only" role="status" aria-live="polite" aria-atomic="true"
                   data-testid="offline-status-announcer" x-text="announcement"></span>
             <div x-show="offline" x-cloak
@@ -240,7 +246,7 @@
         <div hidden role="alert" data-demo-offline-error class="bg-red-100 border border-red-300 text-red-900 p-4">{{ demo_offline_bootstrap_error }}</div>
         {% endif %}
         {% endif %}
-        <div class="max-w-[1140px] mx-auto px-4 py-5 md:px-8 md:py-7">
+        <div class="max-w-[1140px] mx-auto px-4 py-5 md:px-8 md:py-7 [&>#flash-messages+*:has(>h1)]:max-md:pr-28">
             {# Refs #811 (C-44): stabile Live-Region — siehe CONTRIBUTING.md "Templates und Frontend". #}
             <div id="flash-messages" role="status" aria-live="polite" aria-atomic="true">
             {% block messages %}

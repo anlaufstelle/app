@@ -23,6 +23,7 @@ Was hier festgehalten wird (das Verhalten des Skripts steht in
 from __future__ import annotations
 
 import re
+from html.parser import HTMLParser
 from pathlib import Path
 
 import pytest
@@ -274,3 +275,144 @@ class TestOfflineShell:
         # localStorage-Spiegel, nicht aus dem Template.
         assert "data-quick-exit-url" not in body
         assert "data-quick-exit-logout-url" not in body
+
+
+class _ButtonContext(HTMLParser):
+    """Collect the quick-exit button, its ancestors and the focusables before it.
+
+    Walks the rendered document once and records, for the element with
+    ``id="quick-exit-button"``: the attribute dicts of every ancestor, its own
+    attributes, the raw inner markup, and every focusable element opened before
+    it (skip link included). Void elements never get pushed on the stack.
+    """
+
+    _VOID = {"meta", "link", "input", "img", "br", "hr", "source", "path"}
+    _FOCUSABLE = {"a", "button", "input", "select", "textarea"}
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.stack = []
+        self.ancestors = []
+        self.button = None
+        self.focusables_before = []
+        self.label_spans = []
+        self._inside_button = False
+        self._button_depth = 0
+
+    def handle_starttag(self, tag, attrs):
+        attributes = dict(attrs)
+        if self.button is None and attributes.get("id") == "quick-exit-button":
+            self.button = attributes
+            self.ancestors = [dict(entry) for _, entry in self.stack]
+            self._inside_button = True
+            self._button_depth = len(self.stack)
+        elif self.button is None and tag in self._FOCUSABLE and "hidden" not in attributes:
+            self.focusables_before.append((tag, attributes))
+        elif self._inside_button and tag == "span":
+            self.label_spans.append({"attrs": attributes, "text": ""})
+        if tag not in self._VOID:
+            self.stack.append((tag, attributes))
+
+    def handle_endtag(self, tag):
+        if tag in self._VOID:
+            return
+        while self.stack:
+            popped, _ = self.stack.pop()
+            if popped == tag:
+                break
+        if self._inside_button and len(self.stack) == self._button_depth:
+            self._inside_button = False
+
+    def handle_data(self, data):
+        if self._inside_button and self.label_spans:
+            self.label_spans[-1]["text"] += data
+
+
+def _classes(attributes):
+    return set((attributes.get("class") or "").split())
+
+
+def _parse_button_context(html):
+    parser = _ButtonContext()
+    parser.feed(html)
+    assert parser.button is not None, "quick-exit button missing from the document"
+    return parser
+
+
+def _button_markup(html):
+    start = html.index('<button type="button" id="quick-exit-button"')
+    return re.sub(r"\s+", " ", html[start : html.index("</button>", start) + len("</button>")])
+
+
+@pytest.fixture(params=["online", "offline"])
+def shell_html(request, client, staff_user, settings_obj):
+    """Rendered ``base.html`` (online) and ``offline_base.html`` (offline shell)."""
+    if request.param == "online":
+        client.force_login(staff_user)
+        response = client.get(reverse("core:zeitstrom"))
+    else:
+        response = client.get(reverse("core:offline_client_shell"))
+    assert response.status_code == 200
+    return response.content.decode()
+
+
+@pytest.mark.django_db
+class TestCompactButtonPlacement:
+    """Refs #2660: the quick-exit control is a compact button, not an opaque bar.
+
+    The old wrapper painted a full-width ``bg-canvas`` row of 44-52 px above the
+    content; scrolled content was cut off beneath it. Both layouts (online and
+    the precached offline shell) must carry the same compact button.
+    """
+
+    def test_no_opaque_bar_above_the_content(self, shell_html):
+        context = _parse_button_context(shell_html)
+        for ancestor in context.ancestors:
+            assert "bg-canvas" not in _classes(ancestor), "the quick-exit wrapper must not be opaque"
+        bar = next(a for a in context.ancestors if a.get("id") == "quick-exit-bar")
+        bar_classes = _classes(bar)
+        assert "h-0" in bar_classes, "the bar must take no height of its own"
+        assert not any(c.startswith(("min-h-", "py-", "pt-", "pb-")) for c in bar_classes)
+
+    def test_button_is_the_first_focusable_after_the_skip_link(self, shell_html):
+        context = _parse_button_context(shell_html)
+        assert [tag for tag, _ in context.focusables_before] == ["a"]
+        assert context.focusables_before[0][1].get("href") == "#main-content"
+        assert "tabindex" not in context.button
+
+    def test_button_keeps_shortcuts_title_and_test_id(self, shell_html):
+        button = _parse_button_context(shell_html).button
+        assert button["aria-keyshortcuts"] == "Control+Shift+X Shift+Escape"
+        assert "Strg+Umschalt+X" in button["title"]
+        assert button["data-testid"] == "quick-exit-button"
+        assert button["aria-label"] == "Schnell verlassen"
+
+    def test_button_label_is_short_on_mobile_and_full_from_md(self, shell_html):
+        spans = _parse_button_context(shell_html).label_spans
+        short = [s for s in spans if s["text"].strip() == "Verlassen"]
+        full = [s for s in spans if s["text"].strip() == "Schnell verlassen"]
+        assert len(short) == 1 and "md:hidden" in _classes(short[0]["attrs"])
+        assert len(full) == 1 and {"hidden", "md:inline"} <= _classes(full[0]["attrs"])
+
+    def test_button_has_a_44px_target_and_a_solid_face(self, shell_html):
+        classes = _classes(_parse_button_context(shell_html).button)
+        assert {"min-h-[44px]", "min-w-[44px]", "text-red-700", "bg-red-50"} <= classes
+
+    def test_first_content_row_with_a_title_leaves_room_for_the_button_on_mobile(self, shell_html):
+        """The row holding the page title must not run underneath the button."""
+        assert "[&>#flash-messages+*:has(>h1)]:max-md:pr-28" in shell_html
+        assert 'id="offline-status" class="pr-32' in shell_html.replace("md:ml-60 ", "")
+
+    def test_wrapper_carries_no_inline_style(self, shell_html):
+        context = _parse_button_context(shell_html)
+        assert all("style" not in ancestor for ancestor in context.ancestors)
+        assert "style" not in context.button
+
+    def test_online_and_offline_shell_render_the_same_button(self, client, staff_user, settings_obj):
+        client.force_login(staff_user)
+        online = client.get(reverse("core:zeitstrom")).content.decode()
+        offline = client.get(reverse("core:offline_client_shell")).content.decode()
+        assert _button_markup(online) == _button_markup(offline)
+        online_bar = next(a for a in _parse_button_context(online).ancestors if a.get("id") == "quick-exit-bar")
+        offline_bar = next(a for a in _parse_button_context(offline).ancestors if a.get("id") == "quick-exit-bar")
+        assert _classes(online_bar) == _classes(offline_bar)
