@@ -640,6 +640,87 @@ function _flashResponse(text, opts) {
     );
 }
 
+// Refs #2730: a native <form method="post"> sent offline is a navigation. The
+// flash fragment above would replace the whole page with a bare fragment (no
+// navigation, no styles, no sw-register.js, so a waiting worker is never
+// activated there). A navigation is redirected to the page it came from
+// instead (303, a reload does not post again); the notice waits for the
+// offline shell served for that page and is shown there exactly once. HTMX
+// requests and fetch() calls are never navigations and keep the fragment.
+const NAVIGATION_NOTICE_TTL_MS = 30000;
+let pendingNavigationNotice = null;
+
+function _writeAnswer(request, text, opts) {
+    if (request.mode !== "navigate") return _flashResponse(text, opts);
+    let target = new URL("/", self.location.origin).href;
+    try {
+        const referrer = new URL(request.referrer);
+        if (referrer.origin === self.location.origin) {
+            referrer.hash = "";
+            target = referrer.href;
+        }
+    } catch (_e) { /* No usable referrer: the start page. */ }
+    pendingNavigationNotice = {
+        url: target,
+        text: text,
+        tone: opts.tone,
+        expiresAt: Date.now() + NAVIGATION_NOTICE_TTL_MS,
+    };
+    return _withServerPolicy(new Response(null, { status: 303, headers: { Location: target } }));
+}
+
+function _takeNavigationNotice(request) {
+    const notice = pendingNavigationNotice;
+    if (!notice || request.mode !== "navigate") return null;
+    if (Date.now() > notice.expiresAt) {
+        pendingNavigationNotice = null;
+        return null;
+    }
+    const url = new URL(request.url);
+    url.hash = "";
+    if (url.href !== notice.url) return null;
+    pendingNavigationNotice = null;
+    return notice;
+}
+
+function _escapeHtml(text) {
+    return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+}
+
+// Puts the notice into the flash slot of the offline shell (offline_base.html);
+// a document without that slot gets it at the start of its body.
+async function _withNavigationNotice(response, notice) {
+    if (!notice || !response) return response;
+    const contentType = (response.headers.get("Content-Type") || "").toLowerCase();
+    if (!contentType.startsWith("text/html")) return response;
+    const tone =
+        notice.tone === "yellow"
+            ? { box: "bg-yellow-50", text: "text-yellow-800" }
+            : { box: "bg-red-50", text: "text-red-800" };
+    const markup =
+        '<div class="rounded-md ' + tone.box + ' p-4 mb-4" data-testid="offline-navigation-notice">' +
+        '<p class="text-sm ' + tone.text + '">' + _escapeHtml(notice.text) + "</p></div>";
+    let html;
+    try {
+        html = await response.clone().text();
+    } catch (_e) {
+        return response;
+    }
+    const slot = /<div id="flash-messages"[^>]*>/.exec(html) || /<body[^>]*>/.exec(html);
+    const at = slot ? slot.index + slot[0].length : 0;
+    const headers = new Headers(response.headers);
+    headers.delete("Content-Length");
+    return new Response(html.slice(0, at) + markup + html.slice(at), {
+        status: response.status,
+        statusText: response.statusText,
+        headers: headers,
+    });
+}
+
 // Refs #1828: Die Offline-Fallback-Kette fuer Navigationen als geordnete
 // Tabelle — der erste Treffer gewinnt, die Array-Reihenfolge IST die Semantik
 // der frueheren if-Kaskade (u.a. WORKITEM_NEW vor WORKITEM_LIST; die
@@ -841,7 +922,7 @@ self.addEventListener("fetch", (event) => {
         if (isMultipart(request)) {
             event.respondWith(
                 fetch(request.clone()).catch(() =>
-                    _flashResponse(SW_I18N.uploadOffline, {
+                    _writeAnswer(request, SW_I18N.uploadOffline, {
                         tone: "red",
                         status: 503,
                         statusText: "Offline-Upload not supported",
@@ -906,7 +987,8 @@ self.addEventListener("fetch", (event) => {
                         // Persistieren ist gescheitert (NoSessionKey, kein
                         // offlineQueue, IndexedDB-Fehler, Timeout). Roter Banner
                         // statt stummem Datenverlust (#662).
-                        return _flashResponse(
+                        return _writeAnswer(
+                            request,
                             SW_I18N.queuePersistFailed.replace("{reason}", ack.reason),
                             {
                                 tone: "red",
@@ -916,7 +998,7 @@ self.addEventListener("fetch", (event) => {
                         );
                     }
 
-                    return _flashResponse(SW_I18N.queuedOk, {
+                    return _writeAnswer(request, SW_I18N.queuedOk, {
                         tone: "yellow",
                         status: 200,
                         headers: {
@@ -1049,7 +1131,12 @@ self.addEventListener("fetch", (event) => {
         // 4. Sonst: dedizierte /offline/-Home (Offline-Arbeitsplatz) statt
         //    Browser-Default „Sie sind offline / Chrome-Dino"
         event.respondWith(
-            fetch(request, { signal: AbortSignal.timeout(READ_FETCH_TIMEOUT_MS) }).catch(() => {
+            fetch(request, { signal: AbortSignal.timeout(READ_FETCH_TIMEOUT_MS) }).then((response) => {
+                // Refs #2730: the server answered; a notice still waiting
+                // for this page is dropped instead of surfacing later.
+                _takeNavigationNotice(request);
+                return response;
+            }, () => {
                 if (request.headers.get("HX-Request") === "true") {
                     // Kompaktes, gestyltes Banner statt der Voll-Shell — der
                     // Text kommt aus dem pro Request server-injizierten SW_I18N
@@ -1078,20 +1165,27 @@ self.addEventListener("fetch", (event) => {
                         )
                     );
                 }
-                for (const route of SHELL_ROUTES) {
-                    if (route.matches(request.url)) {
-                        return _serveShell(route.shell);
-                    }
-                }
-                // Match public shell variants explicitly instead of bypassing
-                // Cookie/Accept-Language Vary with an unrelated language.
-                const pathname = new URL(request.url).pathname;
-                if (SHELL_URLS.includes(pathname)) return _serveShell(pathname);
-                return caches.match(request.url).then(cached => cached || _serveShell(OFFLINE_FALLBACK_URL));
+                // Refs #2730: the notice of an offline form submission that
+                // redirected here is taken now and shown in the served page.
+                const notice = _takeNavigationNotice(request);
+                return _offlineNavigationAnswer(request).then((page) => _withNavigationNotice(page, notice));
             })
         );
     }
 });
+
+function _offlineNavigationAnswer(request) {
+    for (const route of SHELL_ROUTES) {
+        if (route.matches(request.url)) {
+            return _serveShell(route.shell);
+        }
+    }
+    // Match public shell variants explicitly instead of bypassing
+    // Cookie/Accept-Language Vary with an unrelated language.
+    const pathname = new URL(request.url).pathname;
+    if (SHELL_URLS.includes(pathname)) return _serveShell(pathname);
+    return caches.match(request.url).then(cached => cached || _serveShell(OFFLINE_FALLBACK_URL));
+}
 
 // Refs #1351 (M6): Kein Background-Sync-Handler mehr. Replay-Koordination
 // bei Reconnect laeuft seit M6 NICHT ueber den Service Worker, sondern
