@@ -88,5 +88,5 @@ Decision aid: [User Guide § 7 “The Three Tabs at a Glance”](https://github.
 
 <!-- translation-source: docs/faq.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- translation-date: 2026-10-23 -->
-<!-- source-hash: cb05d87bfb727346c856420ed1a70fc525bee771 -->
+<!-- translation-date: 2026-11-12 -->
+<!-- source-hash: a7c7c0760514cbd13b7737425ef848bbef0c6633 -->

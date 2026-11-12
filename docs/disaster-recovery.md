@@ -414,7 +414,7 @@ docker compose "${compose_files[@]}" run --rm --entrypoint=/app/docker-migrate.s
 docker compose "${compose_files[@]}" up -d
 ```
 
-Retention, Audit-Verifikation, Snapshots, Bereinigung, Breach-Erkennung und MV-Refresh laufen ab Werk im `cron`-Sidecar aus `deploy/crontab`. Zusätzlich ist **nur der Host-Cron für `scripts/ops/backup.sh`** nach [ops-runbook § 3.3](ops-runbook.md#33-host-cron-backup--restliche-host-jobs) einzurichten — auf einem Wegwerfhost aber erst nach dem vollständig grünen Drill-Nachweis. Keine weiteren Host-Cronzeilen für die Sidecar-Jobs anlegen, sonst laufen sie doppelt.
+Retention, Audit-Verifikation, Snapshots, Bereinigung und Breach-Erkennung laufen ab Werk im `cron`-Sidecar aus `deploy/crontab`. Zusätzlich ist **nur der Host-Cron für `scripts/ops/backup.sh`** nach [ops-runbook § 3.3](ops-runbook.md#33-host-cron-backup--restliche-host-jobs) einzurichten — auf einem Wegwerfhost aber erst nach dem vollständig grünen Drill-Nachweis. Keine weiteren Host-Cronzeilen für die Sidecar-Jobs anlegen, sonst laufen sie doppelt.
 
 Danach weiter mit der [Smoke-Verifikation](#7-smoke-verifikation-nach-restore).
 

@@ -695,7 +695,7 @@ Die Doku liegt auf drei Ebenen — je nachdem, ob Sie Berichte **erzeugen**, **b
 
 #### 2. Berichte betreiben (Administration)
 
-[Admin-Guide § 8 „Statistik-Snapshots & Materialized View"](admin-guide.md#8-statistik-snapshots--materialized-view) — Snapshot-Erzeugung, Refresh-Intervall (stündlich vs. nächtlich) und der Abschnitt **„Herausgabe von Berichten: was Sie wissen müssen"**.
+[Admin-Guide § 8 „Statistik-Snapshots und Live-Abfragen"](admin-guide.md#8-statistik-snapshots--materialized-view) — Snapshot-Erzeugung, Live-Fallback und der Abschnitt **„Herausgabe von Berichten: was Sie wissen müssen"**.
 
 #### 3. Eigene Berichts-Backends entwickeln
 

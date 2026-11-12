@@ -458,7 +458,7 @@ Expected (anonymous) response -- it contains **only** the `status` field (#1375)
 {"status": "ok"}
 ```
 
-**Normal immediately after installation:** The MFA quota in the compliance dashboard remains critical until every MFA-mandatory account has enrolled its second factor. “Critical audit events (24h)” can also show a warning after a fresh initial setup because the setup itself creates critical audit events. Background jobs that have never run initially appear as `unknown`: view refresh and breach scan first run at the next quarter-hour and half-hour, retention/audit verification/orphan cleanup daily from 03:00, and statistics snapshots at 04:00 on the next first day of a month. If a state remains past its first scheduled run, inspect `docker compose -f docker-compose.prod.yml logs cron`. An outdated ClamAV signature set is not a normal startup state. The “Admin DB role” card shows the result of the latest role check in the maintenance service; after step 5 of `scripts/initial-setup.sh` it is `ok` and names the time of the check. `unknown` means that no check result has been recorded yet (see § 5.5).
+**Normal immediately after installation:** The MFA quota in the compliance dashboard remains critical until every MFA-mandatory account has enrolled its second factor. “Critical audit events (24h)” can also show a warning after a fresh initial setup because the setup itself creates critical audit events. Background jobs that have never run initially appear as `unknown`: the breach scan first runs at its next hourly run at minute 30, retention/audit verification/orphan cleanup daily from 03:00, and statistics snapshots at 04:00 on the next first day of a month. If a state remains past its first scheduled run, inspect `docker compose -f docker-compose.prod.yml logs cron`. An outdated ClamAV signature set is not a normal startup state. The “Admin DB role” card shows the result of the latest role check in the maintenance service; after step 5 of `scripts/initial-setup.sh` it is `ok` and names the time of the check. `unknown` means that no check result has been recorded yet (see § 5.5).
 
 ---
 
@@ -1799,7 +1799,7 @@ The dedicated `cron-egress` network gives only `cron` general egress, not an all
 30 * * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance detect_breaches >> /var/log/anlaufstelle-breach.log 2>&1
 ```
 
-> **Note:** The complete, authoritative list of all background jobs including their schedule (backup, retention, audit chain verification, statistics snapshots, orphan cleanup, breach scan, view refresh) is in the [ops runbook § 3](ops-runbook.md#3-cron-jobs). In the bundled compose stack they run in the `cron` sidecar (`deploy/crontab`); on the dev server they run as systemd timers via `dev-ops/deploy/install-timers.sh` — in both cases the breach scan runs hourly at minute 30.
+> **Note:** The complete, authoritative list of all background jobs including their schedule (backup, retention, audit chain verification, statistics snapshots, orphan cleanup, breach scan) is in the [ops runbook § 3](ops-runbook.md#3-cron-jobs). In the bundled compose stack they run in the `cron` sidecar (`deploy/crontab`); on the dev server they run as systemd timers via `dev-ops/deploy/install-timers.sh` — in both cases the breach scan runs hourly at minute 30.
 
 ---
 
@@ -2591,5 +2591,5 @@ Person anonymization clears these dynamic fields as well as related titles and g
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: 015fc89df37cef53656b486ff114b2cdffee6402 -->
+<!-- source-hash: 4cfab459ded227cf49fab4a953e87a50d9e09346 -->
 <!-- translation-date: 2026-11-12 -->

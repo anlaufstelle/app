@@ -459,7 +459,7 @@ Erwartete (anonyme) Antwort — sie enthält **nur** das `status`-Feld (#1375):
 {"status": "ok"}
 ```
 
-**Direkt nach der Installation normal:** Die MFA-Quote im Compliance-Dashboard bleibt kritisch, bis alle MFA-pflichtigen Konten ihren zweiten Faktor eingerichtet haben. Die Anzeige „Kritische Audit-Events (24h)“ kann nach einer frischen Ersteinrichtung ebenfalls warnen, weil die Ersteinrichtung selbst kritische Audit-Events erzeugt. Noch nie gelaufene Hintergrundjobs erscheinen zunächst als `unknown`: View-Refresh und Breach-Scan laufen erstmals zur nächsten Viertel- beziehungsweise halben Stunde, Retention/Audit-Prüfung/Orphan-Cleanup täglich ab 03:00 Uhr und Statistik-Snapshots am nächsten Monatsersten um 04:00 Uhr. Bleibt ein Zustand über seinen ersten planmäßigen Lauf hinaus bestehen, prüfen Sie `docker compose -f docker-compose.prod.yml logs cron`. Ein veralteter ClamAV-Signaturstand ist dagegen kein normaler Anlaufzustand. Die Karte „Admin-DB-Rolle“ zeigt das Ergebnis der letzten Rollenprüfung im Wartungsdienst; nach Schritt 5 von `scripts/initial-setup.sh` steht sie auf `ok` und nennt den Prüfzeitpunkt. `unknown` heißt, dass noch kein Prüfergebnis hinterlegt ist (siehe § 5.5).
+**Direkt nach der Installation normal:** Die MFA-Quote im Compliance-Dashboard bleibt kritisch, bis alle MFA-pflichtigen Konten ihren zweiten Faktor eingerichtet haben. Die Anzeige „Kritische Audit-Events (24h)“ kann nach einer frischen Ersteinrichtung ebenfalls warnen, weil die Ersteinrichtung selbst kritische Audit-Events erzeugt. Noch nie gelaufene Hintergrundjobs erscheinen zunächst als `unknown`: Der Breach-Scan läuft erstmals beim nächsten stündlichen Lauf zur 30. Minute, Retention/Audit-Prüfung/Orphan-Cleanup täglich ab 03:00 Uhr und Statistik-Snapshots am nächsten Monatsersten um 04:00 Uhr. Bleibt ein Zustand über seinen ersten planmäßigen Lauf hinaus bestehen, prüfen Sie `docker compose -f docker-compose.prod.yml logs cron`. Ein veralteter ClamAV-Signaturstand ist dagegen kein normaler Anlaufzustand. Die Karte „Admin-DB-Rolle“ zeigt das Ergebnis der letzten Rollenprüfung im Wartungsdienst; nach Schritt 5 von `scripts/initial-setup.sh` steht sie auf `ok` und nennt den Prüfzeitpunkt. `unknown` heißt, dass noch kein Prüfergebnis hinterlegt ist (siehe § 5.5).
 
 ---
 
@@ -1798,7 +1798,7 @@ Das eigene Netz `cron-egress` gibt ausschließlich `cron` allgemeinen Ausgang, k
 30 * * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance detect_breaches >> /var/log/anlaufstelle-breach.log 2>&1
 ```
 
-> **Hinweis:** Die vollständige, autoritative Liste aller Hintergrundjobs samt Zeitplan (Backup, Retention, Audit-Ketten-Verifikation, Statistik-Snapshots, Orphan-Cleanup, Breach-Scan, View-Refresh) steht im [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs). Im mitgelieferten Compose-Stack laufen sie im `cron`-Sidecar (`deploy/crontab`), auf dem Dev-Server als systemd-Timer via `dev-ops/deploy/install-timers.sh` — in beiden Fällen der Breach-Scan stündlich zur 30. Minute.
+> **Hinweis:** Die vollständige, autoritative Liste aller Hintergrundjobs samt Zeitplan (Backup, Retention, Audit-Ketten-Verifikation, Statistik-Snapshots, Orphan-Cleanup, Breach-Scan) steht im [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs). Im mitgelieferten Compose-Stack laufen sie im `cron`-Sidecar (`deploy/crontab`), auf dem Dev-Server als systemd-Timer via `dev-ops/deploy/install-timers.sh` — in beiden Fällen der Breach-Scan stündlich zur 30. Minute.
 
 ---
 
