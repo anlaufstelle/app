@@ -67,6 +67,10 @@ read_env() {
         return 1
     fi
     value="$(env_file_parse_value "$raw")"
+    # Empty optional Compose settings mean no opt-in, just like absence.
+    if [[ -z "$value" && "${2:-required}" == optional ]]; then
+        return 0
+    fi
     if [[ -z "$value" ]]; then
         fail "${name} ist leer."
         return 1

@@ -590,3 +590,19 @@ def test_environment_compose_list_takes_precedence_over_dotenv(tmp_path: Path):
     assert result.returncode == 0, result.stderr
     assert "docker-compose.breach-webhook.yml" in log_file.read_text()
     assert "missing.yml" not in log_file.read_text()
+
+
+@pytest.mark.parametrize("value", ["", '""', "''", "   ", " # empty", '"" # empty'])
+def test_empty_dotenv_compose_list_uses_default_files(tmp_path: Path, value: str):
+    result, _env_file, log_file = _run(
+        tmp_path,
+        compose_from_dotenv=True,
+        env_text=_default_env_text() + f"COMPOSE_FILE={value}\n",
+        extra_compose_files=("docker-compose.breach-webhook.yml",),
+    )
+    assert result.returncode == 0, result.stderr
+    calls = _compose_calls(log_file.read_text())
+    assert calls
+    for call in calls:
+        assert f"-f {REPO_ROOT / 'docker-compose.prod.yml'} --env-file " in call
+        assert "docker-compose.breach-webhook.yml" not in call

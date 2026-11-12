@@ -35,6 +35,16 @@ _OPT_IN = "docker-compose.prod.yml:compose.legal.yml:compose.override.yml:docker
 @pytest.mark.parametrize(
     ("environment_list", "dotenv", "optional_files", "expected"),
     [
+        *[
+            pytest.param(
+                None,
+                f"COMPOSE_FILE={value}\n",
+                True,
+                ["-f", "docker-compose.prod.yml", "-f", "compose.legal.yml", "-f", "compose.override.yml"],
+                id=f"dotenv-empty-{index}-is-not-opt-in",
+            )
+            for index, value in enumerate(["", '""', "''", "   ", " # empty", '"" # empty'])
+        ],
         pytest.param(_OPT_IN, "", True, [], id="environment-opt-in"),
         pytest.param(None, f"COMPOSE_FILE={_OPT_IN}\n", True, [], id="dotenv-opt-in"),
         pytest.param(None, f'  export COMPOSE_FILE = "{_OPT_IN}"\n', True, [], id="exported-dotenv-opt-in"),
