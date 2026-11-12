@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- **Changelog-Einträge folgen einer festen Form** (#2704) — Für Mitwirkende: Ein Eintrag hat höchstens zwei Sätze und 350 Zeichen (Betreiber-Aktionen 600), je Ticket und Abschnitt gibt es einen Eintrag, die Abschnitte stehen in fester Folge. `make changelog-check` prüft das; Nachrunden ändern den Eintrag, sie hängen nichts an.
+- **Changelog-Einträge folgen einer festen Form** (#2704) — Für Mitwirkende: Ein Eintrag hat höchstens zwei Sätze (Redaktionsregel) und 350 Zeichen (Betreiber-Aktionen 600), je Ticket und Abschnitt einen Eintrag, die Abschnitte stehen in fester Folge. `make changelog-check` prüft Länge, Ticket-Dopplung, Folge und Leerzeilen; Nachrunden ändern den Eintrag, sie hängen nichts an.
 
 ## [0.99.10] - 2026-11-11
 
