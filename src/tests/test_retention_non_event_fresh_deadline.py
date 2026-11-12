@@ -20,8 +20,9 @@ from django.db import connection, connections, transaction
 from django.utils import timezone
 
 from core.management.commands import enforce_retention as command
-from core.models import Activity, Client, Event, Settings, ShiftHandoverNote
+from core.models import Activity, AuditLog, Client, Event, LegalHold, Settings, ShiftHandoverNote
 from core.retention import enforcement
+from core.services.compliance import detect_mass_delete
 from core.services.system.settings import update_settings
 from tests._retention_race_helpers import backend_pid, waits_for_a_lock
 
@@ -276,3 +277,131 @@ def test_shortened_period_reaches_newly_due_targets_in_the_next_run(
 
     _run(facility)
     assert removed()
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("kind", ["activity", "handover"])
+@pytest.mark.parametrize("second_period", [30, 90])
+def test_audit_counts_deletions_by_the_period_that_authorized_them(
+    facility, settings_obj, client_identified, admin_user, monkeypatch, settings, kind, second_period
+):
+    """Each committed deletion belongs to its own decision period, even within one run."""
+    field = PERIOD_FIELDS[kind]
+    setattr(settings_obj, field, 30)
+    settings_obj.save(update_fields=[field])
+    recent = _target(kind, facility, client_identified, 45)
+    older = _target(kind, facility, client_identified, 120)
+    original = enforcement.lock_current_settings
+    decisions = []
+
+    def extend_before_second_decision(current_facility):
+        if decisions:
+            assert not type(recent).objects.filter(pk=recent.pk).exists()
+            update_settings(Settings.objects.get(facility=facility), admin_user, **{field: second_period})
+        current = original(current_facility)
+        decisions.append(getattr(current, field))
+        return current
+
+    monkeypatch.setattr(enforcement, "lock_current_settings", extend_before_second_decision)
+    run = enforcement.enforce_activities if kind == "activity" else enforcement.enforce_handover_notes
+    assert run(facility, settings_obj, timezone.now(), False) == {"count": 2}
+    assert decisions == [30, second_period]
+    assert not type(older).objects.filter(pk=older.pk).exists()
+    category = "activities" if kind == "activity" else "handover_notes"
+    entries = list(AuditLog.objects.filter(facility=facility, detail__category=category))
+    assert len(entries) == 1
+    entry = entries[0]
+    assert entry.action == AuditLog.Action.DELETE
+    assert entry.detail == {
+        "category": category,
+        "command": "enforce_retention",
+        "count": 2,
+        "retention_days": (
+            30 if second_period == 30 else {"30": {"count": 1, "deferred": 0}, "90": {"count": 1, "deferred": 0}}
+        ),
+    }
+    # Real deletion audits already count; splitting evidence must not add alarm rows.
+    settings.BREACH_DELETE_THRESHOLD = 1
+    settings.BREACH_DELETE_THRESHOLD_LONG = 1
+    findings = detect_mass_delete(facility)
+    assert len(findings) == 1
+    assert findings[0]["count"] == 1
+    settings.BREACH_DELETE_THRESHOLD = 2
+    settings.BREACH_DELETE_THRESHOLD_LONG = 2
+    assert detect_mass_delete(facility) == []
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("age_days, expected_deferred", [(45, 0), (120, 1)])
+def test_activity_hold_counts_only_if_the_current_period_is_expired(
+    facility, settings_obj, client_identified, lead_user, admin_user, monkeypatch, age_days, expected_deferred
+):
+    """A hold added after selection only defers targets still due under the extended period."""
+    settings_obj.retention_activities_days = 30
+    settings_obj.save(update_fields=["retention_activities_days"])
+    target = _target("activity", facility, client_identified, age_days)
+    original = enforcement.lock_current_settings
+
+    def extend_and_hold_before_decision(current_facility):
+        update_settings(Settings.objects.get(facility=facility), admin_user, retention_activities_days=90)
+        LegalHold.objects.create(
+            facility=facility,
+            target_type="Activity",
+            target_id=target.pk,
+            reason="Preserve the selected activity",
+            created_by=lead_user,
+        )
+        return original(current_facility)
+
+    monkeypatch.setattr(enforcement, "lock_current_settings", extend_and_hold_before_decision)
+    assert enforcement.enforce_activities(facility, settings_obj, timezone.now(), False) == {"count": 0}
+    assert Activity.objects.filter(pk=target.pk).exists()
+    details = list(
+        AuditLog.objects.filter(facility=facility, detail__category="activities").values_list("detail", flat=True)
+    )
+    assert details == (
+        [{"category": "activities", "command": "enforce_retention", "count": 0, "retention_days": 90, "deferred": 1}]
+        if expected_deferred
+        else []
+    )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_activity_audit_attributes_deletions_and_holds_to_their_decision_periods(
+    facility, settings_obj, client_identified, lead_user, admin_user, monkeypatch
+):
+    """A deletion under 30 days and a deferral under 90 days remain separate evidence."""
+    settings_obj.retention_activities_days = 30
+    settings_obj.save(update_fields=["retention_activities_days"])
+    recent = _target("activity", facility, client_identified, 45)
+    held = _target("activity", facility, client_identified, 120)
+    original = enforcement.lock_current_settings
+    decisions = []
+
+    def extend_and_hold_before_second_decision(current_facility):
+        if decisions:
+            assert not Activity.objects.filter(pk=recent.pk).exists()
+            update_settings(Settings.objects.get(facility=facility), admin_user, retention_activities_days=90)
+            LegalHold.objects.create(
+                facility=facility,
+                target_type="Activity",
+                target_id=held.pk,
+                reason="Preserve the selected activity",
+                created_by=lead_user,
+            )
+        current = original(current_facility)
+        decisions.append(current.retention_activities_days)
+        return current
+
+    monkeypatch.setattr(enforcement, "lock_current_settings", extend_and_hold_before_second_decision)
+    assert enforcement.enforce_activities(facility, settings_obj, timezone.now(), False) == {"count": 1}
+    assert decisions == [30, 90]
+    assert Activity.objects.filter(pk=held.pk).exists()
+    entry = AuditLog.objects.get(facility=facility, detail__category="activities")
+    assert entry.detail == {
+        "category": "activities",
+        "command": "enforce_retention",
+        "count": 1,
+        "deferred": 1,
+        "retention_days": {"30": {"count": 1, "deferred": 0}, "90": {"count": 0, "deferred": 1}},
+    }

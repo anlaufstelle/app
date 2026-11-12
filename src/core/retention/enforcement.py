@@ -10,6 +10,7 @@ stdout-Formatierung, Argument-Parsing und Iteration ueber Facilities.
 """
 
 import logging
+from collections import Counter
 from datetime import timedelta
 
 from django.contrib.contenttypes.models import ContentType
@@ -744,9 +745,9 @@ def _lock_activity_and_recheck_hold(facility, pk):
     Anker. ``core_activity`` bleibt das **letzte** Glied der kanonischen
     Ordnung (ADR-050 D5.5) — nach ihr sperrt kein Pfad eine andere Tabelle.
 
-    Rueckgabe: ``(gesperrte Aktivitaet oder None, ist_gehalten)``. ``None``
-    heisst immer „ueberspringen"; ob das an einem Hold lag, sagt das zweite
-    Element.
+    Return ``(locked activity or None, is_held)``. Held rows are returned so
+    the caller can check the current deadline before counting a deferral.
+    ``None`` means the activity no longer exists.
 
     Der Aufrufer muss innerhalb einer ``transaction.atomic()`` stehen — sonst
     faellt die Sperre mit dem impliziten Commit des ``SELECT`` sofort wieder.
@@ -766,18 +767,31 @@ def _lock_activity_and_recheck_hold(facility, pk):
     if activity is None:
         return None, False
     if has_active_hold(facility, "Activity", activity.pk):
-        return None, True
+        return activity, True
     # Refs #1376 (I10) unter der Sperre: der Personen-Hold schuetzt die
     # Aktivitaeten, deren Ziel diese Person IST — exakt die Menge, die der
     # Vorfilter oben ueber ``target_type=client_content_type`` ausnimmt.
     ist_personen_ziel = row["target_type_id"] == ContentType.objects.get_for_model(Client).pk
     if ist_personen_ziel and has_active_hold(facility, "Client", client_id):
-        return None, True
+        return activity, True
     if row["target_type_id"] == event_content_type_id and has_active_hold(facility, "Event", row["target_id"]):
-        return None, True
+        return activity, True
     if row["target_type_id"] == case_content_type_id and has_active_hold(facility, "Case", row["target_id"]):
-        return None, True
+        return activity, True
     return activity, False
+
+
+def _retention_period_evidence(deleted_by_days, deferred_by_days=None):
+    """Keep the scalar period for one period; otherwise attribute counts to each period.
+
+    One audit row per step preserves the mass-delete detector's row count.
+    Mixed periods carry their own deletion and deferral counts (Refs #2714).
+    """
+    deferred_by_days = deferred_by_days or Counter()
+    periods = sorted(deleted_by_days.keys() | deferred_by_days.keys())
+    if len(periods) == 1:
+        return periods[0]
+    return {str(days): {"count": deleted_by_days[days], "deferred": deferred_by_days[days]} for days in periods}
 
 
 def enforce_activities(facility, settings_obj, now, dry_run):
@@ -827,33 +841,29 @@ def enforce_activities(facility, settings_obj, now, dry_run):
     # Aktivitaetszeile) und der Hold ein zweites Mal AUF DER GESPERRTEN Zeile.
     # Die pk-Liste wird vorab materialisiert (bounded, Muster
     # ``_soft_delete_events``).
-    deleted = 0
-    deferred = 0
-    decided_days = settings_obj.retention_activities_days
+    deleted_by_days = Counter()
+    deferred_by_days = Counter()
     for pk in list(qs.values_list("pk", flat=True)):
         with transaction.atomic():
             # The period in force now decides, not the one the run started with
             # (Refs #2714); Settings before the target rows, see
             # :func:`lock_current_settings`.
             current_settings = lock_current_settings(facility) or settings_obj
-            activity, ist_gehalten = _lock_activity_and_recheck_hold(facility, pk)
-            if ist_gehalten:
-                deferred += 1
+            activity, is_held = _lock_activity_and_recheck_hold(facility, pk)
             if activity is None:
                 continue
             days = current_settings.retention_activities_days
             if days < 1 or activity.occurred_at >= now - timedelta(days=days):
                 continue
+            if is_held:
+                deferred_by_days[days] += 1
+                continue
             activity.delete()
-            decided_days = days
-            deleted += 1
+            deleted_by_days[days] += 1
+    deleted = sum(deleted_by_days.values())
+    deferred = sum(deferred_by_days.values())
+    # Literal calls preserve the audit detail inventory and the single-period schema.
     if deferred:
-        # „nicht geloescht" und „nicht angeschaut" muessen fuer die
-        # Spoliationsfrage unterscheidbar bleiben — dieselbe Zaehl-Semantik wie
-        # am Ereignis-Sweep (``_soft_delete_events``). Bewusst ZWEI literale
-        # Aufrufe statt eines ``**extra``: ein zweiter dynamischer
-        # detail-Schreibpunkt in diesem Modul waere am Architektur-Guard
-        # ``TestAuditDetailKeyInventory`` vorbei nur noch laufzeitgeprueft.
         audit_retention_decision(
             facility,
             target_type="Activity",
@@ -861,7 +871,7 @@ def enforce_activities(facility, settings_obj, now, dry_run):
             category="activities",
             command="enforce_retention",
             count=deleted,
-            retention_days=decided_days,
+            retention_days=_retention_period_evidence(deleted_by_days, deferred_by_days),
             deferred=deferred,
         )
     elif deleted:
@@ -872,7 +882,7 @@ def enforce_activities(facility, settings_obj, now, dry_run):
             category="activities",
             command="enforce_retention",
             count=deleted,
-            retention_days=decided_days,
+            retention_days=_retention_period_evidence(deleted_by_days),
         )
     return {"count": deleted}
 
@@ -912,8 +922,7 @@ def enforce_handover_notes(facility, settings_obj, now, dry_run):
     if dry_run:
         return {"count": qs.count()}
 
-    deleted = 0
-    decided_days = settings_obj.retention_handover_notes_days
+    deleted_by_days = Counter()
     for pk in list(qs.values_list("pk", flat=True)):
         with transaction.atomic():
             # The period in force now decides (Refs #2714); Settings before the
@@ -934,8 +943,8 @@ def enforce_handover_notes(facility, settings_obj, now, dry_run):
                 # Stand von vorhin ist nicht rueckholbar (Refs #2124).
                 continue
             note.delete()
-            decided_days = days
-            deleted += 1
+            deleted_by_days[days] += 1
+    deleted = sum(deleted_by_days.values())
     if deleted:
         audit_retention_decision(
             facility,
@@ -944,7 +953,7 @@ def enforce_handover_notes(facility, settings_obj, now, dry_run):
             category="handover_notes",
             command="enforce_retention",
             count=deleted,
-            retention_days=decided_days,
+            retention_days=_retention_period_evidence(deleted_by_days),
         )
     return {"count": deleted}
 
