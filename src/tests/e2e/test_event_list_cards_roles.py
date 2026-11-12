@@ -223,26 +223,32 @@ class TestCardExpansion:
 
 
 class TestFiltersByKeyboardAndOpenState:
-    def test_more_filters_open_with_active_filters_and_survive_history(self, staff_page, base_url, kl_data):
+    def test_active_filters_show_as_chips_and_survive_history(self, staff_page, base_url, kl_data):
         page = staff_page
         query = f"case={kl_data['case']}&created_by={kl_data['miriam']}&anonymous=no"
+        names = ("period", "case", "created_by", "anonymous")
         if kl_data["time_filter"]:
             query += f"&time_filter={kl_data['time_filter']}"
+            names += ("time_filter",)
         _open_list(page, base_url, query)
-        details = page.locator("#event-filters details")
-        expect(details).to_have_attribute("open", "")
-        for name in ("case", "created_by", "anonymous") + (("time_filter",) if kl_data["time_filter"] else ()):
-            expect(page.locator(f"summary [data-active-filter='{name}']")).to_be_visible()
+        # Every active filter is visible without opening the panel: one removable chip each,
+        # and the toggle counts them.
+        for name in names:
+            chip = page.locator(f"#event-filters [data-filter-chip='{name}']")
+            expect(chip).to_be_visible()
+            expect(chip.locator("[data-chip-remove]")).to_have_attribute("href", re.compile(r"^/events/"))
+        expect(page.locator("#event-filters [data-filter-panel-toggle]")).to_contain_text(f"Filter ({len(names)})")
         expect(page.locator("#event-case")).to_have_value(kl_data["case"])
         expect(page.locator("#event-created_by")).to_have_value(str(kl_data["miriam"]))
         expect(page.locator("#event-anonymous")).to_have_value("no")
         assert _no_horizontal_scroll(page)
 
-        # Leave and come back: the same form values are restored.
+        # Leave and come back: the same form values and chips are restored.
         page.goto(f"{base_url}/clients/", wait_until="domcontentloaded")
         page.go_back(wait_until="domcontentloaded")
         expect(page.locator("#event-case")).to_have_value(kl_data["case"])
         expect(page.locator("#event-anonymous")).to_have_value("no")
+        expect(page.locator("#event-filters [data-filter-chip='case']")).to_be_visible()
 
     def test_search_field_and_filters_work_with_keyboard_only(self, staff_page, base_url, kl_data):
         page = staff_page
@@ -256,12 +262,16 @@ class TestFiltersByKeyboardAndOpenState:
             page.keyboard.press("Enter")
         expect(page.locator("#event-table button[aria-controls^='event-detail-']")).to_have_count(2, timeout=10000)
         page.wait_for_url(re.compile(rf"[?&]q=KL-Person-{kl_data['marker']}"), timeout=5000)
-        # The "Nur meine" checkbox toggles with the space bar; the submit button runs the filter with Enter.
+        # The panel opens with Enter on its toggle and moves the focus into the panel.
+        toggle = page.locator("#event-filters [data-filter-panel-toggle]")
+        toggle.focus()
+        page.keyboard.press("Enter")
+        expect(page.locator("#event-filters details[data-filter-panel]")).to_have_attribute("open", "")
+        expect(page.locator("#event-filters [data-filter-panel-body] :focus")).to_have_count(1)
+        # The "Nur meine" checkbox toggles with the space bar and filters at once.
         page.locator("#event-mine").focus()
         page.keyboard.press("Space")
         expect(page.locator("#event-mine")).to_be_checked()
-        page.locator("#event-submit").focus()
-        page.keyboard.press("Enter")
         try:
             page.wait_for_url(re.compile(r"[?&]mine=1"), timeout=10000)
         except Exception as exc:  # noqa: BLE001 - report what the page did instead
@@ -274,6 +284,11 @@ class TestFiltersByKeyboardAndOpenState:
         expect(cards).to_have_count(1, timeout=10000)
         expect(page.locator("#event-mine")).to_be_checked()
         expect(page.locator("#event-q")).to_have_value(f"KL-Person-{kl_data['marker']}")
+        # Escape closes the panel and returns the focus to its toggle.
+        page.locator("#event-mine").focus()
+        page.keyboard.press("Escape")
+        expect(page.locator("#event-filters details[data-filter-panel]")).not_to_have_attribute("open", "")
+        expect(toggle).to_be_focused()
 
 
 class TestNarrowViewportAndEnglish:
@@ -302,11 +317,12 @@ class TestNarrowViewportAndEnglish:
             _open_list(page, base_url, f"case={kl_data['case']}")
             form = page.locator("#event-filters")
             text = form.inner_text()
-            for english in ("More filters", "All types", "Only mine"):
+            for english in ("Today", "Period", "All types", "Only mine"):
                 assert english in text or english in form.inner_html(), (english, text)
-            options = page.locator("#event-filters select option[value='']").all_inner_texts()
+            # The selects sit in the closed panel; read the option labels from the DOM.
+            options = page.locator("#event-filters select option[value='']").all_text_contents()
             assert options and all(o.strip() for o in options)
-            for german in ("Weitere Filter", "Alle Typen", "Alle Personen", "Alle Fälle", "Nur meine"):
+            for german in ("Heute", "Alle Typen", "Alle Personen", "Alle Fälle", "Nur meine"):
                 assert german not in form.inner_html(), german
             assert page.locator("#event-q").get_attribute("placeholder") == "Search contacts …"
             # Date fields are not part of this check (format belongs to the locale work).

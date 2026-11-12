@@ -148,22 +148,27 @@ def query_of(url):
     return parse_qs(urlsplit(url).query)
 
 
-def open_more_filters(page):
-    """Open the collapsed „Weitere Filter“ block (case, created by, shift, anonymous) if it is closed."""
-    details = page.locator("#event-filters details")
-    if details.get_attribute("open") is None:
-        details.locator("summary").click()
-    expect(details).to_have_attribute("open", "")
+def filter_panel(page):
+    """The filter panel (popover on desktop, bottom sheet on mobile) of the contacts list."""
+    return page.locator("#event-filters details[data-filter-panel]")
 
 
-def submit_filters(page):
-    """Submit the filter form and wait for the HTMX partial response."""
+def open_filter_panel(page):
+    """Open the filter panel through its toggle if it is closed; the fields live inside it."""
+    panel = filter_panel(page)
+    if panel.get_attribute("open") is None:
+        page.locator("#event-filters [data-filter-panel-toggle]").click()
+    expect(panel).to_have_attribute("open", "")
+
+
+def filter_by(page, action):
+    """Run ``action`` (a change in the panel) and wait for the HTMX partial it triggers on its own."""
     with page.expect_response(
         lambda response: (
             urlsplit(response.url).path == "/events/" and response.request.resource_type in ("xhr", "fetch")
         )
     ) as info:
-        page.locator("#event-filters button[type='submit']").click()
+        action()
     assert info.value.status == 200
 
 
@@ -181,37 +186,38 @@ class TestFilterRun:
     def test_filter_run_narrows_rows_and_pushes_the_url(self, staff_page, base_url, dataset):
         page = staff_page
         open_list(page, base_url)
+        open_filter_panel(page)
 
+        # A date filters once the visible field commits its value (Tab); there is no submit step.
         fill_date(page, "#event-date_from", "2019-03-01")
+        filter_by(page, lambda: page.keyboard.press("Tab"))
         fill_date(page, "#event-date_to", "2019-03-31")
-        watch_focus_loss(page, "#event-submit")
-        submit_filters(page)
+        watch_focus_loss(page, "#event-doc_type")
+        filter_by(page, lambda: page.keyboard.press("Tab"))
         expect(rows(page)).to_have_count(PAGE_SIZE)
         expect_total(page, PAGE_SIZE, STAFF_TOTAL)
         expect(page).to_have_url(re.compile(r"date_from=2019-03-01"))
         assert query_of(page.url)["date_to"] == ["2019-03-31"]
-        # The form is re-sent with the results; keyboard focus must stay on the button.
-        expect(page.locator("#event-submit"), "keyboard focus must stay on the filter button").to_be_focused()
-        assert focus_losses(page) == [], "the filter run took the focus off the button while the form was re-sent"
+        # The form is re-sent with the results; the panel stays open and keyboard focus stays
+        # on the field the Tab moved to.
+        expect(filter_panel(page), "the panel must stay open while the form is re-sent").to_have_attribute("open", "")
+        expect(page.locator("#event-doc_type"), "keyboard focus must stay in the panel").to_be_focused()
+        assert focus_losses(page) == [], "the filter run took the focus off the field while the form was re-sent"
+        expect(page.locator("#event-filters [data-filter-panel-toggle]")).to_contain_text("Filter (1)")
 
-        page.select_option("#event-doc_type", dataset["type_b"])
-        submit_filters(page)
+        filter_by(page, lambda: page.select_option("#event-doc_type", dataset["type_b"]))
         expect(rows(page)).to_have_count(3)
         assert query_of(page.url)["doc_type"] == [dataset["type_b"]]
 
         # Type "Alle" again and filter by the creator: the elevated contact joins.
-        page.select_option("#event-doc_type", "")
-        open_more_filters(page)
-        page.select_option("#event-created_by", str(dataset["emma"]))
-        submit_filters(page)
+        filter_by(page, lambda: page.select_option("#event-doc_type", ""))
+        filter_by(page, lambda: page.select_option("#event-created_by", str(dataset["emma"])))
         expect(rows(page)).to_have_count(4)
         assert query_of(page.url)["created_by"] == [str(dataset["emma"])]
 
         # "Nur meine" for the signed-in staff user: all 27 own, visible contacts.
-        open_more_filters(page)
-        page.select_option("#event-created_by", "")
-        page.check("#event-mine")
-        submit_filters(page)
+        filter_by(page, lambda: page.select_option("#event-created_by", ""))
+        filter_by(page, lambda: page.check("#event-mine"))
         expect(rows(page)).to_have_count(PAGE_SIZE)
         expect_total(page, PAGE_SIZE, 27)
         assert query_of(page.url)["mine"] == ["1"]
@@ -242,10 +248,9 @@ class TestSharedUrlAndHistory:
     ):
         page = staff_page
         open_list(page, base_url, RANGE)
-        page.select_option("#event-doc_type", dataset["type_b"])
-        open_more_filters(page)
-        page.select_option("#event-created_by", str(dataset["emma"]))
-        submit_filters(page)
+        open_filter_panel(page)
+        filter_by(page, lambda: page.select_option("#event-doc_type", dataset["type_b"]))
+        filter_by(page, lambda: page.select_option("#event-created_by", str(dataset["emma"])))
         expect(rows(page)).to_have_count(3)
         shared_url = page.url
         expected_rows = hrefs(page)
@@ -257,6 +262,9 @@ class TestSharedUrlAndHistory:
             other.wait_for_load_state("domcontentloaded")
             expect(rows(other)).to_have_count(3)
             assert hrefs(other) == expected_rows
+            for key in ("period", "doc_type", "created_by"):
+                expect(other.locator(f"#event-filters [data-filter-chip='{key}']")).to_be_visible()
+            open_filter_panel(other)
             expect_date_value(other, "#event-date_from", "2019-03-01")
             expect_date_value(other, "#event-date_to", "2019-03-31")
             expect(other.locator("#event-doc_type")).to_have_value(dataset["type_b"])
@@ -268,13 +276,12 @@ class TestSharedUrlAndHistory:
         page = staff_page
         open_list(page, base_url, RANGE)
         expect_total(page, PAGE_SIZE, STAFF_TOTAL)
+        open_filter_panel(page)
 
-        page.select_option("#event-doc_type", dataset["type_b"])
-        submit_filters(page)
+        filter_by(page, lambda: page.select_option("#event-doc_type", dataset["type_b"]))
         expect(rows(page)).to_have_count(3)
 
-        page.select_option("#event-doc_type", dataset["type_a"])
-        submit_filters(page)
+        filter_by(page, lambda: page.select_option("#event-doc_type", dataset["type_a"]))
         expect_total(page, PAGE_SIZE, 28)
         assert query_of(page.url)["doc_type"] == [dataset["type_a"]]
 
@@ -295,8 +302,8 @@ class TestSharedUrlAndHistory:
     def test_back_after_a_history_cache_miss_loads_the_full_page(self, staff_page, base_url, dataset):
         page = staff_page
         open_list(page, base_url, RANGE)
-        page.select_option("#event-doc_type", dataset["type_b"])
-        submit_filters(page)
+        open_filter_panel(page)
+        filter_by(page, lambda: page.select_option("#event-doc_type", dataset["type_b"]))
         expect(rows(page)).to_have_count(3)
 
         # Without a snapshot HTMX fetches the URL and swaps the response into the body.
@@ -358,6 +365,8 @@ class TestZeitstromLink:
         page.wait_for_load_state("domcontentloaded")
         expect(page).to_have_url(re.compile(r"/events/\?"))
         expect(rows(page)).to_have_count(3)
+        expect(page.locator("#event-filters [data-filter-chip='period']")).to_be_visible()
+        open_filter_panel(page)
         expect_date_value(page, "#event-date_from", "2019-03-05")
         expect(page.locator("#event-doc_type")).to_have_value(dataset["type_b"])
 
@@ -368,10 +377,14 @@ class TestWithoutJavaScript:
         try:
             page = context.new_page()
             open_list(page, base_url)
+            # The panel is a <details>: it opens without JavaScript, and "Filtern" stays visible.
+            open_filter_panel(page)
             fill_date(page, "#event-date_from", "2019-03-01", native=True)
             fill_date(page, "#event-date_to", "2019-03-31", native=True)
             page.select_option("#event-doc_type", dataset["type_b"])
-            page.locator("#event-filters button[type='submit']").click()
+            submit = page.locator("#event-filters button[type='submit']")
+            expect(submit).to_be_visible()
+            submit.click()
             page.wait_for_load_state("domcontentloaded")
 
             query = query_of(page.url)
@@ -390,10 +403,17 @@ class TestMobileCards:
         expect(rows(page)).to_have_count(PAGE_SIZE)
         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
 
-        page.select_option("#event-doc_type", dataset["type_b"])
-        submit_filters(page)
+        open_filter_panel(page)
+        doc_type = page.locator("#event-doc_type")
+        doc_type.focus()
+        filter_by(page, lambda: doc_type.select_option(dataset["type_b"]))
         expect(rows(page)).to_have_count(3)
+        # Escape in the bottom sheet closes it and gives the cards back.
+        expect(doc_type).to_be_focused()
+        page.keyboard.press("Escape")
+        expect(filter_panel(page)).not_to_have_attribute("open", "")
         expect(rows(page).first).to_be_visible()
+        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
 
 
 class TestRoleColumns:
