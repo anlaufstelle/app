@@ -23,7 +23,7 @@ Version: 1.11
 | 1.8 | September 2026 (2026-09-07) | Einsatzzwecke & Domänen-Pakete (#2140): § 1 Positionierung um die Öffnung über die Ursprungsdomäne ergänzt; § 3 als Arbeitsmodus neu gefasst (offene Sozial-/Lebensberatung und niedrigschwellige Beratungsstellen zuerst, Fit-/Anti-Fit-Tabellen, kuratierte Domänen Awareness/Frauenhaus/Jugendarbeit + generische Beratungsstelle); § 8 Roadmap-Zeile „Domänenbibliotheken" als umgesetzt markiert; § 11 verweist auf die YAML-Paket-Mechanik (`docs/packages.md`) und die vier mitgelieferten Pakete; § 14 Glossar um „Domänen-Paket", „Betreiber-Empfehlung" und „Quick-Exit" ergänzt. |
 | 1.9 | September 2026 (2026-09-10) | § 5 um die Persona der Beratungsstellen-Domäne ergänzt (#2190). |
 | 1.10 | Oktober 2026 (2026-10-07) | Softwarestand v0.99.6: Personenlose Kontakte und die Personen-Kontaktstufen „Nur Pseudonym“ und „Mit Zusatzangaben“ beschreiben die Pseudonymisierung als vorgesehenen Ablauf ohne Pflichtfeld für Klarnamen und unterscheiden Ereignisse ohne Person von inhaltlich anonymen Daten (#2430). |
-| 1.11 | November 2026 (2026-11-12) | Softwarestand v0.99.10: Die Roadmap in § 8 führt Zielbilder ohne Prioritätsspalte, ohne Zusage und ohne Termin; neu aufgenommen sind die Konfigurationsthemen (Berichte, Module, Einrichtung im Browser, Konfigurationspakete, Rechtstexte und E-Mail-Vorlagen). Der KDS-Export steht in § 7, § 8 und § 22 gleich als Zielbild ohne Zusage zu Format und Umfang; § 22 nennt IFT und EUDA statt DBDD/EBDD. § 25 beschreibt die Anmeldung wie umgesetzt (TOTP, Passkeys, Einladung) und verweist nicht mehr auf Roadmap-Schritte, die es nicht gibt (#2718). |
+| 1.11 | November 2026 (2026-11-12) | Softwarestand v0.99.10: Die Roadmap in § 8 führt Zielbilder ohne Prioritätsspalte, ohne Zusage und ohne Termin; neu aufgenommen sind die Konfigurationsthemen (Berichte, Module, Einrichtung im Browser, Konfigurationspakete, Rechtstexte und E-Mail-Vorlagen). Der KDS-Export steht in § 7, § 8 und § 22 gleich als Zielbild ohne Zusage zu Format und Umfang; § 22 nennt IFT und EUDA statt DBDD/EBDD. § 25 beschreibt die Anmeldung mit TOTP und Passkeys sowie die Kontenanlage per Einladung, bei der Ersteinrichtung und im technischen Notfall und verweist nicht mehr auf Roadmap-Schritte, die es nicht gibt (#2718). |
 
 ---
 
@@ -1377,12 +1377,14 @@ Bevor das 30-Sekunden-Ziel zur harten Anforderung wird, sollte es empirisch gepr
 
 ### Authentifizierung
 
-Der aktuelle Stand setzt auf Django-eigene Authentifizierung: Benutzername und Passwort (Passwort-Hashing mit PBKDF2-SHA256 als Django-Standard), ergänzt durch einen zweiten Faktor per TOTP. Zusätzlich lassen sich Passkeys als weiterer zweiter Faktor hinterlegen; das setzt ein eingerichtetes TOTP-Gerät voraus und ersetzt das Passwort nicht. Neue Konten legt die Anwendungsbetreuung in der Fachoberfläche an; die Person erhält eine Einladungs-E-Mail, ein Anfangspasswort wird nicht vergeben.
+Der aktuelle Stand setzt auf Django-eigene Authentifizierung: Benutzername und Passwort (Passwort-Hashing mit PBKDF2-SHA256 als Django-Standard), ergänzt durch einen zweiten Faktor per TOTP. Zusätzlich lassen sich Passkeys als weiterer zweiter Faktor hinterlegen; das setzt ein eingerichtetes TOTP-Gerät voraus und ersetzt das Passwort nicht. Im Regelweg legt die Anwendungsbetreuung neue Konten in der Fachoberfläche an und lädt die Person per E-Mail ein. In diesem Einladungsweg wird kein Anfangspasswort vergeben.
+
+Bei der Ersteinrichtung werden Passwörter direkt gesetzt: für die Systemadministration mit `create_super_admin`, für das erste Konto der Anwendungsbetreuung einer Einrichtung mit `setup_facility`. Als technischer Notfallweg vergibt der Django-Admin beim Anlegen eines Kontos ohne E-Mail-Adresse ein einmalig angezeigtes Initialpasswort.
 
 Die folgenden Optionen sind nicht implementiert und stehen auch nicht in der Roadmap (§ 8):
 
-- **SAML 2.0 / OIDC:** Für Träger, die einen Identity Provider betreiben (selten in der Zielgruppe, aber bei größeren Verbänden möglich). Käme erst in Betracht, wenn die Organisationshierarchie auf Träger-Ebene ausgebaut wird.
-- **CSV-Import von Benutzerlisten:** Für die initiale Übernahme von Benutzerkonten. Der vorhandene CSV-Import-Assistent übernimmt Personen und Ereignisse, keine Benutzerkonten.
+- **SAML 2.0 / OIDC:** Nicht implementiert; eine Option für Träger, die einen Identity Provider betreiben (selten in der Zielgruppe, aber bei größeren Verbänden möglich). Käme erst in Betracht, wenn die Organisationshierarchie auf Träger-Ebene ausgebaut wird.
+- **CSV-Import von Benutzerlisten:** Nicht implementiert; der vorhandene Import-Assistent übernimmt Personen und Ereignisse, keine Benutzerkonten.
 - **LDAP:** Nicht im Scope. Die Zielgruppe betreibt kein Active Directory.
 
 ### Scope-Filter als Middleware
