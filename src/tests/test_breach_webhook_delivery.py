@@ -8,9 +8,12 @@ IP pinning) still runs.
 
 import json
 import urllib.error
+from datetime import timedelta
 
 import pytest
 from django.core.management import CommandError, call_command
+from django.db import connection, transaction
+from django.utils import timezone
 
 from core.models import AuditLog
 
@@ -23,9 +26,11 @@ class _Receiver:
 
     def __init__(self):
         self.fail = False
+        self.attempts = 0
         self.bodies: list[dict] = []
 
     def open(self, opener, req, *args, **kwargs):
+        self.attempts += 1
         if self.fail:
             raise urllib.error.URLError("network unreachable")
         self.bodies.append(json.loads(req.data.decode("utf-8")))
@@ -134,3 +139,131 @@ class TestFailedDeliveryIsVisible:
         assert AuditLog.objects.count() == before + 3
         assert _violations().count() == 2
         assert _latest_scan_marker().detail["job_run"]["status"] == "success"
+
+
+def _backdate_all(hours):
+    """Move every audit row ``hours`` into the past (trigger bypass as in
+    test_breach_detection)."""
+    ts = timezone.now() - timedelta(hours=hours)
+    with transaction.atomic(), connection.cursor() as cur:
+        cur.execute("ALTER TABLE core_auditlog DISABLE TRIGGER auditlog_immutable")
+        try:
+            cur.execute("UPDATE core_auditlog SET timestamp = %s", [ts])
+        finally:
+            cur.execute("ALTER TABLE core_auditlog ENABLE ALWAYS TRIGGER auditlog_immutable")
+
+
+def _quiet(settings):
+    """Thresholds no burst reaches: a later run detects nothing new."""
+    settings.BREACH_FAILED_LOGIN_THRESHOLD = 1000
+    settings.BREACH_EXPORT_THRESHOLD = 1000
+    settings.BREACH_ANON_LOGIN_IP_THRESHOLD = 1000
+
+
+@pytest.mark.django_db(transaction=True)
+class TestFailedDeliveryIsRetried:
+    def setup_method(self):
+        if connection.vendor != "postgresql":
+            pytest.skip("AuditLog trigger requires PostgreSQL")
+
+    def test_next_run_redelivers_without_second_violation(self, facility, admin_user, receiver, thresholds):
+        receiver.fail = True
+        _login_burst(facility, admin_user)
+        with pytest.raises(CommandError):
+            call_command("detect_breaches")
+        finding = _violations().get()
+
+        receiver.fail = False
+        _quiet(thresholds)
+        call_command("detect_breaches")
+
+        assert [body["audit_id"] for body in receiver.bodies] == [str(finding.pk)]
+        assert receiver.bodies[0]["kind"] == "failed_login_burst"
+        assert receiver.bodies[0]["facility"] == facility.name
+        assert _violations().count() == 1
+
+    def test_no_further_attempt_after_successful_redelivery(self, facility, admin_user, receiver, thresholds):
+        receiver.fail = True
+        _login_burst(facility, admin_user)
+        with pytest.raises(CommandError):
+            call_command("detect_breaches")
+        receiver.fail = False
+        call_command("detect_breaches")
+        attempts = receiver.attempts
+
+        call_command("detect_breaches")
+
+        assert receiver.attempts == attempts
+        assert len(receiver.bodies) == 1
+        assert _violations().count() == 1
+
+    def test_delivered_finding_is_not_sent_again(self, facility, admin_user, receiver, thresholds):
+        _login_burst(facility, admin_user)
+        call_command("detect_breaches")
+
+        call_command("detect_breaches")
+
+        assert receiver.attempts == 1
+
+    def test_one_attempt_per_finding_and_run(self, facility, admin_user, receiver, thresholds):
+        receiver.fail = True
+        _login_burst(facility, admin_user)
+
+        with pytest.raises(CommandError):
+            call_command("detect_breaches")
+
+        assert receiver.attempts == 1
+
+    def test_failed_redelivery_keeps_run_red(self, facility, admin_user, receiver, thresholds):
+        receiver.fail = True
+        _login_burst(facility, admin_user)
+        with pytest.raises(CommandError):
+            call_command("detect_breaches")
+        _quiet(thresholds)
+
+        with pytest.raises(CommandError, match="webhook"):
+            call_command("detect_breaches")
+
+        assert receiver.attempts == 2
+        assert _violations().count() == 1
+
+    def test_system_finding_is_redelivered(self, facility, receiver, thresholds):
+        receiver.fail = True
+        _anonymous_burst()
+        with pytest.raises(CommandError):
+            call_command("detect_breaches")
+        finding = _violations().get()
+
+        receiver.fail = False
+        _quiet(thresholds)
+        call_command("detect_breaches")
+
+        assert [body["audit_id"] for body in receiver.bodies] == [str(finding.pk)]
+        assert receiver.bodies[0]["source_ip"] == "198.51.100.7"
+        assert receiver.bodies[0]["facility"] is None
+        assert _violations().count() == 1
+
+    def test_retry_ends_with_the_dedup_window(self, facility, admin_user, receiver, thresholds):
+        receiver.fail = True
+        _login_burst(facility, admin_user)
+        with pytest.raises(CommandError):
+            call_command("detect_breaches")
+        _backdate_all(hours=25)
+
+        receiver.fail = False
+        _quiet(thresholds)
+        call_command("detect_breaches")
+
+        assert receiver.attempts == 1
+        assert receiver.bodies == []
+
+    def test_no_retry_once_the_url_is_removed(self, facility, admin_user, receiver, thresholds, settings):
+        receiver.fail = True
+        _login_burst(facility, admin_user)
+        with pytest.raises(CommandError):
+            call_command("detect_breaches")
+
+        settings.BREACH_NOTIFICATION_WEBHOOK_URL = None
+        call_command("detect_breaches")
+
+        assert receiver.attempts == 1

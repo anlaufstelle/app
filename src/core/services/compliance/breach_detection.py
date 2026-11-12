@@ -51,6 +51,10 @@ die Dedup sauber bleibt.
 Deduplikation: Vor dem Anlegen eines neuen SECURITY_VIOLATION-Eintrags
 prueft die Funktion, ob fuer denselben Tatbestand (Action-Subtype +
 betroffener Subject + 24h-Fenster) bereits ein Eintrag existiert.
+
+Webhook delivery (Refs #2719): every attempt appends its own audit row; a
+failed delivery is retried by the next run inside the same 24-hour window,
+without a second SECURITY_VIOLATION row, and turns ``detect_breaches`` red.
 """
 
 from __future__ import annotations
@@ -592,6 +596,67 @@ def _notify(entry: AuditLog, payload: dict) -> bool | None:
     return delivered
 
 
+def _open_deliveries(facility) -> list[AuditLog]:
+    """Findings of ``facility`` (``None``: system scope) whose delivery failed
+    and never succeeded since (Refs #2719).
+
+    Bounded by the 24-hour dedup window of ``_already_reported``: inside it the
+    finding row stands for the ongoing pattern and suppresses a new one; after
+    it, a still-active pattern produces a fresh finding with its own delivery,
+    so redelivering the old one would only duplicate the alarm.
+    """
+    cutoff = timezone.now() - timedelta(hours=24)
+    failed: set[str] = set()
+    delivered: set[str] = set()
+    for target_id, result in AuditLog.objects.filter(
+        facility=facility,
+        action=AuditLog.Action.BREACH_SCAN_COMPLETED,
+        target_type="AuditLog",
+        detail__category=WEBHOOK_DELIVERY_CATEGORY,
+        timestamp__gte=cutoff,
+    ).values_list("target_id", "detail__result"):
+        (delivered if result == WEBHOOK_DELIVERED else failed).add(target_id)
+    pending = failed - delivered
+    if not pending:
+        return []
+    return list(
+        AuditLog.objects.filter(
+            facility=facility,
+            action=AuditLog.Action.SECURITY_VIOLATION,
+            timestamp__gte=cutoff,
+            pk__in=pending,
+        )
+        .select_related("facility")
+        .order_by("timestamp")
+    )
+
+
+def _payload_from_entry(entry: AuditLog) -> dict:
+    """Rebuild the webhook payload of a recorded finding for redelivery."""
+    detail = entry.detail or {}
+    payload = {
+        "facility": entry.facility.name if entry.facility is not None else None,
+        "kind": detail.get("kind"),
+        "count": detail.get("count"),
+        "threshold": detail.get("threshold"),
+        "window_minutes": detail.get("window_minutes"),
+        "user_id": entry.user_id,
+    }
+    if entry.facility is None:
+        payload["source_ip"] = detail.get("source_ip")
+    payload["audit_id"] = str(entry.pk)
+    payload["timestamp"] = entry.timestamp.isoformat()
+    return payload
+
+
+def _redeliver_open(facility) -> None:
+    """One more attempt per open delivery; no new SECURITY_VIOLATION row."""
+    if not _webhook_configured():
+        return
+    for entry in _open_deliveries(facility):
+        _notify(entry, _payload_from_entry(entry))
+
+
 def count_failed_webhook_deliveries(since) -> int:
     """Failed delivery attempts recorded since ``since`` — feeds the exit code
     of ``detect_breaches`` (Refs #2719)."""
@@ -712,6 +777,9 @@ def run_all_detections(facility) -> list[AuditLog]:
     """Fuehrt alle facility-gescopten Heuristiken aus, schreibt Findings, gibt
     geschriebene Eintraege zurueck. Die installationsweiten (facility-losen)
     Heuristiken laufen separat ueber ``run_system_detections``."""
+    # Refs #2719: retry before detecting, so a delivery that fails in this
+    # run gets its next attempt in the next run, not twice in one run.
+    _redeliver_open(facility)
     new_entries: list[AuditLog] = []
     for detector in (
         detect_failed_login_burst,
@@ -732,6 +800,7 @@ def _run_system_detections() -> list[AuditLog]:
     """Reine Detection-Schleife (ohne GUC-Handling) — der ``facility=NULL``-Read
     UND die facility-losen Writes muessen im ``app.is_super_admin``-Scope laufen
     (siehe ``run_system_detections``)."""
+    _redeliver_open(None)
     new_entries: list[AuditLog] = []
     for finding in (*detect_anonymous_login_bursts(), *detect_super_admin_login_bursts()):
         entry = record_system_finding(finding)
