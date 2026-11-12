@@ -72,7 +72,8 @@ class TestInterruptedRuns:
 
         with monkeypatch.context() as patch:
             patch.setattr("core.retention.enforcement.audit_retention_decision", stop)
-            with pytest.raises(RuntimeError, match="stopped"):
+            # The facility aborts; the run reports it and ends with an error.
+            with pytest.raises(CommandError, match="facility/facilities aborted"):
                 _run_retention()
         assert Event.objects.filter(facility=facility, is_deleted=True).count() == 1
 
@@ -96,7 +97,8 @@ class TestInterruptedRuns:
 
         with monkeypatch.context() as patch:
             patch.setattr("core.retention.enforcement.delete_attachments_for", crash_on_second_event)
-            with pytest.raises(RuntimeError, match="crash"):
+            # The facility aborts; the run reports it and ends with an error.
+            with pytest.raises(CommandError, match="facility/facilities aborted"):
                 _run_retention()
         assert Event.objects.filter(facility=facility, is_deleted=True).count() == 1
 

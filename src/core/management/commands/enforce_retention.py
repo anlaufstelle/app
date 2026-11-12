@@ -48,6 +48,8 @@ class _RetentionTotals:
 
     processed_facilities: int = 0
     skipped_facilities: int = 0
+    # Facilities whose pipeline stopped with an unexpected error; the run goes on.
+    failed_facilities: int = 0
     failed_events: int = 0
     failed_imports: int = 0
     deferred: int = 0
@@ -139,7 +141,16 @@ class Command(BaseCommand):
 
         totals = _RetentionTotals()
         for facility in facilities:
-            self._process_single_facility(facility, now, dry_run, totals)
+            try:
+                self._process_single_facility(facility, now, dry_run, totals)
+            except Exception as exc:
+                # One facility must not stop the deadlines of all following ones.
+                # Each step commits in its own transaction blocks; the failing
+                # block has been rolled back on the way out. Work already
+                # committed for this facility stays, so a broken late step does
+                # not postpone its deletions night after night.
+                self._report_facility_failure(facility, exc)
+                totals.failed_facilities += 1
 
         if not facility_name:
             totals.auditlog_pruned += prune_system_auditlog(now, dry_run)["count"]
@@ -157,6 +168,21 @@ class Command(BaseCommand):
         message = f"No settings for facility '{facility.name}', skipping."
         self.stdout.write(self.style.WARNING(message))
         logger.warning("enforce_retention: %s", message)
+
+    def _report_facility_failure(self, facility, exc):
+        """Log an aborted facility without the exception text.
+
+        The message of a database or validation error can quote stored values,
+        that is personal data; the log keeps the facility and the error class.
+        """
+        logger.error(
+            "enforce_retention: facility %s aborted after %s; continuing with the next facility",
+            facility.pk,
+            type(exc).__name__,
+        )
+        self.stderr.write(
+            self.style.ERROR(f"Facility '{facility.name}' aborted ({type(exc).__name__}); see application logs.")
+        )
 
     def _process_single_facility(self, facility, now, dry_run, totals):
         """Run the full retention pipeline for one facility, accumulating into ``totals``.
@@ -258,6 +284,17 @@ class Command(BaseCommand):
 
         totals.processed_facilities += 1
 
+    @staticmethod
+    def _failure_message(totals):
+        message = (
+            f"{totals.failed_events} event(s) kept and {totals.failed_imports} import job(s) pending "
+            "after a technical retention failure. "
+            "Other retention targets were processed; see application logs."
+        )
+        if totals.failed_facilities:
+            message = f"{totals.failed_facilities} facility/facilities aborted; " + message
+        return message
+
     def _report_enforce_summary(self, totals, facilities, dry_run, *, full_run=True):
         """Emit counts and mark only complete installation runs as successful.
 
@@ -299,6 +336,8 @@ class Command(BaseCommand):
             self.stdout.write(
                 self.style.WARNING(f"[dry-run] Would prune {totals.auditlog_pruned} audit-log entry/entries in total.")
             )
+            if totals.failed_facilities:
+                raise CommandError(self._failure_message(totals))
             return
 
         self.stdout.write(self.style.SUCCESS(f"Soft-deleted {totals.deleted} event(s) in total."))
@@ -320,10 +359,11 @@ class Command(BaseCommand):
         # Refs #919: persistenter LastRun-Marker fuer das Compliance-Dashboard.
         # Geschrieben nur nach erfolgreichem (non-dry-run) Lauf. ``facility=None``
         # — der Cron laeuft installationsweit, nicht pro Facility.
-        failed = totals.failed_events + totals.failed_imports
+        failed = totals.failed_events + totals.failed_imports + totals.failed_facilities
         self.stdout.write(
             f"Run coverage: processed={totals.processed_facilities}, "
-            f"skipped={totals.skipped_facilities}, failed={failed}."
+            f"skipped={totals.skipped_facilities}, failed={failed}, "
+            f"failed_facilities={totals.failed_facilities}."
         )
         # Refs #2583: technical failures, skipped facilities and filters prevent global success.
         if not full_run or totals.skipped_facilities or failed:
@@ -335,11 +375,7 @@ class Command(BaseCommand):
                 not full_run,
             )
             if failed:
-                raise CommandError(
-                    f"{totals.failed_events} event(s) kept and {totals.failed_imports} import job(s) pending "
-                    "after a technical retention failure. "
-                    "Other retention targets were processed; see application logs."
-                )
+                raise CommandError(self._failure_message(totals))
             return
         audit_event(
             AuditLog.Action.RETENTION_RUN_COMPLETED,
