@@ -9,6 +9,9 @@ pytestmark = pytest.mark.architecture
 ROOT = Path(__file__).resolve().parents[2]
 CHECKLIST = ROOT / "docs/dev/release-checklist.md"
 
+if not CHECKLIST.exists():
+    pytest.skip("docs/dev/, scripts/dev/ not in the public snapshot", allow_module_level=True)
+
 
 def _checklist() -> str:
     return CHECKLIST.read_text(encoding="utf-8")

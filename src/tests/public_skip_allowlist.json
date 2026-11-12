@@ -1834,6 +1834,13 @@
     "rationale": "The release strip list excludes .env.demo.example; this node checks that excluded artifact."
   },
   {
+    "nodeid": "src/tests/test_release_checklist_tooling_docs.py",
+    "profile": "public",
+    "reason": "docs/dev/, scripts/dev/ not in the public snapshot",
+    "exclusion": "docs/dev",
+    "rationale": "The release strip list excludes docs/dev and scripts/dev; this module checks the release checklist against scripts/dev/probe-stage.sh."
+  },
+  {
     "nodeid": "src/tests/test_security_headers_single_source.py::test_non_production_caddyfiles_do_not_repeat_application_headers[Caddyfile.demo]",
     "profile": "public",
     "reason": "Caddyfile.dev/Caddyfile.demo/Caddyfile.staging nicht im Public-Snapshot",
