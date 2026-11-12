@@ -6413,8 +6413,8 @@
 
 > **Prüfbereich (#918, Zielumfang #2669).** Die Liste prüft ausschließlich sichtbare, nicht leere, unverschlüsselte Ereignis-Freitexte. Titel/Pseudonyme und dynamische Felder von Personen, Fällen, Episoden und Aufgaben gehören nicht zur Liste. Vorgesehene manuelle Stichproben:
 >
-> - `ENT-PRIV-01` — Freitext-Review listet Ereignis-Freitexte und lokale Musterhinweise; entfernte statische Zielparameter liefern 404
-> - `ENT-PRIV-02` — Review respektiert Rollen-Sichtbarkeit (kein neuer Leak)
+> - `ENT-PRIV-01` — Einstieg über Datenschutz → Freitext-Review (als Leitung): Review listet Ereignis-Freitexte und lokale Musterhinweise; entfernte statische Zielparameter liefern 404
+> - `ENT-PRIV-02` — Review respektiert Rollen-Sichtbarkeit (kein neuer Leak); Assistenz/Fachkraft ⇒ 403 und kein Reiter im Bereich Datenschutz; Systemadministration ⇒ 403
 > - `ENT-PRIV-03` — Review-Aktion wird auditiert
 
 ---
