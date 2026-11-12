@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from django.db import OperationalError, transaction
 from django.db.models import F, OuterRef, Subquery
@@ -60,6 +61,7 @@ from core.retention.legal_holds import get_active_hold_target_ids_for_facilities
 from core.services.audit import audit_retention_decision
 from core.services.events.history_diff import build_field_redaction_marker, is_redaction_marker
 from core.services.system import bypass_replication_triggers, has_rls_bypass_context
+from core.services.system.settings import lock_current_settings
 
 # D5.2: Vorschlagswert der ADR. Ein Bypass-Block je Charge.
 BATCH_SIZE = 500
@@ -87,6 +89,28 @@ CATEGORY_ANONYMIZED_CLIENT = "eventhistory_anonymized_client"
 # stehen, und der Nachweis muss erklaeren, warum sich die Zeile trotzdem
 # geaendert hat.
 CATEGORY_REPAIRED = "eventhistory_repaired"
+
+
+@dataclass(frozen=True)
+class PeriodInForce:
+    """A history period a batch decides on as it stands under the Settings lock.
+
+    Refs #2714: the run reads the settings once when it starts. A batch of the
+    detail or chronicle set re-reads the period in its own transaction, after
+    the shared gate and before the person and event rows, and keeps only the
+    rows that period still lets go.
+    """
+
+    setting: str  # Settings field holding the period in months; ``0`` = unlimited
+    anchor: str  # history row attribute the period counts from
+    now: datetime
+    fallback_months: int  # the run's period, used only without a Settings row
+
+    def locked_cutoff(self, facility):
+        """Lock the Settings row and return the cutoff in force, ``None`` if unlimited."""
+        current = lock_current_settings(facility)
+        months = (getattr(current, self.setting, 0) or 0) if current is not None else self.fallback_months
+        return _months_before(self.now, months) if months > 0 else None
 
 
 class OwnerContextMissingError(RuntimeError):
@@ -305,8 +329,12 @@ def _write_proof(facility, *, category, count, rows, cutoff, deferred, skipped):
     )
 
 
-def _run_batch(facility, batch_pks, *, category, cutoff, delete):
-    """Eine Charge: sperren, Hold pruefen, aendern, Nachweis schreiben, committen."""
+def _run_batch(facility, batch_pks, *, category, cutoff, delete, period=None):
+    """Eine Charge: sperren, Hold pruefen, aendern, Nachweis schreiben, committen.
+
+    With ``period`` the batch keeps only the rows the period in force still
+    lets go, read under the Settings lock (:class:`PeriodInForce`).
+    """
     result = SweepResult()
     # Idempotenz (D1.4): bereits erledigte Zeilen fallen hier heraus. Beim
     # Loeschlauf ist die Bedingung umgekehrt — er arbeitet ausschliesslich auf
@@ -316,6 +344,12 @@ def _run_batch(facility, batch_pks, *, category, cutoff, delete):
         return result
 
     with transaction.atomic():
+        if period is not None:
+            # Gate and Settings before the person and event rows (Refs #2714).
+            cutoff = period.locked_cutoff(facility)
+            rows = [row for row in rows if cutoff is not None and getattr(row, period.anchor) < cutoff]
+            if not rows:
+                return result
         eligible, held, skipped = lock_and_partition_events({row.event_id for row in rows})
         result.deferred_event_ids |= held
         result.skipped_event_ids |= skipped
@@ -388,7 +422,7 @@ def _run_batch_with_retry(facility, batch_pks, **kwargs):
     return SweepResult()  # pragma: no cover — die Schleife kehrt vorher zurueck
 
 
-def _sweep(facility, history_pks, *, category, cutoff, batch_size, delete):
+def _sweep(facility, history_pks, *, category, cutoff, batch_size, delete, period=None):
     _require_owner_context()
     pks = list(history_pks)
     total = SweepResult()
@@ -399,12 +433,13 @@ def _sweep(facility, history_pks, *, category, cutoff, batch_size, delete):
             category=category,
             cutoff=cutoff,
             delete=delete,
+            period=period,
         )
         total.merge(batch)
     return total
 
 
-def redact_event_history_rows(facility, history_pks, *, category, cutoff=None, batch_size=BATCH_SIZE):
+def redact_event_history_rows(facility, history_pks, *, category, cutoff=None, batch_size=BATCH_SIZE, period=None):
     """Redigiert die genannten Historienzeilen spaltengenau (ADR-050 D1/D5).
 
     Der einzige Schreiber der Alters-Redaktion. Liefert ein :class:`SweepResult`
@@ -420,10 +455,11 @@ def redact_event_history_rows(facility, history_pks, *, category, cutoff=None, b
         cutoff=cutoff,
         batch_size=batch_size,
         delete=False,
+        period=period,
     )
 
 
-def delete_redacted_event_history_rows(facility, history_pks, *, cutoff=None, batch_size=BATCH_SIZE):
+def delete_redacted_event_history_rows(facility, history_pks, *, cutoff=None, batch_size=BATCH_SIZE, period=None):
     """Stufe 2 (ADR-050 D8/M-7): loescht bereits redigierte Zeilen nach Fristablauf.
 
     Mechanik, Rolle, Chargen, Nachweis und Sperr-Reihenfolge exakt wie bei der
@@ -438,6 +474,7 @@ def delete_redacted_event_history_rows(facility, history_pks, *, cutoff=None, ba
         cutoff=cutoff,
         batch_size=batch_size,
         delete=True,
+        period=period,
     )
 
 
@@ -671,6 +708,9 @@ def enforce_eventhistory_retention(facility, settings_obj, now, dry_run):
             list(aged_rows.values_list("pk", flat=True)),
             category=CATEGORY_DETAIL_EXPIRED,
             cutoff=detail_cutoff,
+            # The selection used the run's period; each batch decides on the
+            # period in force (Refs #2714).
+            period=PeriodInForce("eventhistory_detail_months", "changed_at", now, detail_months),
         )
     )
     redacted = totals.processed
@@ -680,6 +720,7 @@ def enforce_eventhistory_retention(facility, settings_obj, now, dry_run):
         facility,
         list(chronicle_rows.values_list("pk", flat=True)),
         cutoff=chronicle_cutoff,
+        period=PeriodInForce("eventhistory_chronicle_months", "redacted_at", now, chronicle_months),
     )
     totals.merge(chronicle)
 
