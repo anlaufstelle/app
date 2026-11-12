@@ -221,6 +221,9 @@ def event_list_day_groups(queryset, page_events):
     )
     for row in counts:
         groups[row["day"]]["count"] = row["count"]
+    for group in groups.values():
+        # A row deleted between the page query and the aggregate must not leave a heading without a number.
+        group.setdefault("count", len(group["events"]))
     return list(groups.values())
 
 

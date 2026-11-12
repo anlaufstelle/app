@@ -155,3 +155,12 @@ def test_shared_card_still_renders_date_outside_grouped_list(sample_event):
     local = timezone.localtime(sample_event.occurred_at)
     assert local.strftime("%d.%m.%y") in body
     assert 'aria-label="Zeit"' not in body
+
+
+@pytest.mark.django_db
+def test_day_group_falls_back_to_page_rows_when_aggregate_misses_the_day(sample_event):
+    from core.services.events.list_filters import event_list_day_groups
+
+    groups = event_list_day_groups(Event.objects.none(), [sample_event])
+
+    assert [(group["day"], group["count"]) for group in groups] == [(timezone.localdate(sample_event.occurred_at), 1)]
