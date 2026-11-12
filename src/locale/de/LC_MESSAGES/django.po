@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-12 18:27+0100\n"
+"POT-Creation-Date: 2026-11-12 18:56+0100\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -15301,3 +15301,16 @@ msgstr "zu heute"
 #: src/core/services/compliance/cron.py:129
 msgid "Letzter vollständiger Breach-Scan fehlgeschlagen — cron-Logs und Zustellzeilen prüfen."
 msgstr "Letzter vollständiger Breach-Scan fehlgeschlagen — cron-Logs und Zustellzeilen prüfen."
+
+#, python-format
+msgid "%(n)s gezählt"
+msgstr "%(n)s gezählt"
+
+msgid "anonym"
+msgstr "anonym"
+
+msgid "Team"
+msgstr "Team"
+
+msgid "Gezählte Kontakte anzeigen"
+msgstr "Gezählte Kontakte anzeigen"
