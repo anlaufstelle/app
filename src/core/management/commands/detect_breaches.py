@@ -5,8 +5,9 @@ Facilities und schreibt SECURITY_VIOLATION-AuditLog-Eintraege fuer
 neue Findings. Geeignet als Cron-Job (z.B. stuendlich).
 """
 
+from uuid import uuid4
+
 from django.core.management.base import BaseCommand, CommandError
-from django.utils import timezone
 
 from core.models import AuditLog, Facility
 from core.services.audit import audit_event
@@ -42,7 +43,7 @@ class Command(BaseCommand):
                 "sähe der Lauf 0 Facilities/Zeilen und meldete fälschlich 'Keine neuen "
                 "Breach-Findings.' (Refs #1512)."
             )
-        started_at = timezone.now()
+        run_id = str(uuid4())
         facility_name = options["facility"]
         facilities = Facility.objects.all()
         if facility_name:
@@ -59,7 +60,7 @@ class Command(BaseCommand):
 
         total = 0
         for facility in facilities:
-            entries = run_all_detections(facility)
+            entries = run_all_detections(facility, run_id=run_id)
             total += len(entries)
             for entry in entries:
                 self.stdout.write(
@@ -71,7 +72,7 @@ class Command(BaseCommand):
         # Usernames haben keine Facility) — einmal pro Lauf, nicht je Facility.
         # Nur beim Voll-Lauf (ohne ``--facility``-Einschraenkung).
         if not facility_name:
-            for entry in run_system_detections():
+            for entry in run_system_detections(run_id=run_id):
                 total += 1
                 self.stdout.write(
                     f"  [system] {entry.detail.get('kind')} - count={entry.detail.get('count')} (audit_id={entry.pk})"
@@ -85,7 +86,7 @@ class Command(BaseCommand):
         processed = facilities.count()
         # Refs #2719: every finding is recorded first; a failed webhook delivery
         # then turns the run red instead of ending as a quiet log warning.
-        failed_deliveries = count_failed_webhook_deliveries(started_at)
+        failed_deliveries = count_failed_webhook_deliveries(run_id)
         self.stdout.write(
             f"Run coverage: processed={processed}, skipped=0, failed=0, system_scan={not bool(facility_name)}."
         )
@@ -97,6 +98,7 @@ class Command(BaseCommand):
                 facility=None,
                 target_type="BreachScanRun",
                 detail={
+                    "run_id": run_id,
                     "facilities": processed,
                     "findings": total,
                     "job_run": {

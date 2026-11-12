@@ -565,7 +565,7 @@ def _webhook_configured() -> bool:
     return bool(getattr(settings, "BREACH_NOTIFICATION_WEBHOOK_URL", None))
 
 
-def _record_delivery(entry: AuditLog, delivered: bool, error_details: dict) -> AuditLog:
+def _record_delivery(entry: AuditLog, delivered: bool, error_details: dict, run_id: str | None) -> AuditLog:
     """Append the outcome of one delivery attempt for finding ``entry``."""
     return audit_event(
         AuditLog.Action.BREACH_SCAN_COMPLETED,
@@ -577,12 +577,13 @@ def _record_delivery(entry: AuditLog, delivered: bool, error_details: dict) -> A
             "category": WEBHOOK_DELIVERY_CATEGORY,
             "kind": (entry.detail or {}).get("kind"),
             "result": WEBHOOK_DELIVERED if delivered else WEBHOOK_FAILED,
+            "run_id": run_id,
             **error_details,
         },
     )
 
 
-def _notify(entry: AuditLog, payload: dict) -> bool | None:
+def _notify(entry: AuditLog, payload: dict, *, run_id: str | None = None) -> bool | None:
     """Send the webhook for ``entry`` and record the outcome (Refs #2719).
 
     Returns ``None`` without a configured URL — no attempt, no delivery row,
@@ -593,7 +594,7 @@ def _notify(entry: AuditLog, payload: dict) -> bool | None:
         return None
     error_details: dict = {}
     delivered = _post_webhook(payload, error_details=error_details)
-    _record_delivery(entry, delivered, error_details)
+    _record_delivery(entry, delivered, error_details, run_id)
     return delivered
 
 
@@ -650,26 +651,25 @@ def _payload_from_entry(entry: AuditLog) -> dict:
     return payload
 
 
-def _redeliver_open(facility) -> None:
+def _redeliver_open(facility, *, run_id: str | None = None) -> None:
     """One more attempt per open delivery; no new SECURITY_VIOLATION row."""
     if not _webhook_configured():
         return
     for entry in _open_deliveries(facility):
-        _notify(entry, _payload_from_entry(entry))
+        _notify(entry, _payload_from_entry(entry), run_id=run_id)
 
 
-def count_failed_webhook_deliveries(since) -> int:
-    """Failed delivery attempts recorded since ``since`` — feeds the exit code
-    of ``detect_breaches`` (Refs #2719)."""
+def count_failed_webhook_deliveries(run_id: str) -> int:
+    """Count only this command invocation's failed attempts (Refs #2719)."""
     return AuditLog.objects.filter(
         action=AuditLog.Action.BREACH_SCAN_COMPLETED,
-        timestamp__gte=since,
+        detail__run_id=run_id,
         detail__category=WEBHOOK_DELIVERY_CATEGORY,
         detail__result=WEBHOOK_FAILED,
     ).count()
 
 
-def record_finding(facility, finding: dict) -> AuditLog | None:
+def record_finding(facility, finding: dict, *, run_id: str | None = None) -> AuditLog | None:
     """Schreibt SECURITY_VIOLATION-AuditLog + Webhook (sofern konfiguriert).
 
     Idempotent: deduplicate ueber 24h gegen denselben (kind, user)-
@@ -709,6 +709,7 @@ def record_finding(facility, finding: dict) -> AuditLog | None:
             "audit_id": str(entry.pk),
             "timestamp": entry.timestamp.isoformat(),
         },
+        run_id=run_id,
     )
     return entry
 
@@ -733,7 +734,7 @@ def _already_reported_system(finding: dict) -> bool:
     return False
 
 
-def record_system_finding(finding: dict, *, notify=True) -> AuditLog | None:
+def record_system_finding(finding: dict, *, notify=True, run_id: str | None = None) -> AuditLog | None:
     """Record a facility-less finding, retaining a known target account.
 
     Deduplicate by kind, account and source IP. Scheduled scans may notify
@@ -770,17 +771,18 @@ def record_system_finding(finding: dict, *, notify=True) -> AuditLog | None:
                 "audit_id": str(entry.pk),
                 "timestamp": entry.timestamp.isoformat(),
             },
+            run_id=run_id,
         )
     return entry
 
 
-def run_all_detections(facility) -> list[AuditLog]:
+def run_all_detections(facility, *, run_id: str | None = None) -> list[AuditLog]:
     """Fuehrt alle facility-gescopten Heuristiken aus, schreibt Findings, gibt
     geschriebene Eintraege zurueck. Die installationsweiten (facility-losen)
     Heuristiken laufen separat ueber ``run_system_detections``."""
     # Refs #2719: retry before detecting, so a delivery that fails in this
     # run gets its next attempt in the next run, not twice in one run.
-    _redeliver_open(facility)
+    _redeliver_open(facility, run_id=run_id)
     new_entries: list[AuditLog] = []
     for detector in (
         detect_failed_login_burst,
@@ -791,26 +793,26 @@ def run_all_detections(facility) -> list[AuditLog]:
         detect_distributed_login_attack,
     ):
         for finding in detector(facility):
-            entry = record_finding(facility, finding)
+            entry = record_finding(facility, finding, run_id=run_id)
             if entry is not None:
                 new_entries.append(entry)
     return new_entries
 
 
-def _run_system_detections() -> list[AuditLog]:
+def _run_system_detections(*, run_id: str | None = None) -> list[AuditLog]:
     """Reine Detection-Schleife (ohne GUC-Handling) — der ``facility=NULL``-Read
     UND die facility-losen Writes muessen im ``app.is_super_admin``-Scope laufen
     (siehe ``run_system_detections``)."""
-    _redeliver_open(None)
+    _redeliver_open(None, run_id=run_id)
     new_entries: list[AuditLog] = []
     for finding in (*detect_anonymous_login_bursts(), *detect_super_admin_login_bursts()):
-        entry = record_system_finding(finding)
+        entry = record_system_finding(finding, run_id=run_id)
         if entry is not None:
             new_entries.append(entry)
     return new_entries
 
 
-def run_system_detections() -> list[AuditLog]:
+def run_system_detections(*, run_id: str | None = None) -> list[AuditLog]:
     """Fuehrt die installationsweiten (facility-losen) Heuristiken aus (Refs #1368).
 
     Einmal pro Scan-Lauf, NICHT je Facility. Setzt den ``app.is_super_admin``-
@@ -830,7 +832,7 @@ def run_system_detections() -> list[AuditLog]:
     Reads unter RLS nichts."""
     if connection.vendor != "postgresql":
         # Ohne Postgres kein RLS/GUC — direkt ausfuehren.
-        return _run_system_detections()
+        return _run_system_detections(run_id=run_id)
 
     with connection.cursor() as cur:
         cur.execute("SELECT current_setting('app.is_super_admin', true)")
@@ -838,7 +840,7 @@ def run_system_detections() -> list[AuditLog]:
     with transaction.atomic(), connection.cursor() as cur:
         cur.execute("SELECT set_config('app.is_super_admin', 'true', true)")
         try:
-            return _run_system_detections()
+            return _run_system_detections(run_id=run_id)
         finally:
             # is_local=true: gilt fuer die laufende Transaktion; wird beim Commit
             # ohnehin verworfen — der explizite Restore spiegelt das chain.py-

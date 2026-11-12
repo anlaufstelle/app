@@ -14,6 +14,7 @@ from datetime import timedelta
 import pytest
 from django.core.management import CommandError, call_command
 from django.db import connection, transaction
+from django.test import override_settings
 from django.utils import timezone
 
 from core.models import AuditLog
@@ -325,3 +326,79 @@ def test_programming_error_is_not_treated_as_delivery_failure(facility, admin_us
     _login_burst(facility, admin_user)
     with pytest.raises(TypeError, match="programming error"):
         call_command("detect_breaches")
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("outer_scope", ["facility", "installation"])
+@pytest.mark.parametrize("own_failure", [False, True])
+def test_overlapping_scan_counts_only_its_own_deliveries(
+    outer_scope,
+    own_failure,
+    facility,
+    admin_user,
+    second_facility,
+    second_facility_user,
+    receiver,
+    thresholds,
+    monkeypatch,
+):
+    from core.management.commands import detect_breaches
+
+    original_scan = detect_breaches.run_all_detections
+    interleaved = False
+    nested = False
+    _login_burst(second_facility, second_facility_user)
+    _login_burst(facility, admin_user)
+
+    def overlapping_scan(current_facility, **kwargs):
+        nonlocal interleaved, nested
+        if nested:
+            return original_scan(current_facility, **kwargs)
+        if not interleaved:
+            interleaved = True
+            receiver.fail = True
+            nested = True
+            with pytest.raises(CommandError, match="Breach webhook delivery failed 1 time"):
+                call_command("detect_breaches", facility=second_facility.name)
+            nested = False
+        receiver.fail = own_failure and current_facility.pk == facility.pk
+        return original_scan(current_facility, **kwargs)
+
+    monkeypatch.setattr(detect_breaches, "run_all_detections", overlapping_scan)
+    options = {"facility": facility.name} if outer_scope == "facility" else {}
+    if own_failure:
+        with pytest.raises(CommandError, match="Breach webhook delivery failed 1 time"):
+            call_command("detect_breaches", **options)
+    else:
+        call_command("detect_breaches", **options)
+    if outer_scope == "installation":
+        assert _latest_scan_marker().detail["job_run"]["status"] == ("failed" if own_failure else "success")
+    assert interleaved
+
+
+@pytest.mark.django_db
+def test_overlapping_failure_does_not_fail_scan_without_webhook(
+    facility,
+    second_facility,
+    second_facility_user,
+    receiver,
+    thresholds,
+    monkeypatch,
+):
+    from core.management.commands import detect_breaches
+
+    original_scan = detect_breaches.run_all_detections
+    _login_burst(second_facility, second_facility_user)
+
+    def overlapping_scan(current_facility, **kwargs):
+        if current_facility.pk == facility.pk:
+            with override_settings(BREACH_NOTIFICATION_WEBHOOK_URL=WEBHOOK_URL):
+                receiver.fail = True
+                with pytest.raises(CommandError, match="Breach webhook delivery failed 1 time"):
+                    call_command("detect_breaches", facility=second_facility.name)
+        return original_scan(current_facility, **kwargs)
+
+    monkeypatch.setattr(detect_breaches, "run_all_detections", overlapping_scan)
+    with override_settings(BREACH_NOTIFICATION_WEBHOOK_URL=None):
+        call_command("detect_breaches", facility=facility.name)
+    assert receiver.attempts == 1
