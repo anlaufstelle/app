@@ -189,6 +189,13 @@
     "rationale": "The release strip list excludes dev-ops/deploy/deploy-demo.sh; this node checks that excluded artifact."
   },
   {
+    "nodeid": "src/tests/test_architecture_guards_deploy_sources.py::test_demo_audit_descriptions_match_shared_timer",
+    "profile": "public",
+    "reason": "dev-ops/deploy/install-timers.sh is stripped from the public snapshot",
+    "exclusion": "dev-ops/deploy/install-timers.sh",
+    "rationale": "The release strip list excludes dev-ops/deploy/install-timers.sh; this node checks that excluded artifact."
+  },
+  {
     "nodeid": "src/tests/test_architecture_guards_deploy_sources.py::test_demo_deploy_runs_audit_verification_synchronously_with_warning",
     "profile": "public",
     "reason": "dev-ops/deploy/deploy-demo.sh is stripped from the public snapshot",
