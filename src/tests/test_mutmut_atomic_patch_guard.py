@@ -206,6 +206,22 @@ def test_pragma_no_mutate_bleibt_wirksam(runner, mutmut_unveraendert) -> None:
     assert list(file_mutation.mutate_file_contents("probe.py", quelle).mutant_names) == []
 
 
+def test_enum_creation_hooks_stay_unmutated_with_the_patch(runner, mutmut_unveraendert) -> None:
+    """mutmut skips ``__init__``/``__new__`` of an ``enum.Enum`` subclass; the patch must keep that."""
+    runner._patch_mutmut_atomic_decorators()
+    source = (
+        "import enum\n\n\nclass E(enum.Enum):\n    A = 1\n\n"
+        "    @transaction.atomic\n    def __init__(self, value):\n        self.x = value + 1\n"
+    )
+    assert list(file_mutation.mutate_file_contents("probe.py", source).mutant_names) == []
+
+
+def test_atomic_method_outside_an_enum_is_still_released(runner, mutmut_unveraendert) -> None:
+    runner._patch_mutmut_atomic_decorators()
+    source = "class C:\n    @transaction.atomic\n    def __init__(self, value):\n        self.x = value + 1\n"
+    assert list(file_mutation.mutate_file_contents("probe.py", source).mutant_names) != []
+
+
 # ── (b2) Query-Neutralitaet: genau EINE atomic-Ebene pro Aufruf ─────────────
 SYNTHETISCHE_QUELLE = (
     "from django.db import transaction\n\n\n@transaction.atomic\ndef dienst(wert):\n    return wert + 1\n"
