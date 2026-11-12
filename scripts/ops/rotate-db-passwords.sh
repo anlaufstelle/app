@@ -2,7 +2,7 @@
 # Atomare Rotation der drei PostgreSQL-Rollen-Passwoerter (Refs #1964).
 #
 # Default: production stack in the repo root. Call explicitly for other stacks:
-#   COMPOSE_FILE=<compose-file> ENV_FILE=<env-file> \
+#   COMPOSE_FILE=<colon-separated-compose-files> ENV_FILE=<env-file> \
 #     ./scripts/ops/rotate-db-passwords.sh
 #
 # Das Skript gibt zu keinem Zeitpunkt Passwoerter aus. Es stoppt die dauerhaften
@@ -15,11 +15,9 @@ umask 077
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 ENV_FILE="${ENV_FILE:-.env}"
 WAIT_TIMEOUT="${WAIT_TIMEOUT:-180}"
 
-[[ "$COMPOSE_FILE" = /* ]] || COMPOSE_FILE="${PROJECT_DIR}/${COMPOSE_FILE}"
 [[ "$ENV_FILE" = /* ]] || ENV_FILE="${PROJECT_DIR}/${ENV_FILE}"
 
 # shellcheck source=scripts/ops/lib/env-file.sh
@@ -38,10 +36,6 @@ for command in docker openssl mktemp stat; do
         exit 1
     }
 done
-[[ -f "$COMPOSE_FILE" ]] || {
-    printf '[db-password-rotation] FEHLER: Compose-Datei fehlt: %s\n' "$COMPOSE_FILE" >&2
-    exit 1
-}
 [[ -f "$ENV_FILE" ]] || {
     printf '[db-password-rotation] FEHLER: Env-Datei fehlt: %s\n' "$ENV_FILE" >&2
     exit 1
@@ -65,6 +59,9 @@ read_env() {
         raw="$ENV_FILE_ASSIGN_RAW"
         count=$((count + 1))
     done < "$ENV_FILE"
+    if [[ "$count" -eq 0 && "${2:-required}" == optional ]]; then
+        return 0
+    fi
     if [[ "$count" -ne 1 ]]; then
         fail "${name} muss genau einmal aktiv in ${ENV_FILE} stehen (gefunden: ${count})."
         return 1
@@ -91,16 +88,37 @@ for role in "$APP_USER" "$ADMIN_USER"; do
     }
 done
 
-# Every recreate needs the same fixed file list as the admin guide (base file,
-# then compose.legal.yml and compose.override.yml if they sit next to the base
-# file). Once a -f is given, Compose no longer loads compose.override.yml on its
-# own; without compose.legal.yml the recreated web container loses the imprint/
-# privacy mount and variables.
-COMPOSE_FILES=("$COMPOSE_FILE")
-compose_extra_dir="$(dirname "$COMPOSE_FILE")"
-for compose_extra_file in "${compose_extra_dir}/compose.legal.yml" "${compose_extra_dir}/compose.override.yml"; do
-    [[ -f "$compose_extra_file" ]] && COMPOSE_FILES+=("$compose_extra_file")
+# Preserve an operator's complete Compose list, including opt-in egress, in
+# every forward and rollback call (Refs #2719). Never source the dotenv file.
+# An exported value wins over dotenv; a single base file keeps the historical
+# automatic legal/override files. Explicit lists retain their exact order.
+COMPOSE_FILE="${COMPOSE_FILE:-$(read_env COMPOSE_FILE optional)}"
+COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
+compose_separator="${COMPOSE_PATH_SEPARATOR:-$(read_env COMPOSE_PATH_SEPARATOR optional)}"
+compose_separator="${compose_separator:-:}"
+[[ ${#compose_separator} -eq 1 && "$COMPOSE_FILE" != *$'\n'* ]] || {
+    fail "Compose file list requires a single-character separator and one line."
+    exit 1
+}
+[[ "$COMPOSE_FILE" != "$compose_separator"* && "$COMPOSE_FILE" != *"$compose_separator" &&
+   "$COMPOSE_FILE" != *"$compose_separator$compose_separator"* ]] || {
+    fail "Compose file list contains an empty entry."
+    exit 1
+}
+IFS="$compose_separator" read -r -a COMPOSE_FILES <<< "$COMPOSE_FILE"
+for index in "${!COMPOSE_FILES[@]}"; do
+    [[ "${COMPOSE_FILES[index]}" = /* ]] || COMPOSE_FILES[index]="${PROJECT_DIR}/${COMPOSE_FILES[index]}"
+    [[ -f "${COMPOSE_FILES[index]}" ]] || {
+        fail "Compose file is missing: ${COMPOSE_FILES[index]}"
+        exit 1
+    }
 done
+if [[ ${#COMPOSE_FILES[@]} -eq 1 ]]; then
+    compose_extra_dir="$(dirname "${COMPOSE_FILES[0]}")"
+    for compose_extra_file in "${compose_extra_dir}/compose.legal.yml" "${compose_extra_dir}/compose.override.yml"; do
+        [[ -f "$compose_extra_file" ]] && COMPOSE_FILES+=("$compose_extra_file")
+    done
+fi
 compose_flags=()
 for compose_file in "${COMPOSE_FILES[@]}"; do
     compose_flags+=(-f "$compose_file")

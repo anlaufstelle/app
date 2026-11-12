@@ -122,6 +122,8 @@ fi
 
 Refs #802 (C-34): Migrationen laufen als separater One-Shot-Job **vor** dem Rolling-Restart. Der Web-Entrypoint macht nur noch `collectstatic` + `gunicorn` — keine Migrationen mehr.
 
+**Webhook-Opt-in:** Eine vollständige, nicht leere `COMPOSE_FILE`-Liste in der Betreiber-`.env` (§ 6.5b) hat Vorrang vor der Standardliste unten; bei allen weiteren Dateilisten-Blöcken dieses Handbuchs dieselbe Auswahl verwenden, damit Neuerzeugen den Ausgang erhält.
+
 > **Erstinbetriebnahme statt Deploy?** Dieser Abschnitt beschreibt den *laufenden* Deploy. Für die **erste** Installation gibt es [`scripts/initial-setup.sh`](../scripts/initial-setup.sh) (Refs #793): DB starten und auf Bereitschaft warten → Migrate-One-Shot → Stack hochfahren → `check --deploy` → `check_db_roles` → Super-Admin-Bootstrap. Idempotent und fail-loud; Anleitung in [docs/admin-guide.md § 1 Schritt 4](admin-guide.md).
 
 ```bash
@@ -138,6 +140,10 @@ grep -E '^APP_(VERSION|IMAGE_DIGEST)=' .env
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 
 # 1. Hintergrundjobs anhalten (cron nutzt Anwendungscode und Schema) und prüfen,
 #    dass kein Wartungs-One-Shot mehr läuft (Ausgabe muss leer sein).
@@ -1405,15 +1411,21 @@ Die Meldepflicht nach Art. 33/34 DSGVO trifft den **Verantwortlichen**, also den
 
 #### Webhook-Ausgang einschalten und Zustellung prüfen
 
-Die Standardinstallation lässt `cron` ausschließlich im Netz `internal` ohne Ausgang. Wer `BREACH_NOTIFICATION_WEBHOOK_URL` in der `.env` setzt, bindet zusätzlich `docker-compose.breach-webhook.yml` ein:
+Die Standardinstallation lässt `cron` ausschließlich im Netz `internal` ohne Ausgang. Wer `BREACH_NOTIFICATION_WEBHOOK_URL` setzt, hinterlegt die vollständige Compose-Dateiliste dauerhaft in der Betreiber-`.env`. Beispiel mit vorhandenen Legal- und Override-Dateien (nicht vorhandene Dateien aus der Liste entfernen):
 
-```bash
-docker compose -f docker-compose.prod.yml -f docker-compose.breach-webhook.yml up -d --force-recreate cron
-docker compose -f docker-compose.prod.yml -f docker-compose.breach-webhook.yml exec -T cron python manage.py detect_breaches
-docker compose -f docker-compose.prod.yml -f docker-compose.breach-webhook.yml logs --tail=100 cron
+```dotenv
+COMPOSE_FILE=docker-compose.prod.yml:compose.legal.yml:compose.override.yml:docker-compose.breach-webhook.yml
 ```
 
-Weitere benötigte Zusatzdateien wie in § 1.2 mitführen; die Webhook-Zusatzdatei bei jedem Erzeugen oder Neuerstellen von `cron` mit angeben. Sie verbindet nur `cron` zusätzlich mit `cron-egress`. Dieses Netz erlaubt allgemeinen Ausgang, **keine Beschränkung auf die Webhook-Adresse**; `cron` erhält die gesamte `.env` und arbeitet mit der Admin-Datenbankrolle. Der Webhook selbst akzeptiert nur HTTPS-Ziele mit öffentlicher IP, verbindet zur geprüften IP und folgt keinen Weiterleitungen. Die Zusatzdatei gibt dem `maintenance`-Dienst keinen Ausgang; für den Zustellnachweis deshalb den obigen Aufruf im `cron`-Container verwenden.
+Die Liste muss vollständig und nicht leer sein; relative Pfade beziehen sich auf das Installationsverzeichnis. Dort die folgenden Befehle ausführen. Keine zusätzlichen `-f`-Argumente angeben: Sie würden `COMPOSE_FILE` übersteuern. Eine exportierte `COMPOSE_FILE`-Variable muss dieselbe vollständige Liste enthalten oder entfernt werden. Das Passwortrotationsskript übernimmt die Liste ebenfalls aus der Umgebung oder seiner `ENV_FILE`; ohne Liste behält es die bisherige Auswahl der Basis-, Legal- und Override-Dateien.
+
+```bash
+docker compose --env-file .env up -d --force-recreate cron
+docker compose --env-file .env exec -T cron python manage.py detect_breaches
+docker compose --env-file .env logs --tail=100 cron
+```
+
+Bei jedem Erzeugen oder Neuerstellen von `cron` gilt diese Dateiliste, auch bei Updates und Schlüsselrotation (§ 1.2). Sie verbindet nur `cron` zusätzlich mit `cron-egress`. Dieses Netz erlaubt allgemeinen Ausgang, **keine Beschränkung auf die Webhook-Adresse**; `cron` erhält die gesamte `.env` und arbeitet mit der Admin-Datenbankrolle. Der Webhook selbst akzeptiert nur HTTPS-Ziele mit öffentlicher IP, verbindet zur geprüften IP und folgt keinen Weiterleitungen. Die Zusatzdatei gibt dem `maintenance`-Dienst keinen Ausgang; für den Zustellnachweis deshalb den obigen Aufruf im `cron`-Container verwenden.
 
 Ein mit `Breach webhook delivery failed` fehlgeschlagener (roter) `detect_breaches`-Lauf bedeutet: Mindestens eine Zustellung ist gescheitert, etwa wegen fehlenden Ausgangs oder einer abgelehnten URL. Zuerst werden alle erkannten Funde protokolliert, dann endet das Kommando mit Fehler. Ein grüner Lauf ohne Fund oder offenen Zustellversuch beweist keine Erreichbarkeit: Für den Nachweis in einer Testinstanz einen Test-Fund auslösen und dessen `audit_id` am Empfänger abgleichen.
 
@@ -2504,7 +2516,7 @@ Betriebsregeln daraus:
 
 #### Dateirotation und Altschlüssel entfernen
 
-Ein Ring `ENCRYPTION_KEYS` gilt für **die gesamte Installation**, nicht je Einrichtung. Den neuen Schlüssel zuerst voranstellen, alte Schlüssel zunächst behalten und alle schlüsselnutzenden Prozesse mit dem neuen Ring neu erstellen. Ein bloßes `docker compose restart` übernimmt geänderte `.env`-Werte nicht; für die ausgelieferten Dienste gilt `docker compose "${compose_files[@]}" up -d --force-recreate web cron` (Dateireihe `compose_files` wie beim Update aufgebaut, also mit `compose.legal.yml`/`compose.override.yml`, falls vorhanden). Neue Wartungscontainer lesen die aktuelle Konfiguration. Keine Schlüssel in Shell-Protokolle oder Berichte schreiben.
+Ein Ring `ENCRYPTION_KEYS` gilt für **die gesamte Installation**, nicht je Einrichtung. Den neuen Schlüssel zuerst voranstellen, alte Schlüssel zunächst behalten und alle schlüsselnutzenden Prozesse mit dem neuen Ring neu erstellen. Ein bloßes `docker compose restart` übernimmt geänderte `.env`-Werte nicht; für die ausgelieferten Dienste gilt `docker compose "${compose_files[@]}" up -d --force-recreate web cron` (Dateireihe `compose_files` wie in § 1.2 aufbauen; bei gesetztem `COMPOSE_FILE` aus § 6.5b bleibt sie leer, damit Compose die vollständige Opt-in-Liste liest). Neue Wartungscontainer lesen die aktuelle Konfiguration. Keine Schlüssel in Shell-Protokolle oder Berichte schreiben.
 
 **Verbindliche Reihenfolge** (#2526):
 

@@ -138,6 +138,9 @@ def _run(
     old_admin: str = OLD_ADMIN,
     old_bootstrap: str = OLD_BOOTSTRAP,
     env_file_override: str | None = None,
+    compose_list: tuple[str, ...] | None = None,
+    compose_from_dotenv: bool = False,
+    compose_separator: str = ":",
 ) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
     env_file, compose_file, state_dir = _fixture(tmp_path, accept_old_login=accept_old_login, env_text=env_text)
     for name in extra_compose_files:
@@ -155,6 +158,12 @@ def _run(
         "ROTATION_TEST_NEW_ADMIN": NEW_ADMIN,
         "ROTATION_TEST_NEW_BOOTSTRAP": NEW_BOOTSTRAP,
     }
+    if compose_list is not None:
+        env["COMPOSE_FILE"] = compose_separator.join(str(tmp_path / name) for name in compose_list)
+        env["COMPOSE_PATH_SEPARATOR"] = compose_separator
+    if compose_from_dotenv:
+        env.pop("COMPOSE_FILE")
+        env.pop("COMPOSE_PATH_SEPARATOR", None)
     return (
         subprocess.run(["/bin/bash", str(SCRIPT)], env=env, capture_output=True, text=True, cwd=tmp_path),
         env_file,
@@ -532,3 +541,52 @@ def test_commented_duplicate_does_not_count_but_a_real_second_definition_does(tm
     result, env_file, log_file = _run(tmp_path / "dup", env_text=doubled)
     _assert_rejected_before_any_change(result, env_file, log_file, doubled)
     assert "genau einmal" in result.stderr
+
+
+@pytest.mark.parametrize("source", ["environment", "dotenv"])
+@pytest.mark.parametrize("rollback", [False, True])
+@pytest.mark.parametrize("separator", [":", ";"])
+def test_opt_in_compose_list_survives_every_rotation_call(tmp_path: Path, source: str, rollback: bool, separator: str):
+    files = (
+        "docker-compose.prod.yml",
+        "compose.legal.yml",
+        "docker-compose.breach-webhook.yml",
+        "compose.override.yml",
+    )
+    selected = separator.join(str(tmp_path / name) for name in files)
+    env_text = _default_env_text() + f"COMPOSE_FILE='{selected}'\nCOMPOSE_PATH_SEPARATOR='{separator}'\n"
+    result, env_file, log_file = _run(
+        tmp_path,
+        accept_old_login=rollback,
+        extra_compose_files=files[1:],
+        env_text=env_text,
+        compose_list=files if source == "environment" else None,
+        compose_from_dotenv=source == "dotenv",
+        compose_separator=separator,
+    )
+    assert (result.returncode != 0) if rollback else (result.returncode == 0), result.stderr
+    calls = _compose_calls(log_file.read_text())
+    assert calls
+    expected = " ".join(f"-f {tmp_path / name}" for name in files) + " --env-file "
+    for call in calls:
+        assert expected in call, call
+    assert "COMPOSE_FILE='" + selected + "'" in env_file.read_text()
+
+
+def test_present_webhook_overlay_is_not_enabled_without_opt_in(tmp_path: Path):
+    result, _env_file, log_file = _run(tmp_path, extra_compose_files=("docker-compose.breach-webhook.yml",))
+    assert result.returncode == 0, result.stderr
+    assert "docker-compose.breach-webhook.yml" not in log_file.read_text()
+
+
+def test_environment_compose_list_takes_precedence_over_dotenv(tmp_path: Path):
+    files = ("docker-compose.prod.yml", "docker-compose.breach-webhook.yml")
+    result, _env_file, log_file = _run(
+        tmp_path,
+        extra_compose_files=files[1:],
+        compose_list=files,
+        env_text=_default_env_text() + "COMPOSE_FILE=missing.yml\n",
+    )
+    assert result.returncode == 0, result.stderr
+    assert "docker-compose.breach-webhook.yml" in log_file.read_text()
+    assert "missing.yml" not in log_file.read_text()

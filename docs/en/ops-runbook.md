@@ -125,6 +125,8 @@ fi
 
 Refs #802 (C-34): Migrations run as a separate one-shot job **before** the rolling restart. The web entrypoint now only does `collectstatic` + `gunicorn` — no more migrations.
 
+**Webhook opt-in:** A complete, non-empty `COMPOSE_FILE` list in the operator’s `.env` (§ 6.5b) takes precedence over the default list below; use the same selection in every subsequent file-list block in this handbook so that recreating containers retains egress.
+
 > **Initial setup instead of a deploy?** This section describes the *ongoing* deploy. For the **first** installation there is [`scripts/initial-setup.sh`](../../scripts/initial-setup.sh) (Refs #793): start the DB and wait for readiness → migrate one-shot → bring up the stack → `check --deploy` → `check_db_roles` → super-admin bootstrap. Idempotent and fail-loud; instructions in [docs/admin-guide.md § 1 Step 4](admin-guide.md).
 
 ```bash
@@ -141,6 +143,10 @@ grep -E '^APP_(VERSION|IMAGE_DIGEST)=' .env
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 
 # 1. Stop background jobs (cron uses application code and schema) and check that
 #    no maintenance one-shot is still running (the output must be empty).
@@ -1391,15 +1397,21 @@ The reporting duty under Art. 33/34 GDPR lies with the **controller**, i.e. the 
 
 #### Enable webhook egress and verify delivery
 
-The standard installation keeps `cron` exclusively on the `internal` network without egress. If you set `BREACH_NOTIFICATION_WEBHOOK_URL` in `.env`, also include `docker-compose.breach-webhook.yml`:
+The standard installation keeps `cron` exclusively on the `internal` network without egress. If you set `BREACH_NOTIFICATION_WEBHOOK_URL`, persist the complete Compose file list in the operator's `.env`. Example with existing legal and override files (remove any files that do not exist from the list):
 
-```bash
-docker compose -f docker-compose.prod.yml -f docker-compose.breach-webhook.yml up -d --force-recreate cron
-docker compose -f docker-compose.prod.yml -f docker-compose.breach-webhook.yml exec -T cron python manage.py detect_breaches
-docker compose -f docker-compose.prod.yml -f docker-compose.breach-webhook.yml logs --tail=100 cron
+```dotenv
+COMPOSE_FILE=docker-compose.prod.yml:compose.legal.yml:compose.override.yml:docker-compose.breach-webhook.yml
 ```
 
-Keep any other required overlays from § 1.2; include the webhook overlay whenever creating or recreating `cron`. It connects only `cron` to the additional `cron-egress` network. This network allows general egress, **not an allowlist limited to the webhook address**; `cron` receives the entire `.env` and uses the admin database role. The webhook itself accepts only HTTPS targets with a public IP, connects to the validated IP and does not follow redirects. The overlay gives no egress to `maintenance`; use the command above inside the `cron` container to verify delivery.
+The list must be complete and non-empty; relative paths refer to the installation directory. Run the following commands there. Do not add `-f` arguments: they would override `COMPOSE_FILE`. An exported `COMPOSE_FILE` variable must contain the same complete list or be unset. The password rotation script also reads the list from the environment or its `ENV_FILE`; without a list it keeps its previous selection of base, legal and override files.
+
+```bash
+docker compose --env-file .env up -d --force-recreate cron
+docker compose --env-file .env exec -T cron python manage.py detect_breaches
+docker compose --env-file .env logs --tail=100 cron
+```
+
+This file list applies whenever creating or recreating `cron`, including updates and key rotation (§ 1.2). It connects only `cron` to the additional `cron-egress` network. This network allows general egress, **not an allowlist limited to the webhook address**; `cron` receives the entire `.env` and uses the admin database role. The webhook itself accepts only HTTPS targets with a public IP, connects to the validated IP and does not follow redirects. The overlay gives no egress to `maintenance`; use the command above inside the `cron` container to verify delivery.
 
 A failed (red) `detect_breaches` run reporting `Breach webhook delivery failed` means at least one delivery failed, for example because egress is missing or the URL was rejected. All detected findings are recorded before the command exits with an error. A green run without a finding or pending delivery attempt proves no reachability: trigger a test finding in a test instance and match its `audit_id` at the receiver.
 
@@ -2477,7 +2489,7 @@ Operational rules that follow from this:
 
 #### File rotation and old-key removal
 
-One `ENCRYPTION_KEYS` ring serves **the entire installation**, not each facility. Prepend the new key, retain old keys initially, and recreate every process that uses the keys with the new ring. Plain `docker compose restart` does not reload changed `.env` values; for the shipped services use `docker compose "${compose_files[@]}" up -d --force-recreate web cron` (build the `compose_files` series as for an update, i.e. including `compose.legal.yml`/`compose.override.yml` if present). Fresh maintenance containers read the current configuration. Do not put keys into shell logs or reports.
+One `ENCRYPTION_KEYS` ring serves **the entire installation**, not each facility. Prepend the new key, retain old keys initially, and recreate every process that uses the keys with the new ring. Plain `docker compose restart` does not reload changed `.env` values; for the shipped services use `docker compose "${compose_files[@]}" up -d --force-recreate web cron` (build the `compose_files` series as in § 1.2; with `COMPOSE_FILE` configured as in § 6.5b, leave it empty so Compose reads the complete opt-in list). Fresh maintenance containers read the current configuration. Do not put keys into shell logs or reports.
 
 **Required sequence** (#2526):
 
@@ -3382,4 +3394,4 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.10 -->
 <!-- translation-date: 2026-11-12 -->
-<!-- source-hash: 0276776fdf8f553badbebef0917224f78f224331 -->
+<!-- source-hash: 775a1c08b4ca59a856d59ea13075df5bcc268e02 -->
