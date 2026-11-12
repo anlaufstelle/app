@@ -1,0 +1,49 @@
+{% load i18n %}
+{% comment %}KPI row (feed mode): a baseline row of numbers, not cards. Each linked number is the
+hit count of the page it opens — the contact count runs through the contact list's own query with
+the same parameters as the link, "mine" and "overdue" are strictly assigned to the user, the tally
+total counts tally-origin entries of every type in the live window. On small screens the row scrolls sideways inside itself.
+The slot is replaced by the live watch (component "kpi") and out-of-band by feed refreshes.{% endcomment %}
+<div id="zeitstrom-kpi-slot" data-testid="zeitstrom-kpi-slot" {% if kpi_oob %}hx-swap-oob="outerHTML"{% endif %}>
+    {% if kpis %}
+    {% with link_class="inline-flex items-center gap-1.5 whitespace-nowrap min-h-[44px] md:min-h-0 rounded-md px-1 hover:bg-canvas" %}
+    <ul class="mb-4 flex max-w-full items-center gap-x-5 gap-y-1 overflow-x-auto md:flex-wrap" aria-label="{% trans 'Kennzahlen' %}">
+        <li>
+            {% if kpis.contacts_url %}<a href="{{ kpis.contacts_url }}?{{ kpis.contacts_params }}" data-testid="zeitstrom-contacts-list" data-count="{{ kpis.contacts_count }}" class="{{ link_class }} text-ink">{% else %}<span data-testid="zeitstrom-contacts-list" data-count="{{ kpis.contacts_count }}" class="{{ link_class }} text-ink">{% endif %}
+                <span class="text-[18px] font-bold tabular-nums">{{ kpis.contacts_count }}</span>
+                <span class="text-[13px] text-ink-soft">{% if kpis.contacts_scope == "shift" %}{% blocktrans count counter=kpis.contacts_count %}Kontakt im Dienst{% plural %}Kontakte im Dienst{% endblocktrans %}{% elif kpis.contacts_scope == "today" %}{% blocktrans count counter=kpis.contacts_count %}Kontakt heute{% plural %}Kontakte heute{% endblocktrans %}{% else %}{% blocktrans count counter=kpis.contacts_count %}Kontakt an diesem Tag{% plural %}Kontakte an diesem Tag{% endblocktrans %}{% endif %}</span>{% if kpis.contacts_url %}<span aria-hidden="true" class="text-ink-muted">→</span>{% endif %}
+            {% if kpis.contacts_url %}</a>{% else %}</span>{% endif %}
+        </li>
+        {% if kpis.tally_total is not None %}
+        <li>
+            <a href="{{ kpis.contacts_url }}?{{ kpis.tally_params }}" data-testid="zeitstrom-kpi-tally" data-count="{{ kpis.tally_total }}" class="{{ link_class }} text-ink">
+                <span class="text-[18px] font-bold tabular-nums">{{ kpis.tally_total }}</span>
+                <span class="text-[13px] text-ink-soft">{% trans "gezählt (Strichliste)" %}</span><span aria-hidden="true" class="text-ink-muted">→</span>
+            </a>
+        </li>
+        {% endif %}
+        <li>
+            <a href="{% url 'core:workitem_inbox' %}?assigned_to=me" data-testid="zeitstrom-kpi-mine" data-count="{{ kpis.my_open_count }}" class="{{ link_class }} text-ink">
+                <span class="text-[18px] font-bold tabular-nums">{{ kpis.my_open_count }}</span>
+                <span class="text-[13px] text-ink-soft">{% blocktrans count counter=kpis.my_open_count %}meine Aufgabe{% plural %}meine Aufgaben{% endblocktrans %}</span><span aria-hidden="true" class="text-ink-muted">→</span>
+            </a>
+        </li>
+        <li>
+            <a href="{% url 'core:workitem_inbox' %}?assigned_to=me&amp;due=overdue" data-testid="zeitstrom-kpi-overdue" data-count="{{ kpis.my_overdue_count }}" class="{{ link_class }} {% if kpis.my_overdue_count %}text-red-600{% else %}text-ink{% endif %}">
+                <span class="text-[18px] font-bold tabular-nums">{{ kpis.my_overdue_count }}</span>
+                <span class="text-[13px] {% if kpis.my_overdue_count %}text-red-600{% else %}text-ink-soft{% endif %}">{% trans "überfällig" %}</span><span aria-hidden="true" class="{% if kpis.my_overdue_count %}text-red-600{% else %}text-ink-muted{% endif %}">→</span>
+            </a>
+        </li>
+        {% if kpis.bans_count %}
+        <li>
+            <span data-testid="zeitstrom-kpi-bans" data-count="{{ kpis.bans_count }}" class="inline-flex items-center gap-1.5 whitespace-nowrap min-h-[44px] md:min-h-0 rounded-full border border-ban/30 bg-ban-soft px-2.5 py-1 font-semibold text-ban-deep">
+                <svg aria-hidden="true" class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+                <span class="text-[18px] font-bold tabular-nums">{{ kpis.bans_count }}</span>
+                <span class="text-[13px]">{% blocktrans count counter=kpis.bans_count %}Hausverbot aktiv{% plural %}Hausverbote aktiv{% endblocktrans %}</span>
+            </span>
+        </li>
+        {% endif %}
+    </ul>
+    {% endwith %}
+    {% endif %}
+</div>

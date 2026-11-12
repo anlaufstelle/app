@@ -229,9 +229,9 @@ def test_offline_event_reactive_messages_expose_status() -> None:
 def test_zeitstrom_filters_and_day_links_are_named() -> None:
     source = _source("core/zeitstrom/index.html")
     assert "aria-label=\"{% trans 'Nach Dokumentationstyp filtern' %}\"" in source
-    assert source.count("aria-label=\"{% trans 'Vorheriger Tag' %}\"") == 2
+    assert source.count("aria-label=\"{% trans 'Vorheriger Tag' %}\"") == 1
     assert source.count("aria-label=\"{% trans 'Nächster Tag' %}\"") == 2
-    assert source.count('aria-disabled="true" tabindex="-1"') == 2
+    assert source.count('aria-disabled="true" role="link"') == 1
 
 
 def test_event_and_handover_low_opacity_text_is_removed() -> None:

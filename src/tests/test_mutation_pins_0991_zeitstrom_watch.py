@@ -75,7 +75,7 @@ def _tally_weitergabe(monkeypatch, facility, user, komponente, *, heute):
         summary_aufrufe.append(context)
         return zusammenfassung
 
-    def _validator_spy(user_arg, facility_arg, state_arg, component, *, tally_summary=None):
+    def _validator_spy(user_arg, facility_arg, state_arg, component, *, tally_summary=None, ban_revision=None):
         validator_aufrufe.append((component, tally_summary))
         return f"validator:{component}"
 

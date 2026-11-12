@@ -961,7 +961,7 @@ EXPECTATIONS = (
     E("core:tally_undo", "partials-htmx", post=ASSISTANT_PLUS, extra_ok=(404,)),
     E("core:zeitstrom_feed_partial", "partials-htmx", get=ASSISTANT_PLUS),
     E("core:zeitstrom_tally_counts_partial", "partials-htmx", get=ASSISTANT_PLUS),
-    E("core:zeitstrom_current_shift_partial", "partials-htmx", get=ASSISTANT_PLUS),
+    E("core:zeitstrom_kpi_partial", "partials-htmx", get=ASSISTANT_PLUS),
     E("core:zeitstrom_focus_box_partial", "partials-htmx", get=ASSISTANT_PLUS),
     # Refs #1917: Banner-Follow-up des Watchers — dieselbe Rollenfläche wie
     # die Zeitstrom-Startseite, Grund-Redaktion übernimmt get_active_bans.

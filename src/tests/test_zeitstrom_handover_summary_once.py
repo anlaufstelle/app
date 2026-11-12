@@ -1,8 +1,7 @@
 """The Zeitstrom page builds each handover summary at most once per request.
 
-The feed's shift summary, the handover summary and the current-shift box can
-all ask for the same facility, user, date and shift. The page must compute
-such a summary once and reuse it; different shifts still get their own.
+The handover builds the summary of its displayed shift; the feed builds none
+(its figures come from the KPI row).
 """
 
 from collections import Counter
@@ -58,18 +57,17 @@ def _summary_calls(client, user, params):
 
 @pytest.mark.django_db
 class TestHandoverSummaryOncePerRequest:
-    def test_running_shift_shares_one_summary_with_the_current_shift_box(self, client, staff_user, shifts):
+    def test_feed_builds_no_summary(self, client, staff_user, shifts):
         calls, context = _summary_calls(client, staff_user, {})
 
-        assert calls == Counter({(TODAY, "Frühdienst"): 1})
-        assert context["handover_summary"] is context["current_shift_summary"]
+        assert calls == Counter()
+        assert "current_shift_summary" not in context
+        assert "handover_summary" not in context
 
     def test_handover_mode_builds_the_displayed_shift_once(self, client, staff_user, shifts):
         calls, context = _summary_calls(client, staff_user, {"view": "uebergabe"})
 
-        assert calls == Counter({(YESTERDAY, "Nachtdienst"): 1, (TODAY, "Frühdienst"): 1})
-        assert context["uebergabe_summary"] is context["handover_summary"]
-        assert context["current_shift_summary"]["shift_label"] == "Frühdienst"
+        assert calls == Counter({(YESTERDAY, "Nachtdienst"): 1})
 
     def test_handover_for_the_running_shift_builds_it_once(self, client, staff_user, shifts):
         params = {"view": "uebergabe", "date": TODAY.isoformat(), "time_filter": str(shifts["early"].pk)}
@@ -78,14 +76,13 @@ class TestHandoverSummaryOncePerRequest:
 
         assert calls == Counter({(TODAY, "Frühdienst"): 1})
 
-    def test_historical_shift_keeps_its_own_summary(self, client, staff_user, shifts):
+    def test_historical_shift_builds_no_summary_in_the_feed(self, client, staff_user, shifts):
         params = {"date": YESTERDAY.isoformat(), "time_filter": str(shifts["late"].pk)}
 
         calls, context = _summary_calls(client, staff_user, params)
 
-        assert calls == Counter({(YESTERDAY, "Spätdienst"): 1, (TODAY, "Frühdienst"): 1})
-        assert context["handover_summary"]["shift_label"] == "Spätdienst"
-        assert context["current_shift_summary"]["shift_label"] == "Frühdienst"
+        assert calls == Counter()
+        assert "handover_summary" not in context
 
     def test_handover_mode_builds_no_tally_summary(self, client, staff_user, shifts):
         client.force_login(staff_user)

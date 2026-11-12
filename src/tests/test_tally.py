@@ -57,6 +57,69 @@ class TestBuildTallySummary:
         summary = build_tally_summary(facility, assistant_user)
         assert all(r["document_type"].pk != high.pk for r in summary["rows"])
 
+    @pytest.mark.parametrize("is_active,tally_enabled", [(True, False), (False, True)])
+    def test_total_includes_unavailable_types_without_changing_tile_counts(
+        self, facility, staff_user, doc_type_contact, is_active, tally_enabled
+    ):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        unavailable = DocumentType.objects.create(
+            facility=facility, name="Unavailable", is_active=is_active, tally_enabled=tally_enabled
+        )
+        for document_type, via in [
+            (doc_type_contact, Event.CreatedVia.STANDARD),
+            (doc_type_contact, Event.CreatedVia.TALLY),
+            (unavailable, Event.CreatedVia.TALLY),
+        ]:
+            Event.objects.create(
+                facility=facility,
+                document_type=document_type,
+                occurred_at=timezone.now(),
+                data_json={},
+                created_by=staff_user,
+                is_anonymous=True,
+                created_via=via,
+            )
+        with CaptureQueriesContext(connection) as queries:
+            summary = build_tally_summary(facility, staff_user)
+
+        assert summary["tally_total"] == 2
+        assert {row["document_type"].pk: row["count"] for row in summary["rows"]} == {doc_type_contact.pk: 2}
+        event_reads = [q["sql"] for q in queries if 'FROM "core_event"' in q["sql"]]
+        assert len(event_reads) == 1
+        assert "GROUP BY" in event_reads[0]
+
+    def test_total_excludes_hidden_deleted_foreign_and_out_of_window_events(
+        self, facility, staff_user, doc_type_contact, organization
+    ):
+        from datetime import timedelta
+
+        from core.models import Facility
+
+        hidden = DocumentType.objects.create(facility=facility, name="Hidden", sensitivity="high")
+        foreign = Facility.objects.create(name="Other", organization=organization)
+        foreign_type = DocumentType.objects.create(facility=foreign, name="Other tally")
+        for scope, document_type, deleted, days in [
+            (facility, doc_type_contact, False, 0),
+            (facility, hidden, False, 0),
+            (facility, doc_type_contact, True, 0),
+            (facility, doc_type_contact, False, 3),
+            (foreign, foreign_type, False, 0),
+        ]:
+            Event.objects.create(
+                facility=scope,
+                document_type=document_type,
+                occurred_at=timezone.now() - timedelta(days=days),
+                data_json={},
+                created_by=staff_user,
+                is_anonymous=True,
+                created_via=Event.CreatedVia.TALLY,
+                is_deleted=deleted,
+            )
+
+        assert build_tally_summary(facility, staff_user)["tally_total"] == 1
+
 
 @pytest.mark.django_db
 class TestTallyIncrementView:

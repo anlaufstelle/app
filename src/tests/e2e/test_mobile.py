@@ -4,6 +4,7 @@ Prüft Layout, Navigation und Overflow auf mobilen Viewports.
 Refs #382, #418.
 """
 
+import re
 import uuid
 
 import pytest
@@ -67,7 +68,7 @@ class TestMobileZeitstromTouchTargets:
         if width:
             assert box["width"] >= 44, f"{label}: nur {box['width']:.0f}px breit"
 
-    def test_zeitstrom_tally_tabs_and_chips_are_thumb_sized(self, mobile_page, base_url):
+    def test_zeitstrom_tally_selection_and_chips_are_thumb_sized(self, mobile_page, base_url):
         page = mobile_page
         page.goto(f"{base_url}/")
         page.wait_for_load_state("domcontentloaded")
@@ -78,19 +79,17 @@ class TestMobileZeitstromTouchTargets:
         self._assert_44px(page.locator('[data-testid="zeitstrom-tab-uebergabe"]'), "Übergabe-Reiter")
         self._assert_44px(page.locator('[data-testid="zeitstrom-filter-chip"]').first, "Inhaltsfilter")
 
-        tabs = page.locator('[data-testid="time-filter-tabs"]')
-        # Refs #1059 (R-B2p-10): die Zeitfilter sind Druckknoepfe mit aria-pressed in
-        # einer role="group"-Leiste, kein ARIA-Tab-Pattern mehr.
-        filter_buttons = tabs.locator(".time-filter-tab")
-        for index in range(filter_buttons.count()):
-            self._assert_44px(filter_buttons.nth(index), f"Dienst-Reiter {index + 1}")
-        assert tabs.locator('[data-testid="time-filter-scroll-hint"]').is_visible()
-
-        strip = tabs.locator('[role="group"]')
-        assert strip.evaluate("el => el.scrollWidth > el.clientWidth"), "Dienst-Reiter passen unerwartet ohne Scrollen"
-        nachtdienst = tabs.locator('[data-testid="time-filter-nachtdienst"]')
-        nachtdienst.scroll_into_view_if_needed()
-        assert nachtdienst.is_visible()
+        trigger = page.get_by_test_id("zeitstrom-selection-trigger")
+        self._assert_44px(trigger, "Date and shift", width=True)
+        trigger.click()
+        shift = page.get_by_test_id("zeitstrom-shift-select")
+        self._assert_44px(shift, "Shift selection")
+        options = shift.locator("option").all_text_contents()
+        assert any("Frühdienst" in text for text in options)
+        assert any("Spätdienst" in text for text in options)
+        assert any("Nachtdienst" in text for text in options)
+        page.keyboard.press("Escape")
+        expect(trigger).to_be_focused()
 
 
 class TestMobileNavMore:
@@ -497,14 +496,15 @@ class TestMobileActionButtonsHidden:
     """Auf Mobile sind Inline-Create-Buttons versteckt (Bottom-Nav übernimmt). Refs #448."""
 
     def test_zeitstrom_create_buttons_hidden(self, mobile_page, base_url):
-        """Zeitstrom: 3 Create-Buttons sind auf Mobile unsichtbar."""
+        """The desktop create menu and primary action stay hidden on mobile."""
         page = mobile_page
         page.goto(f"{base_url}/")
         page.wait_for_load_state("domcontentloaded")
 
-        # Der Wrapper-Div mit den 3 Desktop-Buttons (hidden md:flex)
-        buttons_wrapper = page.locator("h1:has-text('Zeitstrom') + div")
-        assert not buttons_wrapper.is_visible(), "Create-Buttons sollten auf Mobile versteckt sein"
+        for testid in ("zeitstrom-create-menu", "zeitstrom-create-event"):
+            control = page.get_by_test_id(testid)
+            expect(control).to_have_count(1)
+            expect(control).to_be_hidden()
 
     def test_client_list_create_button_hidden(self, mobile_page, base_url):
         """Personenliste: 'Person anlegen'-Button auf Mobile unsichtbar."""
@@ -895,3 +895,114 @@ class TestMobileNoHorizontalScroll:
 
         assert title in page.locator("h1").inner_text()
         _assert_no_horizontal_overflow(page)
+
+
+class TestZeitstromHeaderAndFiguresAt390:
+    """Browser geometry and keyboard checks for the shared header and figures."""
+
+    def test_sheet_keyboard_close_and_focus_return(self, iphone14_page, base_url):
+        page = iphone14_page
+        page.goto(f"{base_url}/?time_filter=all", wait_until="domcontentloaded")
+        trigger = page.get_by_test_id("zeitstrom-selection-trigger")
+        sheet = page.get_by_test_id("zeitstrom-selection")
+        close = sheet.locator("[data-sheet-close]")
+        trigger.focus()
+        trigger.press("Enter")
+        expect(sheet).to_be_visible()
+        expect(close).to_be_focused()
+        close.press("Tab")
+        expect(sheet.locator("a[data-date-nav-link]").first).to_be_focused()
+        page.keyboard.press("Tab")
+        shift = page.get_by_test_id("zeitstrom-shift-select")
+        expect(shift).to_be_focused()
+        with page.expect_response(
+            lambda response: "/partials/zeitstrom/feed/" in response.url and response.status == 200
+        ):
+            shift.press("End")
+        expect(sheet).to_be_hidden()
+        expect(trigger).to_be_focused()
+        trigger.press("Enter")
+        expect(close).to_be_focused()
+        close.press("Escape")
+        expect(sheet).to_be_hidden()
+        expect(trigger).to_be_focused()
+        trigger.press("Enter")
+        close.click()
+        expect(sheet).to_be_hidden()
+        expect(trigger).to_be_focused()
+        trigger.press("Enter")
+        page.locator("[data-sheet-backdrop]").click(position={"x": 5, "y": 5})
+        expect(sheet).to_be_hidden()
+        expect(trigger).to_be_focused()
+
+    def test_date_links_preserve_explicit_whole_day(self, iphone14_page, base_url):
+        page = iphone14_page
+        page.goto(f"{base_url}/?time_filter=all", wait_until="domcontentloaded")
+        page.get_by_test_id("zeitstrom-selection-trigger").click()
+        page.get_by_test_id("zeitstrom-date-nav").get_by_role("link", name="Vorheriger Tag").click()
+        page.wait_for_url(re.compile(r"date=\d{4}-\d{2}-\d{2}.*time_filter=all"))
+        expect(page.get_by_test_id("zeitstrom-shift-select")).to_have_value("all")
+
+    def test_figures_scroll_inside_the_page_and_ban_details_stay_visible(self, iphone14_page, base_url, e2e_env):
+        page = iphone14_page
+        lines = django_shell(
+            e2e_env,
+            """
+from datetime import timedelta
+from django.utils import timezone
+from core.models import Client, DocumentType, Event, Facility, User
+facility = Facility.objects.get(name='Hauptstelle')
+actor = User.objects.get(username='emma')
+person = Client.objects.create(facility=facility, pseudonym='KPI-Ban', contact_stage='identified', created_by=actor)
+document_type = DocumentType.objects.create(facility=facility, name='KPI safety', system_type='ban')
+event = Event.objects.create(
+    facility=facility, client=person, document_type=document_type, occurred_at=timezone.now(), created_by=actor,
+    data_json={'aktiv': True, 'grund': 'Safety', 'bis': (timezone.localdate()+timedelta(days=2)).isoformat()},
+)
+print(event.pk)
+""",
+        )
+        event_id = lines[-1]
+        try:
+            page.goto(f"{base_url}/", wait_until="domcontentloaded")
+            figures = page.get_by_test_id("zeitstrom-kpi-slot").locator("ul")
+            expect(figures).to_be_visible()
+            assert figures.evaluate("el => el.scrollWidth > el.clientWidth")
+            assert figures.evaluate("el => getComputedStyle(el).overflowX") == "auto"
+            assert page.locator("main").evaluate("el => el.scrollWidth <= el.clientWidth")
+            assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+            ban_row = page.locator("#zeitstrom-bans-slot > div > div").filter(has_text="KPI-Ban")
+            expect(ban_row).to_be_visible()
+            expect(ban_row).to_contain_text("Safety")
+            expect(ban_row).to_contain_text("Bis:")
+            ban_row.scroll_into_view_if_needed()
+            expect(ban_row).to_be_in_viewport(ratio=1)
+            assert ban_row.evaluate("el => el.scrollWidth <= el.clientWidth")
+            before = int(page.get_by_test_id("zeitstrom-kpi-bans").get_attribute("data-count"))
+            django_shell(
+                e2e_env,
+                "from core.models import Event, User; "
+                "from core.services.events import soft_delete_event; "
+                f"soft_delete_event(Event.objects.get(pk='{event_id}'), User.objects.get(username='emma'))",
+            )
+            page.evaluate("window.zeitstromWatch.checkNow()")
+            expect(ban_row).to_have_count(0, timeout=15000)
+            chip = page.get_by_test_id("zeitstrom-kpi-bans")
+            if before == 1:
+                expect(chip).to_have_count(0, timeout=15000)
+            else:
+                expect(chip).to_have_attribute("data-count", str(before - 1), timeout=15000)
+        finally:
+            django_shell(
+                e2e_env,
+                f"""
+from core.models import Client, DocumentType, Event, User
+from core.services.events import soft_delete_event
+event = Event.objects.get(pk='{event_id}')
+if not event.is_deleted:
+    soft_delete_event(event, User.objects.get(username='emma'))
+# Keep the append-only history; hide the fixture's configuration and person.
+DocumentType.objects.filter(pk=event.document_type_id).update(is_active=False)
+Client.objects.filter(pk=event.client_id).update(is_active=False)
+""",
+            )

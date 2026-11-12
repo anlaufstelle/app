@@ -159,9 +159,9 @@ from core.views.workitems import (
 from core.views.zeitstrom import (
     HandoverNoteUpdateView,
     ZeitstromBansPartialView,
-    ZeitstromCurrentShiftPartialView,
     ZeitstromFeedPartialView,
     ZeitstromFocusBoxPartialView,
+    ZeitstromKpiPartialView,
     ZeitstromTallyCountsPartialView,
     ZeitstromView,
     ZeitstromWatchView,
@@ -425,9 +425,9 @@ urlpatterns = [
         name="zeitstrom_tally_counts_partial",
     ),
     path(
-        "partials/zeitstrom/current-shift/",
-        ZeitstromCurrentShiftPartialView.as_view(),
-        name="zeitstrom_current_shift_partial",
+        "partials/zeitstrom/kpi/",
+        ZeitstromKpiPartialView.as_view(),
+        name="zeitstrom_kpi_partial",
     ),
     path(
         "partials/zeitstrom/focus-box/",

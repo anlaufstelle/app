@@ -22,7 +22,7 @@ from core.services.zeitstrom_watch import (
     build_zeitstrom_page_scope,
     build_zeitstrom_tally_topology_validator,
 )
-from tests._factories import make_client, make_document_type, make_event
+from tests._factories import make_document_type, make_event
 
 
 def _scope_for_client(client):
@@ -96,7 +96,7 @@ class TestZeitstromWatchHttpContract:
             "feed",
             "tally_counts",
             "tally_topology",
-            "current_shift",
+            "kpi",
             "focus_box",
             # Refs #1917: Hausverbotswarnungen werden über eine opake
             # Revision mitüberwacht.
@@ -139,8 +139,9 @@ class TestZeitstromWatchHttpContract:
         changed = _watch(client, params=params, etag=first["ETag"], validators=previous)
 
         assert changed.status_code == 200
-        assert changed.json()["components"] == ["tally_counts"]
-        assert set(changed.json()["validators"]) == {"tally_counts"}
+        # The KPI row carries the tally total and moves with the tile counters.
+        assert sorted(changed.json()["components"]) == ["kpi", "tally_counts"]
+        assert set(changed.json()["validators"]) == {"kpi", "tally_counts"}
 
     def test_type_filter_change_invalidates_only_the_feed_component(self, client, staff_user):
         client.force_login(staff_user)
@@ -651,60 +652,6 @@ class TestZeitstromWatchChromeProjections:
         assert response.status_code == 200
         assert response.json()["components"] == ["focus_box"]
 
-    @pytest.mark.usefixtures("midday_clock")
-    def test_current_shift_revision_tracks_visible_highlight_content(self, client, staff_user, facility):
-        TimeFilter.objects.create(
-            facility=facility,
-            label="Ganztagstest",
-            start_time="00:00",
-            end_time="23:59",
-        )
-        item = WorkItem.objects.create(
-            facility=facility,
-            created_by=staff_user,
-            title="Dringender Diensthinweis",
-            status=WorkItem.Status.DONE,
-            priority=WorkItem.Priority.URGENT,
-        )
-        client.force_login(staff_user)
-        params = {"type": "events"}
-        first = _watch(client, params=params)
-        previous = first.json()["validators"]
-
-        item.title = "Geänderter Diensthinweis"
-        item.save(update_fields=["title", "updated_at"])
-
-        response = _watch(client, params=params, etag=first["ETag"], validators=previous)
-        assert response.status_code == 200
-        assert response.json()["components"] == ["current_shift"]
-
-    @pytest.mark.usefixtures("midday_clock")
-    def test_current_shift_revision_tracks_rendered_client_stat(self, client, staff_user, facility):
-        TimeFilter.objects.create(
-            facility=facility,
-            label="Ganztag Statistik",
-            start_time="00:00",
-            end_time="23:59",
-        )
-        client.force_login(staff_user)
-        params = {"type": "events"}
-        first = _watch(client, params=params)
-
-        make_client(
-            facility=facility,
-            pseudonym="Neu im aktuellen Dienst",
-            created_by=staff_user,
-        )
-
-        response = _watch(
-            client,
-            params=params,
-            etag=first["ETag"],
-            validators=first.json()["validators"],
-        )
-        assert response.status_code == 200
-        assert response.json()["components"] == ["current_shift"]
-
 
 @pytest.mark.django_db
 class TestZeitstromWatchRefreshPartials:
@@ -992,7 +939,7 @@ class TestZeitstromWatchRefreshPartials:
         client.force_login(staff_user)
         old_scope = _scope_for_client(client)
         missing = client.get(
-            reverse("core:zeitstrom_current_shift_partial"),
+            reverse("core:zeitstrom_kpi_partial"),
             headers={"X-Zeitstrom-Watch": "1", "If-Match": '"invalid"'},
         )
         assert missing.status_code == 409
@@ -1000,7 +947,7 @@ class TestZeitstromWatchRefreshPartials:
         staff_user.facility = second_facility
         staff_user.save(update_fields=["facility"])
         stale = client.get(
-            reverse("core:zeitstrom_current_shift_partial"),
+            reverse("core:zeitstrom_kpi_partial"),
             headers={
                 "X-Zeitstrom-Watch": "1",
                 "X-Zeitstrom-Page-Scope": old_scope,
@@ -1168,7 +1115,7 @@ class TestZeitstromWatchRefreshPartials:
     @pytest.mark.parametrize(
         ("url_name", "wrapper_id"),
         [
-            ("zeitstrom_current_shift_partial", "zeitstrom-current-shift-slot"),
+            ("zeitstrom_kpi_partial", "zeitstrom-kpi-slot"),
             ("zeitstrom_focus_box_partial", "zeitstrom-focus-box-slot"),
         ],
     )
@@ -1176,7 +1123,7 @@ class TestZeitstromWatchRefreshPartials:
         client.force_login(staff_user)
         scope = _scope_for_client(client)
         component = {
-            "zeitstrom_current_shift_partial": "current_shift",
+            "zeitstrom_kpi_partial": "kpi",
             "zeitstrom_focus_box_partial": "focus_box",
         }[url_name]
         validator = _watch(client, scope=scope).json()["validators"][component]
@@ -1205,7 +1152,7 @@ class TestZeitstromWatchRefreshPartials:
         # gebunden — der Watcher kennt jetzt eine eigene Banner-URL.
         assert f'data-bans-url="{reverse("core:zeitstrom_bans_partial")}"' in content
         assert f'data-handover-note-url="{reverse("core:handover_note")}"' in content
-        assert 'id="zeitstrom-current-shift-slot"' in content
+        assert 'id="zeitstrom-kpi-slot"' in content
         assert 'id="zeitstrom-focus-box-slot"' in content
         assert content.index("zeitstrom-filter-state.js") < content.index("zeitstrom-live-watch.js")
         assert content.index("zeitstrom-live-watch.js") < content.index("offline-tally.js")

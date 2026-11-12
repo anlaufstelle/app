@@ -695,7 +695,8 @@ class TestZeitstromWatchBans:
 
         response = _watch(client, etag=first["ETag"], validators=first.json()["validators"])
         assert response.status_code == 200
-        assert response.json()["components"] == ["bans"]
+        # The KPI row carries the ban count, so it moves with the banner.
+        assert sorted(response.json()["components"]) == ["bans", "kpi"]
 
     def test_ban_lift_reaches_assistant(
         self, client, assistant_user, lead_user, facility, client_identified, high_ban_doc_type

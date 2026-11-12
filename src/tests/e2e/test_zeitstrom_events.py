@@ -8,12 +8,11 @@ Tests:
 
 import os
 import re
-from datetime import datetime, time
 
 import pytest
 from playwright.sync_api import expect
 
-from ._helpers import track_console_errors, wait_for_active_service_worker
+from ._helpers import track_console_errors, wait_for_active_service_worker, wait_until_htmx_bound
 from ._selectors import open_desktop_overflow
 
 pytestmark = pytest.mark.e2e
@@ -68,14 +67,14 @@ class TestAktivitaetslogStartseite:
         assert page.url.endswith("/")
         assert page.locator("h1").inner_text() == "Zeitstrom"
 
-    def test_time_filter_tabs_visible(self, authenticated_page, base_url):
+    def test_shift_select_offers_every_shift(self, authenticated_page, base_url):
         page = authenticated_page
         page.goto(f"{base_url}/")
         page.wait_for_load_state("domcontentloaded")
-        tabs = page.locator("[data-testid='time-filter-tabs']")
-        assert tabs.locator("button:has-text('Frühdienst')").is_visible()
-        assert tabs.locator("button:has-text('Spätdienst')").is_visible()
-        assert tabs.locator("button:has-text('Nachtdienst')").is_visible()
+        shift = page.get_by_test_id("zeitstrom-shift-select")
+        expect(shift).to_be_visible()
+        for label in ("Frühdienst", "Spätdienst", "Nachtdienst"):
+            expect(shift.locator("option").filter(has_text=label)).to_have_count(1)
 
     def test_navigation_links(self, authenticated_page):
         page = authenticated_page
@@ -136,11 +135,17 @@ class TestTimeFilterHTMX:
         event_list = page.locator("#feed-list")
         assert event_list.is_visible()
 
-        # Klick auf Spätdienst-Tab
-        page.locator("[data-testid='time-filter-tabs'] button:has-text('Spätdienst')").click()
-        # HTMX sollte den Inhalt aktualisieren (Warten auf Netzwerk-Idle)
-        page.wait_for_load_state("domcontentloaded")
-        assert event_list.is_visible()
+        shift = page.get_by_test_id("zeitstrom-shift-select")
+        target = shift.locator("option").filter(has_text="Spätdienst").get_attribute("value")
+        wait_until_htmx_bound(page, shift)
+        page.evaluate("window.__shiftNavigationMarker = 'alive'")
+        with page.expect_response(
+            lambda response: "/partials/zeitstrom/feed/" in response.url and response.status == 200
+        ):
+            shift.select_option(target)
+        expect(shift).to_have_value(target)
+        expect(event_list).to_be_visible()
+        assert page.evaluate("window.__shiftNavigationMarker") == "alive"
 
 
 class TestEventErstellung:
@@ -409,55 +414,27 @@ class TestEventEditAndDelete:
 class TestNachtdienstShiftAssignment:
     """Event erscheint im korrekten Schicht-Tab (Refs #281)."""
 
-    def _get_current_shift_label(self):
-        """Bestimmt den erwarteten Schicht-Tab basierend auf aktueller Uhrzeit."""
-        now = datetime.now().time()
-        if time(8, 0) <= now <= time(16, 0):
-            return "Frühdienst"
-        elif time(16, 0) < now <= time(22, 0):
-            return "Spätdienst"
-        else:
-            return "Nachtdienst"
-
-    def _get_other_shift_label(self):
-        """Gibt einen Schicht-Tab zurück, der NICHT die aktuelle Schicht ist."""
-        current = self._get_current_shift_label()
-        if current == "Frühdienst":
-            return "Spätdienst"
-        elif current == "Spätdienst":
-            return "Frühdienst"
-        else:
-            return "Frühdienst"
-
-    def test_event_appears_in_correct_shift_tab(self, authenticated_page, base_url):
-        """Neues Event (occurred_at=jetzt) erscheint im auto-selektierten Tab, nicht in einem anderen."""
+    def test_event_appears_only_in_its_selected_shift(self, authenticated_page, base_url):
+        """A newly created contact appears in its running shift and disappears in another."""
         page = authenticated_page
-
-        # Event erstellen
-        page.goto(f"{base_url}/events/new/")
-        page.wait_for_load_state("domcontentloaded")
+        page.goto(f"{base_url}/events/new/", wait_until="domcontentloaded")
         page.select_option("select[name='document_type']", label="Kontakt")
-        page.wait_for_load_state("domcontentloaded")
-        # Refs #1349: primärer Button — SUBMIT ist auf der Event-Anlege-Seite
-        # seit "Speichern & nächster Kontakt" mehrdeutig.
         page.locator("#event-submit-btn").click()
         page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/$"))
-
-        # Zurück zum Zeitstrom (Schicht-Tabs)
-        page.goto(f"{base_url}/")
-        page.wait_for_load_state("domcontentloaded")
-
-        # Event sollte in der Event-Liste sichtbar sein (auto-selektierter Tab = aktuelle Schicht)
-        event_list = page.locator("#feed-list")
-        assert event_list.locator("text=Kontakt").first.is_visible()
-
-        # Auf einen anderen Schicht-Tab klicken → Event sollte nicht erscheinen
-        other_shift = self._get_other_shift_label()
-        other_tab = page.locator(f"button:has-text('{other_shift}')")
-        other_tab.click()
-        page.wait_for_load_state("domcontentloaded")
-        # HTMX-Swap abwarten: gewechselter Tab wird aktiv markiert.
-        expect(other_tab).to_have_class(re.compile(r"bg-accent-light"))
+        event_id = page.url.rstrip("/").rsplit("/", 1)[1]
+        page.goto(f"{base_url}/", wait_until="domcontentloaded")
+        contact = page.locator(f"#feed-list button[aria-controls='event-detail-{event_id}']")
+        expect(contact).to_be_visible()
+        shift = page.get_by_test_id("zeitstrom-shift-select")
+        values = shift.locator("option").evaluate_all("els => els.map(el => el.value)")
+        other_shift = next(value for value in values if value not in ("all", shift.input_value()))
+        wait_until_htmx_bound(page, shift)
+        with page.expect_response(
+            lambda response: "/partials/zeitstrom/feed/" in response.url and response.status == 200
+        ):
+            shift.select_option(other_shift)
+        expect(shift).to_have_value(other_shift)
+        expect(contact).to_have_count(0)
 
 
 class TestQualifiedClientEventDeletion:

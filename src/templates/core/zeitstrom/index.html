@@ -10,7 +10,7 @@
      data-watch-url="{% url 'core:zeitstrom_watch' %}"
      data-feed-url="{% url 'core:zeitstrom_feed_partial' %}"
      data-tally-counts-url="{% url 'core:zeitstrom_tally_counts_partial' %}"
-     data-current-shift-url="{% url 'core:zeitstrom_current_shift_partial' %}"
+     data-kpi-url="{% url 'core:zeitstrom_kpi_partial' %}"
      data-handover-note-url="{% url 'core:handover_note' %}"
      data-focus-box-url="{% url 'core:zeitstrom_focus_box_partial' %}"
      data-bans-url="{% url 'core:zeitstrom_bans_partial' %}">
@@ -25,7 +25,8 @@
     <h1 class="text-[22px] font-bold text-ink">{% trans "Zeitstrom" %}</h1>
 
     {# Mobile: date and shift are one tap target that opens the sheet below. #}
-    <button type="button" id="zeitstrom-selection-trigger" data-testid="zeitstrom-selection-trigger"
+    {# Keep the returned sheet focus through the feed swap (#2655). #}
+    <button type="button" id="zeitstrom-selection-trigger" data-testid="zeitstrom-selection-trigger" data-hx-no-focus
             aria-expanded="false" aria-controls="zeitstrom-selection" aria-haspopup="dialog" data-live-label="{% trans 'läuft' %}"
             class="md:hidden order-last w-full text-left min-h-[44px] px-3 py-1.5 bg-surface border border-subtle rounded-[10px]">
         <span class="block text-[13px] font-semibold text-ink">
@@ -107,50 +108,13 @@
 {% endwith %}
 {% if not uebergabe_mode %}{% include "core/zeitstrom/partials/selection_hint.html" %}{% endif %}
 
-{% include "core/zeitstrom/partials/contacts_navigation.html" %}
-
-{% if show_cockpit %}
-<div data-testid="zeitstrom-cockpit" class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">
-    {% comment %}
-    K1–K3 (Refs #1804, Konzept §3.7): Die Zahl auf einer verlinkten Kachel ist das
-    Ergebnis genau der Abfrage, die der Klick öffnet — oder die Kachel benennt
-    ihren Filter. Beide Aufgaben-Kacheln zählen strikt „mir zugewiesen"
-    (`staff_dashboard_context`), die Zielliste hat aber den Default-Scope
-    „mir & unzugewiesen": ohne `?assigned_to=me` steht auf der Kachel „2" und in
-    der Liste stehen drei Zeilen. Bei „Überfällig" kam die Kachelzahl in der
-    parameterlosen Zielliste gar nicht mehr vor.
-
-    „Heutige Kontakte" ist der K3-Fall: Ziel ist die Übergabe **einer Schicht**,
-    die Zahl zählt den **ganzen Tag**. Deckungsgleich ist das nicht — deshalb
-    benennt die Unterzeile den Filter, und sie ist damit Teil der Zusage, nicht
-    Dekoration.
-    {% endcomment %}
-    <a href="?view=uebergabe" class="card p-3 hover:border-accent transition-colors block">
-        <div class="text-[12px] text-ink-muted uppercase tracking-wide">{% trans "Heutige Kontakte" %}</div>
-        <div class="text-[22px] font-bold text-ink mt-0.5">{{ cockpit.today_events_count }}</div>
-        <div class="text-[12px] text-ink-muted mt-0.5">{% trans "Ereignisse heute" %}</div>
-    </a>
-    <a href="{% url 'core:workitem_inbox' %}?assigned_to=me" class="card p-3 hover:border-accent transition-colors block">
-        <div class="text-[12px] text-ink-muted uppercase tracking-wide">{% trans "Meine Aufgaben" %}</div>
-        <div class="text-[22px] font-bold text-ink mt-0.5">{{ cockpit.my_open_workitems_count }}</div>
-        <div class="text-[12px] text-ink-muted mt-0.5">{% trans "Mir zugewiesen, offen" %}</div>
-    </a>
-    <a href="{% url 'core:workitem_inbox' %}?assigned_to=me&amp;due=overdue" class="card p-3 hover:border-accent transition-colors block">
-        <div class="text-[12px] text-ink-muted uppercase tracking-wide">{% trans "Überfällig" %}</div>
-        <div class="text-[22px] font-bold {% if cockpit.my_overdue_count %}text-red-600{% else %}text-ink{% endif %} mt-0.5">{{ cockpit.my_overdue_count }}</div>
-        <div class="text-[12px] text-ink-muted mt-0.5">{% trans "Mir zugewiesen, Frist verstrichen" %}</div>
-    </a>
-</div>
-{% endif %}
+{% if not uebergabe_mode %}{% include "core/zeitstrom/partials/kpi_slot.html" %}{% endif %}
 
 {% include "core/zeitstrom/partials/bans_slot.html" %}
 
 {% if uebergabe_mode %}
 {% include "core/handover/partials/_summary_full.html" with summary=uebergabe_summary %}
 {% else %}
-{# Aktueller Dienst (Refs #1138): dauerhaft sichtbare Dienst-Übersicht der laufenden Schicht — nicht aufklappbar, nicht an die Zeitstrom-Auswahl gekoppelt. #}
-{% include "core/zeitstrom/partials/current_shift_slot.html" %}
-
 {# Strichliste (Refs #1349): „+1"-Erfassung anonymer Massenkontakte je Typ. #}
 <div id="tally-panel-slot">
     {% if show_tally_panel %}

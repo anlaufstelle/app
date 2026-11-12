@@ -288,14 +288,16 @@ class TestTimelineDocTypeFilter:
         page.wait_for_load_state("domcontentloaded")
 
         doc_type_select = page.locator("#filter-doc-type")
-        if doc_type_select.count() > 0:
-            # Filter auf einen bestimmten Typ setzen
+        expect(doc_type_select).to_be_visible()
+        with page.expect_response(
+            lambda response: "/partials/zeitstrom/feed/" in response.url and response.status == 200
+        ):
             doc_type_select.select_option(label="Kontakt")
-            page.wait_for_load_state("domcontentloaded")
-
-            # Event-Liste wurde aktualisiert
-            event_list = page.locator("#feed-list")
-            assert event_list.count() > 0
+        selected = doc_type_select.input_value()
+        expect(page.locator("#feed-list")).to_be_visible()
+        expect(page.get_by_test_id("zeitstrom-contacts-list")).to_have_attribute(
+            "href", re.compile(rf"doc_type={selected}.*created_via=standard")
+        )
 
 
 class TestFilterPersistenceExcludesQ:

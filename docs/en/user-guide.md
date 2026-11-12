@@ -177,9 +177,18 @@ The feed combines four sources for the current day:
 | **Contacts** (Events) | Documentation entries with preview fields |
 | **Activities** | System operations (created, edited, deleted ...) |
 | **Tasks** (Work Items) | Hints and tasks with priority and status |
-| **Entry Bans** | Active entry bans -- additionally shown as a red banner on top |
+| **Entry Bans** | Active entry bans -- additionally shown as red rows on top (see [Entry Ban banner](#entry-ban-banner)) |
 
 **Header row.** At the very top, a single row holds the title, the date switcher, the shift selection and the **Feed | Handover** switch; it applies to both views. The shift is named only there. On desktop, **New** groups **Create task** and **Create person** for social workers and higher roles. On a phone, date and shift are one shared tap target that opens a sheet from the bottom; **Close**, the Escape key or a tap beside the sheet closes it again, and the focus returns to the tap target.
+
+**Figures row.** In the feed, a row of figures sits directly below the header row (it scrolls sideways on a phone). Figures with an arrow lead to the corresponding lists:
+
+- **Contacts on shift** -- documented contacts of the selected shift and day (without a selected shift the figure reads **Contacts today**, on an earlier day **Contacts on this day**). The link opens the contacts list with the same filters plus "without tally"; tally marks do not count here.
+- **Counted (tally)** -- tally entries in the live window, including entries of types that have since been disabled; visible only when the tally is visible. The link opens the contacts list with "tally only" and the same time window. Tiles continue to count all anonymous contacts of their type, so their sum can differ from this figure.
+- **My tasks** and **overdue** -- open tasks assigned to you (not the unassigned team tasks); "overdue" is red as soon as the figure is above zero.
+- **Entry bans active** -- visible only while entry bans exist; the details are directly below.
+
+The row applies to every role with Timeline access. The figures update with every tally mark, with **Undo**, when the shift or a filter changes, and in the background when other people change something. The handover shows the full summary of the shift instead.
 
 The right sidebar contains **“Team tasks needing attention”**, a team focus box with up to **8 entries**, regardless of assignment. It groups tasks by **Overdue**, **Due today**, **Urgent · Important** and **In progress**; each task appears only in its highest applicable pressure group. Within groups, tasks are sorted by due date, priority and creation time. Open normal-priority tasks without a deadline remain available through **To task overview**.
 
@@ -218,9 +227,7 @@ For the application the two hours really are different points in time, one hour 
 
 On the night the clocks spring forward, by contrast, the hour from 02:00 to 03:00 **does not exist at all** -- there the form still rejects a time from that window and says why. There is nothing to choose: a time that does not exist is not made real by any selection.
 
-If the selection is not the running shift (another day or another shift), a hint "You are viewing …" with the link **to the running shift** appears below the header row; while the running shift is selected it does not appear.
-
-The permanently visible **Current shift** box above the feed shows contacts, new tasks, new people and important occurrences for the ongoing shift. It is independent of the selected Timeline filter and appears only while a configured shift is running.
+If the selection is not the running shift (another day or another shift), a hint "You are viewing …" with the link **to the running shift** appears below the header row; while the running shift is selected it does not appear. The former **Current shift** box is replaced by the figures row in the feed; the handover still contains the full shift summary.
 
 #### Handover note
 
@@ -251,7 +258,7 @@ Filter changes reload only the feed (HTMX), without a full page refresh.
 
 ### Entry Ban banner
 
-If there are active entry bans in your facility, they are displayed as a red banner below the heading.
+If there are active entry bans in your facility, the figures row shows the red-marked figure **Entry bans active**, and directly below it one red row per ban appears with the pseudonym and, depending on permissions and available content, the reason and "Until" date. The detail rows sit outside the sideways-scrolling figures row and remain visible on a phone. The figure and details update in the background when an entry ban is created, changed or deleted.
 
 ---
 
@@ -290,7 +297,7 @@ The **Work Center** (`/start/`) is the landing page of the **Manager** role -- a
 
 All other roles are redirected from `/start/` straight to their own workplace:
 
-- **Social worker / Assistant** -- to the Timeline (`/`); the former tiles "Today's contacts", "My tasks", and "Recently edited" together with the lists "My open tasks" and "Recently edited persons" live on there as a cockpit block above the feed.
+- **Social worker / Assistant** -- to the Timeline (`/`); the former tiles "Today's contacts" and "My tasks" have become the figures row above the feed (see [What the Timeline shows](#what-the-timeline-shows)).
 - **Application support** (`facility_admin`) -- to the administration overview (`/verwaltung/`).
 - **System administration** (`super_admin`) -- to the system area (`/system/`).
 
@@ -1196,5 +1203,5 @@ Phone, email, date and address patterns are detected heuristically and locally o
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: 1c04e57d546db42f2248371ae11116f09eec0c99 -->
+<!-- source-hash: c5415b44986e9ccedea7615ef5a35eb8e162ffb6 -->
 <!-- translation-date: 2026-11-12 -->

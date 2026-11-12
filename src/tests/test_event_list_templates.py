@@ -130,7 +130,7 @@ def test_filters_are_selected_and_pagination_retains_normalized_state(client, st
 
 
 @pytest.mark.parametrize("role", ["assistant_user", "staff_user", "lead_user", "admin_user"])
-def test_zeitstrom_contacts_navigation_preserves_day_type_and_shift(client, request, role, facility, doc_type_contact):
+def test_zeitstrom_contact_kpi_preserves_day_type_and_shift(client, request, role, facility, doc_type_contact):
     from datetime import time
 
     shift = TimeFilter.objects.create(facility=facility, label="Day", start_time=time(8), end_time=time(16))
@@ -148,8 +148,9 @@ def test_zeitstrom_contacts_navigation_preserves_day_type_and_shift(client, requ
         "date_to": ["2026-09-10"],
         "doc_type": [str(doc_type_contact.pk)],
         "time_filter": [str(shift.pk)],
+        "created_via": ["standard"],
     }
-    assert "Kontakte" in response.content.decode()
+    assert "Kontakte im Dienst" in response.content.decode()
 
 
 @pytest.mark.parametrize("role", ["assistant_user", "staff_user"])
@@ -214,13 +215,14 @@ def test_feed_filter_refresh_updates_contacts_link(client, assistant_user, doc_t
     )
     assert response.status_code == 200
     html = Elements(response.content)
-    assert html.find("nav", id="contacts-navigation", **{"hx-swap-oob": "outerHTML"})
+    assert html.find("div", id="zeitstrom-kpi-slot", **{"hx-swap-oob": "outerHTML"})
     links = html.find("a", **{"data-testid": "zeitstrom-contacts-list"})
     assert len(links) == 1
     assert parse_qs(urlsplit(links[0]["href"]).query) == {
         "date_from": ["2026-09-11"],
         "date_to": ["2026-09-11"],
         "doc_type": [str(doc_type_contact.pk)],
+        "created_via": ["standard"],
     }
 
 

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime, time, timedelta
 
-from django.db.models import Exists, F, OuterRef, Q
+from django.db.models import Count, Exists, F, OuterRef, Q
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
@@ -29,6 +29,20 @@ from core.models import (
 )
 from core.services.file_vault.quota import facility_storage_usage, storage_warning
 from core.services.workitem_visibility import workitems_for_read
+
+
+def zeitstrom_workitem_counts(user, facility, *, today=None) -> dict[str, int]:
+    """Read the team total and strictly assigned personal counters together."""
+    today = today or timezone.localdate()
+    return (
+        workitems_for_read(facility)
+        .filter(status__in=[WorkItem.Status.OPEN, WorkItem.Status.IN_PROGRESS])
+        .aggregate(
+            total_open=Count("id"),
+            my_open=Count("id", filter=Q(assigned_to=user)),
+            my_overdue=Count("id", filter=Q(assigned_to=user, due_date__lt=today)),
+        )
+    )
 
 
 def staff_dashboard_context(user, facility) -> dict:

@@ -14,9 +14,10 @@ import pytest
 from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
 
-from core.models import Activity, Client, TimeFilter
+from core.models import Activity, TimeFilter
 from core.services import zeitstrom_watch as watch
 from core.services.zeitstrom_filters import resolve_zeitstrom_state
+from core.services.zeitstrom_kpis import build_zeitstrom_kpis
 from tests._factories import make_client, make_document_type, make_event
 
 pytestmark = pytest.mark.django_db
@@ -33,27 +34,15 @@ def shift_state(facility):
     )
 
 
-def test_current_shift_counts_and_highlights_only_eligible_people(facility, staff_user, shift_state):
-    """Only active events and new active, undeleted clients inside the shift count.
-
-    Kills x__current_shift_projection__mutmut_16,
-    x__current_shift_projection__mutmut_52, x__current_shift_projection__mutmut_53
-    and x__current_shift_projection__mutmut_54 through the public validator.
-    """
+def test_kpi_counts_only_contacts_of_eligible_people(facility, staff_user, shift_state):
+    """Contacts of deleted or inactive people do not count; the others inside the shift do."""
     document_type = make_document_type(facility=facility, name="Crisis", system_type="crisis")
     moment = shift_state.live_context.window_start + timedelta(hours=1)
     people = [
         make_client(facility=facility, created_by=staff_user, pseudonym=name, **flags)
-        for name, flags in [
-            ("Deleted", {"is_deleted": True}),
-            ("Inactive", {"is_active": False}),
-            ("Outside", {}),
-            ("Eligible", {}),
-        ]
+        for name, flags in [("Deleted", {"is_deleted": True}), ("Inactive", {"is_active": False}), ("Eligible", {})]
     ]
-    Client.objects.filter(pk__in=[person.pk for person in people]).update(created_at=moment)
-    Client.objects.filter(pk=people[2].pk).update(created_at=moment - timedelta(days=1))
-    events = [
+    for person in people:
         make_event(
             facility=facility,
             client=person,
@@ -62,15 +51,10 @@ def test_current_shift_counts_and_highlights_only_eligible_people(facility, staf
             data_json={},
             created_by=staff_user,
         )
-        for person in (people[1], people[3])
-    ]
-    with patch.object(watch, "_opaque_validator", wraps=watch._opaque_validator) as signer:
-        validator = watch.build_zeitstrom_component_validator(staff_user, facility, shift_state, "current_shift")
-    assert validator
-    projection = signer.call_args.kwargs["projection"]
-    assert projection["stats"]["clients_new"] == 1
-    assert projection["stats"]["events_total"] == 1
-    assert [(kind, value[0]) for kind, _, value in projection["highlights"]] == [("crisis", str(events[1].pk))]
+    kpis = build_zeitstrom_kpis(
+        facility, staff_user, shift_state, tally_summary=None, today=datetime(2026, 6, 15).date()
+    )
+    assert kpis["contacts_count"] == 1
 
 
 @pytest.mark.parametrize("feed_type,system_type,person_slot", [("events", "", 4), ("bans", "ban", 2)])

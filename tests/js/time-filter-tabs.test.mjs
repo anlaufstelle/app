@@ -3,10 +3,13 @@
 // the date/shift trigger opens a sheet that closes on Escape or outside tap and
 // returns focus to the trigger.
 
+import { readFileSync } from "node:fs";
+
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 beforeAll(async () => {
     await import("../../src/static/js/time-filter-tabs.js");
+    await import("../../src/static/js/focus-management.js");
 });
 
 const PAGE = `
@@ -128,6 +131,26 @@ describe("mobile sheet", () => {
         trigger().click();
         choose("night");
         expect(trigger().getAttribute("aria-expanded")).toBe("false");
+    });
+
+    it("keeps the returned focus when the filtered feed is swapped", () => {
+        // Use the actual template control: its opt-out governs the global
+        // afterSwap focus handler after the sheet has returned focus.
+        // Refs #2655.
+        const template = readFileSync("src/templates/core/zeitstrom/index.html", "utf8");
+        const control = template.match(/<button[^>]*id="zeitstrom-selection-trigger"[\s\S]*?<\/button>/)[0];
+        trigger().outerHTML = control;
+        trigger().click();
+        choose("night");
+        expect(document.activeElement).toBe(trigger());
+        const feed = document.createElement("div");
+        feed.id = "feed-list";
+        document.body.appendChild(feed);
+        feed.dispatchEvent(new CustomEvent("htmx:afterSwap", {
+            bubbles: true,
+            detail: { target: feed },
+        }));
+        expect(document.activeElement).toBe(trigger());
     });
 
     it("ignores Escape while closed", () => {

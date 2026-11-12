@@ -15,17 +15,15 @@ pytestmark = pytest.mark.django_db
 
 
 ROLES = ["assistant", "staff", "lead", "facility_admin"]
-# The cockpit is only rendered for assistant and staff roles.
-COCKPIT_ROLES = {"assistant", "staff"}
 
 
 def _role_surfaces(surfaces):
-    return [(role, surface) for role in ROLES for surface in surfaces if surface != "cockpit" or role in COCKPIT_ROLES]
+    return [(role, surface) for role in ROLES for surface in surfaces]
 
 
 @pytest.mark.parametrize(
     ("role", "surface"),
-    _role_surfaces(["inbox", "badges", "detail", "profile", "focus", "cockpit", "handover", "feed"]),
+    _role_surfaces(["inbox", "badges", "detail", "profile", "focus", "kpi", "handover", "feed"]),
 )
 @pytest.mark.parametrize("revocation", ["trash", "inactive"])
 def test_work_surfaces_follow_person_revocation_and_restoration(
@@ -115,14 +113,13 @@ def test_work_surfaces_follow_person_revocation_and_restoration(
             box = response.context["focus_box"]
             assert {item.pk for group in box["groups"] for item in group["items"]} == open_ids
             assert box["total_open_count"] == len(open_ids)
-        elif surface == "cockpit":
+        elif surface == "kpi":
             response = client.get(reverse("core:zeitstrom"))
             assert response.status_code == 200
-            cockpit = response.context["cockpit"]
-            assert {item.pk for item in cockpit["my_open_workitems"]}.issubset(open_ids)
-            assert cockpit["my_open_workitems_count"] == len(open_ids)
-            assert cockpit["my_overdue_count"] == len(open_ids)
-            assert cockpit["today_events_count"] == (2 if include_target else 1)
+            kpis = response.context["kpis"]
+            assert kpis["my_open_count"] == len(open_ids)
+            assert kpis["my_overdue_count"] == len(open_ids)
+            assert kpis["contacts_count"] == (2 if include_target else 1)
         elif surface == "feed":
             response = client.get(reverse("core:zeitstrom"), {"type": "workitems"})
             assert response.status_code == 200
@@ -165,7 +162,7 @@ def test_work_surfaces_follow_person_revocation_and_restoration(
         check_visible(True, favorite=True)
 
 
-@pytest.mark.parametrize(("role", "surface"), _role_surfaces(["profile", "cockpit", "handover"]))
+@pytest.mark.parametrize(("role", "surface"), _role_surfaces(["profile", "kpi", "handover"]))
 def test_widgets_exclude_role_hidden_documentation(client, facility, client_identified, role, surface):
     reader = User.objects.create_user(username=f"hidden-{role}", role=role, facility=facility)
     visible = {"assistant": {"normal"}, "staff": {"normal", "elevated"}}.get(role, {"normal", "elevated", "high"})
@@ -187,10 +184,10 @@ def test_widgets_exclude_role_hidden_documentation(client, facility, client_iden
         assert response.status_code == 200
         assert response.context["stats"]["events_today"] == len(visible)
         assert {event.document_type.sensitivity for event in response.context["recent_events"]} == visible
-    elif surface == "cockpit":
+    elif surface == "kpi":
         response = client.get(reverse("core:zeitstrom"))
         assert response.status_code == 200
-        assert response.context["cockpit"]["today_events_count"] == len(visible)
+        assert response.context["kpis"]["contacts_count"] == len(visible)
     else:
         response = client.get(
             reverse("core:zeitstrom"),
@@ -200,7 +197,7 @@ def test_widgets_exclude_role_hidden_documentation(client, facility, client_iden
         assert response.context["uebergabe_summary"]["stats"]["events_total"] == len(visible)
 
 
-@pytest.mark.parametrize("component", ["focus_box", "current_shift", "feed"])
+@pytest.mark.parametrize("component", ["focus_box", "kpi", "feed"])
 @pytest.mark.parametrize("revocation", ["trash", "inactive"])
 @pytest.mark.usefixtures("midday_clock")
 @pytest.mark.parametrize("role", ["assistant", "staff", "lead", "facility_admin"])
@@ -238,7 +235,7 @@ def test_watch_validators_ignore_tasks_of_revoked_people(
 
 @pytest.mark.usefixtures("midday_clock")
 @pytest.mark.parametrize("role", ["assistant", "staff", "lead", "facility_admin"])
-def test_current_shift_validator_ignores_documentation_of_trashed_people(
+def test_kpi_validator_ignores_documentation_of_trashed_people(
     client, facility, client_identified, staff_user, lead_user, role
 ):
     reader = User.objects.create_user(username=f"watch-event-{role}", role=role, facility=facility)
@@ -263,4 +260,4 @@ def test_current_shift_validator_ignores_documentation_of_trashed_people(
     event.save(update_fields=["occurred_at"])
     second = client.get(url, {"type": "events"}, headers=headers)
     assert second.status_code == 200
-    assert second.json()["validators"]["current_shift"] == first.json()["validators"]["current_shift"]
+    assert second.json()["validators"]["kpi"] == first.json()["validators"]["kpi"]

@@ -46,7 +46,7 @@ function renderDom() {
               data-watch-url="/api/v1/zeitstrom/watch/"
               data-feed-url="/partials/zeitstrom/feed/"
               data-tally-counts-url="/partials/zeitstrom/tally-counts/"
-              data-current-shift-url="/partials/zeitstrom/current-shift/"
+              data-kpi-url="/partials/zeitstrom/kpi/"
               data-handover-note-url="/uebergabe/notiz/"
               data-focus-box-url="/partials/zeitstrom/focus-box/">
             <form id="zeitstrom-filter-state">
@@ -58,7 +58,7 @@ function renderDom() {
             </form>
             <div id="zeitstrom-bans-slot"></div>
             <div id="handover-note"><form><textarea>Gespeicherter Stand</textarea></form></div>
-            <div id="zeitstrom-current-shift-slot"></div>
+            <div id="zeitstrom-kpi-slot"></div>
             <div id="tally-panel-slot">
                 <div data-testid="tally-row-type-1">
                     <span id="tally-count-type-1" data-testid="tally-count-type-1"
@@ -136,6 +136,31 @@ beforeEach(() => {
 });
 
 describe("Zeitstrom live watch", () => {
+    it.each([
+        ["kpi", "zeitstrom-kpi-slot", "/partials/zeitstrom/kpi/"],
+        ["bans", "zeitstrom-bans-slot", "/partials/zeitstrom/bans/"],
+        ["focus_box", "zeitstrom-focus-box-slot", "/partials/zeitstrom/focus-box/"],
+    ])("refreshes the %s slot independently", async (component, slot, path) => {
+        const root = document.getElementById("zeitstrom-live-watch");
+        root.dataset.bansUrl = "/partials/zeitstrom/bans/";
+        const navigate = vi.fn();
+        const fetchMock = vi.fn()
+            .mockResolvedValueOnce(watchResponse([component], { [component]: '"fresh"' }))
+            .mockResolvedValueOnce(response({
+                text: `<div id="${slot}">fresh ${component}</div>`,
+                headers: { "Content-Type": "text/html", ETag: '"fresh"' },
+            }));
+        const watcher = window.createZeitstromLiveWatch(root, { fetch: fetchMock, navigate });
+
+        await watcher.checkNow();
+
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(new URL(fetchMock.mock.calls[1][0], "https://example.test").pathname).toBe(path);
+        expect(document.getElementById(slot).textContent).toBe(`fresh ${component}`);
+        expect(navigate).not.toHaveBeenCalled();
+        watcher.stop();
+    });
+
     it("refreshes an untouched handover note form", async () => {
         const navigate = vi.fn();
         const fetchMock = vi
@@ -260,8 +285,8 @@ describe("Zeitstrom live watch", () => {
             .fn()
             .mockResolvedValueOnce(
                 watchResponse(
-                    ["feed", "current_shift"],
-                    { feed: '"feed-a"', current_shift: '"shift-a"' },
+                    ["feed", "kpi"],
+                    { feed: '"feed-a"', kpi: '"shift-a"' },
                 ),
             )
             .mockResolvedValueOnce(
@@ -275,11 +300,11 @@ describe("Zeitstrom live watch", () => {
                 return lateCurrent.promise;
             })
             .mockResolvedValueOnce(
-                watchResponse(["current_shift"], { current_shift: '"shift-b"' }),
+                watchResponse(["kpi"], { kpi: '"shift-b"' }),
             )
             .mockResolvedValueOnce(
                 response({
-                    text: '<section id="zeitstrom-current-shift-slot">B current</section>',
+                    text: '<section id="zeitstrom-kpi-slot">B current</section>',
                     headers: { "Content-Type": "text/html", ETag: '"shift-b"' },
                 }),
             )
@@ -291,18 +316,18 @@ describe("Zeitstrom live watch", () => {
         await watcher.checkNow();
         expect(lateCurrent.signal.aborted).toBe(true);
         await watcher.checkNow();
-        expect(document.getElementById("zeitstrom-current-shift-slot").textContent).toContain("B current");
+        expect(document.getElementById("zeitstrom-kpi-slot").textContent).toContain("B current");
 
         lateCurrent.resolve(
             response({
-                text: '<section id="zeitstrom-current-shift-slot">A stale</section>',
+                text: '<section id="zeitstrom-kpi-slot">A stale</section>',
                 headers: { "Content-Type": "text/html", ETag: '"shift-a"' },
             }),
         );
         await flush();
         await watcher.checkNow();
 
-        expect(document.getElementById("zeitstrom-current-shift-slot").textContent).toContain("B current");
+        expect(document.getElementById("zeitstrom-kpi-slot").textContent).toContain("B current");
         expect(document.body.textContent).not.toContain("A stale");
     });
 
@@ -312,8 +337,8 @@ describe("Zeitstrom live watch", () => {
             .fn()
             .mockResolvedValueOnce(
                 watchResponse(
-                    ["feed", "current_shift"],
-                    { feed: '"feed-a"', current_shift: '"shift-a"' },
+                    ["feed", "kpi"],
+                    { feed: '"feed-a"', kpi: '"shift-a"' },
                 ),
             )
             .mockImplementationOnce((_url, options) => {
@@ -869,11 +894,11 @@ describe("Zeitstrom live watch", () => {
             )
             .mockResolvedValueOnce(
                 watchResponse(
-                    ["feed", "tally_counts", "current_shift"],
+                    ["feed", "tally_counts", "kpi"],
                     {
                         feed: '"feed-v2"',
                         tally_counts: '"count-v2"',
-                        current_shift: '"shift-v2"',
+                        kpi: '"shift-v2"',
                     },
                 ),
             )
@@ -891,7 +916,7 @@ describe("Zeitstrom live watch", () => {
             )
             .mockResolvedValueOnce(
                 response({
-                    text: '<section id="zeitstrom-current-shift-slot">neuer Dienst</section>',
+                    text: '<section id="zeitstrom-kpi-slot">neuer Dienst</section>',
                     headers: { "Content-Type": "text/html", ETag: '"shift-v2"' },
                 }),
             );
@@ -919,10 +944,10 @@ describe("Zeitstrom live watch", () => {
             "/api/v1/zeitstrom/watch/",
             "/partials/zeitstrom/feed/",
             "/partials/zeitstrom/tally-counts/",
-            "/partials/zeitstrom/current-shift/",
+            "/partials/zeitstrom/kpi/",
         ]);
         expect(document.querySelector("[data-offline-tally-number-form]").isConnected).toBe(true);
-        expect(document.getElementById("zeitstrom-current-shift-slot").textContent).toContain("neuer Dienst");
+        expect(document.getElementById("zeitstrom-kpi-slot").textContent).toContain("neuer Dienst");
         watcher.stop();
     });
 
@@ -1009,9 +1034,9 @@ describe("Zeitstrom live watch", () => {
         const fetchMock = vi
             .fn()
             .mockResolvedValueOnce(
-                watchResponse(["tally_counts", "current_shift", "focus_box"], {
+                watchResponse(["tally_counts", "kpi", "focus_box"], {
                     tally_counts: '"count-v1"',
-                    current_shift: '"shift-v1"',
+                    kpi: '"shift-v1"',
                     focus_box: '"focus-v1"',
                 }),
             )
@@ -1023,7 +1048,7 @@ describe("Zeitstrom live watch", () => {
             )
             .mockResolvedValueOnce(
                 response({
-                    text: '<section id="zeitstrom-current-shift-slot">Dienst</section>',
+                    text: '<section id="zeitstrom-kpi-slot">Dienst</section>',
                     headers: { "Content-Type": "text/html", ETag: '"shift-v1"' },
                 }),
             )
@@ -1057,14 +1082,14 @@ describe("Zeitstrom live watch", () => {
         expect(paths).toEqual([
             "/api/v1/zeitstrom/watch/",
             "/partials/zeitstrom/tally-counts/",
-            "/partials/zeitstrom/current-shift/",
+            "/partials/zeitstrom/kpi/",
             "/partials/zeitstrom/focus-box/",
             "/api/v1/zeitstrom/watch/",
             "/partials/zeitstrom/feed/",
         ]);
         expect(JSON.parse(fetchMock.mock.calls[4][1].headers["X-Zeitstrom-Validators"])).toEqual({
             tally_counts: '"count-v1"',
-            current_shift: '"shift-v1"',
+            kpi: '"shift-v1"',
             focus_box: '"focus-v1"',
             tally_topology: '"topology-v1"',
         });
@@ -1314,7 +1339,7 @@ describe("Zeitstrom live watch", () => {
         const fetchMock = vi.fn().mockResolvedValue(
             response({
                 redirected: true,
-                url: "http://localhost/login/?next=/partials/zeitstrom/current-shift/",
+                url: "http://localhost/login/?next=/partials/zeitstrom/kpi/",
             }),
         );
         window.__logoutInFlight = Date.now();

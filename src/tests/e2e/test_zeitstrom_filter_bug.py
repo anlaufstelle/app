@@ -1,6 +1,11 @@
 """E2E-Tests: Doku-Typ-Filter bleibt bei Zeitfilter-Wechsel erhalten (Refs #298, Refs #303)."""
 
+import re
+
 import pytest
+from playwright.sync_api import expect
+
+from ._helpers import wait_until_htmx_bound
 
 pytestmark = pytest.mark.e2e
 
@@ -9,7 +14,7 @@ class TestDocTypeFilterPreservedOnTimeFilterSwitch:
     """Bug #298: Zeitfilter-Tabs verlieren den doc_type-Parameter."""
 
     def test_doc_type_preserved_when_switching_time_filter(self, staff_page, base_url):
-        """Doku-Typ auswählen, dann Zeitfilter-Tab wechseln — Dropdown behält die Auswahl."""
+        """Changing the shift preserves the document type without a page navigation."""
         page = staff_page
 
         # Timeline öffnen (Schicht-Tabs + Doc-Type-Filter)
@@ -47,24 +52,13 @@ class TestDocTypeFilterPreservedOnTimeFilterSwitch:
         selected_value = doc_type_select.input_value()
         assert selected_value != "", "Doc-Type-Filter sollte einen Wert haben nach Auswahl"
 
-        # Einen anderen Zeitfilter-Tab klicken (Spätdienst oder Frühdienst)
-        time_filter_buttons = page.locator("button.time-filter-tab")
-        count = time_filter_buttons.count()
-        assert count >= 2, "Mindestens 2 Zeitfilter-Tabs erwartet"
-
-        # Den zweiten Tab klicken (ein anderer als der aktuell aktive)
-        # Finde einen Tab der nicht aktiv ist (kein bg-accent-light)
-        inactive_button = None
-        for i in range(count):
-            btn = time_filter_buttons.nth(i)
-            classes = btn.get_attribute("class") or ""
-            if "bg-accent-light" not in classes:
-                inactive_button = btn
-                break
-
-        assert inactive_button is not None, "Es sollte mindestens einen inaktiven Zeitfilter-Tab geben"
-        target_filter = inactive_button.get_attribute("data-zeitstrom-time-filter")
-        assert target_filter
+        # The single native shift control replaces the old row of buttons.
+        shift = page.get_by_test_id("zeitstrom-shift-select")
+        expect(shift).to_be_visible()
+        options = shift.locator("option").evaluate_all("els => els.map(el => el.value)")
+        assert len(options) >= 3
+        target_filter = next(value for value in options if value != shift.input_value() and value != "all")
+        wait_until_htmx_bound(page, shift)
 
         # Erst ab dem abgeschlossenen Dokumenttyp-Swap darf eine Navigation
         # dem Zeitfilterwechsel zugerechnet werden.
@@ -82,7 +76,7 @@ class TestDocTypeFilterPreservedOnTimeFilterSwitch:
             ),
             timeout=5000,
         ):
-            inactive_button.click()
+            shift.select_option(target_filter)
 
         page.evaluate("window.zeitstromWatch.checkNow()")
         assert page.evaluate("window.__zeitstromFilterNavigationMarker") == "alive"
@@ -91,8 +85,11 @@ class TestDocTypeFilterPreservedOnTimeFilterSwitch:
             timeout=5000,
         )
 
-        # Prüfen: Der doc_type-Dropdown sollte immer noch denselben Wert haben
-        new_selected_value = doc_type_select.input_value()
-        assert new_selected_value == selected_value, (
-            f"Doc-Type-Filter ging verloren: erwartet '{selected_value}', bekommen '{new_selected_value}'"
+        expect(shift).to_have_value(target_filter)
+        expect(doc_type_select).to_have_value(selected_value)
+        expect(page.get_by_test_id("zeitstrom-contacts-list")).to_have_attribute(
+            "href",
+            re.compile(
+                rf"doc_type={selected_value}.*time_filter={target_filter}|time_filter={target_filter}.*doc_type={selected_value}"
+            ),
         )

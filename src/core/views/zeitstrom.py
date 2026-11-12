@@ -36,20 +36,19 @@ from core.services.case.handover_note import (
     note_revision,
     save_note,
 )
-from core.services.dashboard import build_focus_box, staff_dashboard_context
+from core.services.dashboard import build_focus_box
 from core.services.events import (
     build_feed_items,
     build_tally_summary,
     current_tally_context,
     enrich_events_with_preview,
 )
-from core.services.events.list_filters import event_list_params_from_zeitstrom
 from core.services.system import get_active_bans
 from core.services.zeitstrom_display import format_shift_window
 from core.services.zeitstrom_filters import ZEITSTROM_FILTER_KEYS, resolve_zeitstrom_state
+from core.services.zeitstrom_kpis import build_zeitstrom_kpis
 from core.services.zeitstrom_watch import (
     WATCH_COMPONENTS,
-    build_current_shift_summary,
     build_zeitstrom_component_validator,
     build_zeitstrom_page_scope,
     build_zeitstrom_tally_topology_validator,
@@ -68,12 +67,14 @@ ZEITSTROM_PREVIOUS_STATE_HEADER = "X-Zeitstrom-Previous-State"
 _SHIFT_UNRESOLVED = _("Die Schicht konnte nicht bestimmt werden. Bitte die Seite neu laden.")
 
 
-def _contacts_navigation_context(user, state):
-    """Render the same contacts destination on full pages and feed refreshes."""
-    return {
-        "contacts_navigation": nav.CONTACTS if nav.is_visible(nav.CONTACTS, user) else None,
-        "contacts_list_params": urlencode(event_list_params_from_zeitstrom(state)),
-    }
+def _kpi_context(facility, user, state, *, tally_summary, active_bans, today=None):
+    """KPI row of the feed mode; the handover shows its full summary instead."""
+    if state.is_handover:
+        return {"kpis": None}
+    kpis = build_zeitstrom_kpis(facility, user, state, tally_summary=tally_summary, today=today)
+    kpis["bans_count"] = len(active_bans)
+    kpis["contacts_url"] = reverse(nav.CONTACTS.url_name) if nav.is_visible(nav.CONTACTS, user) else None
+    return {"kpis": kpis}
 
 
 #: Feed type pills (design: als-screens.jsx filter pills).
@@ -89,11 +90,9 @@ _FEED_FILTER_OPTIONS = (
 class HandoverSummaries:
     """Request-scoped reuse of ``build_handover_summary`` (Refs #1997).
 
-    The feed's shift summary, the handover view and the current-shift box can
-    ask for the same facility, user, date and shift within one request. Each
-    distinct shift is built once; the key carries every shift attribute the
-    summary reads, so two different shifts never share a result. One instance
-    lives for one request only.
+    Each distinct handover shift is built once; the key carries every shift
+    attribute the summary reads, so two different shifts never share a result.
+    One instance lives for one request only.
     """
 
     def __init__(self, facility, user):
@@ -212,32 +211,23 @@ def _filter_context(facility, user, state, *, today):
     }
 
 
-def _sidebar_context(facility, user, state, summaries):
-    """Team focus box, current-shift box and active house bans."""
+def _sidebar_context(facility, user):
+    """Team focus box and active house bans."""
     return {
         # Team focus box (Refs #1128): open and running tasks grouped by
         # urgency instead of a flat top-5 list.
         "focus_box": build_focus_box(facility),
-        # Refs #1138: always the shift running now, independent of the date
-        # and shift selected in the Zeitstrom.
-        "current_shift_summary": build_current_shift_summary(facility, user, state, summary_builder=summaries),
         "active_bans": get_active_bans(facility, user=user),
     }
 
 
-def _cockpit_context(facility, user):
-    """Role cockpit at the top of the start page for staff and assistants (Refs #1124)."""
-    if user.is_lead_or_admin or user.is_super_admin:
-        return {}
-    return {"show_cockpit": True, "cockpit": staff_dashboard_context(user, facility)}
-
-
 def _handover_context(facility, user, state, summaries, *, now):
-    """Shift summary of the selected shift; in handover mode also the notes (Refs #1124)."""
+    """Handover mode only: the shift summary and the notes (Refs #1124).
+
+    The feed builds no summary; its figures come from the KPI row.
+    """
     selected_filter = state.time_filter
-    context = {
-        "handover_summary": summaries(state.target_date, selected_filter) if selected_filter else None,
-    }
+    context = {}
     if not state.is_handover:
         return context
     # Refs #2042: the manual shift note sits at the top of the handover, for
@@ -295,11 +285,19 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
 
         context.update(_feed_context(facility, user, state))
         context.update(_filter_context(facility, user, state, today=today))
-        context.update(_sidebar_context(facility, user, state, summaries))
+        context.update(_sidebar_context(facility, user))
         context.update(_handover_context(facility, user, state, summaries, now=now))
-        context.update(_contacts_navigation_context(user, state))
-        context.update(_cockpit_context(facility, user))
         context.update(_tally_context(facility, user, state))
+        context.update(
+            _kpi_context(
+                facility,
+                user,
+                state,
+                tally_summary=context["tally_summary"],
+                active_bans=context["active_bans"],
+                today=today,
+            )
+        )
 
         # URLs and watch validators stay at the HTTP boundary.
         context["tally_next"] = f"{self.request.path}?{urlencode(state.params)}"
@@ -763,10 +761,22 @@ class ZeitstromFeedPartialView(AssistantOrAboveRequiredMixin, ZeitstromWatchFoll
         # behalten den OOB-Mechanismus.
         context["tally_panel_oob"] = self.request.GET.get("feed_only") != "1"
         context["zeitstrom_filter_state"] = filter_state
-        context.update(_contacts_navigation_context(self.request.user, state))
-        context["contacts_navigation_oob"] = True
         context.update(_selection_context(state, today=timezone.localdate()))
         context["selection_hint_oob"] = True
+        # The live watch refreshes the KPI row as its own component; every
+        # other feed request (shift change, filter change, own tally action)
+        # carries the row out-of-band so it never lags behind the feed.
+        if self.request.headers.get("X-Zeitstrom-Watch") != "1":
+            context.update(
+                _kpi_context(
+                    facility,
+                    self.request.user,
+                    state,
+                    tally_summary=context["tally_summary"],
+                    active_bans=get_active_bans(facility, user=self.request.user),
+                )
+            )
+            context["kpi_oob"] = context["kpis"] is not None
         return context
 
 
@@ -859,22 +869,31 @@ class ZeitstromTallyCountsPartialView(AssistantOrAboveRequiredMixin, ZeitstromWa
 
 
 @method_decorator(require_http_methods(["GET", "HEAD", "OPTIONS"]), name="dispatch")
-class ZeitstromCurrentShiftPartialView(AssistantOrAboveRequiredMixin, ZeitstromWatchFollowupMixin, View):
-    template_name = "core/zeitstrom/partials/current_shift_slot.html"
-    watch_component = "current_shift"
+class ZeitstromKpiPartialView(AssistantOrAboveRequiredMixin, ZeitstromWatchFollowupMixin, View):
+    """Authoritative KPI row as a Watch follow-up (feed mode only)."""
+
+    template_name = "core/zeitstrom/partials/kpi_slot.html"
+    watch_component = "kpi"
 
     def get(self, request):
         with _consistent_watch_render():
-            state = resolve_zeitstrom_state(request.GET, request.current_facility)
-            context = {
-                "current_shift_summary": build_current_shift_summary(
-                    request.current_facility,
-                    request.user,
-                    state,
-                ),
-                "selection_is_live": not state.is_handover and state.is_live_tally_context,
-            }
-            return self.render_watch_followup(request, self.template_name, context, state)
+            facility = request.current_facility
+            state = resolve_zeitstrom_state(request.GET, facility)
+            if state.is_handover:
+                return self.render_watch_followup(request, "", {}, state, status=204)
+            tally_summary = (
+                build_tally_summary(facility, request.user, context=state.live_context)
+                if state.is_live_tally_context
+                else None
+            )
+            context = _kpi_context(
+                facility,
+                request.user,
+                state,
+                tally_summary=tally_summary,
+                active_bans=get_active_bans(facility, user=request.user),
+            )
+            return self.render_watch_followup(request, self.template_name, context, state, tally_summary=tally_summary)
 
 
 @method_decorator(require_http_methods(["GET", "HEAD", "OPTIONS"]), name="dispatch")

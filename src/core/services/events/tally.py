@@ -361,29 +361,35 @@ def tally_document_types(facility, user):
 
 
 def build_tally_summary(facility, user, *, context: TallyLiveContext | None = None):
-    """Strichlisten-Aggregation für die Zeitstrom-Startseite.
+    """Return live-window tile counts and the tally-origin total in one query.
 
-    Liefert ein Dict ``{"window_start", "window_end", "rows"}`` — ``rows`` ist
-    je anonymfähigem, sichtbarem Dokumentationstyp ein
-    ``{"document_type", "count", "requires_number_input"}`` mit der Anzahl
-    anonymer Kontakte im aktuellen Zeitfenster. Gezählt werden ausschließlich
-    für den User sichtbare (``Event.objects.visible_to``), nicht gelöschte,
-    anonyme Events.
+    Tiles count all visible, undeleted anonymous events of eligible types.
+    ``tally_total`` counts visible, undeleted tally-origin entries of every
+    type, including types no longer offered by the panel.
+    Refs #2655.
+    Existing row and window fields retain their shape.
     """
     context = context or current_tally_context(facility)
     eligibilities = [result for result in tally_eligibilities(facility, user) if result.eligible]
 
-    counts = dict(
+    grouped_counts = (
         Event.objects.visible_to(user)
         .filter(
+            Q(is_anonymous=True) | Q(created_via=Event.CreatedVia.TALLY),
             facility=facility,
             is_deleted=False,
-            is_anonymous=True,
             occurred_at__range=(context.window_start, context.window_end),
         )
-        .values_list("document_type_id")
+        .values_list("document_type_id", "created_via", "is_anonymous")
         .annotate(n=Count("id"))
     )
+    counts: dict[uuid.UUID, int] = {}
+    tally_total = 0
+    for document_type_id, created_via, is_anonymous, count in grouped_counts:
+        if is_anonymous:
+            counts[document_type_id] = counts.get(document_type_id, 0) + count
+        if created_via == Event.CreatedVia.TALLY:
+            tally_total += count
 
     rows = [
         {
@@ -399,5 +405,6 @@ def build_tally_summary(facility, user, *, context: TallyLiveContext | None = No
         "shift_date": context.shift_date,
         "window_start": context.window_start,
         "window_end": context.window_end,
+        "tally_total": tally_total,
         "rows": rows,
     }

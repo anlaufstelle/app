@@ -4,15 +4,14 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any
 
 from django.db.models import Case as DBCase
-from django.db.models import Count, IntegerField, Q, Value, When
+from django.db.models import IntegerField, Q, Value, When
 from django.db.models.functions import Coalesce
 from django.utils.crypto import constant_time_compare, salted_hmac
 
 from core.constants import FEED_MAX_PER_TYPE
-from core.models import Activity, Client, DocumentTypeField, Event, WorkItem
+from core.models import Activity, DocumentTypeField, WorkItem
 from core.services.compliance import user_can_see_field
 from core.services.events import build_tally_summary
 from core.services.workitem_visibility import workitems_for_read
@@ -22,7 +21,7 @@ WATCH_COMPONENTS = (
     "feed",
     "tally_counts",
     "tally_topology",
-    "current_shift",
+    "kpi",
     "focus_box",
     "bans",
     "handover_note",
@@ -31,7 +30,8 @@ _COMPONENT_STATE_KEYS = {
     "feed": ("date", "time_filter", "type", "doc_type", "view"),
     "tally_counts": ("date", "time_filter", "view"),
     "tally_topology": ("date", "time_filter", "view"),
-    "current_shift": (),
+    # The KPI row's links and counts depend on day, shift and document type.
+    "kpi": ("date", "time_filter", "doc_type"),
     "focus_box": (),
     # Das Banner zeigt immer die JETZT aktiven Hausverbote — unabhängig von
     # Datum/Filter (Refs #1917).
@@ -407,103 +407,37 @@ def _tally_topology_projection(facility, user, state: ZeitstromState, *, summary
     )
 
 
-def build_current_shift_summary(facility, user, state: ZeitstromState, *, summary_builder=None):
-    """Renderer-only helper used by full page and current-shift partial.
+def _kpi_projection(
+    facility, user, state: ZeitstromState, *, tally_summary=None, ban_revision=None, workitem_counts=None
+):
+    """Values shown in the KPI row; ``None`` outside the feed mode.
 
-    *summary_builder* ``(target_date, time_filter) -> summary`` lets the full
-    page reuse a summary it already built for the same shift in this request.
+    The ban chip is covered by the opaque ban revision, so a ban change moves
+    this validator without a decrypting read in the poll path.
     """
 
-    from core.services.case import build_handover_summary
+    from core.services.zeitstrom_kpis import build_zeitstrom_kpis
 
-    if state.live_context.time_filter is None:
+    if state.is_handover:
         return None
-    if summary_builder is not None:
-        return summary_builder(state.live_context.shift_date, state.live_context.time_filter)
-    return build_handover_summary(
-        facility,
-        state.live_context.shift_date,
-        state.live_context.time_filter,
-        user,
-    )
-
-
-def _current_shift_projection(facility, user, state: ZeitstromState):
-    """Values/aggregates only; never calls the handover renderer."""
-
-    live_filter = state.live_context.time_filter
-    if live_filter is None:
-        return None
-    start_dt = state.live_context.window_start
-    end_dt = state.live_context.window_end
-    visible_events = (
-        Event.objects.visible_to(user)
-        .exclude(client__is_deleted=True)
-        .exclude(client__is_active=False)
-        .filter(
-            facility=facility,
-            is_deleted=False,
-            occurred_at__range=(start_dt, end_dt),
-        )
-    )
-    events_by_type = list(
-        visible_events.values("document_type__name", "document_type__color")
-        .annotate(count=Count("id"))
-        .order_by("-count")
-    )
-    stats = {
-        "events_total": sum(item["count"] for item in events_by_type),
-        "events_by_type": events_by_type,
-        "workitems_new": workitems_for_read(facility).filter(created_at__range=(start_dt, end_dt)).count(),
-        "clients_new": Client.objects.for_facility(facility)
-        .filter(is_deleted=False, is_active=True, created_at__range=(start_dt, end_dt))
-        .count(),
-    }
-
-    highlights: list[dict[str, Any]] = []
-    for highlight_type, system_type in (("crisis", "crisis"), ("ban", "ban")):
-        rows = list(
-            visible_events.filter(document_type__system_type=system_type)
-            .values(*_EVENT_VALUES)
-            .order_by("-occurred_at")[:10]
-        )
-        highlights.extend({"type": highlight_type, "time": row["occurred_at"], "row": row} for row in rows)
-    task_rows = list(
-        workitems_for_read(facility)
-        .filter(
-            priority__in=[WorkItem.Priority.URGENT, WorkItem.Priority.IMPORTANT],
-            created_at__range=(start_dt, end_dt),
-        )
-        .values(*_WORKITEM_VALUES)
-        .order_by("-created_at")[:10]
-    )
-    highlights.extend({"type": "task", "time": row["created_at"], "row": row} for row in task_rows)
-    highlights.sort(key=lambda item: item["time"], reverse=True)
-    event_rows = [item["row"] for item in highlights if item["type"] != "task"]
-    field_configs = _visible_field_configs(event_rows, user)
-    highlight_projection = []
-    for item in highlights:
-        row = item["row"]
-        value = _workitem_projection(row) if item["type"] == "task" else _event_projection(row, field_configs)
-        highlight_projection.append((item["type"], item["time"], value))
-
+    if ban_revision is None:
+        ban_revision = _bans_projection(facility, user)
+    if tally_summary is None and state.is_live_tally_context:
+        tally_summary = build_tally_summary(facility, user, context=state.live_context)
     return {
-        "shift": (str(live_filter.pk), live_filter.label, live_filter.start_time, live_filter.end_time),
-        "date": state.live_context.shift_date,
-        "window": (start_dt, end_dt),
-        "stats": stats,
-        "highlights": tuple(highlight_projection),
+        **build_zeitstrom_kpis(facility, user, state, tally_summary=tally_summary, workitem_counts=workitem_counts),
+        "bans": ban_revision,
     }
 
 
-def _focus_box_projection(facility):
+def _focus_box_projection(facility, *, total_open_count=None):
     # Local import keeps this module's dependency surface projection-focused.
     from django.utils import timezone
 
     today = timezone.localdate()
     open_statuses = [WorkItem.Status.OPEN, WorkItem.Status.IN_PROGRESS]
     base = workitems_for_read(facility).filter(status__in=open_statuses)
-    total_open = base.count()
+    total_open = base.count() if total_open_count is None else total_open_count
     eligible = base.filter(
         Q(due_date__lte=today)
         | Q(priority__in=[WorkItem.Priority.URGENT, WorkItem.Priority.IMPORTANT])
@@ -591,16 +525,33 @@ def build_zeitstrom_component_validator(
     component: str,
     *,
     tally_summary=None,
+    ban_revision=None,
+    workitem_counts=None,
 ) -> str:
-    """Return the validator for the state rendered by one follow-up."""
+    """Return the validator for the state rendered by one follow-up.
+
+    *ban_revision* lets a caller that validates several components in one
+    request read the opaque ban revision once for both ``bans`` and ``kpi``.
+    """
 
     projections = {
         "feed": lambda: _feed_projection(facility, user, state),
         "tally_counts": lambda: _tally_counts_projection(facility, user, state, summary=tally_summary),
         "tally_topology": lambda: _tally_topology_projection(facility, user, state, summary=tally_summary),
-        "current_shift": lambda: _current_shift_projection(facility, user, state),
-        "focus_box": lambda: _focus_box_projection(facility),
-        "bans": lambda: _bans_projection(facility, user),
+        "kpi": lambda: _kpi_projection(
+            facility,
+            user,
+            state,
+            tally_summary=tally_summary,
+            ban_revision=ban_revision,
+            workitem_counts=workitem_counts,
+        ),
+        "focus_box": lambda: (
+            _focus_box_projection(facility, total_open_count=workitem_counts["total_open"])
+            if workitem_counts is not None
+            else _focus_box_projection(facility)
+        ),
+        "bans": lambda: ban_revision if ban_revision is not None else _bans_projection(facility, user),
         "handover_note": lambda: _handover_note_projection(facility, user, state),
     }
     if component not in projections:
@@ -647,6 +598,13 @@ def build_zeitstrom_watch_snapshot(
     tally_summary = None
     if state.is_live_tally_context and {"tally_counts", "tally_topology"}.intersection(component_names):
         tally_summary = build_tally_summary(facility, user, context=state.live_context)
+    ban_revision = _bans_projection(facility, user) if {"bans", "kpi"}.intersection(component_names) else None
+    # The focus box and KPI row share their counters instead of adding a read.
+    workitem_counts = None
+    if {"kpi", "focus_box"}.issubset(component_names):
+        from core.services.dashboard.main import zeitstrom_workitem_counts
+
+        workitem_counts = zeitstrom_workitem_counts(user, facility)
     validators = {
         name: build_zeitstrom_component_validator(
             user,
@@ -654,6 +612,8 @@ def build_zeitstrom_watch_snapshot(
             state,
             name,
             tally_summary=tally_summary,
+            ban_revision=ban_revision,
+            **({"workitem_counts": workitem_counts} if workitem_counts is not None else {}),
         )
         for name in component_names
     }

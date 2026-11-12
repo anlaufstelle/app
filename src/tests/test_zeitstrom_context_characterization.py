@@ -26,12 +26,12 @@ from django.utils.functional import Promise
 from core.models import DocumentType, DocumentTypeField, FieldTemplate, TimeFilter, WorkItem
 from core.services.case import build_handover_summary
 from core.services.case.handover_note import Shift, build_handover_note_context
-from core.services.dashboard import build_focus_box, staff_dashboard_context
+from core.services.dashboard import build_focus_box
 from core.services.events import build_tally_summary
 from core.services.system import get_active_bans
 from core.services.zeitstrom_filters import resolve_zeitstrom_state
+from core.services.zeitstrom_kpis import build_zeitstrom_kpis
 from core.services.zeitstrom_watch import (
-    build_current_shift_summary,
     build_zeitstrom_page_scope,
     build_zeitstrom_tally_topology_validator,
 )
@@ -47,8 +47,7 @@ ROLES = ["assistant_user", "staff_user", "lead_user", "admin_user"]
 BASE_KEYS = {
     "view",
     "feed_items",
-    "handover_summary",
-    "current_shift_summary",
+    "kpis",
     "tally_summary",
     "show_tally_panel",
     "time_filters",
@@ -66,8 +65,6 @@ BASE_KEYS = {
     "focus_box",
     "active_bans",
     "zeitstrom_filter_state",
-    "contacts_navigation",
-    "contacts_list_params",
     "prev_url",
     "next_url",
     "today_url",
@@ -80,7 +77,6 @@ BASE_KEYS = {
     "zeitstrom_page_scope",
     "zeitstrom_tally_topology",
 }
-COCKPIT_KEYS = {"show_cockpit", "cockpit"}
 HANDOVER_KEYS = {"uebergabe_mode", "uebergabe_summary", "handover_notes", "handover_note_display"}
 
 
@@ -210,7 +206,7 @@ def _get(client, user, params=None):
 
 
 def _context_keys(response):
-    return set(response.context.keys()) & (BASE_KEYS | COCKPIT_KEYS | HANDOVER_KEYS)
+    return set(response.context.keys()) & (BASE_KEYS | HANDOVER_KEYS)
 
 
 def _assert_matches_services(response, facility, user, params):
@@ -238,12 +234,6 @@ def _assert_matches_services(response, facility, user, params):
     ]
     assert ctx["tally_next"] == f"{reverse('core:zeitstrom')}?{urlencode(state.params)}"
 
-    expected_handover = (
-        build_handover_summary(facility, state.target_date, state.time_filter, user) if state.time_filter else None
-    )
-    assert _norm(ctx["handover_summary"]) == _norm(expected_handover)
-    current_state = resolve_zeitstrom_state({}, facility)
-    assert _norm(ctx["current_shift_summary"]) == _norm(build_current_shift_summary(facility, user, current_state))
     assert _norm(ctx["focus_box"]) == _norm(build_focus_box(facility))
     assert _norm(ctx["active_bans"]) == _norm(get_active_bans(facility, user=user))
     assert ctx["zeitstrom_page_scope"] == build_zeitstrom_page_scope(user, facility)
@@ -275,11 +265,14 @@ def _assert_matches_services(response, facility, user, params):
         else:
             assert ctx["tally_summary"] is None
 
-    if user.is_lead_or_admin or user.is_super_admin:
-        assert "show_cockpit" not in ctx
+    if state.is_handover:
+        assert ctx["kpis"] is None
     else:
-        assert ctx["show_cockpit"] is True
-        assert _norm(ctx["cockpit"]) == _norm(staff_dashboard_context(user, facility))
+        expected_kpis = build_zeitstrom_kpis(
+            facility, user, state, tally_summary=ctx["tally_summary"], today=state.local_date
+        )
+        assert {key: ctx["kpis"][key] for key in expected_kpis} == expected_kpis
+        assert ctx["kpis"]["bans_count"] == len(ctx["active_bans"])
 
 
 @pytest.mark.django_db
@@ -291,13 +284,11 @@ class TestZeitstromContextCharacterization:
         response = _get(client, user)
 
         ctx = response.context
-        expected = BASE_KEYS | (set() if user.is_lead_or_admin else COCKPIT_KEYS)
+        expected = BASE_KEYS
         assert _context_keys(response) == expected
         assert ctx["selected_filter"] == shifts["early"]
         assert ctx["target_date"] == TODAY
         assert ctx["show_tally_panel"] is True
-        assert ctx["handover_summary"]["shift_label"] == "Frühdienst"
-        assert _norm(ctx["handover_summary"]) == _norm(ctx["current_shift_summary"])
         feed_events = [str(item["object"].pk) for item in ctx["feed_items"] if item["type"] == "event"]
         expected_events = [str(populated["contact_now"].pk)]
         if role != "assistant_user":
@@ -320,11 +311,6 @@ class TestZeitstromContextCharacterization:
         assert ctx["target_date"] == YESTERDAY
         assert ctx["show_tally_panel"] is False
         assert ctx["tally_summary"] is None
-        assert ctx["handover_summary"]["shift_label"] == "Spätdienst"
-        assert ctx["handover_summary"]["date"] == YESTERDAY
-        # The current-shift box stays on the running shift.
-        assert ctx["current_shift_summary"]["shift_label"] == "Frühdienst"
-        assert ctx["current_shift_summary"]["date"] == TODAY
         assert [item["object"].pk for item in ctx["feed_items"] if item["type"] == "event"] == [
             populated["contact_late"].pk
         ]
@@ -340,8 +326,6 @@ class TestZeitstromContextCharacterization:
         ctx = response.context
         assert ctx["selected_filter"] is None
         assert ctx["selected_filter_id"] == "all"
-        assert ctx["handover_summary"] is None
-        assert ctx["current_shift_summary"]["shift_label"] == "Frühdienst"
         _assert_matches_services(response, facility, user, params)
 
     @pytest.mark.parametrize("role", ROLES)
@@ -352,15 +336,13 @@ class TestZeitstromContextCharacterization:
         response = _get(client, user, params)
 
         ctx = response.context
-        expected = BASE_KEYS | HANDOVER_KEYS | (set() if user.is_lead_or_admin else COCKPIT_KEYS)
+        expected = BASE_KEYS | HANDOVER_KEYS
         assert _context_keys(response) == expected
         # At 12:00 the latest completed shift is last night's.
         assert ctx["selected_filter"] == shifts["night"]
         assert ctx["selected_filter_id"] == str(shifts["night"].pk)
         assert ctx["target_date"] == YESTERDAY
         assert ctx["uebergabe_summary"]["shift_label"] == "Nachtdienst"
-        assert _norm(ctx["handover_summary"]) == _norm(ctx["uebergabe_summary"])
-        assert ctx["current_shift_summary"]["shift_label"] == "Frühdienst"
         assert (ctx["handover_notes"] is None) is (role == "assistant_user")
         _assert_matches_services(response, facility, user, params)
 
@@ -374,7 +356,6 @@ class TestZeitstromContextCharacterization:
         ctx = response.context
         assert ctx["selected_filter"] is None
         assert ctx["selected_filter_id"] == "all"
-        assert ctx["handover_summary"] is None
         assert ctx["uebergabe_summary"]["date"] == YESTERDAY
         _assert_matches_services(response, facility, user, params)
 
@@ -439,8 +420,6 @@ class TestZeitstromContextCharacterization:
         assert ctx["active_bans"] == []
         assert list(ctx["time_filters"]) == []
         assert ctx["selected_filter"] is None
-        assert ctx["handover_summary"] is None
-        assert ctx["current_shift_summary"] is None
         _assert_matches_services(response, facility, user, {})
 
     def test_empty_facility_handover(self, client, facility, frozen, staff_user):
@@ -450,7 +429,6 @@ class TestZeitstromContextCharacterization:
 
         ctx = response.context
         assert ctx["selected_filter"] is None
-        assert ctx["handover_summary"] is None
         assert ctx["uebergabe_summary"]["date"] == TODAY
         _assert_matches_services(response, facility, staff_user, params)
 

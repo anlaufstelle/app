@@ -23,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Zeitstrom: Kennzahlenzeile statt Cockpit, Dienst-Karte und Kontakte-Link** (#2655) — Eine Zeile zeigt Kontakte im Dienst, gezählte Striche, eigene und überfällige Aufgaben und aktive Hausverbote; Links öffnen die zugehörigen gefilterten Listen. Sie ersetzt Cockpit, Dienst-Karte und Kontakte-Link, gilt für alle Rollen und aktualisiert sich live.
 - **Zeitstrom: eine Kopfzeile für Datum, Schicht und Ansicht** (#2654) — Datum, Schicht-Auswahl und Feed/Übergabe-Wahl stehen in einer Kopfzeile, die Schicht wird nur dort genannt. Weicht die Auswahl vom laufenden Dienst ab, führt ein Hinweis zurück; mobil öffnen Datum und Schicht gemeinsam ein Auswahlblatt.
 - **Demo-Hinweis mobil einzeilig und aufklappbar** (#2663) — Auf dem Handy zeigt die Zeile „Demo · synthetisch · Reset 18:00“, Bereich und Wechsel-Link klappen per Tipp auf (je Sitzung gemerkt). Die Zeile bleibt immer sichtbar; ohne JavaScript steht der volle Hinweis da.
 - **„Schnell verlassen“ als kompakter Knopf oben rechts statt deckender Leiste** (#2660) — Der Knopf nimmt keine eigene Zeile mehr ein; mobil steht „Verlassen“, breit der Volltext. Der Inhalt beginnt auf jeder Breite unterhalb des Knopfs, Hinweisleisten und Offline-Navigation lassen rechts Platz, Statusbalken bleiben voll breit. Auch Passwortwechsel, 2FA-Einrichtung und Offline-Ausweichseite tragen ihn; Kürzel und Tab-Position bleiben.

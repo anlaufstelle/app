@@ -113,10 +113,14 @@ def _minimal_state():
 
 
 def _stub_other_components(monkeypatch):
-    """Stubbt feed/current_shift/focus_box/bans — nicht Ziel dieser Batch."""
+    """Stub unrelated components and their shared workitem counters."""
+    monkeypatch.setattr(
+        "core.services.dashboard.main.zeitstrom_workitem_counts",
+        lambda *a, **k: {"total_open": 0, "my_open": 0, "my_overdue": 0},
+    )
 
     monkeypatch.setattr(zeitstrom_watch_module, "_feed_projection", lambda *a, **k: "stub-feed")
-    monkeypatch.setattr(zeitstrom_watch_module, "_current_shift_projection", lambda *a, **k: "stub-current-shift")
+    monkeypatch.setattr(zeitstrom_watch_module, "_kpi_projection", lambda *a, **k: "stub-kpi")
     monkeypatch.setattr(zeitstrom_watch_module, "_focus_box_projection", lambda *a, **k: "stub-focus-box")
     monkeypatch.setattr(zeitstrom_watch_module, "_bans_projection", lambda *a, **k: "stub-bans")
 
@@ -471,19 +475,18 @@ def test_build_zeitstrom_component_validator_tally_topology_forwards_facility(mo
     assert calls == [((facility, user, state), {"summary": None})]
 
 
-def test_build_zeitstrom_component_validator_current_shift_forwards_user(monkeypatch):
-    """Pins x_build_zeitstrom_component_validator__mutmut_37 (user durch
-    ``None`` ersetzt im Aufruf von ``_current_shift_projection``)."""
+def test_build_zeitstrom_component_validator_kpi_forwards_user_and_summary(monkeypatch):
+    """The KPI projection is called with the real user and the passed tally summary."""
 
     calls = []
-    monkeypatch.setattr(zeitstrom_watch_module, "_current_shift_projection", _recording_stub(calls))
+    monkeypatch.setattr(zeitstrom_watch_module, "_kpi_projection", _recording_stub(calls))
     facility = SimpleNamespace(pk="f-cv3")
     user = SimpleNamespace(pk="u-cv3")
     state = _minimal_state()
 
-    build_zeitstrom_component_validator(user, facility, state, "current_shift")
+    build_zeitstrom_component_validator(user, facility, state, "kpi")
 
-    assert calls == [((facility, user, state), {})]
+    assert calls == [((facility, user, state), {"tally_summary": None, "ban_revision": None, "workitem_counts": None})]
 
 
 def test_build_zeitstrom_component_validator_unknown_component_message_is_exact():

@@ -10,6 +10,8 @@ there; a past day outside the seed window holds exactly the cards created here.
 
 import json
 import re
+from datetime import date, timedelta
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 from playwright.sync_api import expect
@@ -207,59 +209,60 @@ class TestHandoverPage:
         assert page.locator("text=Kontakte").count() > 0
 
 
-class TestCurrentShiftInZeitstrom:
-    """Dienst-Übersicht des aktuell laufenden Dienstes im Zeitstrom (Refs #1138)."""
+class TestZeitstromFigures:
+    """The figures replace the old shift card and follow the selected contact window."""
 
-    def test_current_shift_card_visible_on_load(self, authenticated_page, base_url):
-        """Die Dienst-Übersicht ist dauerhaft sichtbar und beschriftet — kein Aufklappen."""
+    def test_figures_replace_the_current_shift_card(self, authenticated_page, base_url):
         page = authenticated_page
         page.goto(f"{base_url}/", wait_until="domcontentloaded")
+        expect(page.get_by_test_id("zeitstrom-kpi-slot")).to_be_visible()
+        expect(page.get_by_test_id("zeitstrom-contacts-list")).to_be_visible()
+        expect(page.get_by_test_id("current-shift")).to_have_count(0)
+        expect(page.get_by_test_id("zeitstrom-cockpit")).to_have_count(0)
+        expect(page.get_by_test_id("handover-summary")).to_have_count(0)
 
-        card = page.locator("[data-testid='current-shift']")
-        card.wait_for(state="visible", timeout=10000)
-        # Überschrift wird per CSS in Versalien dargestellt → case-insensitiv prüfen.
-        assert "aktueller dienst" in card.inner_text().lower()
-        # Kein aufklappbares <details> mehr für die Dienst-Übersicht.
-        assert page.locator("[data-testid='handover-summary']").count() == 0
-
-    def test_current_shift_card_independent_of_date_and_filter(self, authenticated_page, base_url):
-        """Die Dienst-Übersicht bleibt beim laufenden Dienst, auch bei anderer Datums-/Schicht-Auswahl."""
-        from datetime import date, timedelta
-
+    def test_contact_figure_follows_date_and_shift(self, authenticated_page, base_url):
         page = authenticated_page
         page.goto(f"{base_url}/", wait_until="domcontentloaded")
-
-        card = page.locator("[data-testid='current-shift']")
-        card.wait_for(state="visible", timeout=10000)
-        running_shift_label = card.locator("[data-testid='current-shift-label']").inner_text()
-
-        # Beliebigen Schicht-Filter ermitteln, der NICHT der laufende Dienst ist,
-        # und per Voll-Navigation (anderer Tag) ansteuern.
-        tabs = page.locator(".time-filter-tab")
-        other_filter_id = None
-        for i in range(tabs.count()):
-            label = tabs.nth(i).inner_text().strip()
-            if label.startswith("Alle"):
-                continue
-            # running_shift_label = "Spätdienst · 16:00 – 22:00"; Tab = "Spätdienst 16:00–22:00"
-            if label.split()[0] not in running_shift_label:
-                other_filter_id = tabs.nth(i).get_attribute("data-zeitstrom-time-filter")
-                break
-
-        assert other_filter_id is not None, "Kein vom laufenden Dienst abweichender Schichtfilter gefunden"
+        shift = page.get_by_test_id("zeitstrom-shift-select")
+        values = shift.locator("option").evaluate_all("els => els.map(el => el.value)")
+        other = next(value for value in values if value not in ("all", shift.input_value()))
         yesterday = (date.today() - timedelta(days=1)).isoformat()
-        # Datum und abweichende Schicht in EINER Voll-Navigation ansteuern.
-        # Ein vorausgehender HTMX-Klick würde absichtlich eine zweite,
-        # konkurrierende Navigation starten und nicht diesen Vertrag testen.
-        page.goto(
-            f"{base_url}/?date={yesterday}&time_filter={other_filter_id}",
-            wait_until="domcontentloaded",
-        )
+        page.goto(f"{base_url}/?date={yesterday}&time_filter={other}", wait_until="domcontentloaded")
+        expect(shift).to_have_value(other)
+        contacts = page.get_by_test_id("zeitstrom-contacts-list")
+        expect(contacts).to_be_visible()
+        params = parse_qs(urlparse(contacts.get_attribute("href")).query)
+        assert params["date_from"] == params["date_to"] == [yesterday]
+        assert params["time_filter"] == [other]
+        assert params["created_via"] == ["standard"]
+        expect(page.get_by_test_id("zeitstrom-kpi-tally")).to_have_count(0)
+        expect(page.get_by_test_id("current-shift")).to_have_count(0)
 
-        card = page.locator("[data-testid='current-shift']")
-        card.wait_for(state="visible", timeout=10000)
-        # Beschriftung der Box folgt weder Datum noch Schicht-Auswahl.
-        assert card.locator("[data-testid='current-shift-label']").inner_text() == running_shift_label
+    def test_tally_and_undo_update_the_figure_in_another_tab(self, staff_page, base_url):
+        page = staff_page
+        page.goto(f"{base_url}/", wait_until="domcontentloaded")
+        observer = page.context.new_page()
+        try:
+            observer.goto(f"{base_url}/", wait_until="domcontentloaded")
+            counter = page.get_by_test_id("zeitstrom-kpi-tally")
+            before = int(counter.get_attribute("data-count"))
+            button = page.locator("button[data-testid^='tally-increment-']").first
+            expect(button).to_be_visible()
+            button.click()
+            expect(counter).to_have_attribute("data-count", str(before + 1), timeout=15000)
+            observer.evaluate("window.zeitstromWatch.checkNow()")
+            expect(observer.get_by_test_id("zeitstrom-kpi-tally")).to_have_attribute(
+                "data-count", str(before + 1), timeout=15000
+            )
+            page.get_by_test_id("tally-undo").click()
+            expect(counter).to_have_attribute("data-count", str(before), timeout=15000)
+            observer.evaluate("window.zeitstromWatch.checkNow()")
+            expect(observer.get_by_test_id("zeitstrom-kpi-tally")).to_have_attribute(
+                "data-count", str(before), timeout=15000
+            )
+        finally:
+            observer.close()
 
 
 class TestFeedCardHeaderToggle:

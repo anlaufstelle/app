@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-12 16:39+0100\n"
+"POT-Creation-Date: 2026-11-12 17:31+0100\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -8129,10 +8129,6 @@ msgstr "Neue Aufgaben"
 msgid "Neue Personen"
 msgstr "Neue Personen"
 
-#: src/templates/core/handover/partials/_summary_compact.html:6
-msgid "Wichtige Ereignisse"
-msgstr "Wichtige Ereignisse"
-
 #: src/templates/core/handover/partials/_summary_full.html:14
 msgid "Statistiken"
 msgstr "Statistiken"
@@ -9715,22 +9711,6 @@ msgstr "Alle erledigten Aufgaben anzeigen"
 msgid "Keine erledigten Aufgaben im gewählten Zeitraum"
 msgstr "Keine erledigten Aufgaben im gewählten Zeitraum"
 
-#: src/templates/core/zeitstrom/index.html:44
-msgid "Heutige Kontakte"
-msgstr "Heutige Kontakte"
-
-#: src/templates/core/zeitstrom/index.html:46
-msgid "Ereignisse heute"
-msgstr "Ereignisse heute"
-
-#: src/templates/core/zeitstrom/index.html:51
-msgid "Mir zugewiesen, offen"
-msgstr "Mir zugewiesen, offen"
-
-#: src/templates/core/zeitstrom/index.html:56
-msgid "Mir zugewiesen, Frist verstrichen"
-msgstr "Mir zugewiesen, Frist verstrichen"
-
 #: src/templates/core/zeitstrom/index.html:63
 msgid "Feed"
 msgstr "Feed"
@@ -9746,10 +9726,6 @@ msgstr "Hausverbot:"
 #: src/templates/core/zeitstrom/index.html:103
 msgid "Ganzer Tag"
 msgstr "Ganzer Tag"
-
-#: src/templates/core/zeitstrom/index.html:136
-msgid "Aktueller Dienst"
-msgstr "Aktueller Dienst"
 
 #: src/templates/core/zeitstrom/index.html:190
 msgid "Alle aufklappen"
@@ -13927,10 +13903,6 @@ msgstr "Quelle: <code>core/services/compliance/</code>. Aktualisierung bei jedem
 msgid "Übersicht aller Legal Holds. Aufheben ist hier durch die Systemverwaltung möglich; Setzen erfolgt in der jeweiligen Akte."
 msgstr "Übersicht aller Legal Holds. Aufheben ist hier durch die Systemverwaltung möglich; Setzen erfolgt in der jeweiligen Akte."
 
-#: src/templates/core/zeitstrom/partials/contacts_navigation.html:3
-msgid "Kontakt-Navigation"
-msgstr "Kontakt-Navigation"
-
 #, python-format
 msgid "Noch offene Historienfassung: %(counter)s (zurückgestellt)."
 msgid_plural "Noch offene Historienfassungen: %(counter)s (zurückgestellt)."
@@ -15252,3 +15224,76 @@ msgstr "Wartungsmodus, Änderungen an 2FA und Passkeys (auch an der 2FA-Pflicht)
 #: src/core/services/compliance/vvt.py:317
 msgid "Unveränderbarkeit per DB-Trigger erzwungen (UPDATE/DELETE blockiert); der Aufbewahrungslauf umgeht den Trigger transaktional, um abgelaufene Einträge zu löschen; fachliche Inhalte ändert er nicht"
 msgstr "Unveränderbarkeit per DB-Trigger erzwungen (UPDATE/DELETE blockiert); der Aufbewahrungslauf umgeht den Trigger transaktional, um abgelaufene Einträge zu löschen; fachliche Inhalte ändert er nicht"
+
+#: src/templates/core/zeitstrom/index.html:30
+#: src/templates/core/zeitstrom/index.html:36
+msgid "läuft"
+msgstr "läuft"
+
+#: src/templates/core/zeitstrom/index.html:42
+msgid "Tag wechseln"
+msgstr "Tag wechseln"
+
+#: src/templates/core/zeitstrom/index.html:81
+msgid "Ansicht"
+msgstr "Ansicht"
+
+#: src/templates/core/zeitstrom/partials/kpi_slot.html:11
+msgid "Kennzahlen"
+msgstr "Kennzahlen"
+
+#: src/templates/core/zeitstrom/partials/kpi_slot.html:15
+msgid "Kontakt im Dienst"
+msgid_plural "Kontakte im Dienst"
+msgstr[0] "Kontakt im Dienst"
+msgstr[1] "Kontakte im Dienst"
+
+#: src/templates/core/zeitstrom/partials/kpi_slot.html:15
+msgid "Kontakt heute"
+msgid_plural "Kontakte heute"
+msgstr[0] "Kontakt heute"
+msgstr[1] "Kontakte heute"
+
+#: src/templates/core/zeitstrom/partials/kpi_slot.html:15
+msgid "Kontakt an diesem Tag"
+msgid_plural "Kontakte an diesem Tag"
+msgstr[0] "Kontakt an diesem Tag"
+msgstr[1] "Kontakte an diesem Tag"
+
+#: src/templates/core/zeitstrom/partials/kpi_slot.html:22
+msgid "gezählt (Strichliste)"
+msgstr "gezählt (Strichliste)"
+
+#: src/templates/core/zeitstrom/partials/kpi_slot.html:29
+msgid "meine Aufgabe"
+msgid_plural "meine Aufgaben"
+msgstr[0] "meine Aufgabe"
+msgstr[1] "meine Aufgaben"
+
+#: src/templates/core/zeitstrom/partials/kpi_slot.html:35
+msgid "überfällig"
+msgstr "überfällig"
+
+#: src/templates/core/zeitstrom/partials/kpi_slot.html:43
+msgid "Hausverbot aktiv"
+msgid_plural "Hausverbote aktiv"
+msgstr[0] "Hausverbot aktiv"
+msgstr[1] "Hausverbote aktiv"
+
+#: src/templates/core/zeitstrom/partials/selection_hint.html:9
+#, python-format
+msgid "Du siehst %(shift)s, %(day)s —"
+msgstr "Du siehst %(shift)s, %(day)s —"
+
+#: src/templates/core/zeitstrom/partials/selection_hint.html:9
+#, python-format
+msgid "Du siehst den ganzen Tag, %(day)s —"
+msgstr "Du siehst den ganzen Tag, %(day)s —"
+
+#: src/templates/core/zeitstrom/partials/selection_hint.html:10
+msgid "zum laufenden Dienst"
+msgstr "zum laufenden Dienst"
+
+#: src/templates/core/zeitstrom/partials/selection_hint.html:10
+msgid "zu heute"
+msgstr "zu heute"

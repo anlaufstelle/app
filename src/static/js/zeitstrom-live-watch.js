@@ -19,7 +19,7 @@
         "feed",
         "tally_counts",
         "tally_topology",
-        "current_shift",
+        "kpi",
         "focus_box",
         "bans",
         "handover_note",
@@ -388,7 +388,7 @@
 
         async function refreshChrome(component, signal, expectedGeneration, expectedValidator) {
             const config = {
-                current_shift: [root.dataset.currentShiftUrl, "zeitstrom-current-shift-slot"],
+                kpi: [root.dataset.kpiUrl, "zeitstrom-kpi-slot"],
                 focus_box: [root.dataset.focusBoxUrl, "zeitstrom-focus-box-slot"],
                 bans: [root.dataset.bansUrl, "zeitstrom-bans-slot"],
             }[component];

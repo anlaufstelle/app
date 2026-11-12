@@ -175,9 +175,18 @@ Der Feed fasst vier Quellen des aktuellen Tages zusammen:
 | **Kontakte** (Events) | Dokumentationseinträge mit Vorschaufeldern |
 | **Aktivitäten** | System-Operationen (erstellt, bearbeitet, gelöscht …) |
 | **Aufgaben** (WorkItems) | Hinweise und Aufgaben mit Priorität und Status |
-| **Hausverbote** | Aktive Hausverbote — zusätzlich als rotes Banner oben |
+| **Hausverbote** | Aktive Hausverbote — zusätzlich als rote Zeilen oben (siehe [Hausverbot-Banner](#hausverbot-banner)) |
 
 **Kopfzeile.** Ganz oben steht eine einzige Zeile mit dem Titel, dem Datumswechsler, der Schicht-Auswahl und der Umschaltung **Feed | Übergabe**; sie gilt für beide Ansichten. Die Schicht wird nur dort genannt. Am Desktop bündelt **Neu** ab der Rolle Fachkraft die Aktionen **Aufgabe erstellen** und **Person anlegen**. Am Handy sind Datum und Schicht ein gemeinsames Tipp-Ziel, das ein Auswahlblatt von unten öffnet; **Schließen**, die Escape-Taste oder ein Tipp neben das Blatt schließen es wieder, der Fokus kehrt zum Tipp-Ziel zurück.
+
+**Kennzahlenzeile.** Im Feed steht direkt unter der Kopfzeile eine Zeile mit Zahlen (am Handy seitlich scrollbar). Die Zahlen mit Pfeil führen zu den zugehörigen Listen:
+
+- **Kontakte im Dienst** — dokumentierte Kontakte der gewählten Schicht und des gewählten Tages (ohne gewählte Schicht heißt die Zahl **Kontakte heute**, an einem früheren Tag **Kontakte an diesem Tag**). Der Link öffnet die Kontakte-Liste mit denselben Filtern und dem Zusatz „ohne Strichliste“; Striche zählen hier nicht mit.
+- **gezählt (Strichliste)** — Strichlisten-Einträge im Live-Fenster, einschließlich Einträgen inzwischen deaktivierter Typen; nur sichtbar, wenn die Strichliste sichtbar ist. Der Link öffnet die Kontakte-Liste mit „nur Strichliste“ und demselben Zeitfenster. Die Kacheln zählen weiterhin alle anonymen Kontakte ihres Typs; ihre Summe kann deshalb von dieser Zahl abweichen.
+- **meine Aufgaben** und **überfällig** — offene Aufgaben, die Ihnen zugewiesen sind (nicht die unzugewiesenen Teamaufgaben); „überfällig“ steht rot, sobald die Zahl größer als null ist.
+- **Hausverbote aktiv** — nur sichtbar, wenn Hausverbote bestehen; die Einzelheiten stehen direkt darunter.
+
+Die Zeile gilt für alle Rollen mit Zeitstrom-Zugang. Die Zahlen aktualisieren sich mit jedem Strich, mit **Rückgängig**, beim Wechsel von Schicht oder Filter und im Hintergrund, wenn andere Personen etwas ändern. Die Übergabe zeigt stattdessen die vollständige Zusammenfassung der Schicht.
 
 In der rechten Seitenspalte steht die Team-Fokusbox **„Team-Aufgaben mit Handlungsbedarf“** mit bis zu **8 Einträgen**, unabhängig von der Zuweisung. Sie gruppiert nach **Überfällig**, **Heute fällig**, **Dringend · Wichtig** und **In Bearbeitung**; jede Aufgabe erscheint nur in der höchsten zutreffenden Druckstufe. Innerhalb der Gruppen wird nach Fälligkeit, Priorität und Erstellzeit sortiert. Offene normale Aufgaben ohne Frist bleiben über **Zur Aufgabenübersicht** erreichbar.
 
@@ -216,9 +225,7 @@ Die beiden Stunden sind für die Anwendung wirklich verschiedene Zeitpunkte, die
 
 In der Nacht zur Sommerzeit gibt es die Stunde von 02:00 bis 03:00 dagegen **gar nicht** — dort weist das Formular eine Uhrzeit aus diesem Fenster weiterhin zurück und nennt den Grund. Eine Auswahl gibt es hier nicht: eine Uhrzeit, die es nicht gibt, wird durch keine Angabe real.
 
-Zeigt die Auswahl nicht den laufenden Dienst (anderer Tag oder andere Schicht), steht unter der Kopfzeile ein Hinweis „Du siehst …“ mit dem Link **zum laufenden Dienst**; bei laufendem Dienst erscheint er nicht.
-
-Oberhalb des Feeds steht die dauerhaft sichtbare Box **Aktueller Dienst** mit Kontakten, neuen Aufgaben, neuen Personen und wichtigen Vorkommnissen der laufenden Schicht. Sie ist unabhängig vom gewählten Zeitstrom-Filter und erscheint nur, wenn gerade eine eingerichtete Schicht läuft.
+Zeigt die Auswahl nicht den laufenden Dienst (anderer Tag oder andere Schicht), steht unter der Kopfzeile ein Hinweis „Du siehst …“ mit dem Link **zum laufenden Dienst**; bei laufendem Dienst erscheint er nicht. Die frühere Box **Aktueller Dienst** wird im Feed durch die Kennzahlenzeile ersetzt; die Übergabe enthält weiterhin die vollständige Schichtzusammenfassung.
 
 #### Übergabenotiz
 
@@ -249,7 +256,7 @@ Filteränderungen laden nur den Feed neu (HTMX), ohne die ganze Seite zu aktuali
 
 ### Hausverbot-Banner
 
-Wenn aktive Hausverbote in Ihrer Einrichtung bestehen, werden diese als rotes Banner unterhalb der Überschrift angezeigt.
+Wenn aktive Hausverbote in Ihrer Einrichtung bestehen, steht in der Kennzahlenzeile die rot markierte Zahl **Hausverbote aktiv**, und direkt darunter erscheint je Hausverbot eine rote Zeile mit Pseudonym sowie, je nach Berechtigung und vorhandenem Inhalt, Grund und „Bis“-Datum. Die Detailzeilen stehen außerhalb der seitlich scrollbaren Kennzahlenzeile und bleiben auch am Handy sichtbar. Zahl und Details aktualisieren sich im Hintergrund, wenn ein Hausverbot angelegt, geändert oder gelöscht wird.
 
 ---
 
@@ -288,7 +295,7 @@ Die **Arbeitszentrale** (`/start/`) ist die Landingpage der **Leitung** — eine
 
 Alle übrigen Rollen werden von `/start/` direkt an ihren Arbeitsplatz umgeleitet:
 
-- **Fachkraft / Assistenz** — zum Zeitstrom (`/`); die bisherigen Kacheln „Heutige Kontakte", „Meine Aufgaben" und „Zuletzt bearbeitet" samt der Listen „Meine offenen Aufgaben" und „Zuletzt bearbeitete Personen" leben dort als Cockpit-Block oberhalb des Feeds weiter.
+- **Fachkraft / Assistenz** — zum Zeitstrom (`/`); die bisherigen Kacheln „Heutige Kontakte" und „Meine Aufgaben" sind dort zur Kennzahlenzeile oberhalb des Feeds geworden (siehe [Was der Zeitstrom zeigt](#was-der-zeitstrom-zeigt)).
 - **Anwendungsbetreuung** (`facility_admin`) — zur Verwaltungs-Übersicht (`/verwaltung/`).
 - **Systemadministration** (`super_admin`) — zum Systembereich (`/system/`).
 
