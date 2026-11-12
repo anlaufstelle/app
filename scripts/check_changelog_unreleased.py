@@ -11,27 +11,29 @@ vergebene Versionsbloecke.
 
 Konvention: AGENTS.md (Abschnitt "Coding-Regeln", CHANGELOG-Eintrag-Regel) —
 ``### Kategorie`` aus Security/Added/Changed/Fixed/Docs, Format
-``- **Titel** ([#NNN](URL)) — ein Satz.``.
+``- **Titel** ([#NNN](URL)) — Text.`` mit hoechstens zwei Saetzen.
 
-Kalibrierung gegen gelebte Praxis
-==================================
-Die Regeln unten wurden gegen die beiden zuletzt abgenommenen Bloecke
-``[0.81.0]`` und ``[0.80.0]`` in CHANGELOG.md kalibriert: beide MUESSEN diesen
-Guard bestehen, wenn ihr Inhalt (hypothetisch) unter ``[Unreleased]`` stuende
-(siehe ``dev-ops/release/tests/test_check_changelog_unreleased.py``, Test
-``test_real_released_blocks_would_pass_the_guard``). Zwei Abweichungen von
-AGENTS.md wurden dabei sichtbar und sind bewusst in den Regeln beruecksichtigt:
+Calibration
+===========
+Rules a-f were calibrated against the released blocks ``[0.81.0]`` and
+``[0.80.0]``. Two deviations from AGENTS.md showed up there and are part of
+the rules on purpose:
 
-* ``### Removed`` und ``### Performance`` werden in der Praxis verwendet,
-  obwohl AGENTS.md nur Security/Added/Changed/Fixed/Docs nennt -> im
-  Vokabular unten (``ALLOWED_SECTIONS``) mit aufgenommen.
-* Nicht jeder Eintrag traegt eine ``#NNN``-Referenz — ``[0.80.0]`` enthaelt
-  unter ``### Fixed`` den reinen Dependency-Bump "cryptography auf 50.0.0
-  angehoben" ganz ohne Ticket-Bezug. Ein fehlender Issue-Link ist deshalb nur
-  ein Hinweis (Warnung), kein Blocker (Exit bleibt 0).
+* ``### Removed`` and ``### Performance`` are used in practice although
+  AGENTS.md does not name them, so the vocabulary below includes them.
+* Not every entry carries a ``#NNN`` reference: ``[0.80.0]`` lists a plain
+  dependency bump without a ticket. A missing reference is therefore only a
+  warning and never blocks (exit code stays 0).
 
-Regeln (deterministisch, kein Stil-Linting)
-============================================
+The entry length limit of rule g was calibrated against ``[0.12.0]`` and
+``[0.14.0]`` instead (Refs #2704). Those blocks were written and edited in one
+pass at release time, and every entry of both meets the limit (see
+``dev-ops/release/tests/test_check_changelog_unreleased.py``). ``[0.80.0]``
+and ``[0.81.0]`` no longer pass the guard as a whole: they already carry the
+long entries rule g is meant to prevent.
+
+Regeln (deterministisch)
+========================
 a) ``### ``-Unterabschnitte in [Unreleased] nur aus ``ALLOWED_SECTIONS``.
 b) Kein leerer Unterabschnitt (Heading ohne mindestens einen Top-Level-Bullet).
 c) Ein Eintrag ohne jede ``#NNN``-Referenz erzeugt nur eine Warnung (siehe
@@ -46,6 +48,28 @@ f) Jede Kategorie hoechstens eine ``### ``-Ueberschrift pro Block (Refs #1975).
    Ueberschrift hinten an, statt den Eintrag unter die vorhandene zu
    sortieren. Geprueft wird auch das nur im offenen Block — veroeffentlichte
    Abschnitte stecken in der Public-History und sind nicht mehr aenderbar.
+
+Entry form (Refs #2704)
+=======================
+Since v0.20.0 every change writes its own entry, and review rounds kept adding
+sentences to it. Entries grew from about 250 to more than 1,000 characters,
+one ticket spread over several entries, and merged branches left the sections
+in the order of arrival. Rules g-k keep the open block in the form the release
+edit expects:
+
+g) The text of an entry after the dash has at most ``MAX_ENTRY_CHARS``
+   characters, in the operator-actions section ``MAX_OPERATOR_ENTRY_CHARS``.
+   The text is counted as rendered: a Markdown link counts with its label,
+   not with its target. An entry without a dash is measured as a whole.
+h) One entry per ticket and section. The tickets of an entry are the ``#NNN``
+   references before the dash; a mention in the text of another entry does
+   not count. The same ticket may still appear in two sections, for example
+   as an operator action and as a security entry. The operator-actions
+   section is exempt: operators work through it step by step, so one ticket
+   may list each required step as its own entry.
+i) The sections follow ``SECTION_ORDER``.
+j) No blank line between two entries of a section.
+k) A blank line before every ``### `` heading.
 """
 
 from __future__ import annotations
@@ -55,25 +79,51 @@ import re
 import sys
 from pathlib import Path
 
-# Documented vocabulary plus categories retained from established releases.
-# The operator-actions section records mandatory deployment follow-up explicitly.
-ALLOWED_SECTIONS: frozenset[str] = frozenset(
-    {
-        "Added",
-        "Changed",
-        "Deprecated",
-        "Removed",
-        "Fixed",
-        "Security",
-        "Docs",
-        "Performance",
-        "Erforderliche Betreiber-Aktionen",
-    }
+# Reading order of the sections in a release block (rule i). It holds the
+# documented vocabulary plus the categories retained from established
+# releases. The operator actions come first, as
+# src/tests/test_changelog_operator_actions.py requires.
+SECTION_ORDER: tuple[str, ...] = (
+    "Erforderliche Betreiber-Aktionen",
+    "Security",
+    "Added",
+    "Changed",
+    "Deprecated",
+    "Removed",
+    "Fixed",
+    "Performance",
+    "Docs",
 )
+OPERATOR_SECTION = SECTION_ORDER[0]
+ALLOWED_SECTIONS: frozenset[str] = frozenset(SECTION_ORDER)
+
+# Rule g. Operator actions get more room for the step and the runbook link.
+MAX_ENTRY_CHARS = 350
+MAX_OPERATOR_ENTRY_CHARS = 600
 
 _SUBSECTION_RE = re.compile(r"^### (.+?)\s*$")
 _BULLET_RE = re.compile(r"^- (.*)$")
 _ISSUE_REF_RE = re.compile(r"#(\d+)")
+_LINK_RE = re.compile(r"\[([^\]]*)\]\([^)]*\)")
+_HEAD_SEPARATOR = " — "
+
+
+def _split_entry(text: str) -> tuple[str, str]:
+    """Split an entry into its head (title and ticket links) and its text."""
+    head, separator, body = text.partition(_HEAD_SEPARATOR)
+    if not separator:
+        return "", text
+    return head, body
+
+
+def entry_text_length(text: str) -> int:
+    """Return the length of the entry text after the dash, as rendered.
+
+    A Markdown link counts with its label only. An entry without a dash is
+    measured as a whole.
+    """
+    _head, body = _split_entry(text)
+    return len(_LINK_RE.sub(r"\1", body).strip())
 
 
 def find_unreleased_block(lines: list[str]) -> tuple[int, int] | None:
@@ -100,11 +150,11 @@ def find_unreleased_block(lines: list[str]) -> tuple[int, int] | None:
 
 
 def analyze_unreleased(lines: list[str], start: int, end: int) -> tuple[list[tuple[int, str]], list[tuple[int, str]]]:
-    """Regeln a-d und f auf den Inhalt der ``[Unreleased]``-Sektion anwenden.
+    """Apply rules a-d and f-k to the content of the ``[Unreleased]`` section.
 
-    ``start``/``end`` wie von :func:`find_unreleased_block` geliefert.
-    Gibt ``(errors, warnings)`` zurueck, je eine Liste aus
-    ``(1-basierte Zeilennummer, deutsche Meldung)``.
+    ``start``/``end`` as returned by :func:`find_unreleased_block`. Returns
+    ``(errors, warnings)``, each a list of ``(1-based line number, message)``.
+    The messages of rules a-f are German, those of rules g-k English.
     """
     errors: list[tuple[int, str]] = []
     warnings: list[tuple[int, str]] = []
@@ -118,6 +168,12 @@ def analyze_unreleased(lines: list[str], start: int, end: int) -> tuple[list[tup
     seen_keys: dict[tuple[frozenset[str], str], int] = {}
     # Regel f: je Kategorie alle Ueberschrift-Zeilen, in Lesereihenfolge.
     section_lines: dict[str, list[int]] = {}
+    # Rule h: first entry line per (section, ticket).
+    seen_tickets: dict[tuple[str, str], int] = {}
+    # Rules j and k: what the last non-blank line was, and whether a blank
+    # line followed it.
+    previous_was_entry = False
+    blank_since_previous = False
 
     def close_section() -> None:
         if section_name is not None and not section_has_bullet:
@@ -132,8 +188,16 @@ def analyze_unreleased(lines: list[str], start: int, end: int) -> tuple[list[tup
         raw = lines[idx]
         lineno = idx + 1
 
+        if not raw.strip():
+            blank_since_previous = True
+            continue
+
         heading_match = _SUBSECTION_RE.match(raw)
         if heading_match:
+            if not blank_since_previous:
+                errors.append((lineno, f"Missing blank line before '{raw.strip()}'."))
+            previous_was_entry = False
+            blank_since_previous = False
             close_section()
             section_name = heading_match.group(1).strip()
             section_heading_line = lineno
@@ -156,10 +220,16 @@ def analyze_unreleased(lines: list[str], start: int, end: int) -> tuple[list[tup
             else:
                 section_has_bullet = True
 
+            if previous_was_entry and blank_since_previous:
+                errors.append((lineno, "Blank line inside the list: entries of a section follow each other directly."))
+            previous_was_entry = True
+            blank_since_previous = False
+
             text = bullet_match.group(1).rstrip()
             refs = frozenset(_ISSUE_REF_RE.findall(text))
             key = (refs, text[:60].casefold())
-            if key in seen_keys:
+            is_duplicate = key in seen_keys
+            if is_duplicate:
                 errors.append(
                     (
                         lineno,
@@ -178,12 +248,80 @@ def analyze_unreleased(lines: list[str], start: int, end: int) -> tuple[list[tup
                         "(gelebte Praxis, z. B. reine Dependency-Bumps ohne Ticket).",
                     )
                 )
+
+            # A duplicate is already reported above; rule h would only repeat it.
+            # Operator actions are exempt: one ticket may list each step on its own.
+            if section_name not in (None, OPERATOR_SECTION) and not is_duplicate:
+                errors.extend(_second_entries(text, section_name, lineno, seen_tickets))
+
+            limit = MAX_OPERATOR_ENTRY_CHARS if section_name == OPERATOR_SECTION else MAX_ENTRY_CHARS
+            length = entry_text_length(text)
+            if length > limit:
+                errors.append(
+                    (
+                        lineno,
+                        f"Entry text has {length} characters; the limit is {limit} "
+                        "(link targets do not count). Say what changes for users, operators "
+                        "or security; edge cases, exit codes and file names belong in the "
+                        "commit body, the ticket and the hand-check.",
+                    )
+                )
             continue
+
+        # Indented lines continue the entry above; anything else ends the list.
+        if not raw[0].isspace():
+            previous_was_entry = False
+        blank_since_previous = False
 
     close_section()
     errors.extend(_doppelte_kategorien(section_lines))
+    errors.extend(_sections_out_of_order(section_lines))
     errors.sort(key=lambda paar: paar[0])
     return errors, warnings
+
+
+def _second_entries(
+    text: str, section_name: str, lineno: int, seen_tickets: dict[tuple[str, str], int]
+) -> list[tuple[int, str]]:
+    """Rule h: report every ticket of this entry that already has one in the section."""
+    head, _body = _split_entry(text)
+    findings: list[tuple[int, str]] = []
+    for ticket in sorted(set(_ISSUE_REF_RE.findall(head)), key=int):
+        first_line = seen_tickets.setdefault((section_name, ticket), lineno)
+        if first_line != lineno:
+            findings.append(
+                (
+                    lineno,
+                    f"Second entry for #{ticket} in '### {section_name}' (first one in line "
+                    f"{first_line}). One entry per ticket and section: merge both into one.",
+                )
+            )
+    return findings
+
+
+def _sections_out_of_order(section_lines: dict[str, list[int]]) -> list[tuple[int, str]]:
+    """Rule i: report every section that comes after one it should precede.
+
+    Unknown sections are left to rule a. A repeated section is judged by its
+    first heading; rule f reports the repetition.
+    """
+    rank = {name: position for position, name in enumerate(SECTION_ORDER)}
+    findings: list[tuple[int, str]] = []
+    latest: str | None = None
+    for name, line_numbers in section_lines.items():
+        if name not in rank:
+            continue
+        if latest is not None and rank[name] < rank[latest]:
+            findings.append(
+                (
+                    line_numbers[0],
+                    f"Section '### {name}' is out of order: it belongs before '### {latest}'. "
+                    f"Order: {' → '.join(SECTION_ORDER)}.",
+                )
+            )
+        else:
+            latest = name
+    return findings
 
 
 def _doppelte_kategorien(section_lines: dict[str, list[int]]) -> list[tuple[int, str]]:
