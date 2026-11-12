@@ -181,3 +181,116 @@ def test_secret_key_fallback_still_rotates_authenticated_session(settings, staff
     assert response.wsgi_request.user.is_authenticated
     assert response.cookies[settings.SESSION_COOKIE_NAME].value != old_key
     assert current.session[HASH_SESSION_KEY] == staff_user.get_session_auth_hash()
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("backend", ["db", "cache", "cached_db"])
+@pytest.mark.parametrize("predecessor_retained", [False, True])
+def test_factor_commit_after_auth_check_keeps_successor_cookie(
+    backend, predecessor_retained, settings, staff_user, monkeypatch
+):
+    settings.SESSION_ENGINE = f"django.contrib.sessions.backends.{backend}"
+    EncryptedTOTPDevice.objects.create(user=staff_user, confirmed=True)
+    credential = _passkey(staff_user)
+    browser = _browser(staff_user)
+    old_key = browser.session.session_key
+    request = RequestFactory().get("/manifest.json", HTTP_COOKIE=f"{settings.SESSION_COOKIE_NAME}={old_key}")
+    middleware = DemoSessionMiddleware(lambda request: HttpResponse())
+    middleware.process_request(request)
+    AuthenticationMiddleware(lambda request: HttpResponse()).process_request(request)
+    assert request.user.is_authenticated
+    request.session["notice"] = "A session write from an overlapping request"
+    original_save = request.session.save
+    session_store = import_module(settings.SESSION_ENGINE).SessionStore
+    original_delete = session_store.delete
+    saved_in_commit_window = []
+
+    def save_before_predecessor_delete(store, session_key=None):
+        if (session_key or store.session_key) == old_key and not saved_in_commit_window:
+            saved_in_commit_window.append(True)
+            original_save()
+        if (session_key or store.session_key) != old_key or not predecessor_retained:
+            return original_delete(store, session_key)
+        return None
+
+    def save_during_factor_change(*args, **kwargs):
+        with monkeypatch.context() as interleaving:
+            interleaving.setattr(session_store, "delete", save_before_predecessor_delete)
+            response = browser.post(f"/mfa/passkey/{credential.pk}/delete/")
+        assert response.status_code == 302
+        assert browser.session.session_key != old_key
+        assert browser.get("/mfa/settings/").status_code == 200
+
+    monkeypatch.setattr(request.session, "save", save_during_factor_change)
+    late_response = middleware.process_response(request, HttpResponse())
+    assert saved_in_commit_window == [True]
+    assert not session_store().exists(old_key)
+    browser.cookies.update(late_response.cookies)
+
+    assert browser.get("/mfa/settings/").status_code == 200, "a late response must not replace the valid successor"
+    assert settings.SESSION_COOKIE_NAME not in late_response.cookies
+
+
+@pytest.mark.django_db
+def test_predecessor_deleted_during_save_keeps_normal_response(settings, staff_user, monkeypatch):
+    browser = _browser(staff_user)
+    old_key = browser.session.session_key
+    request = RequestFactory().get("/manifest.json", HTTP_COOKIE=f"{settings.SESSION_COOKIE_NAME}={old_key}")
+    middleware = DemoSessionMiddleware(lambda request: HttpResponse())
+    middleware.process_request(request)
+    AuthenticationMiddleware(lambda request: HttpResponse()).process_request(request)
+    assert request.user.is_authenticated
+    request.session["notice"] = "An overlapping write"
+    original_save = request.session.save
+    session_store = import_module(settings.SESSION_ENGINE).SessionStore
+
+    def delete_before_save(*args, **kwargs):
+        session_store().delete(old_key)
+        return original_save(*args, **kwargs)
+
+    monkeypatch.setattr(request.session, "save", delete_before_save)
+    response = middleware.process_response(request, HttpResponse("Manifest response"))
+
+    assert response.status_code == 200
+    assert response.content == b"Manifest response"
+    assert settings.SESSION_COOKIE_NAME not in response.cookies
+    assert "Cookie" in response.get("Vary", "")
+    assert not session_store().exists(old_key)
+
+
+@pytest.mark.django_db
+def test_response_completed_before_rotation_can_only_lose_browser_authentication(settings, staff_user, lead_user):
+    EncryptedTOTPDevice.objects.create(user=staff_user, confirmed=True)
+    credential = _passkey(staff_user)
+    browser = _browser(staff_user)
+    other_browser = _browser(lead_user)
+    other_key = other_browser.session.session_key
+    other_hash = other_browser.session[HASH_SESSION_KEY]
+    old_key = browser.session.session_key
+    request = RequestFactory().get("/manifest.json", HTTP_COOKIE=f"{settings.SESSION_COOKIE_NAME}={old_key}")
+    middleware = DemoSessionMiddleware(lambda request: HttpResponse())
+    middleware.process_request(request)
+    AuthenticationMiddleware(lambda request: HttpResponse()).process_request(request)
+    request.session["notice"] = "A response waiting for browser delivery"
+    late_response = middleware.process_response(request, HttpResponse())
+    assert late_response.cookies[settings.SESSION_COOKIE_NAME].value == old_key
+
+    rotation = browser.post(f"/mfa/passkey/{credential.pk}/delete/")
+    assert rotation.status_code == 302
+    successor_key = browser.session.session_key
+    assert successor_key != old_key
+    assert browser.get("/mfa/settings/").status_code == 200
+    browser.cookies.update(late_response.cookies)
+
+    denied = browser.get("/mfa/settings/")
+    assert denied.status_code == 302
+    assert denied.url.startswith("/login/")
+    assert denied.wsgi_request.user.is_anonymous
+    assert HASH_SESSION_KEY not in denied.wsgi_request.session
+    assert not import_module(settings.SESSION_ENGINE).SessionStore().exists(old_key)
+    successor = Client()
+    successor.cookies[settings.SESSION_COOKIE_NAME] = successor_key
+    assert successor.get("/mfa/settings/").wsgi_request.user.pk == staff_user.pk
+    assert other_browser.session.session_key == other_key
+    assert other_browser.session[HASH_SESSION_KEY] == other_hash
+    assert other_browser.get("/mfa/settings/").wsgi_request.user.pk == lead_user.pk

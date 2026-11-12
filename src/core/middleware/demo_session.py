@@ -6,8 +6,9 @@ Resolve its cached user before downstream writes so that these responses
 neither clear the cookie nor publish an anonymous successor (Refs #2736).
 An explicit successful login may publish its authenticated session.
 
-Before saving an unchanged authenticated key, recheck its existence and auth
-revision: a request authenticated before rotation may finish after revocation.
+Before and after saving an unchanged authenticated key, recheck its existence
+and auth revision: revocation can overlap the save. A response completed before
+revocation can still arrive late; its old key cannot authenticate after rotation.
 Explicit logout, session clearing, absolute expiry and new session creation
 retain Django's cookie behavior. Expired idle sessions remain anonymous even
 when their inert cookie stays until browser expiry. Skipped cookie writes
@@ -18,6 +19,7 @@ from django.conf import settings
 from django.contrib.auth import SESSION_KEY
 from django.contrib.auth import get_user as get_session_user
 from django.contrib.auth.middleware import get_user
+from django.contrib.sessions.exceptions import SessionInterrupted
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.utils.cache import patch_vary_headers
 
@@ -47,7 +49,21 @@ class DemoSessionMiddleware(SessionMiddleware):
             # was accessed; keep that for caches.
             patch_vary_headers(response, ("Cookie",))
             return response
-        return super().process_response(request, response)
+        try:
+            response = super().process_response(request, response)
+        except SessionInterrupted:
+            # A predecessor can disappear between the precheck and DB update.
+            # Keep the view response without publishing the revoked cookie.
+            if not self._is_revoked_key_response(request):
+                raise
+            patch_vary_headers(response, ("Cookie",))
+            return response
+        if settings.SESSION_COOKIE_NAME in response.cookies and self._is_revoked_key_response(request):
+            # Django has saved and staged the cookie, but headers are not sent.
+            # Drop it if the save overlapped deletion or an auth revision change.
+            del response.cookies[settings.SESSION_COOKIE_NAME]
+            patch_vary_headers(response, ("Cookie",))
+        return response
 
     @staticmethod
     def _is_revoked_key_response(request):
