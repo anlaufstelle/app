@@ -5,11 +5,13 @@ import uuid
 from contextlib import suppress
 
 import pytest
+from playwright.sync_api import expect
 
 from tests.e2e._selectors import find_first_client_link, open_desktop_overflow
 
 from ._helpers import SEED_PASSWORD
 from ._helpers import wait_for_active_service_worker as _wait_for_active_service_worker
+from .test_mfa_session_revocation import _raw_queue_count
 
 pytestmark = [pytest.mark.e2e, pytest.mark.offline_smoke]  # Refs #1418 (WebKit-Smoke)
 
@@ -114,6 +116,57 @@ def test_offline_banner_visible_when_offline(authenticated_page, base_url):
     # Banner sollte verschwinden
     banner.wait_for(state="hidden", timeout=5000)
     assert not banner.is_visible()
+
+
+def test_offline_native_form_post_lands_on_a_full_page(browser, base_url):
+    """Refs #2730: a native <form method="post"> sent offline is a navigation.
+
+    The worker queues it and redirects to the form page; the offline shell
+    served there carries the notice once, the offline navigation and
+    sw-register.js. A reload neither posts again nor repeats the notice.
+    """
+    context = browser.new_context(locale="de-DE")
+    page = context.new_page()
+    page.set_default_timeout(30000)
+    page.goto(f"{base_url}/login/")
+    page.fill('input[name="username"]', "admin")
+    page.fill('input[name="password"]', SEED_PASSWORD)
+    page.click('#login-form button[type="submit"]')
+    page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
+    try:
+        page.goto(f"{base_url}/workitems/new/", wait_until="domcontentloaded")
+        _wait_for_active_service_worker(page)
+        queued_before = _raw_queue_count(page)
+
+        page.context.set_offline(True)
+        page.evaluate("window.dispatchEvent(new Event('offline'))")
+        page.fill("input[name='title']", f"E2E native offline POST {uuid.uuid4().hex[:6]}")
+        page.click("button.btn-primary[type=submit]")
+
+        notice = page.locator('[data-testid="offline-navigation-notice"]')
+        expect(notice).to_contain_text("lokal verschlüsselt")
+        expect(notice).to_have_count(1)
+        assert page.url == f"{base_url}/workitems/new/", page.url
+        expect(page.locator('#flash-messages [data-testid="offline-navigation-notice"]')).to_have_count(1)
+        expect(page.locator('[data-testid="offline-nav"]')).to_be_visible()
+        assert page.evaluate("() => typeof window.offlineWorker") == "object", "sw-register.js missing"
+        assert _raw_queue_count(page) == queued_before + 1, "the submit must be queued exactly once"
+
+        # 303 instead of a page at the POST: a reload asks for no resubmission and posts nothing.
+        page.reload(wait_until="domcontentloaded")
+        expect(page.locator('[data-testid="offline-nav"]')).to_be_visible()
+        expect(notice).to_have_count(0)
+        assert _raw_queue_count(page) == queued_before + 1, "a reload must not queue the submit again"
+
+        # The navigation stays usable offline.
+        page.locator('[data-testid="offline-nav-zeitstrom"]').click()
+        page.wait_for_url(f"{base_url}/")
+        expect(page.locator('[data-testid="offline-nav"]')).to_be_visible()
+    finally:
+        with suppress(Exception):
+            page.context.set_offline(False)
+            page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+        context.close()
 
 
 @pytest.mark.webkit_transport_artifact

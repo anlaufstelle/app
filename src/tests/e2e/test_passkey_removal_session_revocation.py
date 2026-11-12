@@ -19,7 +19,7 @@ from contextlib import suppress
 import pytest
 from playwright.sync_api import expect
 
-from ._helpers import django_shell, wait_for_active_service_worker
+from ._helpers import django_shell
 from .test_mfa_session_revocation import (
     USERNAME,
     _cleanup,
@@ -75,20 +75,6 @@ def _set_language(e2e_env, code: str) -> str:
     return next(line for line in lines if line.startswith("prev=")).removeprefix("prev=")
 
 
-def _settle(page) -> None:
-    """Let the page stop navigating on its own before the form is submitted.
-
-    The service worker takes control of a page shortly after it loaded and the page then
-    reloads itself. A removal submitted inside that window completes on the server, but the
-    browser drops the response, so the new session cookie never arrives and the acting
-    session looks signed out.
-    """
-    wait_for_active_service_worker(page)
-    page.wait_for_function("() => !!navigator.serviceWorker.controller", timeout=15000)
-    page.wait_for_load_state("load")
-    page.wait_for_timeout(2000)
-
-
 def _new_context(browser, language: str):
     context = browser.new_context(locale="de-DE" if language == "de" else "en-US", timezone_id="Europe/Berlin")
     page = context.new_page()
@@ -113,7 +99,6 @@ class TestZZPasskeyRemovalRevokesOtherSessions:
             assert _is_signed_in(page_b, base_url), "precondition: B is signed in before the removal"
 
             page_a.goto(f"{base_url}/mfa/settings/", wait_until="domcontentloaded")
-            _settle(page_a)
             delete_button = page_a.locator("[data-testid='passkey-delete-button']")
             expect(delete_button).to_have_count(1)
             delete_button.click()
@@ -122,7 +107,6 @@ class TestZZPasskeyRemovalRevokesOtherSessions:
             if "/sudo/" in page_a.url:
                 _confirm_sudo(page_a, codes[2])
                 page_a.goto(f"{base_url}/mfa/settings/", wait_until="domcontentloaded")
-                _settle(page_a)
                 page_a.locator("[data-testid='passkey-delete-button']").click()
             expect(page_a.locator("[data-testid='passkey-empty']")).to_be_visible()
             page_a.wait_for_load_state("load")

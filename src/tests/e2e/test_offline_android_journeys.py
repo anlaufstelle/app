@@ -477,6 +477,12 @@ class TestMidSessionCaptureRoundtrip:
                 timeout_s=10,
                 desc="SW-queuedOk-Feedback nach Aufgaben-Submit",
             )
+            # Refs #2730: the native submit is a navigation; it lands on the full task page with the
+            # notice in the flash slot and the offline navigation, not on a bare fragment.
+            assert page.url == f"{base_url}/workitems/new/", page.url
+            notice = page.locator("[data-testid='offline-navigation-notice']").inner_text()
+            assert notice.count("lokal verschlüsselt") == 1, notice
+            assert page.locator("[data-testid='offline-nav']").is_visible(), "offline navigation missing after submit"
             queued = _raw_queue_count(page)
             assert queued == 1, f"Queue-Zeile fehlt nach Offline-Submit: {queued!r}"
             assert _server_workitem_state(e2e_env, title) == "MISSING"
@@ -588,17 +594,21 @@ class TestMidSessionCaptureRoundtrip:
                 timeout_s=10,
                 desc="SW-queuedOk-Feedback (UTF-8) nach Kontakt-Submit",
             )
+            # Refs #2730: the notice sits in the full event page reached by the redirect.
+            assert page.url == f"{base_url}/events/new/", page.url
+            assert page.locator("[data-testid='offline-nav']").is_visible(), "offline navigation missing after submit"
             assert _server_anon_event_count(e2e_env) == count_before
 
             # Beweis der Persistenz VOR dem Drain: die Queue-Zeile per rohem
-            # IndexedDB-Zugriff zaehlen (die Feedback-Seite ist inert — kein
-            # offline-store.js geladen, daher direkt via IDB-API).
+            # IndexedDB-Zugriff zaehlen (unabhaengig von den Modulen der Seite).
             queued = _raw_queue_count(page)
             assert queued == 1, f"Queue-Zeile fehlt nach Offline-Submit: {queued!r}"
 
-            # Netz kommt zurueck, waehrend nur die inerte Feedback-Seite offen
-            # ist (bewusst KEIN dispatch von 'online' — die Seite hat ohnehin
-            # keine Listener). Der naechste Seitenstart muss selbst drainen.
+            # Refs #2730: the submit now lands on the full offline page, whose
+            # sync orchestrator would replay on the browser's 'online' event.
+            # Leave it while still offline so only an inert page is open when
+            # the network returns; the next page start must drain on its own.
+            page.goto("about:blank")
             page.context.set_offline(False)
             page.goto(f"{base_url}/", wait_until="domcontentloaded")
             _wait_until(

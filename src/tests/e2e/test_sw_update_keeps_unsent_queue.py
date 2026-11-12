@@ -68,6 +68,18 @@ def _old_generation_gone(page) -> bool:
     return not [k for k in keys if k.startswith(OLD_CACHE)]
 
 
+def _controlled_by(page, probe: str) -> bool:
+    """True once the worker registered with ``probe`` controls the page (tolerates a reload)."""
+    try:
+        return page.evaluate(
+            "(probe) => !!navigator.serviceWorker.controller && "
+            "navigator.serviceWorker.controller.scriptURL.includes(probe)",
+            probe,
+        )
+    except Exception:  # the page may reload while the new worker takes over
+        return False
+
+
 def test_update_drops_old_generation_and_keeps_unsent_queue(base_url, browser, e2e_env):
     title = f"SW-Update {uuid.uuid4().hex[:6]}"
     probe = f"e2e-update-{uuid.uuid4().hex[:8]}"
@@ -92,8 +104,14 @@ def test_update_drops_old_generation_and_keeps_unsent_queue(base_url, browser, e
             }""",
             probe,
         )
-        # The worker of the page that captured the form takes over on the next navigation; its
-        # activation removes every older generation.
+        # Refs #2730: the offline submit landed on a full page that loads sw-register.js, so the
+        # waiting worker is activated on that page itself, without a navigation (the bare
+        # fragment of earlier versions never activated it). The activation removes every older
+        # generation.
+        assert wait_until(page, lambda: _controlled_by(page, probe), timeout_ms=20000), (
+            "the page reached by the offline submit did not activate the waiting worker"
+        )
+        assert _raw_queue_count(page) == 1, "the takeover must keep the unsent entry"
         page.goto(f"{base_url}/", wait_until="domcontentloaded")
         assert wait_until(page, lambda: _old_generation_gone(page), timeout_ms=20000), "old generation not removed"
         page.wait_for_load_state("domcontentloaded")

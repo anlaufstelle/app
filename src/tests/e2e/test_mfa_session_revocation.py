@@ -28,6 +28,7 @@ from urllib.parse import urlsplit
 
 import pytest
 from django_otp.oath import TOTP
+from playwright.sync_api import expect
 
 from ._helpers import SEED_PASSWORD
 from ._helpers import wait_for_active_service_worker as _wait_for_active_service_worker
@@ -315,6 +316,10 @@ def _capture_task_offline(page, base_url, title: str) -> None:
     page.fill("input[name='title']", title)
     page.click("button.btn-primary[type=submit]")
     page.wait_for_function("() => document.body.innerText.includes('lokal verschlüsselt')", timeout=10000)
+    # The offline submit lands on the full task page again, with the notice and the navigation.
+    assert page.url == f"{base_url}/workitems/new/", page.url
+    expect(page.locator("[data-testid='offline-navigation-notice']")).to_contain_text("lokal verschlüsselt")
+    expect(page.locator("[data-testid='offline-nav']")).to_be_visible()
     assert _raw_queue_count(page) == 1, "the offline task must be queued locally"
     # Network is back, but no reconnect event: the replay has not run yet.
     page.context.set_offline(False)
