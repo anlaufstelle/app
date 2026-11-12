@@ -95,7 +95,7 @@ def test_deletion_target_annotation_is_three_bulk_queries(facility, staff_user, 
     _assert_query_budget(captured, 3)
 
 
-def test_event_feed_uses_one_joined_query(facility, staff_user, client_identified, doc_type_contact):
+def test_event_feed_uses_one_joined_and_one_grouped_query(facility, staff_user, client_identified, doc_type_contact):
     make_event(
         facility=facility,
         client=client_identified,
@@ -108,7 +108,8 @@ def test_event_feed_uses_one_joined_query(facility, staff_user, client_identifie
     with CaptureQueriesContext(connection) as captured:
         build_feed_items(facility, timezone.localdate(), "events", user=staff_user)
 
-    _assert_query_budget(captured, 1)
+    # One additional hourly aggregation is allowed for the feed (#2661).
+    _assert_query_budget(captured, 2)
 
 
 def test_client_list_query_count_is_bounded_per_page(client, facility, staff_user, client_identified):

@@ -11,7 +11,7 @@ from django.db.models.functions import Coalesce
 from django.utils.crypto import constant_time_compare, salted_hmac
 
 from core.constants import FEED_MAX_PER_TYPE
-from core.models import Activity, DocumentTypeField, WorkItem
+from core.models import Activity, DocumentTypeField, Event, WorkItem
 from core.services.compliance import user_can_see_field
 from core.services.events import build_tally_summary
 from core.services.workitem_visibility import workitems_for_read
@@ -252,9 +252,15 @@ def _workitem_projection(row):
 
 
 def _feed_projection(facility, user, state: ZeitstromState):
-    """Bounded values-only mirror of ``build_feed_items``."""
+    """Mirror the capped feed and its complete hourly tally groups."""
 
-    from core.services.events.feed import activities_for_feed_read, events_for_feed_read, get_time_range
+    from core.services.events.feed import (
+        activities_for_feed_read,
+        build_tally_feed_groups,
+        cap_feed_items,
+        events_for_feed_read,
+        get_time_range,
+    )
 
     start_dt, end_dt = get_time_range(state.target_date, state.time_filter)
     include_all = state.feed_type == ""
@@ -269,7 +275,13 @@ def _feed_projection(facility, user, state: ZeitstromState):
             events = events.exclude(document_type__system_type="ban")
         if state.doc_type_id:
             events = events.filter(document_type_id=state.doc_type_id)
-        rows = list(events.values(*_EVENT_VALUES).order_by("-occurred_at")[:FEED_MAX_PER_TYPE])
+        rows = list(
+            events.exclude(created_via=Event.CreatedVia.TALLY)
+            .values(*_EVENT_VALUES)
+            .order_by("-occurred_at")[:FEED_MAX_PER_TYPE]
+        )
+        groups = build_tally_feed_groups(facility, start_dt, end_dt, user, state.doc_type_id)
+        items.extend({"type": "tally_group", "time": group["start"], "row": group} for group in groups)
         items.extend({"type": "event", "time": row["occurred_at"], "row": row} for row in rows)
 
     if state.feed_type == "activities" or include_all:
@@ -329,8 +341,7 @@ def _feed_projection(facility, user, state: ZeitstromState):
         )
         items.extend({"type": "ban", "time": row["occurred_at"], "row": row} for row in rows)
 
-    items.sort(key=lambda item: item["time"], reverse=True)
-    items = items[:FEED_MAX_PER_TYPE]
+    items = cap_feed_items(items, time_key="time")
     event_rows = [item["row"] for item in items if item["type"] == "event"]
     field_configs = _visible_field_configs(event_rows, user)
 
@@ -339,6 +350,8 @@ def _feed_projection(facility, user, state: ZeitstromState):
         row = item["row"]
         if item["type"] == "event":
             value = _event_projection(row, field_configs)
+        elif item["type"] == "tally_group":
+            value = row
         elif item["type"] == "ban":
             value = _ban_card_projection(row)
         elif item["type"] == "activity":
@@ -347,11 +360,11 @@ def _feed_projection(facility, user, state: ZeitstromState):
                 row["occurred_at"],
                 row["verb"],
                 row["summary"],
-                row["person"],
                 _related_user(row, "actor"),
                 row["target_type_id"],
                 row["target_type__model"],
                 str(row["target_id"]),
+                row["person"],
             )
         else:
             value = _workitem_projection(row)

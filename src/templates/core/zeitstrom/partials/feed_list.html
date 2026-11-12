@@ -17,6 +17,8 @@
     {% for item in feed_items %}
         {% if item.type == "event" %}
             {% include "components/_event_card.html" with event=item.object show_date=False show_client=True %}
+        {% elif item.type == "tally_group" %}
+            {% include "components/_tally_group_row.html" with group=item.object %}
         {% elif item.type == "activity" %}
             {% include "components/_activity_card.html" with activity=item.object %}
         {% elif item.type == "workitem" %}

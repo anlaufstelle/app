@@ -221,7 +221,7 @@ Rechenweg: OKLCH → OKLab (`a=C·cos(h)`, `b=C·sin(h)`) → lineares sRGB; `Y=
 | Checkbox (ungewählt, Standardrahmen), Radiobutton | `--border` / vorhandene native Darstellung | 3,367:1* | 3,040:1* | CSS-Rahmen unverändert |
 | Sekundärbutton, Filteröffner | `.btn-secondary`, `--border` | 3,367:1 | 3,040:1 | ≥ 3:1 |
 | Strichlisten-Kachel, Datumsauslöser, Tagespfeile, inaktives Segment | `border-subtle` | 3,367:1 | 3,040:1 | ≥ 3:1 |
-| Primärbutton, aktives Segment, gewählte Checkbox | Akzentfüllung/-rahmen | 7,128:1 | 6,436:1 | ≥ 3:1 |
+| Primärbutton, aktives Segment | Akzentfüllung/-rahmen | 7,128:1 | 6,436:1 | ≥ 3:1 |
 | Tastatur-Fokusrahmen (Links, Buttons, Inputs, Selects, Textareas) | `ring-accent`, 2 px Abstand | 7,128:1 | 6,436:1 | ≥ 3:1 |
 | Karten-/Listenrahmen, Zeilentrenner | `--border-soft` | 1,483:1 | 1,339:1 | rein dekorativ |
 | Spaltentexte, Uhrzeit, Versallabel | `text-ink-muted` | 5,066:1 | 4,574:1 | ≥ 4,5:1 |

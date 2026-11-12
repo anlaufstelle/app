@@ -1,0 +1,23 @@
+{% load i18n %}
+<div class="feed-row" data-testid="tally-group" data-total="{{ group.total }}" x-data="expandableCard" x-init="applyGlobalCollapse" @zeitstrom-collapse-all.window="applyGlobalCollapse">
+    <button type="button" @click="toggle" aria-expanded="false" :aria-expanded="expanded"
+            aria-controls="tally-group-{{ group.key }}" data-testid="tally-group-toggle" class="feed-row-header">
+        <span data-feed-column="edge" class="feed-row-edge bg-[oklch(0.75_0.01_75)]" aria-hidden="true"></span>
+        <span data-feed-column="time" class="feed-row-time" title="{{ group.start|date:'c' }}–{{ group.end|date:'c' }}">{{ group.start|time:"H" }}–{{ group.end|time:"H" }}</span>
+        <span data-feed-column="type" class="feed-row-type">{% blocktrans with n=group.total %}{{ n }} gezählt{% endblocktrans %}</span>
+        <span data-feed-column="person" class="feed-row-person"><span class="text-ink-muted italic">{% trans "anonym" %}</span></span>
+        <span data-feed-column="details" class="feed-row-details">
+            <span data-testid="feed-kind-badge" class="feed-kind-badge bg-[oklch(0.94_0.008_75)] text-ink-soft">{% trans "Strichliste" %}</span>
+            {% for entry in group.types %}{{ entry.count }} {{ entry.name }}{% if not forloop.last %} · {% endif %}{% endfor %}
+        </span>
+        <span data-feed-column="by" class="feed-row-by">{% trans "Team" %}
+            <span class="transition-transform duration-200" :class="rotateClass" aria-hidden="true">⌄</span>
+        </span>
+    </button>
+    <div id="tally-group-{{ group.key }}" x-show="expanded" x-cloak class="mx-3.5 mb-3 bg-canvas rounded-md px-3 py-2 text-[13px] text-ink-soft">
+        <ul class="space-y-1">
+            {% for entry in group.types %}<li data-count="{{ entry.count }}"><span class="font-semibold">{{ entry.count }}</span> {{ entry.name }}</li>{% endfor %}
+        </ul>
+        <a href="{{ group.url }}" class="inline-flex items-center min-h-[44px] text-accent font-semibold hover:underline">{% trans "Gezählte Kontakte anzeigen" %}</a>
+    </div>
+</div>

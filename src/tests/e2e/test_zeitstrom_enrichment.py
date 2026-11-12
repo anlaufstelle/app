@@ -9,13 +9,13 @@ there; a past day outside the seed window holds exactly the cards created here.
 """
 
 import json
-import re
 from datetime import date, timedelta
 from urllib.parse import parse_qs, urlparse
 
 import pytest
 from playwright.sync_api import expect
 
+from ._axe import run_axe
 from ._helpers import django_shell
 
 pytestmark = pytest.mark.e2e
@@ -77,6 +77,11 @@ activity(Activity.Verb.QUALIFIED, Activity.Action.CLIENT_QUALIFIED, 10)
 Event.objects.create(
     facility=facility, document_type=doc_type, client=person, occurred_at=at(11), data_json={{}}, created_by=actor
 )
+for hour in (13, 13, 14):
+    Event.objects.create(
+        facility=facility, document_type=doc_type, occurred_at=at(hour), is_anonymous=True,
+        created_via=Event.CreatedVia.TALLY, data_json={{}}, created_by=actor,
+    )
 task = WorkItem.objects.create(facility=facility, client=person, created_by=actor, title='{PREFIX} Aufgabe')
 WorkItem.objects.filter(pk=task.pk).update(created_at=at(12))
 print('FEED_FIXTURE ' + json.dumps({{'client': str(person.pk)}}))
@@ -244,6 +249,11 @@ class TestZeitstromFigures:
             observer.goto(f"{base_url}/", wait_until="domcontentloaded")
             counter = page.get_by_test_id("zeitstrom-kpi-tally")
             before = int(counter.get_attribute("data-count"))
+            group_sum = """expected => Array.from(
+                document.querySelectorAll('#feed-list [data-testid=tally-group]')
+            ).reduce((n, el) => n + Number(el.dataset.total), 0) === expected"""
+            page.wait_for_function(group_sum, arg=before)
+            observer.wait_for_function(group_sum, arg=before)
             button = page.locator("button[data-testid^='tally-increment-']").first
             expect(button).to_be_visible()
             button.click()
@@ -252,12 +262,16 @@ class TestZeitstromFigures:
             expect(observer.get_by_test_id("zeitstrom-kpi-tally")).to_have_attribute(
                 "data-count", str(before + 1), timeout=15000
             )
+            page.wait_for_function(group_sum, arg=before + 1)
+            observer.wait_for_function(group_sum, arg=before + 1)
             page.get_by_test_id("tally-undo").click()
             expect(counter).to_have_attribute("data-count", str(before), timeout=15000)
             observer.evaluate("window.zeitstromWatch.checkNow()")
             expect(observer.get_by_test_id("zeitstrom-kpi-tally")).to_have_attribute(
                 "data-count", str(before), timeout=15000
             )
+            page.wait_for_function(group_sum, arg=before)
+            observer.wait_for_function(group_sum, arg=before)
         finally:
             observer.close()
 
@@ -280,7 +294,7 @@ class TestFeedCardHeaderToggle:
         panel = page.locator(f"#{header.get_attribute('aria-controls')}")
 
         # Klick auf den Zeit-Text in der Kopfzeile (NICHT den Chevron rechts).
-        time_text = header.get_by_text(re.compile(r"^\d{1,2}:\d{2}$")).first
+        time_text = header.locator('[data-feed-column="time"]')
         time_text.click()
         expect(header).to_have_attribute("aria-expanded", "true", timeout=5000)
         expect(panel).to_be_visible()
@@ -288,3 +302,174 @@ class TestFeedCardHeaderToggle:
         # Erneuter Klick auf die Kopfzeile klappt wieder zu.
         time_text.click()
         expect(header).to_have_attribute("aria-expanded", "false", timeout=5000)
+
+
+class TestFeedRowsAndGroups:
+    def test_hour_groups_expand_with_keyboard(self, authenticated_page, base_url, feed_fixture):
+        page = authenticated_page
+        page.goto(f"{base_url}/?date={FEED_DAY}&time_filter=all", wait_until="domcontentloaded")
+        groups = page.get_by_test_id("tally-group")
+        expect(groups).to_have_count(2)
+        assert sorted(int(g.get_attribute("data-total")) for g in groups.all()) == [1, 2]
+        toggle = groups.first.get_by_test_id("tally-group-toggle")
+        expect(toggle).to_have_attribute("aria-expanded", "false")
+        toggle.focus()
+        toggle.press("Enter")
+        expect(toggle).to_have_attribute("aria-expanded", "true")
+        detail = page.locator("#" + toggle.get_attribute("aria-controls"))
+        expect(detail).to_be_visible()
+        expect(detail.locator("li")).to_have_count(1)
+        toggle.press("Space")
+        expect(toggle).to_have_attribute("aria-expanded", "false")
+        expect(toggle).to_be_focused()
+
+    def test_shared_grid_at_desktop_and_mobile(self, authenticated_page, base_url, feed_fixture):
+        page = authenticated_page
+        page.goto(f"{base_url}/?date={FEED_DAY}&time_filter=all", wait_until="domcontentloaded")
+        page.set_viewport_size({"width": 1440, "height": 900})
+        rows = page.locator("#feed-list .feed-row-header")
+        assert rows.count() >= 5
+        positions = rows.evaluate_all("""rows => rows.map(row => {
+            const children = Array.from(row.children);
+            return {display: getComputedStyle(row).display,
+                x: children.map(el => Math.round(el.getBoundingClientRect().left)),
+                h: row.getBoundingClientRect().height};
+        })""")
+        assert all(r["display"] == "grid" and r["h"] >= 48 for r in positions)
+        for column in (1, 2, 3):
+            assert len({r["x"][column] for r in positions}) == 1
+        page.set_viewport_size({"width": 390, "height": 844})
+        geometry = rows.evaluate_all("""rows => rows.map(row => {
+            const time = row.querySelector('[data-feed-column="time"]').getBoundingClientRect();
+            const details = row.querySelector('[data-feed-column="details"]').getBoundingClientRect();
+            return {height: row.getBoundingClientRect().height, top: time.top, next: details.top};
+        })""")
+        assert all(r["height"] >= 44 and r["next"] > r["top"] for r in geometry)
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+        contact = page.get_by_test_id("event-card-toggle").first
+        contact.focus()
+        contact.press("Enter")
+        expect(contact).to_have_attribute("aria-expanded", "true")
+        contact.press("Space")
+        expect(contact).to_have_attribute("aria-expanded", "false")
+        expect(contact).to_be_focused()
+
+    def test_control_and_text_contrast_from_computed_colours(self, authenticated_page, base_url, feed_fixture):
+        page = authenticated_page
+        page.goto(f"{base_url}/?date={FEED_DAY}&time_filter=all", wait_until="domcontentloaded")
+        values = page.evaluate("""() => {
+            const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1;
+            const ctx = canvas.getContext('2d', {willReadFrequently: true});
+            function luminance(colour) {
+                ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = colour; ctx.fillRect(0, 0, 1, 1);
+                const rgb = Array.from(ctx.getImageData(0, 0, 1, 1).data).slice(0, 3).map(c => {
+                    c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4;
+                });
+                return .2126 * rgb[0] + .7152 * rgb[1] + .0722 * rgb[2];
+            }
+            function ratio(a, b) {
+                const values = [luminance(a), luminance(b)].sort((a,b) => a-b);
+                return (values[1] + .05) / (values[0] + .05);
+            }
+            const select = getComputedStyle(document.getElementById('zeitstrom-shift-select'));
+            const list = getComputedStyle(document.querySelector('#feed-list .feed-rows'));
+            const text = getComputedStyle(document.querySelector('#feed-list .feed-row-time'));
+            const token = getComputedStyle(document.documentElement);
+            return {control: ratio(select.borderColor, select.backgroundColor),
+                focus: ratio(token.getPropertyValue('--accent'), '#fff'),
+                text: ratio(text.color, list.backgroundColor),
+                soft: ratio(list.borderColor, list.backgroundColor)};
+        }""")
+        assert values["control"] >= 3, values
+        assert values["focus"] >= 3, values
+        assert values["text"] >= 4.5, values
+        assert values["soft"] < 3, values
+
+    def test_desktop_shift_change_keeps_focus(self, authenticated_page, base_url):
+        page = authenticated_page
+        page.set_viewport_size({"width": 1440, "height": 900})
+        page.goto(f"{base_url}/?time_filter=all", wait_until="domcontentloaded")
+        select = page.get_by_test_id("zeitstrom-shift-select")
+        page.evaluate("""() => {
+            window.__feedSwapDone = false;
+            document.body.addEventListener('htmx:afterSwap', event => {
+                if (event.detail.target.id === 'feed-list') window.__feedSwapDone = true;
+            });
+        }""")
+        select.focus()
+        with page.expect_response(lambda r: "/partials/zeitstrom/feed/" in r.url and r.request.method == "GET"):
+            select.select_option(index=1)
+        page.wait_for_function("window.__feedSwapDone === true")
+        expect(select).to_be_focused()
+
+    def test_mobile_sheet_traps_tab_and_returns_focus(self, authenticated_page, base_url):
+        page = authenticated_page
+        page.set_viewport_size({"width": 390, "height": 844})
+        page.goto(f"{base_url}/?time_filter=all", wait_until="domcontentloaded")
+        trigger = page.get_by_test_id("zeitstrom-selection-trigger")
+        trigger.click()
+        sheet = page.get_by_test_id("zeitstrom-selection")
+        expect(sheet).to_have_attribute("aria-modal", "true")
+        select = sheet.locator("select")
+        close = sheet.locator("[data-sheet-close]")
+        select.focus()
+        select.press("Tab")
+        expect(close).to_be_focused()
+        close.press("Shift+Tab")
+        expect(select).to_be_focused()
+        select.press("Escape")
+        expect(trigger).to_be_focused()
+        expect(sheet).to_be_hidden()
+
+    def test_mobile_shift_links_without_javascript(self, staff_page, browser, base_url):
+        context = browser.new_context(
+            storage_state=staff_page.context.storage_state(),
+            java_script_enabled=False,
+            viewport={"width": 390, "height": 844},
+        )
+        try:
+            page = context.new_page()
+            page.goto(f"{base_url}/?time_filter=all", wait_until="domcontentloaded")
+            links = page.locator("noscript nav a")
+            assert links.count() >= 2
+            expect(links.nth(1)).to_be_visible()
+            href = links.nth(1).get_attribute("href")
+            links.nth(1).click()
+            assert page.url.endswith(href)
+        finally:
+            context.close()
+
+    def test_feed_has_no_axe_findings(self, authenticated_page, base_url, feed_fixture):
+        page = authenticated_page
+        page.goto(f"{base_url}/?date={FEED_DAY}&time_filter=all", wait_until="domcontentloaded")
+        expect(page.get_by_test_id("tally-group")).to_have_count(2)
+        result = run_axe(page, base_url)
+        assert not result.violations, result.violations
+        page.set_viewport_size({"width": 390, "height": 844})
+        page.get_by_test_id("zeitstrom-selection-trigger").click()
+        expect(page.get_by_test_id("zeitstrom-selection")).to_have_attribute("aria-modal", "true")
+        result = run_axe(page, base_url)
+        assert not result.violations, result.violations
+
+    @pytest.mark.parametrize("path", ["/", "/events/", "/clients/", "/workitems/"])
+    def test_field_boundaries_at_double_zoom(self, authenticated_page, base_url, path):
+        page = authenticated_page
+        page.set_viewport_size({"width": 1440, "height": 1000})
+        page.goto(base_url + path, wait_until="domcontentloaded")
+        page.locator("#main-content h1").wait_for(state="visible")
+        snapshot = """() => Array.from(document.querySelectorAll(
+            '#main-content input:not([type=hidden]):not([type=checkbox]):not([type=radio]), ' +
+            '#main-content select, #main-content textarea'
+        )).filter(el => el.getBoundingClientRect().width > 0).map(el => {
+            const css = getComputedStyle(el), rect = el.getBoundingClientRect();
+            return {id: el.id || el.name, colour: css.borderColor,
+                border: parseFloat(css.borderWidth), width: rect.width, height: rect.height};
+        })"""
+        before = page.evaluate(snapshot)
+        assert before
+        page.evaluate("document.documentElement.style.zoom = '200%'")
+        after = page.evaluate(snapshot)
+        assert [(f["id"], f["colour"], f["border"]) for f in after] == [
+            (f["id"], f["colour"], f["border"]) for f in before
+        ]
+        assert all(f["border"] >= 1 and f["width"] > 0 and f["height"] >= 44 for f in after), after

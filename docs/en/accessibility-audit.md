@@ -15,7 +15,7 @@ Calculation: OKLCH → OKLab (`a=C·cos(h)`, `b=C·sin(h)`) → linear sRGB; `Y=
 | Unchecked checkbox, radio button | `--border` / existing native appearance | 3.367:1* | 3.040:1* | CSS boundary unchanged |
 | Secondary button, filter toggle | `.btn-secondary`, `--border` | 3.367:1 | 3.040:1 | ≥ 3:1 |
 | Tally tile, date trigger, day arrows, inactive segment | `border-subtle` | 3.367:1 | 3.040:1 | ≥ 3:1 |
-| Primary button, active segment, checked checkbox | Accent fill/border | 7.128:1 | 6.436:1 | ≥ 3:1 |
+| Primary button, active segment | Accent fill/border | 7.128:1 | 6.436:1 | ≥ 3:1 |
 | Keyboard focus (links, buttons, inputs, selects, textareas) | `ring-accent`, 2 px offset | 7.128:1 | 6.436:1 | ≥ 3:1 |
 | Card/list borders, row separators | `--border-soft` | 1.483:1 | 1.339:1 | Decorative only |
 | Column text, time, uppercase labels | `text-ink-muted` | 5.066:1 | 4.574:1 | ≥ 4.5:1 |
@@ -25,4 +25,4 @@ Calculation: OKLCH → OKLab (`a=C·cos(h)`, `b=C·sin(h)`) → linear sRGB; `Y=
 <!-- translation-source: docs/accessibility-audit.md (section 2.3 addendum) -->
 <!-- translation-version: v0.99.10 -->
 <!-- translation-date: 2026-11-12 -->
-<!-- source-hash: d6b25ba400b84ff2dda47bf9ade104db250ea2cf -->
+<!-- source-hash: 7e0163e4a95161887dce3dd8a1f17fbf56ff19b2 -->

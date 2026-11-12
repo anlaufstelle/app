@@ -154,3 +154,27 @@ class TestZeitstromViewQueryCount:
         large = len(ctx_large.captured_queries)
 
         assert large <= small + 3, f"staff-Cockpit skaliert nicht-konstant: {small} -> {large} Queries."
+
+
+@pytest.mark.django_db
+def test_hourly_tallies_add_only_one_feed_query(facility, normal_doc_type, staff_user):
+    from django.db import connection
+
+    when = timezone.now()
+    Event.objects.bulk_create(
+        [
+            Event(
+                facility=facility,
+                document_type=normal_doc_type,
+                created_by=staff_user,
+                occurred_at=when,
+                is_anonymous=True,
+                created_via=Event.CreatedVia.TALLY,
+            )
+            for _ in range(250)
+        ]
+    )
+    with CaptureQueriesContext(connection) as captured:
+        items = build_feed_items(facility, timezone.localdate(when), "events", user=staff_user)
+    assert len(captured) <= 2  # One standard-event read plus one grouped read.
+    assert [i["object"]["total"] for i in items if i["type"] == "tally_group"] == [250]

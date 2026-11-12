@@ -600,10 +600,11 @@ class TestZeitstromWatchQueryBudget:
         with CaptureQueriesContext(connection) as many:
             assert _watch(client, params={"type": "events"}, scope=scope).status_code == 200
 
-        # The first request includes one fixed middleware read after the
+        # One grouped tally read is added to the former 20-query budget (#2661);
+        # the first request also includes one fixed middleware read after the
         # session save to check key existence and the current auth revision.
-        assert len(one) <= 21
-        assert len(many) <= 20
+        assert len(one) <= 22
+        assert len(many) <= 21
         assert len(many) <= len(one) + 2, (
             f"Watch queries must stay constant: 1 row={len(one)}, {total_rows} rows={len(many)}"
         )

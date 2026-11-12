@@ -1,9 +1,12 @@
 """Service for building unified activity feeds."""
 
 from datetime import UTC, datetime, time, timedelta
+from urllib.parse import urlencode
 
 from django.contrib.contenttypes.models import ContentType
-from django.db.models import Q
+from django.db.models import Count, Q
+from django.db.models.functions import TruncHour
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.utils.translation import ngettext
@@ -194,8 +197,63 @@ def activities_for_feed_read(facility, user):
     return activities
 
 
+def build_tally_feed_groups(facility, start_dt, end_dt, user, document_type_id=None):
+    """Aggregate every visible tally-origin entry before either feed cap.
+
+    Match build_tally_summary's origin and visibility contract, including
+    disabled types. UTC buckets keep repeated local hours distinct (#2661).
+    """
+    tallies = Event.objects.visible_to(user).filter(
+        facility=facility,
+        is_deleted=False,
+        created_via=Event.CreatedVia.TALLY,
+        occurred_at__range=(start_dt, end_dt),
+    )
+    if document_type_id:
+        tallies = tallies.filter(document_type_id=document_type_id)
+    rows = (
+        tallies.annotate(hour=TruncHour("occurred_at", tzinfo=UTC))
+        .values("hour", "document_type_id", "document_type__name")
+        .annotate(count=Count("id"))
+        .order_by("hour", "document_type__name", "document_type_id")
+    )
+    groups = {}
+    for row in rows:
+        hour = row["hour"]
+        if hour not in groups:
+            start = timezone.localtime(hour)
+            end = timezone.localtime(hour + timedelta(hours=1))
+            day = start.date().isoformat()
+            params = {"date_from": day, "date_to": day, "created_via": Event.CreatedVia.TALLY.value}
+            groups[hour] = {
+                "key": hour.strftime("%Y%m%d%H"),
+                "start": start,
+                "end": end,
+                "total": 0,
+                "types": [],
+                "url": reverse("core:event_list") + "?" + urlencode(params),
+            }
+        group = groups[hour]
+        group["total"] += row["count"]
+        group["types"].append(
+            {"id": str(row["document_type_id"]), "name": row["document_type__name"], "count": row["count"]}
+        )
+    return list(groups.values())
+
+
+def cap_feed_items(items, *, time_key="occurred_at"):
+    """Reserve room for complete hour groups, then merge in the capped rows."""
+    groups = [item for item in items if item["type"] == "tally_group"]
+    entries = sorted(
+        (item for item in items if item["type"] != "tally_group"),
+        key=lambda item: item[time_key].astimezone(UTC),
+        reverse=True,
+    )[: max(0, FEED_MAX_PER_TYPE - len(groups))]
+    return sorted(entries + groups, key=lambda item: item[time_key].astimezone(UTC), reverse=True)
+
+
 def _feed_events(facility, start_dt, end_dt, user, include_all, document_type_id=None):
-    """Event-Zweig des Feeds (Refs #1892, Extraktion aus ``build_feed_items``).
+    """Event branch of the feed, including complete tally groups (#2661).
 
     Exclude bans when loading all types to avoid duplicates with bans feed.
     The document-type filter runs in the query, before the cap, so older
@@ -209,10 +267,15 @@ def _feed_events(facility, start_dt, end_dt, user, include_all, document_type_id
         events_qs = events_qs.exclude(document_type__system_type="ban")
     if document_type_id:
         events_qs = events_qs.filter(document_type_id=document_type_id)
-    events = events_qs.select_related("document_type", "client", "created_by").order_by("-occurred_at")[
-        :FEED_MAX_PER_TYPE
+    events = (
+        events_qs.exclude(created_via=Event.CreatedVia.TALLY)
+        .select_related("document_type", "client", "created_by")
+        .order_by("-occurred_at")[:FEED_MAX_PER_TYPE]
+    )
+    groups = build_tally_feed_groups(facility, start_dt, end_dt, user, document_type_id)
+    return [{"type": "event", "occurred_at": e.occurred_at, "object": e} for e in events] + [
+        {"type": "tally_group", "occurred_at": group["start"], "object": group} for group in groups
     ]
-    return [{"type": "event", "occurred_at": e.occurred_at, "object": e} for e in events]
 
 
 def activity_person_label(activity):
@@ -257,11 +320,13 @@ def _feed_workitems(facility, start_dt, end_dt):
     return [{"type": "workitem", "occurred_at": wi.created_at, "object": wi} for wi in workitems]
 
 
-def _feed_bans(facility, start_dt, end_dt, user):
+def _feed_bans(facility, start_dt, end_dt, user, *, exclude_tally=False):
     """Ban-Zweig des Feeds (Refs #1892, Extraktion aus ``build_feed_items``)."""
+    bans_qs = events_for_feed_read(facility, user)
+    if exclude_tally:
+        bans_qs = bans_qs.exclude(created_via=Event.CreatedVia.TALLY)
     bans = (
-        events_for_feed_read(facility, user)
-        .filter(
+        bans_qs.filter(
             document_type__system_type="ban",
             occurred_at__gte=start_dt,
             occurred_at__lte=end_dt,
@@ -299,13 +364,13 @@ def build_feed_items(facility, target_date, feed_type, time_filter=None, user=No
         else []
     )
     workitems_list = _feed_workitems(facility, start_dt, end_dt) if feed_type == "workitems" or include_all else []
-    bans_list = _feed_bans(facility, start_dt, end_dt, user) if feed_type == "bans" or include_all else []
+    bans_list = (
+        _feed_bans(facility, start_dt, end_dt, user, exclude_tally=include_all)
+        if feed_type == "bans" or include_all
+        else []
+    )
 
-    return sorted(
-        events_list + activities_list + workitems_list + bans_list,
-        key=lambda x: x["occurred_at"],
-        reverse=True,
-    )[:FEED_MAX_PER_TYPE]
+    return cap_feed_items(events_list + activities_list + workitems_list + bans_list)
 
 
 #: Returned by ``safe_decrypt`` for a corrupt token; never a stored value.
