@@ -197,7 +197,8 @@ E2E_DEMO_SPECS := \
 	src/tests/e2e/test_demo_offline_key_notice.py \
 	src/tests/e2e/test_demo_offline_key_preparation.py \
 	src/tests/e2e/test_i18n_locale.py::TestAnonymousLocale::test_demo_query_switch_error_and_start \
-	src/tests/e2e/test_system_compliance_maintenance_results.py::TestDemoCards
+	src/tests/e2e/test_system_compliance_maintenance_results.py::TestDemoCards \
+	src/tests/e2e/test_quick_exit_geometry.py::TestDemoNotice
 .PHONY: test-e2e-demo
 test-e2e-demo:
 	flock -w $(CI_LOCK_TIMEOUT) "$(CI_LOCK)" make tailwind-build

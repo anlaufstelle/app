@@ -78,6 +78,7 @@ def test_demo_target_is_locked_and_selects_demo_specs():
         "test_demo_offline_key_preparation.py",
         "test_i18n_locale.py::TestAnonymousLocale::test_demo_query_switch_error_and_start",
         "test_system_compliance_maintenance_results.py::TestDemoCards",
+        "test_quick_exit_geometry.py::TestDemoNotice",
         "-rs",
     ):
         assert expected in result.stdout

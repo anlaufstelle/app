@@ -432,9 +432,8 @@ class TestDemoNotice:
 
     @pytest.fixture(autouse=True)
     def _demo_profile(self, base_url, browser):
-        # Not ``require_demo``: that helper registers the call site in the demo gate
-        # (``make test-e2e-demo``), which is a separate target of its own. This class is
-        # started explicitly in the demo profile, see the module docstring.
+        # Not ``require_demo``: the class is listed in E2E_DEMO_SPECS by name, so
+        # ``make test-e2e-demo`` runs it and test_demo_gate.py checks that it stays there.
         if os.environ.get("E2E_DEMO_MODE") != "1":
             pytest.skip("Requires the demo profile (E2E_DEMO_MODE=1, E2E_SEED_SCALE=demo)")
         assert os.environ.get("E2E_SEED_SCALE") == "demo", "The demo profile requires E2E_SEED_SCALE=demo"

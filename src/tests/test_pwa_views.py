@@ -853,8 +853,8 @@ class TestPrecachedShellBumpGuard:
     # precached shell and every runtime entry keeps the policy it was stored
     # with; a policy change reaches existing devices only with a new
     # CACHE_NAME. Pinned together with _PINNED_CACHE_NAME above.
-    # The 503 page's inline style hash changed (link contrast); v67 is still
-    # unreleased, so the fingerprint moves without a further bump.
+    # The inline style hash of offline.html changed (quick-exit bar); v67 is
+    # still unreleased, so the fingerprint moves without a further bump.
     _PINNED_POLICY_FINGERPRINT = "6bf00e5a543d3b6098559ea2c31627680362cbc0af05b4df70009931b0b1c721"
 
     @staticmethod
