@@ -201,16 +201,28 @@ def _detect_user_action_burst(facility, *, action, kind, short_threshold, long_t
     return findings
 
 
-def _detect_facility_action_burst(facility, *, actions, kind, short_threshold, long_threshold) -> list[dict]:
-    """Facility-weiter Burst einer Action-Menge ueber zwei Fenster (kurz + Langzeit)."""
+# Category prefix of audit rows that record a decision on a retention proposal.
+RETENTION_PROPOSAL_CATEGORY_PREFIX = "retention_proposal_"
+
+
+def _detect_facility_action_burst(
+    facility, *, actions, kind, short_threshold, long_threshold, exclude=None
+) -> list[dict]:
+    """Facility-weiter Burst einer Action-Menge ueber zwei Fenster (kurz + Langzeit).
+
+    ``exclude`` is an optional ``Q`` of rows that carry one of ``actions`` but
+    do not count towards the burst."""
     short_minutes = _get_threshold("BREACH_DETECTION_WINDOW_MINUTES", 60)
     long_minutes = _get_threshold("BREACH_DETECTION_LONG_WINDOW_MINUTES", 1440)
     short_cutoff = _window_cutoff(short_minutes)
-    agg = AuditLog.objects.filter(
+    rows = AuditLog.objects.filter(
         facility=facility,
         action__in=actions,
         timestamp__gte=_window_cutoff(long_minutes),
-    ).aggregate(
+    )
+    if exclude is not None:
+        rows = rows.exclude(exclude)
+    agg = rows.aggregate(
         long_c=Count("id"),
         short_c=Count("id", filter=Q(timestamp__gte=short_cutoff)),
     )
@@ -292,10 +304,18 @@ def detect_mass_export(facility) -> list[dict]:
 
 
 def detect_mass_delete(facility) -> list[dict]:
-    """Mehr als N DELETE-Aktionen facility-weit im Fenster (kurz + Langzeit)."""
+    """Mehr als N DELETE-Aktionen facility-weit im Fenster (kurz + Langzeit).
+
+    Decisions on retention proposals (approve, reject, defer, reactivate,
+    discarded approvals) are written as ``DELETE`` with a category starting
+    with ``retention_proposal_``. They remove no data and do not count; the
+    deletions they lead to are recorded by the retention run itself."""
     return _detect_facility_action_burst(
         facility,
         actions=(AuditLog.Action.DELETE,),
+        # has_key keeps rows without a category: a bare NOT LIKE on a missing
+        # JSON key is NULL and would silently drop every real deletion.
+        exclude=Q(detail__has_key="category", detail__category__startswith=RETENTION_PROPOSAL_CATEGORY_PREFIX),
         kind="mass_delete",
         short_threshold=_get_threshold("BREACH_DELETE_THRESHOLD", 50),
         long_threshold=_get_threshold("BREACH_DELETE_THRESHOLD_LONG", 150),

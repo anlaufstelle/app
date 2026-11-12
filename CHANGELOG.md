@@ -42,6 +42,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Im Hintergrund abgelehnte Offline-Bearbeitung wird nicht mehr bei jedem Seitenaufruf neu gesendet** (#2720) — Lehnt der Server eine Offline-Bearbeitung ab, erscheint sie unter „Nicht übertragbar“, lässt sich in der Personenansicht korrigieren und zählt nicht mehr gegen das Schreiblimit.
 - **Sammelfixes aus dem Code-Audit** (#2717) — Der Dokumentationstyp-Filter im Zeitstrom findet an vollen Tagen alle Treffer, Fotos mit Zweitbild werden angenommen. Fälle von Personen im Papierkorb bleiben dort. Doppelte Pseudonyme und ungültige Fall-Suche ergeben keinen Serverfehler. Aufheben einer Zusammenführung wird abgelehnt, wenn es eigene Zusatzfelder der behaltenen Person löschen würde.
 
+### Fixed
+
+- **Massenlösch-Alarm zählt Entscheidungen über Löschvorschläge nicht mehr mit** (#2717) — Freigeben, Ablehnen, Zurückstellen und Reaktivieren von Löschvorschlägen löschen nichts und lösen den Alarm deshalb nicht mehr aus. Echte Löschungen zählen weiter.
+
 ## [0.99.10] - 2026-11-11
 
 Weiterer Release-Kandidat vor 1.0: bündelt neue Basis-Image-Digests für PostgreSQL, Redis, ClamAV und Caddy (Betreiber-Aktion), einen Schwachstellen-Scan für App- und Fremdimages als Release-Gate mit befristeten Ausnahmen, die Advisory- und SBOM-Prüfung manuell vendorter JavaScript-Bibliotheken, ein offen bleibendes Offline-Bearbeitungsformular, Barrierefreiheits-Korrekturen, einen gehärteten Sprachcookie sowie Sicherheitsupdates für Entwicklungsabhängigkeiten.
