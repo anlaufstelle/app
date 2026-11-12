@@ -52,6 +52,17 @@ def _helper_option(name: str) -> int:
     return int(match.group(1))
 
 
+def dead_mirror_seconds(*, retries: int, timeout: int, files: int, resolve: int = RESOLVE_ATTEMPT_SECONDS) -> int:
+    """Time a dead first mirror costs for ``files`` files before apt moves on to the next mirror.
+
+    Every file is tried ``retries + 1`` times on the dead mirror. One attempt ends at the first of
+    two limits: the name resolution (libc resolver, ``resolve`` seconds, apt's ``Timeout`` does not
+    apply to it) or apt's own network timeout (connect/stall). The slower one bounds the attempt, so
+    the retry count multiplies the resolution time, and ``Timeout`` only matters once it exceeds it.
+    """
+    return files * (retries + 1) * max(resolve, timeout)
+
+
 @pytest.mark.architecture
 def test_workflows_install_packages_only_through_the_bounded_helper():
     calls = 0
@@ -81,14 +92,17 @@ def test_playwright_system_deps_run_with_the_same_apt_budget():
 
 
 @pytest.mark.architecture
+def test_dead_mirror_cost_is_bounded_by_retries_times_resolution_until_the_timeout_exceeds_it():
+    assert dead_mirror_seconds(retries=1, timeout=15, files=4) == 4 * 2 * 20
+    assert dead_mirror_seconds(retries=0, timeout=15, files=4) == 4 * 20
+    assert dead_mirror_seconds(retries=1, timeout=60, files=1) == 2 * 60  # a long timeout takes over
+
+
+@pytest.mark.architecture
 def test_dead_first_mirror_leaves_room_for_the_fallback_mirror_within_the_step_limit():
     retries = _helper_option("Acquire::Retries")
-    assert _helper_option("Acquire::http::Timeout") <= 15
-    assert _helper_option("Acquire::https::Timeout") <= 15
-    attempts = retries + 1
-    update_dead = attempts * INRELEASE_FILES * RESOLVE_ATTEMPT_SECONDS
-    install_dead = attempts * MAX_DEB_FILES * RESOLVE_ATTEMPT_SECONDS
-    dead_mirror_seconds = update_dead + install_dead
+    timeout = max(_helper_option("Acquire::http::Timeout"), _helper_option("Acquire::https::Timeout"))
+    dead_mirror = dead_mirror_seconds(retries=retries, timeout=timeout, files=INRELEASE_FILES + MAX_DEB_FILES)
     checked = 0
     for name, job, _steps_of_job, _index, step in _steps():
         run = step.get("run", "")
@@ -96,7 +110,7 @@ def test_dead_first_mirror_leaves_room_for_the_fallback_mirror_within_the_step_l
             continue
         checked += 1
         limit = step["timeout-minutes"] * 60
-        assert dead_mirror_seconds <= MAX_DEAD_MIRROR_SHARE * limit, (name, job, dead_mirror_seconds, limit)
+        assert dead_mirror <= MAX_DEAD_MIRROR_SHARE * limit, (name, job, dead_mirror, limit)
     assert checked >= 3
 
 
