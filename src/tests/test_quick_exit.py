@@ -398,11 +398,6 @@ class TestCompactButtonPlacement:
         classes = _classes(_parse_button_context(shell_html).button)
         assert {"min-h-[44px]", "min-w-[44px]", "text-red-700", "bg-red-50"} <= classes
 
-    def test_first_content_row_with_a_title_leaves_room_for_the_button_on_mobile(self, shell_html):
-        """The row holding the page title must not run underneath the button."""
-        assert "[&>#flash-messages+*:has(>h1)]:max-md:pr-28" in shell_html
-        assert 'id="offline-status" class="pr-32' in shell_html.replace("md:ml-60 ", "")
-
     def test_wrapper_carries_no_inline_style(self, shell_html):
         context = _parse_button_context(shell_html)
         assert all("style" not in ancestor for ancestor in context.ancestors)

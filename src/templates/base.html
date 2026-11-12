@@ -82,48 +82,54 @@
       data-privacy-screen="{% if request.current_facility.settings.privacy_screen_on_blur %}1{% else %}0{% endif %}"
       data-quick-exit-logout-url="{% url 'logout' %}">
 
-    {# Refs #2136: focus:z-[80] statt focus:z-50 — die Quick-Exit-Leiste darunter #}
-    {# ist sticky; bei gleichem z-index gewaenne sie als spaeteres Geschwister #}
-    {# und verdeckte den fokussierten Skip-Link. Nur hier und in #}
-    {# offline_base.html noetig — die eigenstaendigen Seiten tragen den Knopf #}
-    {# nicht. Der Abstand bleibt: der Wrapper steht hier seit dem Nachzug auf #}
-    {# z-30 (Begruendung unten), in offline_base.html auf z-50. #}
+    {# Refs #2136: focus:z-[80] instead of focus:z-50 — the quick-exit wrapper below #}
+    {# is sticky; with equal z-index it would win as the later sibling and cover the #}
+    {# focused skip link. Only needed here and in offline_base.html — the standalone #}
+    {# pages do not carry the button. The gap stays: the wrapper sits on z-30 here #}
+    {# (reason below), on z-50 in offline_base.html. #}
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[80] focus:bg-accent focus:text-white focus:px-4 focus:py-2 focus:rounded-md">
         {% trans "Zum Inhalt springen" %}
     </a>
 
-    {% comment %}Refs #2136 (N-2): Mitschauen-/Shoulder-Surfing-Schutz.
+    {% comment %}Refs #2136 (N-2): protection against onlookers / shoulder surfing.
 
-    Der Knopf steht direkt hinter dem Skip-Link und ist damit das erste
-    fokussierbare Element der Seite (WCAG 2.1.1) — wer die Anwendung in
-    Gegenwart einer gefaehrdenden Person bedient, erreicht ihn mit einem Tab.
-    Der Knopf klebt oben rechts (sticky) und ist auf JEDER angemeldeten Seite
-    sichtbar, auch mobil: die Bottom-Nav behaelt ihre fuenf Slots, und im
-    "Mehr"-Menue waere der Knopf hinter einem Tap versteckt. Refs #2660: Es
-    gibt keine eigene Zeile und keine deckende Flaeche mehr — ``#quick-exit-bar``
-    ist 0 px hoch (``h-0``), der 44 px hohe Knopf ragt darunter in den Inhalt
-    und ueberdeckt beim Scrollen nur seine eigene Flaeche. Mobil steht
-    "Verlassen", ab md der Volltext; ``aria-label`` haelt den zugaenglichen
-    Namen auf "Schnell verlassen". Die Offline-Banner im Wrapper (``pr-32``/``md:pr-48``) und die
-    erste Inhaltszeile mit Titel (mobil ``pr-28``) lassen rechts Platz.
+    The button sits directly behind the skip link and is therefore the first
+    focusable element of the page (WCAG 2.1.1) — whoever works in the presence
+    of a threatening person reaches it with one Tab. It sticks to the top right
+    and is visible on EVERY signed-in page, on mobile too: the bottom nav keeps
+    its five slots, and inside the "Mehr" menu the button would hide behind a
+    tap. Refs #2660: there is no row of its own and no opaque surface —
+    ``#quick-exit-bar`` is 0 px high (``h-0``), the 44 px button reaches into the
+    content below it (y 4-48 px). On mobile the label reads "Verlassen", from md
+    the full text; ``aria-label`` keeps the accessible name "Schnell verlassen".
 
-    Der Sticky-Wrapper umschliesst jetzt AUCH den Offline-Statusbalken (der
-    ihn vorher selbst trug, Refs #1495): zwei getrennte sticky-Elemente auf
-    top-0 laegen uebereinander statt untereinander.
+    Space for the button (Refs #2660, structural, no per-template rule): the
+    content wrapper starts below the button (``pt-14`` = 56 px) at EVERY width, so
+    no page element — title row, action buttons, back link, form field — can
+    run underneath it. The three full-width notices that start at y = 0 (offline
+    status, demo notice, 2FA reminder) cannot be moved below the button, so each
+    keeps ``pr-36 md:pr-56`` (144/224 px) free on the right. Footprint of the
+    button measured from the right edge, worst case with a wide fallback font:
+    mobile 16 px padding + about 120 px button = 136 px, from md 32 px + about
+    176 px = 208 px — the reserve is one step larger than that.
 
-    z-30 statt z-50 (Nachzug zu #2136): Das mobile Such-Overlay liegt
-    ``fixed inset-x-0 top-0 z-[60]``, aber INNERHALB der Bottom-Nav
-    (``partials/_navigation_mobile.html``), und die spannt mit ``z-40`` einen
-    eigenen Stapelkontext auf — sein ``z-[60]`` wirkt nur nav-intern, nach
-    aussen zaehlt die ``40``. Der Knopf ueberlappt das Overlay geometrisch
-    (Knopf ca. 4-48 px, Suchfeld ca. 16-58 px) und fing auf ``z-50`` jeden Tap
-    ins Suchfeld ab. Der Wrapper trug das ``z-50`` schon vor #2136, blieb
-    ohne sichtbaren Offline-Banner aber 0 px hoch; erst der stets sichtbare
-    Knopf macht die Ueberlappung real. ``z-30`` haelt ihn weiter ueber dem
-    gesamten Seiteninhalt (unpositioniert bzw. ``z-10``) und ueber der
-    Desktop-Sidebar (``z-index: auto``), ordnet sie aber unter die Nav und
-    deren Overlays ein. Gegen Dialoge/Toasts aus ``<main>`` (``z-50``,
-    spaeteres Geschwister) verlor sie ohnehin schon.
+    The sticky wrapper also encloses the offline status bar (which carried the
+    stickiness itself before, Refs #1495): two separate sticky elements on top-0
+    would overlap instead of stacking.
+
+    z-30 instead of z-50 (follow-up to #2136): the mobile search overlay is
+    ``fixed inset-x-0 top-0 z-[60]`` but lives INSIDE the bottom nav
+    (``partials/_navigation_mobile.html``), and that nav opens its own stacking
+    context with ``z-40`` — the overlay's ``z-[60]`` only counts inside the nav,
+    from outside the ``40`` counts. The button overlaps the overlay
+    geometrically (button about 4-48 px, search field about 16-58 px) and on
+    ``z-50`` it swallowed every tap into the search field. The wrapper already
+    carried ``z-50`` before #2136 but stayed 0 px high without a visible offline
+    banner; only the always-visible button makes the overlap real. ``z-30`` keeps
+    it above the whole page content (unpositioned or ``z-10``) and above the
+    desktop sidebar (``z-index: auto``) but ranks it below the nav and its
+    overlays. Against dialogs/toasts from ``<main>`` (``z-50``, later sibling)
+    it lost anyway.
     {% endcomment %}
     <div class="sticky top-0 z-30">
         <div id="quick-exit-bar" class="flex h-0 items-start justify-end px-4 md:px-8">
@@ -158,7 +164,7 @@
              data-sync-complete-message="{% trans 'Übertragung beendet.' %}"
              data-queue-unknown-message="{% trans 'Stand der wartenden Änderungen unklar. Bitte erneut versuchen.' %}"
              data-conflict-message="{% trans 'Neuer Konflikt. Öffnen Sie die Seite „Konflikte“ über den Link im Konfliktbanner zur Auflösung.' %}"
-             id="offline-status" class="pr-32 md:ml-60 md:pr-48">
+             id="offline-status" class="pr-36 md:ml-60 md:pr-56">
             <span class="sr-only" role="status" aria-live="polite" aria-atomic="true"
                   data-testid="offline-status-announcer" x-text="announcement"></span>
             <div x-show="offline" x-cloak
@@ -224,14 +230,14 @@
         {# Refs #2285: aktueller Bereich + Wechsel-Link, Tag aus templatetags/demo_scenarios.py #}
         {# (KEINE Erweiterung von context_processors.py — der Tag liefert den Wert gezielt nur hier, s. dort). #}
         {% if demo_mode %}
-        {# Refs #2663: einzeilig und einklappbar statt vier Zeilen ueber dem Inhalt. Die Zeile #}
-        {# selbst (Demo, synthetische Daten, Reset-Zeit) bleibt immer sichtbar: Kennzeichnung #}
-        {# und Reset-Zeitpunkt sind Transparenzpflicht der oeffentlichen Demo (Refs #1062, #1604). #}
-        {# Ohne JavaScript ist der vollstaendige Hinweis sichtbar; demo-banner.js ersetzt die #}
-        {# statische Zeile durch den Schalter und klappt die Details mobil ein (data-collapsed). #}
-        {# pr-32/md:pr-48 lassen dem Quick-Exit-Knopf rechts Platz (Refs #2660). #}
+        {# Refs #2663: one line and foldable instead of four lines above the content. The line #}
+        {# itself (demo, synthetic data, reset time) stays visible at all times: the marking #}
+        {# and the reset time are a transparency duty of the public demo (Refs #1062, #1604). #}
+        {# Without JavaScript the complete notice is visible; demo-banner.js swaps the static #}
+        {# line for the toggle and folds the details on mobile (data-collapsed). #}
+        {# pr-36/md:pr-56 keep the right edge free for the quick-exit button (Refs #2660). #}
         {% blocktrans with reset=demo_next_reset|time:"H:i" asvar demo_summary %}Demo · synthetische Daten · Reset {{ reset }}{% endblocktrans %}
-        <div id="demo-banner" class="group bg-amber-100 border-b border-amber-300 text-amber-900 text-center text-xs md:text-[13px] py-1 pl-4 pr-32 md:pr-48" data-testid="demo-banner">
+        <div id="demo-banner" class="group bg-amber-100 border-b border-amber-300 text-amber-900 text-center text-xs md:text-[13px] py-1 pl-4 pr-36 md:pr-56" data-testid="demo-banner">
             <span class="md:hidden" data-demo-banner-summary>{{ demo_summary }}</span>
             <button type="button" hidden aria-expanded="true" aria-controls="demo-banner-details" data-demo-banner-toggle data-testid="demo-banner-toggle"
                     class="md:hidden inline-flex items-center gap-1 min-h-[24px] rounded hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-900">
@@ -264,7 +270,7 @@
         <div hidden role="alert" data-demo-offline-error class="bg-red-100 border border-red-300 text-red-900 p-4">{{ demo_offline_bootstrap_error }}</div>
         {% endif %}
         {% endif %}
-        <div class="max-w-[1140px] mx-auto px-4 py-5 md:px-8 md:py-7 [&>#flash-messages+*:has(>h1)]:max-md:pr-28">
+        <div class="max-w-[1140px] mx-auto px-4 pt-14 pb-5 md:px-8 md:pb-7">
             {# Refs #811 (C-44): stabile Live-Region — siehe CONTRIBUTING.md "Templates und Frontend". #}
             <div id="flash-messages" role="status" aria-live="polite" aria-atomic="true">
             {% block messages %}

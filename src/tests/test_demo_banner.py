@@ -126,7 +126,7 @@ class TestDemoBanner:
 
     def test_banner_leaves_room_for_the_quick_exit_button(self, demo_page):
         classes = _classes(_parse(demo_page).elements[0][1])
-        assert {"pr-32", "md:pr-48", "py-1"} <= classes
+        assert {"pr-36", "md:pr-56", "py-1"} <= classes
         assert "py-1.5" not in classes
 
     def test_no_inline_style_or_handler_in_the_banner(self, demo_page):
