@@ -675,7 +675,7 @@ voraus. Das Beispiel gehoert ausschliesslich in `sudo crontab -e`.
 # Abgelaufene Django-Sitzungen bereinigen (taeglich 05:00)
 0 5 * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance clearsessions >> /var/log/anlaufstelle-clearsessions.log 2>&1
 
-# Breach detection scan (hourly at minute 30, without webhook; Refs #685)
+# Breach-Detection-Scan (stündlich zur 30. Minute, ohne Webhook; Refs #685)
 30 * * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance detect_breaches >> /var/log/anlaufstelle-breach.log 2>&1
 
 # Materialized-View-Refresh (stuendlich zur 15. Minute, Details siehe Abschnitt 11)
