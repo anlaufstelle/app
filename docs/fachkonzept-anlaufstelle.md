@@ -561,12 +561,17 @@ Für den vollständigen Implementierungsstand siehe [CHANGELOG](../CHANGELOG.md)
 
 ### Roadmap
 
-Die folgenden Themen sind Zielbilder, keine implementierten Funktionen. Klientel-Self-Service (einschließlich Selbstregistrierung und eigener Portale für Auskunft, Berichtigung oder Löschung) ist verworfen, nicht geplant ([ADR-013](adr/013-dsgvo-art16-no-selfservice.md), [ADR-041](adr/041-berichtigungsworkflow-intern.md)). Betroffenenrechte werden intern durch berechtigte Mitarbeitende bearbeitet (§ 19).
+Die folgenden Themen sind Zielbilder ohne Zusage und ohne Termin, keine implementierten Funktionen. Klientel-Self-Service (einschließlich Selbstregistrierung und eigener Portale für Auskunft, Berichtigung oder Löschung) ist verworfen, nicht geplant ([ADR-013](adr/013-dsgvo-art16-no-selfservice.md), [ADR-041](adr/041-berichtigungsworkflow-intern.md)). Betroffenenrechte werden intern durch berechtigte Mitarbeitende bearbeitet (§ 19).
 
-| Thema | Beschreibung | Priorität |
-|-------|-------------|-----------|
-| KDS-Export | Aggregat-Export gemäß KDS 3.0 für Suchthilfestatistik | Hoch |
-| REST-API (Zielbild) | Externe authentifizierte API mit Facility-Scoping für Trägersysteme | Mittel |
+| Thema | Beschreibung |
+|-------|-------------|
+| KDS-Export | Export für die Deutsche Suchthilfestatistik; ohne Zusage zu Format und Umfang |
+| Externe API für Trägersysteme | Authentifizierte Schnittstelle mit Einrichtungs-Scoping; die vorhandenen JSON-Endpunkte sind intern und sitzungsgebunden |
+| Berichte je Einrichtung konfigurierbar | Die Einrichtung soll selbst einstellen können, wie die ausgelieferten Berichte für sie erscheinen |
+| Module je Einrichtung schaltbar | Funktionsbereiche je Einrichtung ein- und ausschalten |
+| Einrichtung und erste Schritte im Browser | Einrichten und erste Schritte in der Oberfläche statt über Kommandozeile und Django-Admin |
+| Konfigurationspakete exportieren und erweitern | Die Konfiguration einer Einrichtung als Paket exportieren; Pakete lassen sich erweitern |
+| Rechtstexte und E-Mail-Vorlagen in der Oberfläche pflegen | Pflege der Texte durch die Einrichtung in der Oberfläche |
 
 ---
 
