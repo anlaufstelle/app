@@ -3,8 +3,8 @@
 **Open-Source-Fachsystem für niedrigschwellige soziale Arbeit**
 
 Autor: Erika Musterfrau, Tobias Nix
-Stand: Oktober 2026
-Version: 1.10
+Stand: November 2026
+Version: 1.11
 
 ---
 
@@ -23,6 +23,7 @@ Version: 1.10
 | 1.8 | September 2026 (2026-09-07) | Einsatzzwecke & Domänen-Pakete (#2140): § 1 Positionierung um die Öffnung über die Ursprungsdomäne ergänzt; § 3 als Arbeitsmodus neu gefasst (offene Sozial-/Lebensberatung und niedrigschwellige Beratungsstellen zuerst, Fit-/Anti-Fit-Tabellen, kuratierte Domänen Awareness/Frauenhaus/Jugendarbeit + generische Beratungsstelle); § 8 Roadmap-Zeile „Domänenbibliotheken" als umgesetzt markiert; § 11 verweist auf die YAML-Paket-Mechanik (`docs/packages.md`) und die vier mitgelieferten Pakete; § 14 Glossar um „Domänen-Paket", „Betreiber-Empfehlung" und „Quick-Exit" ergänzt. |
 | 1.9 | September 2026 (2026-09-10) | § 5 um die Persona der Beratungsstellen-Domäne ergänzt (#2190). |
 | 1.10 | Oktober 2026 (2026-10-07) | Softwarestand v0.99.6: Personenlose Kontakte und die Personen-Kontaktstufen „Nur Pseudonym“ und „Mit Zusatzangaben“ beschreiben die Pseudonymisierung als vorgesehenen Ablauf ohne Pflichtfeld für Klarnamen und unterscheiden Ereignisse ohne Person von inhaltlich anonymen Daten (#2430). |
+| 1.11 | November 2026 (2026-11-12) | Softwarestand v0.99.10: Die Roadmap in § 8 führt Zielbilder ohne Prioritätsspalte, ohne Zusage und ohne Termin; neu aufgenommen sind die Konfigurationsthemen (Berichte, Module, Einrichtung im Browser, Konfigurationspakete, Rechtstexte und E-Mail-Vorlagen). Der KDS-Export steht in § 7, § 8 und § 22 gleich als Zielbild ohne Zusage zu Format und Umfang; § 22 nennt IFT und EUDA statt DBDD/EBDD. § 25 beschreibt die Anmeldung wie umgesetzt (TOTP, Passkeys, Einladung) und verweist nicht mehr auf Roadmap-Schritte, die es nicht gibt (#2718). |
 
 ---
 

@@ -110,3 +110,13 @@ def test_authentication_points_to_listed_roadmap_steps_only(concept):
     # Current state: second factor, passkeys and invitations exist in the code.
     for current in ("Passkey", "Einladung"):
         assert current in auth, current
+
+
+def test_history_has_entry_1_11(concept):
+    assert re.search(r"^\| 1\.11 \|", concept, re.MULTILINE)
+    assert re.search(r"^Version: 1\.11$", concept, re.MULTILINE)
+
+
+def test_english_summary_names_no_priorities():
+    text = SUMMARY_EN.read_text(encoding="utf-8")
+    assert "priority" not in text.lower().split("## non-functional requirements")[1].split("## ")[0]
