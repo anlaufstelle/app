@@ -407,8 +407,13 @@ class Command(BaseCommand):
         )
 
     def _handle_propose(self, facilities, now):
-        """Create RetentionProposal entries for events that would be deleted."""
+        """Create RetentionProposal entries for events that would be deleted.
+
+        A failing facility is logged and counted like in the deletion run; the
+        others still get their proposals, and the command ends with an error.
+        """
         total_created = 0
+        failed_facilities = 0
 
         for facility in facilities:
             try:
@@ -417,16 +422,25 @@ class Command(BaseCommand):
                 self._warn_missing_settings(facility)
                 continue
 
-            # Reactivate deferred proposals whose wait has expired (Issue #515)
-            reactivated, auto_approved = reactivate_deferred_proposals(facility)
-            if reactivated or auto_approved:
-                self.stdout.write(
-                    f"Facility '{facility.name}': {reactivated} proposal(s) reactivated, "
-                    f"{auto_approved} auto-approved after defer."
-                )
+            try:
+                # Reactivate deferred proposals whose wait has expired (Issue #515)
+                reactivated, auto_approved = reactivate_deferred_proposals(facility)
+                if reactivated or auto_approved:
+                    self.stdout.write(
+                        f"Facility '{facility.name}': {reactivated} proposal(s) reactivated, "
+                        f"{auto_approved} auto-approved after defer."
+                    )
 
-            created_count = create_proposals_for_facility(facility, settings_obj, now)["count"]
+                created_count = create_proposals_for_facility(facility, settings_obj, now)["count"]
+            except Exception as exc:
+                self._report_facility_failure(facility, exc)
+                failed_facilities += 1
+                continue
             self.stdout.write(f"Facility '{facility.name}': {created_count} proposal(s) created.")
             total_created += created_count
 
         self.stdout.write(self.style.SUCCESS(f"Total: {total_created} proposal(s) created."))
+        if failed_facilities:
+            raise CommandError(
+                f"{failed_facilities} facility/facilities aborted while creating proposals; see application logs."
+            )

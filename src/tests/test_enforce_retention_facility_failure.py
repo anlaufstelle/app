@@ -15,7 +15,7 @@ from django.core.management.base import CommandError
 from django.utils import timezone
 
 from core.management.commands import enforce_retention as command_module
-from core.models import AuditLog, DocumentType, Event, Facility, Settings
+from core.models import AuditLog, DocumentType, Event, Facility, RetentionProposal, Settings
 
 pytestmark = pytest.mark.django_db
 
@@ -96,3 +96,23 @@ def test_run_without_failure_still_succeeds(two_facilities):
     call_command("enforce_retention", stdout=stdout)
     assert "failed=0, failed_facilities=0." in stdout.getvalue()
     assert all(Event.objects.get(pk=event.pk).is_deleted for event in events.values())
+
+
+def test_failing_facility_does_not_stop_proposals_for_the_next_one(two_facilities, monkeypatch, caplog):
+    failing, healthy, events = two_facilities
+    real = command_module.create_proposals_for_facility
+
+    def flaky(facility, *args, **kwargs):
+        if facility.pk == failing.pk:
+            raise RuntimeError(SECRET)
+        return real(facility, *args, **kwargs)
+
+    monkeypatch.setattr(command_module, "create_proposals_for_facility", flaky)
+    caplog.set_level(logging.ERROR)
+    stdout, stderr, error = _run("--propose")
+    assert RetentionProposal.objects.filter(facility=healthy, target_id=events[healthy.pk].pk).exists()
+    assert not RetentionProposal.objects.filter(facility=failing).exists()
+    assert "1 facility/facilities aborted" in error
+    assert "RuntimeError" in caplog.text
+    for text in (stdout, stderr, error, caplog.text):
+        assert SECRET not in text
