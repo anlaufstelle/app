@@ -41,8 +41,9 @@ import time
 import uuid
 
 import pytest
+from playwright.sync_api import expect
 
-from ._helpers import SEED_PASSWORD
+from ._helpers import SEED_PASSWORD, django_shell
 from ._helpers import wait_for_active_service_worker as _wait_for_active_service_worker
 
 pytestmark = pytest.mark.e2e
@@ -249,6 +250,101 @@ def test_dirty_page_is_not_reloaded_on_update(browser, base_url):
         page.locator("#sw-update-toast").wait_for(state="visible", timeout=15000)
         page.locator("#sw-update-toast").get_by_text("Neu laden").click()
         page.wait_for_function("() => window.__preUpdateMarker === undefined", timeout=15000)
+    finally:
+        context.close()
+
+
+def test_takeover_does_not_cut_a_running_form_post(browser, base_url, e2e_env):
+    """Refs #2730: hold a native POST response until takeover reaches the old page.
+
+    Person creation is network-only: unlike a queued task write it does not
+    keep the old worker alive or fall back to the queue after six seconds.
+    """
+    page, context = _login_with_retry(browser, base_url)
+    probe = f"e2e-inflight-{uuid.uuid4().hex[:8]}"
+    pseudonym = f"E2E-Takeover-{uuid.uuid4().hex[:8]}"
+    form_url = f"{base_url}/clients/new/"
+    parked = []
+    order = []
+    control = context.new_page()
+    control.goto(f"{base_url}/manifest.json", wait_until="domcontentloaded")
+
+    def hold_response(route):
+        if route.request.url != form_url or route.request.method != "POST":
+            route.fallback()
+            return
+        # Fetch only once, without following the redirect. The server has saved
+        # the person, but the browser cannot receive its response until fulfilment.
+        response = route.fetch(max_redirects=0)
+        parked.append((route, response))
+        order.append("post-response-held")
+        # Playwright waits for a pending navigation before evaluating in its
+        # frame. Use a document without app scripts to release the waiting worker.
+        control.evaluate(
+            "async () => { const reg = await navigator.serviceWorker.getRegistration(); "
+            "reg.waiting.postMessage({type: 'SKIP_WAITING'}); }"
+        )
+
+    def record_takeover(message):
+        if message.text == probe:
+            order.append("controllerchange")
+
+    page.on("console", record_takeover)
+    try:
+        page.goto(form_url, wait_until="domcontentloaded")
+        _wait_for_active_service_worker(page)
+        page.evaluate(
+            """(probe) => {
+                const send = ServiceWorker.prototype.postMessage;
+                const held = [];
+                ServiceWorker.prototype.postMessage = function (message, ...rest) {
+                    if (message && message.type === 'SKIP_WAITING') { held.push(this); return; }
+                    return send.call(this, message, ...rest);
+                };
+                window.__heldActivations = held;
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    if (navigator.serviceWorker.controller.scriptURL.includes(probe)) console.info(probe);
+                });
+                const observer = new MutationObserver(() => {
+                    if (!document.getElementById('sw-update-toast')) return;
+                    observer.disconnect();
+                    console.info(probe + ':protected');
+                });
+                observer.observe(document.body, {childList: true, subtree: true});
+            }""",
+            probe,
+        )
+        page.evaluate(
+            "async (probe) => { await navigator.serviceWorker.register('/sw.js?' + probe, { scope: '/' }); }",
+            probe,
+        )
+        page.wait_for_function("() => window.__heldActivations.length > 0")
+        # No input/change events: a dirty-page guard must not conceal a broken
+        # navigation guard. The normal form submit remains native.
+        page.evaluate("(name) => { document.querySelector('[name=pseudonym]').value = name; }", pseudonym)
+        assert page.evaluate("() => window.offlineQueue.getQueueCount()") == 0
+        context.route("**/*", hold_response)
+        # The prompt is produced by the real reload decision after takeover.
+        # Observe it inside the old document, without asking Playwright to wait
+        # for that document's pending navigation before evaluating an assertion.
+        with (
+            page.expect_console_message(lambda message: message.text == probe + ":protected"),
+            page.expect_console_message(lambda message: message.text == probe),
+        ):
+            page.evaluate("() => document.querySelector('button.btn-primary[type=submit]').click()")
+        assert len(parked) == 1
+        assert parked[0][1].status == 302
+        assert page.url == form_url
+        order.append("response-released")
+        parked[0][0].fulfill(response=parked[0][1])
+        page.wait_for_url(lambda url: "/clients/new/" not in url, wait_until="domcontentloaded")
+        expect(page.get_by_role("heading", name=pseudonym, exact=True)).to_be_visible()
+        assert order == ["post-response-held", "controllerchange", "response-released"]
+        lines = django_shell(
+            e2e_env,
+            f"from core.models import Client; print('N|%d' % Client.objects.filter(pseudonym='{pseudonym}').count())",
+        )
+        assert [line for line in lines if line.startswith("N|")][-1] == "N|1", lines
     finally:
         context.close()
 
