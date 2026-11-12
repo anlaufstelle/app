@@ -701,6 +701,67 @@
     document.addEventListener("htmx:configRequest", syncOfflineTallyIdempotencyKey);
     document.addEventListener("htmx:afterRequest", rotateQueuedOfflineTallyIdempotencyKey);
 
+    // #1938/#2653: the full page submits natively online (POST/redirect). Offline
+    // a native POST would leave the page for the worker's queue notice, and a
+    // second submit could reuse the server-rendered key, so the second contact
+    // would vanish in the replay deduplication. Offline the form is therefore
+    // sent in place: the queue notice lands in the flash area and the key is
+    // rotated per queue ACK. Any other answer is left to the browser.
+    function showWorkerNotice(html) {
+        const current = document.getElementById("flash-messages");
+        if (!current) return;
+        const template = document.createElement("template");
+        template.innerHTML = html;
+        const incoming = template.content.querySelector("#flash-messages");
+        current.replaceChildren(...(incoming ? incoming.childNodes : template.content.childNodes));
+    }
+
+    async function submitFullPageFormOffline(form) {
+        const input = form.querySelector('input[name="idempotency_key"]');
+        const key = input && input.value ? input.value : newIdempotencyKey();
+        if (input) input.value = key;
+        const csrfInput = form.querySelector('input[name="csrfmiddlewaretoken"]');
+        const headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "X-Idempotency-Key": key,
+            Accept: "text/html",
+        };
+        const csrf = (csrfInput && csrfInput.value) || csrfToken();
+        if (csrf) headers["X-CSRFToken"] = csrf;
+        const button = form.querySelector('button[type="submit"]');
+        if (button) button.disabled = true;
+        try {
+            const response = await fetch(new URL(form.getAttribute("action") || TALLY_URL, window.location.href), {
+                method: "POST",
+                credentials: "same-origin",
+                headers: headers,
+                body: new URLSearchParams(new FormData(form)).toString(),
+            });
+            if (response.headers.get("HX-Retarget") === "#flash-messages") {
+                if (response.headers.get(OFFLINE_QUEUED_HEADER) === "1" && input) input.value = newIdempotencyKey();
+                showWorkerNotice(await response.text());
+                return;
+            }
+            if (response.redirected) {
+                window.location.assign(response.url);
+                return;
+            }
+        } catch (_error) {
+            // Fall through: the browser submits the same key, the server deduplicates.
+        } finally {
+            if (button) button.disabled = false;
+        }
+        HTMLFormElement.prototype.submit.call(form);
+    }
+
+    document.addEventListener("submit", function (event) {
+        const form = event.target;
+        if (!form || !form.matches || !form.matches("form[data-offline-tally-form][data-tally-page-form]")) return;
+        if (navigator.onLine !== false) return;
+        event.preventDefault();
+        submitFullPageFormOffline(form);
+    });
+
     function htmxNumberButton(event) {
         const detail = (event && event.detail) || {};
         const request = detail.requestConfig || {};

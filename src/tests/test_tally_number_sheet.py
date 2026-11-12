@@ -135,6 +135,23 @@ class TestNumberFormFragment:
         assert form.attrs["method"] == "post"
         assert form.attrs["action"] == reverse("core:tally_increment")
 
+    def test_full_page_form_is_marked_for_the_offline_in_place_submit(self, client, facility, staff_user):
+        # Offline, offline-tally.js sends this form in place and rotates its key per queue ACK;
+        # it finds the form by this marker and must be loaded on the page.
+        document_type, _ausgabe, _rueckgabe = _number_tally_type(facility)
+        client.force_login(staff_user)
+
+        response = client.get(reverse("core:tally_increment"), {"document_type": str(document_type.pk)})
+
+        tree = _parse(response.content.decode())
+        form = tree.find_testid(f"tally-inline-form-{document_type.pk}")
+        assert "data-tally-page-form" in form.attrs
+        assert "data-offline-tally-form" in form.attrs
+        assert "js/offline-tally.js" in response.content.decode()
+
+        fragment = _parse(_open(client, document_type).content.decode())
+        assert "data-tally-page-form" not in fragment.find_testid(f"tally-inline-form-{document_type.pk}").attrs
+
     def test_full_page_validation_error_is_shown_on_the_page(self, client, facility, staff_user):
         document_type, ausgabe, rueckgabe = _number_tally_type(facility)
         client.force_login(staff_user)

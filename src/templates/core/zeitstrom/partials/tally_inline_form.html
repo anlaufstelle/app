@@ -3,7 +3,8 @@
 tally-undo.js opens it (show/showModal, focus, Escape, click outside) and sets aria-modal
 for the bottom sheet only. Without JavaScript it is visible through ``open``; on the full
 page (tally_page) it stays a static card that submits natively: the page has no
-slot, so htmx must not intercept the submit (errors re-render the whole page).{% endcomment %}
+slot, so htmx must not intercept the submit (errors re-render the whole page). Offline,
+offline-tally.js sends the full-page form in place (data-tally-page-form).{% endcomment %}
 <dialog open id="tally-number-form-{{ document_type.pk }}"
         class="{% if tally_page %}block static{% else %}m-0 p-4 w-full max-w-none fixed inset-x-0 bottom-0 top-auto rounded-t-[16px] md:absolute md:inset-x-auto md:bottom-auto md:w-[360px] md:max-w-[360px] md:rounded-[12px] border border-subtle bg-surface text-ink shadow-xl backdrop:bg-black/40 md:backdrop:bg-transparent z-40{% endif %}"
         data-tally-number-sheet
@@ -23,7 +24,7 @@ slot, so htmx must not intercept the submit (errors re-render the whole page).{%
           class="flex flex-col gap-3"
           data-offline-tally-form
           data-testid="tally-inline-form-{{ document_type.pk }}"
-          {% if tally_page %}hx-disable{% else %}hx-post="{% url 'core:tally_increment' %}"
+          {% if tally_page %}hx-disable data-tally-page-form{% else %}hx-post="{% url 'core:tally_increment' %}"
           hx-target="#tally-number-form-slot"
           hx-headers='{"X-Idempotency-Key": "{{ idempotency_key }}"}'
           hx-swap="innerHTML"{% endif %}>

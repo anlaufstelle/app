@@ -1012,3 +1012,82 @@ describe("warm number form in the panel slot", () => {
     });
 });
 
+
+describe("full-page number form while offline", () => {
+    function fullPageForm() {
+        document.body.innerHTML = `
+            <div id="flash-messages" role="status"></div>
+            <form method="post" action="/partials/tally/increment/" data-offline-tally-form data-tally-page-form hx-disable>
+                <input type="hidden" name="csrfmiddlewaretoken" value="csrf-1">
+                <input type="hidden" name="document_type" value="${TYPE_A}">
+                <input type="hidden" name="idempotency_key" value="server-key">
+                <input name="anzahl" value="3">
+                <button type="submit">Kontakt zählen</button>
+            </form>`;
+        return document.querySelector("form");
+    }
+
+    function queuedNotice() {
+        return new Response('<div id="flash-messages"><p>Offline gespeichert</p></div>', {
+            status: 200,
+            headers: { "X-Offline-Queued": "1", "HX-Retarget": "#flash-messages" },
+        });
+    }
+
+    function submit(form) {
+        const event = new Event("submit", { bubbles: true, cancelable: true });
+        form.dispatchEvent(event);
+        return event;
+    }
+
+    it("stays on the page and sends every queued submission with its own key", async () => {
+        vi.spyOn(window.navigator, "onLine", "get").mockReturnValue(false);
+        vi.spyOn(window.crypto, "randomUUID").mockReturnValueOnce("key-2").mockReturnValueOnce("key-3");
+        const nativeSubmit = vi.spyOn(HTMLFormElement.prototype, "submit").mockImplementation(() => {});
+        global.fetch = vi.fn(async () => queuedNotice());
+        const form = fullPageForm();
+        const key = form.querySelector('input[name="idempotency_key"]');
+
+        expect(submit(form).defaultPrevented).toBe(true);
+        await vi.waitFor(() => expect(key.value).toBe("key-2"));
+        expect(submit(form).defaultPrevented).toBe(true);
+        await vi.waitFor(() => expect(key.value).toBe("key-3"));
+
+        const calls = global.fetch.mock.calls;
+        expect(calls.map(([url]) => String(url))).toEqual([
+            `${window.location.origin}/partials/tally/increment/`,
+            `${window.location.origin}/partials/tally/increment/`,
+        ]);
+        expect(calls.map(([, init]) => new URLSearchParams(init.body).get("idempotency_key"))).toEqual([
+            "server-key",
+            "key-2",
+        ]);
+        expect(calls.map(([, init]) => init.headers["X-Idempotency-Key"])).toEqual(["server-key", "key-2"]);
+        expect(new URLSearchParams(calls[0][1].body).get("anzahl")).toBe("3");
+        expect(calls[0][1].headers["HX-Request"]).toBeUndefined();
+        expect(document.getElementById("flash-messages").textContent).toContain("Offline gespeichert");
+        expect(document.getElementById("flash-messages").getAttribute("role")).toBe("status");
+        expect(nativeSubmit).not.toHaveBeenCalled();
+    });
+
+    it("leaves the online submit to the browser", () => {
+        vi.spyOn(window.navigator, "onLine", "get").mockReturnValue(true);
+        global.fetch = vi.fn();
+        const form = fullPageForm();
+
+        expect(submit(form).defaultPrevented).toBe(false);
+        expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it("hands an answer that is neither a worker notice nor a redirect back to the native submit", async () => {
+        vi.spyOn(window.navigator, "onLine", "get").mockReturnValue(false);
+        const nativeSubmit = vi.spyOn(HTMLFormElement.prototype, "submit").mockImplementation(() => {});
+        global.fetch = vi.fn(async () => new Response("<html><body>Fehler</body></html>", { status: 200 }));
+        const form = fullPageForm();
+
+        submit(form);
+
+        await vi.waitFor(() => expect(nativeSubmit).toHaveBeenCalledTimes(1));
+        expect(form.querySelector('input[name="idempotency_key"]').value).toBe("server-key");
+    });
+});
