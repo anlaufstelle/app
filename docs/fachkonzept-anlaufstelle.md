@@ -528,7 +528,7 @@ Die Ökosystem-Ebene öffnet Anlaufstelle nach außen:
 - **Export/Import:** CSV, PDF, JSON — für die Weiterverarbeitung in Excel, für Berichte, für Datenmigration.
 - **Behördenreports:** Formatierte Berichte für Jugendämter und Fördermittelgeber, auf Knopfdruck.
 - **Dokumentenbibliotheken:** Vorkonfigurierte Dokumentationstypen für verschiedene Einrichtungstypen (siehe Kapitel 11).
-- **Optionale Module (Zielbild):** Mögliche Erweiterungen außerhalb des Kerns: Kalender, Wiki, KDS-Export und Schnittstellen zu Drittsystemen.
+- **Optionale Module (Zielbild):** Mögliche Erweiterungen außerhalb des Kerns: Kalender, Wiki, KDS-Export (Export für die Deutsche Suchthilfestatistik; ohne Zusage zu Format und Umfang) und Schnittstellen zu Drittsystemen.
 
 ---
 
@@ -1312,14 +1312,14 @@ Das Hauptdokument nennt DSGVO und Sozialdatenschutz (SGB X) als rechtlichen Rahm
 | **SGB X** (§§ 67–85a) | Sozialdatenschutz. Pseudonymisierung und Löschfristen adressieren die Kernanforderungen. | Pseudonymisierung und Fristfunktionen implementiert; Einsatzprüfung durch Einrichtung |
 | **SGB VIII** (§§ 61–65) | Relevant bei Jugendhilfe-Einrichtungen. Besondere Schweigepflicht. | Einsatzprüfung durch Einrichtung; Datenschutzfunktionen siehe § 19 |
 | **§ 203 StGB** | Schweigepflicht. Betrifft die organisatorische Ebene, nicht direkt das System. | Dokumentation |
-| **KDS (Kerndatensatz Suchthilfe)** | Export-Format für die Deutsche Suchthilfestatistik. Relevant für Einrichtungen, die an die DBDD/EBDD berichten. | Zielbild: domänenspezifischer Export, kein zugesagter Behördennachweis |
+| **KDS (Kerndatensatz Suchthilfe)** | Einheitlicher Kerndatensatz der Deutschen Suchthilfestatistik. Ein KDS-Export (Export für die Deutsche Suchthilfestatistik; ohne Zusage zu Format und Umfang) ist Zielbild. Relevant für Einrichtungen, die an die DBDD/EBDD berichten. | Zielbild: domänenspezifischer Export, kein zugesagter Behördennachweis |
 | **BASiS (Bundesarbeitsgemeinschaft)** | Standardisierte Leistungsdokumentation in der Suchthilfe. Überlappung mit der Statistik-Zuordnung in der Domänenbibliothek. | Zielbild: domänenspezifischer Export, kein zugesagter Behördennachweis |
 | **BFSG** (Barrierefreiheitsstärkungsgesetz) | Ab Juni 2025 relevant für digitale Produkte. Siehe Kapitel 20. | Querschnitt |
 | **NIS2-Umsetzungsgesetz** | Potenziell relevant für Träger im Gesundheits-/Sozialsektor ab bestimmter Größe. Betrifft IT-Sicherheitsmaßnahmen. | Monitoring |
 
 ### Empfehlung
 
-**Zielbild:** KDS-Export ist in § 8 genannt. BASiS-Kompatibilität ist ein fachlicher Prüfbedarf, keine zugesagte implementierte Schnittstelle. Einrichtungen müssen prüfen, welche Nachweise ihre konkreten Förder- und Berichtsverhältnisse verlangen.
+**Zielbild:** KDS-Export ist in § 8 genannt (Export für die Deutsche Suchthilfestatistik; ohne Zusage zu Format und Umfang). BASiS-Kompatibilität ist ein fachlicher Prüfbedarf, keine zugesagte implementierte Schnittstelle. Einrichtungen müssen prüfen, welche Nachweise ihre konkreten Förder- und Berichtsverhältnisse verlangen.
 
 ---
 

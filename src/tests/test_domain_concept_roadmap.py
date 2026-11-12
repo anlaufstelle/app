@@ -78,3 +78,17 @@ def test_roadmap_lists_the_agreed_topics(concept):
         assert topic in table, topic
     for undecided in ("Erwähnungen", "mehrere Einrichtungen", "KI-Anbindung"):
         assert undecided not in table, undecided
+
+
+def test_kds_export_is_described_the_same_in_all_sections(concept):
+    mentions = {
+        "7": _section(concept, "7. Modulstruktur"),
+        "8": _subsection(_section(concept, "8. Aktueller Stand und Roadmap"), "Roadmap"),
+        "22": _section(concept, "22. Regulatorische Landschaft"),
+    }
+    for number, body in mentions.items():
+        kds_lines = [line for line in body.splitlines() if "KDS-Export" in line or "KDS (Kerndatensatz" in line]
+        assert kds_lines, f"section {number} no longer mentions the KDS export"
+        for line in kds_lines:
+            assert KDS_WORDING in line, f"section {number}: {line}"
+            assert "3.0" not in line and "XML" not in line and "JSON" not in line, line
