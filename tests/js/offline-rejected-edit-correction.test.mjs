@@ -234,6 +234,39 @@ describe("a background-rejected edit of an existing event", () => {
         expect(component.lastSyncResult).toBe("invalid");
     });
 
+    it("offers no edit on a sibling edit that was already sent, while the rejected one stays correctable", async () => {
+        onLine(false);
+        await openPerson();
+        for (const [pk, value] of [
+            [PK_EVENT, "11"],
+            [PK_OTHER, "4"],
+        ]) {
+            component.startEdit(eventByPk(pk));
+            component.editValues.dauer = value;
+            await component.saveEdit(eventByPk(pk));
+        }
+        onLine(true);
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async (url) =>
+                String(url).includes(PK_EVENT)
+                    ? rejection({ dauer: [{ message: "zu gross", code: "max_value" }] })
+                    : saved(),
+            ),
+        );
+        await window.offlineEdit.replayAllModifiedEvents();
+        vi.unstubAllGlobals();
+        await component.load();
+
+        // The rejected edit keeps the correction route ...
+        expect(eventByPk(PK_EVENT).localStatus).toBe("dead");
+        expect(eventByPk(PK_EVENT).can_edit_ui).toBe(true);
+        // ... the sent one is stored as a finished envelope; editing it again would
+        // replay the token from before its own save and raise a conflict.
+        expect(eventByPk(PK_OTHER).localStatus).toBe("clean");
+        expect(eventByPk(PK_OTHER).can_edit_ui).toBe(false);
+    });
+
     it("stays read-only when the person was not allowed to edit the event", async () => {
         // Server says can_edit=false: no edit button before the rejection ...
         onLine(false);

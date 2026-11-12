@@ -209,8 +209,11 @@
             deadReason: data.deadReason || "",
             // Refs #2720: Server edit permission kept in the envelope and the
             // dead-letter detail, so a background-rejected edit of an existing
-            // event can be offered for correction on the person's view.
-            can_edit: data.canEdit === true,
+            // event can be offered for correction on the person's view. Only
+            // dead entries carry it on: an edit that was already sent stays as a
+            // finished envelope holding the token from before its own save, so
+            // editing it again would raise a conflict with itself.
+            can_edit: localStatus === "dead" && data.canEdit === true,
             was_new: data.wasNew === true,
             last_error: data.lastError || "",
         };
