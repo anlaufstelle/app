@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **CI: apt-Schritte erreichen bei einem Spiegelausfall den Ausweichspiegel** (#2707) — Lint-, Test- und E2E-Workflow installieren Systempakete über ein gemeinsames Hilfsskript: Sind sie vorhanden, entfällt apt; sonst wechselt apt von einem toten ersten Spiegel sofort zum nächsten, und ein Teilausfall lässt den Lauf fehlschlagen statt mit veralteten Listen weiterzulaufen.
 ### Security
 
+- **Wächter für die Actions-Richtlinie** (#2711) — Ein Test im Entwicklungs-Repo schlägt an, wenn ein ausgelieferter Workflow eine Action außerhalb der am öffentlichen Repo erlaubten Liste (von GitHub erstellte Actions, vier `docker/*`-Actions, `sigstore/cosign-installer`) oder ohne vollen Commit-SHA verwendet; ein Verstoß fällt so vor dem Release auf statt erst im Release-Workflow der App.
 - **Schonfrist für frische Upstream-Fixes in Fremdimages** (#2705) — Ein Treffer unter `critical` mit Fix, dessen Kennung nach dem Build des Fremdimages veröffentlicht wurde, blockiert den Image-Scan erst 14 Tage nach der Veröffentlichung; bis dahin steht er mit Fristende als `grace` im Bericht. Ohne Fix, bei `critical`, ohne verwertbares Datum und im App-Image gilt die bisherige Regel.
 
 ## [0.99.10] - 2026-11-11
