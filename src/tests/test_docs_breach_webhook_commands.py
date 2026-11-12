@@ -24,12 +24,18 @@ def test_scan_entry_points_explain_webhook_service_selection(document, section):
 
 @pytest.mark.parametrize("document", ["docs/ops-runbook.md", "docs/en/ops-runbook.md"])
 @pytest.mark.parametrize("section", ["3.3", "3.4"])
-def test_webhook_scheduler_guidance_keeps_the_sidecar_schedule(document, section):
+def test_webhook_scheduler_guidance_matches_the_stack(document, section):
     text = (ROOT / document).read_text()
     match = re.search(rf"^### {re.escape(section)} .*?(?=^### |\Z)", text, re.M | re.S)
     assert match, (document, section)
     guidance = next(line for line in match.group().splitlines() if line.startswith("**Webhook"))
-    # A running sidecar already schedules the scan; adding a host job duplicates it.
     assert "deploy/crontab" in guidance
     assert ("stündlich" if document.startswith("docs/ops") else "hourly") in guidance
-    assert ("weglassen" if document.startswith("docs/ops") else "omit") in guidance
+    if section == "3.4":
+        assert ("keinen `cron`-Sidecar" if document.startswith("docs/ops") else "no `cron` sidecar") in guidance
+        assert ("Prod-Stack" if document.startswith("docs/ops") else "production stack") in guidance
+        assert "§ 6.5b" in guidance
+        assert not re.search(r"Breach-Timer.*weglassen|omit.*breach timer", match.group(), re.I)
+    else:
+        # A running sidecar already schedules the scan; adding a host job duplicates it.
+        assert ("weglassen" if document.startswith("docs/ops") else "omit") in guidance
