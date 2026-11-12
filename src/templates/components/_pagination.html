@@ -11,7 +11,7 @@
         {% if page.has_previous %}
         <a href="?page={{ page.previous_page_number }}{% if extra_params %}&{{ extra_params }}{% endif %}"
            aria-label="{% trans 'Vorherige Seite' %}"
-           class="px-3 py-1 rounded border border-subtle hover:bg-canvas">‹</a>
+           class="inline-flex min-h-[44px] min-w-[44px] items-center justify-center md:min-h-0 md:min-w-0 px-3 py-1 rounded border border-subtle hover:bg-canvas">‹</a>
         {% endif %}
         <span class="px-3 py-1 rounded border border-accent/30 bg-accent-light text-accent font-medium">
             {{ page.number }} / {{ page.paginator.num_pages }}
@@ -19,7 +19,7 @@
         {% if page.has_next %}
         <a href="?page={{ page.next_page_number }}{% if extra_params %}&{{ extra_params }}{% endif %}"
            aria-label="{% trans 'Nächste Seite' %}"
-           class="px-3 py-1 rounded border border-subtle hover:bg-canvas">›</a>
+           class="inline-flex min-h-[44px] min-w-[44px] items-center justify-center md:min-h-0 md:min-w-0 px-3 py-1 rounded border border-subtle hover:bg-canvas">›</a>
         {% endif %}
     </div>
 </div>
