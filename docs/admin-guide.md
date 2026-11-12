@@ -196,7 +196,7 @@ compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
 # Let Compose read the complete opt-in list from the environment or .env.
-if [[ -n "${COMPOSE_FILE:-}" ]] || { grep -E '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env | tail -n1 | grep -qE "=[[:space:]]*[\"']?[^[:space:]\"'#]"; }; then
+if [[ -n "${COMPOSE_FILE:-}" ]] || { grep -E '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env | tail -n1 | grep -qE "^[^=]*=[[:space:]]*[\"']?[^[:space:]\"'#]"; }; then
     compose_files=()
 fi
 docker compose "${compose_files[@]}" up -d --force-recreate web
@@ -422,7 +422,7 @@ compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
 # Let Compose read the complete opt-in list from the environment or .env.
-if [[ -n "${COMPOSE_FILE:-}" ]] || { grep -E '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env | tail -n1 | grep -qE "=[[:space:]]*[\"']?[^[:space:]\"'#]"; }; then
+if [[ -n "${COMPOSE_FILE:-}" ]] || { grep -E '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env | tail -n1 | grep -qE "^[^=]*=[[:space:]]*[\"']?[^[:space:]\"'#]"; }; then
     compose_files=()
 fi
 docker compose "${compose_files[@]}" up -d
@@ -495,7 +495,7 @@ compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
 # Let Compose read the complete opt-in list from the environment or .env.
-if [[ -n "${COMPOSE_FILE:-}" ]] || { grep -E '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env | tail -n1 | grep -qE "=[[:space:]]*[\"']?[^[:space:]\"'#]"; }; then
+if [[ -n "${COMPOSE_FILE:-}" ]] || { grep -E '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env | tail -n1 | grep -qE "^[^=]*=[[:space:]]*[\"']?[^[:space:]\"'#]"; }; then
     compose_files=()
 fi
 docker compose "${compose_files[@]}" up -d web
@@ -1517,7 +1517,7 @@ compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
 # Let Compose read the complete opt-in list from the environment or .env.
-if [[ -n "${COMPOSE_FILE:-}" ]] || { grep -E '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env | tail -n1 | grep -qE "=[[:space:]]*[\"']?[^[:space:]\"'#]"; }; then
+if [[ -n "${COMPOSE_FILE:-}" ]] || { grep -E '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env | tail -n1 | grep -qE "^[^=]*=[[:space:]]*[\"']?[^[:space:]\"'#]"; }; then
     compose_files=()
 fi
 docker compose "${compose_files[@]}" up -d
@@ -1553,7 +1553,7 @@ compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
 # Let Compose read the complete opt-in list from the environment or .env.
-if [[ -n "${COMPOSE_FILE:-}" ]] || { grep -E '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env | tail -n1 | grep -qE "=[[:space:]]*[\"']?[^[:space:]\"'#]"; }; then
+if [[ -n "${COMPOSE_FILE:-}" ]] || { grep -E '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env | tail -n1 | grep -qE "^[^=]*=[[:space:]]*[\"']?[^[:space:]\"'#]"; }; then
     compose_files=()
 fi
 
@@ -1584,7 +1584,7 @@ compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
 # Let Compose read the complete opt-in list from the environment or .env.
-if [[ -n "${COMPOSE_FILE:-}" ]] || { grep -E '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env | tail -n1 | grep -qE "=[[:space:]]*[\"']?[^[:space:]\"'#]"; }; then
+if [[ -n "${COMPOSE_FILE:-}" ]] || { grep -E '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env | tail -n1 | grep -qE "^[^=]*=[[:space:]]*[\"']?[^[:space:]\"'#]"; }; then
     compose_files=()
 fi
 
@@ -1624,7 +1624,7 @@ compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
 # Let Compose read the complete opt-in list from the environment or .env.
-if [[ -n "${COMPOSE_FILE:-}" ]] || { grep -E '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env | tail -n1 | grep -qE "=[[:space:]]*[\"']?[^[:space:]\"'#]"; }; then
+if [[ -n "${COMPOSE_FILE:-}" ]] || { grep -E '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env | tail -n1 | grep -qE "^[^=]*=[[:space:]]*[\"']?[^[:space:]\"'#]"; }; then
     compose_files=()
 fi
 # 2. web UND cron neu erzeugen
@@ -1851,7 +1851,7 @@ compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
 # Let Compose read the complete opt-in list from the environment or .env.
-if [[ -n "${COMPOSE_FILE:-}" ]] || { grep -E '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env | tail -n1 | grep -qE "=[[:space:]]*[\"']?[^[:space:]\"'#]"; }; then
+if [[ -n "${COMPOSE_FILE:-}" ]] || { grep -E '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env | tail -n1 | grep -qE "^[^=]*=[[:space:]]*[\"']?[^[:space:]\"'#]"; }; then
     compose_files=()
 fi
 docker compose "${compose_files[@]}" up -d --force-recreate cron
