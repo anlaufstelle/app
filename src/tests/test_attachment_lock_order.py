@@ -1529,3 +1529,150 @@ def test_endgueltiges_loeschen_wartet_zuerst_auf_die_fremde_vorgaengerzeile(clie
         f"Vernichtungspfad ist nicht erfolgreich durchgelaufen: {ergebnis.get('wert')!r}"
     )
     assert not Attachment.objects.filter(pk=strang.kopf.pk).exists(), "der Kopf wurde nicht vernichtet"
+
+
+# ------------------------------------------- event update with an upload ----
+
+
+def _event_with_attachment(facility, owner_client, user, *, name):
+    """Event with one persisted attachment and a text field for a real delta."""
+    doc_type, ft_file, ft_text = _doc_type(facility, entity_type=DocumentType.EntityType.EVENT, name=name)
+    event = Event.objects.create(
+        facility=facility,
+        client=owner_client,
+        document_type=doc_type,
+        occurred_at=timezone.now(),
+        data_json={},
+        created_by=user,
+    )
+    attachment = _attach(facility, event, ft_file, user)
+    return event, attachment, ft_file, ft_text
+
+
+def _replace_payload(event, attachment, ft_file, ft_text):
+    from core.services.attachments.crud import replace_upload_key
+
+    return {
+        "document_type": str(event.document_type_id),
+        "occurred_at": event.occurred_at.strftime("%Y-%m-%dT%H:%M"),
+        ft_text.slug: "changed",
+        replace_upload_key(ft_file.slug, attachment.entry_id): SimpleUploadedFile(
+            "replacement.pdf", PDF_MINIMAL, content_type="application/pdf"
+        ),
+    }
+
+
+_ROW_BEFORE_CHAIN = "the update must wait for the held {} row BEFORE it holds the chain lock — observed: {}"
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("held_table", ["core_client", "core_event", "core_attachment"])
+def test_event_update_with_upload_waits_for_each_row_before_the_chain_lock(
+    client, staff_user, facility, client_identified, held_table
+):
+    """A foreign transaction holds the person, the event or the attachment row
+    and then wants the chain lock.
+
+    The update stages a replacement file and then locks person -> event ->
+    attachment rows before its first audit write. It therefore waits on the
+    held row without holding the chain lock; the foreign transaction gets the
+    chain lock, commits nothing and releases — the update then succeeds. A path
+    that took the chain lock first would close the cycle (``40P01``).
+    """
+    event, attachment, ft_file, ft_text = _event_with_attachment(
+        facility, client_identified, staff_user, name=f"Update waits {held_table}"
+    )
+    held_pk = {"core_client": client_identified.pk, "core_event": event.pk, "core_attachment": attachment.pk}[
+        held_table
+    ]
+    client.force_login(staff_user)
+
+    def path():
+        with patch("core.services.file_vault.storage.run_virus_scan", lambda *a, **kw: None):
+            return client.post(
+                reverse("core:event_update", kwargs={"pk": event.pk}),
+                _replace_payload(event, attachment, ft_file, ft_text),
+            )
+
+    observation, result = _beobachte_wartenden_pfad(
+        _Gegenrichtung(facility.pk), path, haelt=(held_table, held_pk), kontext=f"event update ({held_table} held)"
+    )
+    assert observation == "blockiert", _ROW_BEFORE_CHAIN.format(held_table, observation)
+    assert result.get("wert") is not None and result["wert"].status_code == 302, (
+        f"the update did not succeed: {result.get('wert')!r}"
+    )
+    attachment.refresh_from_db()
+    assert not attachment.is_current, "the replacement was not persisted"
+
+
+@pytest.mark.django_db
+def test_event_update_with_upload_after_parallel_merge_locks_the_fresh_person_first(
+    client, staff_user, lead_user, facility
+):
+    """The person is merged while the replacement file is being scanned.
+
+    The view loaded the event at the source person; the merge moves it to the
+    target person before the write transaction opens. The first row lock of the
+    write must hit the freshly read target person, then the event, then the
+    attachment rows — all before the chain lock — and the stale source person
+    must not be locked at all.
+    """
+    from core.services.client.merge import merge_clients
+
+    source = Client.objects.create(
+        facility=facility,
+        contact_stage=Client.ContactStage.IDENTIFIED,
+        pseudonym="Lock probe merge source",
+        created_by=staff_user,
+    )
+    target = Client.objects.create(
+        facility=facility,
+        contact_stage=Client.ContactStage.IDENTIFIED,
+        pseudonym="Lock probe merge target",
+        created_by=staff_user,
+    )
+    event, attachment, ft_file, ft_text = _event_with_attachment(facility, source, staff_user, name="Update merge")
+    client.force_login(staff_user)
+    merged_at: list[int] = []
+
+    def merge_during_scan(*args, **kwargs):
+        if not merged_at:
+            merge_clients(Client.objects.get(pk=source.pk), Client.objects.get(pk=target.pk), lead_user)
+            merged_at.append(len(captured.ereignisse))
+
+    with (
+        patch("core.services.file_vault.storage.run_virus_scan", merge_during_scan),
+        _Sperrmitschnitt() as captured,
+    ):
+        response = client.post(
+            reverse("core:event_update", kwargs={"pk": event.pk}),
+            _replace_payload(event, attachment, ft_file, ft_text),
+        )
+
+    assert merged_at, "the merge must run between loading and saving"
+    assert response.status_code == 302, response.content
+    assert Event.objects.get(pk=event.pk).client_id == target.pk
+    attachment.refresh_from_db()
+    assert not attachment.is_current, "the replacement was not persisted"
+    _assert_probe_vollstaendig(captured)
+
+    after_merge = captured.ereignisse[merged_at[0] :]
+    first_locks: list = []
+    seen: set = set()
+    for table, key, _mutation in after_merge:
+        entry = (table, key)
+        if table != CHAIN and entry in seen:
+            continue
+        seen.add(entry)
+        first_locks.append(entry)
+    tables = [table for table, _key in first_locks]
+    assert first_locks[0] == ("core_client", _kennung(target.pk)), f"first lock must be the fresh person: {first_locks}"
+    assert tables[1] == "core_event", f"the event comes right after the person: {tables}"
+    assert ("core_client", _kennung(source.pk)) not in first_locks, "the stale person must not be locked"
+    chain_at = tables.index(CHAIN)
+    attachment_at = tables.index("core_attachment")
+    assert attachment_at < chain_at, f"attachment rows belong before the chain lock: {tables}"
+    newly_locked_under_chain = [entry for entry in first_locks[chain_at:] if entry[0] != CHAIN]
+    assert not newly_locked_under_chain, (
+        f"rows locked for the first time under the chain lock: {newly_locked_under_chain}"
+    )
