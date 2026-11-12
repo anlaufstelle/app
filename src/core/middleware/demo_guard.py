@@ -10,12 +10,13 @@ On the public demo (``DEMO_MODE``) POST is refused for the paths in
   leaves in place, so the whole demo answers 503 until someone steps in;
 * actions that lock a shared demo account until the hourly reset: changing
   its second factor, passkeys or password, and user or settings changes in
-  the admin. :func:`refuse_demo_change` covers the 2FA requirement in forms
-  whose other fields stay open.
+  the admin. :func:`refuse_demo_change` also refuses changes to the 2FA
+  requirement and to ``is_active``, ``role`` and ``username`` of existing
+  shared accounts, including the current account. Unchanged guarded values
+  allow changes to other fields in the same form.
 
-Any other change to accounts or data stays open; the hourly ``seed --flush``
-restores it. Both lists match the routed path (``request.path_info``), so a
-script prefix does not bypass them. No-op outside ``DEMO_MODE``.
+Both lists match the routed path (``request.path_info``), so a script prefix
+does not bypass them. No-op outside ``DEMO_MODE``.
 
 Placed after the MessageMiddleware so the flash message is stored. Settings
 are read per request (testable with ``override_settings``).
@@ -37,9 +38,10 @@ DEFAULT_BLOCKED_PREFIXES = ("/system/maintenance/",)
 def refuse_demo_change(request, stored, submitted) -> bool:
     """On the demo, refuse a form submission that changes a guarded value.
 
-    For fields that would lock a shared account until the hourly reset (the 2FA
-    requirement), while the rest of their form stays usable. Adds the demo
-    refusal message and returns True when the caller must not save anything.
+    Guards the 2FA requirement and the is_active, role and username fields of
+    existing shared accounts, including the current account. Unchanged guarded
+    values allow changes to other fields. Adds the demo refusal message and
+    returns True when the caller must not save anything.
     """
     if not getattr(settings, "DEMO_MODE", False) or stored == submitted:
         return False

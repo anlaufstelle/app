@@ -88,9 +88,11 @@ DEMO_LOGINS = [
 # disabling 2FA), changing the password (the admin's password change is
 # blocked by URL name below), and deactivating, deleting or re-roling users or
 # changing facility settings in the admin. Signing in with a second factor
-# stays open. POST only — visitors can still view every page. The account and
-# facility settings forms refuse only a change of the 2FA requirement
-# (core.middleware.demo_guard.refuse_demo_change).
+# stays open. POST only — visitors can still view every page. Account and
+# facility settings forms refuse changes to the 2FA requirement. Account forms
+# also refuse changes to is_active, role and username of existing shared
+# accounts, including the current account. Unchanged guarded values allow
+# changes to other fields (core.middleware.demo_guard.refuse_demo_change).
 DEMO_GUARD_BLOCKED_PREFIXES = (
     "/system/maintenance/",
     "/mfa/setup/",
