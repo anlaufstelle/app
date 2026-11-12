@@ -675,8 +675,8 @@ class TestMidSessionCaptureRoundtrip:
             assert page.locator("[data-testid='offline-nav']").is_visible(), "offline navigation missing after submit"
             assert _server_anon_event_count(e2e_env) == count_before
 
-            # Beweis der Persistenz VOR dem Drain: die Queue-Zeile per rohem
-            # IndexedDB-Zugriff zaehlen (unabhaengig von den Modulen der Seite).
+            # Prove persistence before draining: count queue rows through the
+            # raw IndexedDB API, independently of the page's loaded modules.
             queued = _raw_queue_count(page)
             assert queued == 1, f"Queue-Zeile fehlt nach Offline-Submit: {queued!r}"
 
