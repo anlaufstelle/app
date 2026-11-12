@@ -327,10 +327,10 @@ def anonymize_clients(facility, dry_run, *, deferred_ids=None):
                 if current_settings and current_settings.retention_identified_days >= 1
                 else None
             )
-            # ``core_client`` ist die erste Datenstufe der kanonischen Ordnung
-            # und der gemeinsame Koordinationspunkt mit ``create_hold_for_target``.
-            # ALLE Lesungen liegen bewusst DANACH — erst dann sind sie stabile
-            # Aussagen und nicht der Stand von vorhin.
+            # ``core_client`` is the first data row in the canonical lock order
+            # and the shared coordination point with ``create_hold_for_target``.
+            # All reads follow that lock so they describe the protected state,
+            # not a snapshot from before the lock.
             locked = Client.objects.select_for_update().filter(pk=client_pk, facility=facility).first()
             if locked is None:
                 # Zeile verschwunden oder in eine andere Einrichtung gewandert.
