@@ -14,7 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Wächter für die Actions-Richtlinie** (#2711) — Ein Test im Entwicklungs-Repo schlägt an, wenn ein ausgelieferter Workflow eine Action außerhalb der am öffentlichen Repo erlaubten Liste (von GitHub erstellte Actions, vier `docker/*`-Actions, `sigstore/cosign-installer`) oder ohne vollen Commit-SHA verwendet; ein Verstoß fällt so vor dem Release auf statt erst im Release-Workflow der App.
 - **Schonfrist für frische Upstream-Fixes in Fremdimages** (#2705) — Ein Treffer unter `critical` mit Fix, dessen Kennung nach dem Build des Fremdimages veröffentlicht wurde, blockiert den Image-Scan erst 14 Tage nach der Veröffentlichung; bis dahin steht er mit Fristende als `grace` im Bericht. Ohne Fix, bei `critical`, ohne verwertbares Datum und im App-Image gilt die bisherige Regel.
-- **Zweiter Faktor und Entsperr-Mail an Konto und Sitzung gebunden** (#2717) — Ein unbestätigtes 2FA-Geheimnis gilt nur in der Sitzung, die die Einrichtung begonnen hat. Teilen sich Konten eine E-Mail-Adresse, bekommt jedes gesperrte Konto einen eigenen Entsperr-Link. Die öffentliche Demo sperrt jede Änderung an 2FA und Passkeys.
+- **Zweiter Faktor und Entsperr-Mail an Konto und Sitzung gebunden** (#2717) — Ein unbestätigtes 2FA-Geheimnis gilt nur in der Sitzung, die es erzeugt hat. Teilen sich Konten eine Adresse, erhält jedes gesperrte Konto einen eigenen Entsperr-Link. Die öffentliche Demo sperrt Passwortwechsel und jede Änderung an 2FA, Passkeys und 2FA-Pflicht.
 
 ### Added
 
