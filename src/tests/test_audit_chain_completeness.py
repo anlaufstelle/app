@@ -317,6 +317,42 @@ class TestPruneKeepsEvidenceOfMissingRows:
         ]
         assert verify_chain(facility, hwm=store).ok
 
+    def test_a_row_inserted_after_the_link_check_is_not_pruned(self, facility, tmp_path, monkeypatch):
+        """Only rows the link check has seen are deleted and signed.
+
+        ``FOR UPDATE`` does not stop an INSERT. An owner-level role deletes a
+        protected row and the anchored tail behind it, then replays the tail
+        byte for byte once the link check has passed. Deleted unchecked, the
+        replay would become the signed boundary that legitimises the missing
+        anchor, and the chain would pass as complete.
+        """
+        from core.retention import audit_pruning
+
+        rows, store = _expired_chain(facility, tmp_path, LOGIN_VIOLATION_LOGOUT)
+        anchor_before = (tmp_path / "anchor.json").read_bytes()
+        replay = AuditLog(
+            **{field.attname: getattr(rows[2], field.attname) for field in AuditLog._meta.concrete_fields}
+        )
+        with transaction.atomic(), bypass_replication_triggers():
+            AuditLog.objects.filter(pk__in=[rows[1].pk, rows[2].pk]).delete()
+        assert not verify_chain(facility, hwm=store).ok
+        original = audit_pruning._check_expired_links
+
+        def check_then_replay(*args, **kwargs):
+            checked = original(*args, **kwargs)
+            AuditLog.objects.bulk_create([replay])
+            return checked
+
+        monkeypatch.setattr(audit_pruning, "_check_expired_links", check_then_replay)
+
+        result = prune_auditlog(facility, PERIOD)
+
+        assert AuditLog.objects.filter(pk=rows[2].pk).exists(), "the unchecked replay was deleted"
+        assert result == {"count": 1}
+        assert (tmp_path / "anchor.json").read_bytes() == anchor_before
+        after = verify_chain(facility, hwm=HighWaterMarkStore.load(store.path))
+        assert not after.ok, f"A replayed tail concealed a missing protected row: {after!r}"
+
 
 @pytest.mark.django_db(transaction=True)
 def test_a_protected_row_stays_locked_until_the_prune_commits(facility, tmp_path, monkeypatch):
@@ -332,10 +368,10 @@ def test_a_protected_row_stays_locked_until_the_prune_commits(facility, tmp_path
 
     rows, _ = _expired_chain(facility, tmp_path, LOGIN_VIOLATION_LOGOUT)
     protected = rows[1]
-    original = audit_pruning._authenticate_candidates
+    original = audit_pruning._delete_checked
     outcomes = []
 
-    def probe_lock_then_authenticate(qs, boundaries):
+    def probe_lock_then_delete(candidates, pks):
         other = connections.create_connection("default")
         try:
             with other.cursor() as cursor:
@@ -346,9 +382,9 @@ def test_a_protected_row_stays_locked_until_the_prune_commits(facility, tmp_path
                     outcomes.append(("locked", type(exc.__cause__).__name__))
         finally:
             other.close()
-        return original(qs, boundaries)
+        return original(candidates, pks)
 
-    monkeypatch.setattr(audit_pruning, "_authenticate_candidates", probe_lock_then_authenticate)
+    monkeypatch.setattr(audit_pruning, "_delete_checked", probe_lock_then_delete)
 
     assert prune_auditlog(facility, PERIOD) == {"count": 2}
     assert outcomes == [("locked", "LockNotAvailable")]

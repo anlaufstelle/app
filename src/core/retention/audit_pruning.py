@@ -13,7 +13,7 @@ from uuid import UUID
 
 from django.conf import settings
 from django.db import connection, transaction
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 from django.utils import timezone
 
 from core.models import AuditLog, Case, Client, Event
@@ -205,8 +205,8 @@ class AuditPruneIntegrityError(Exception):
 _AUTHENTICATE_CHUNK_SIZE = 2000
 
 
-def _check_expired_links(facility, cutoff) -> None:
-    """Lock the expired part of the chain and check that nothing is missing.
+def _check_expired_links(facility, cutoff, candidates, boundary_hashes):
+    """Lock, authenticate and link-check the expired rows in one pass.
 
     Refs #2717 (finding no. 9): a row authenticates on its own stored
     ``prev_hash``; that alone does not show that its predecessor still
@@ -214,20 +214,37 @@ def _check_expired_links(facility, cutoff) -> None:
     its successor keeps a dangling ``prev_hash`` -- the only trace of the
     deletion. Pruning that successor would remove the trace and sign it as a
     boundary. Every row before the cutoff -- a prefix of the chain order --
-    must therefore authenticate and link to the row before it (chain start:
-    ``""``) or to a boundary of an authenticated checkpoint, the same rule
+    must therefore carry an ``entry_hash`` that its stored fields reproduce
+    (the deletion criteria are hashed fields an owner-level role can rewrite
+    past the trigger) and link to the row before it (chain start: ``""``) or
+    to a boundary of an authenticated checkpoint, the same rule
     ``verify_chain`` applies.
 
     ``FOR UPDATE`` covers the checkpoints and every expired row, not only the
     candidates: a protected row deleted concurrently cannot vanish between
-    this check and the deletion.
+    this check and the deletion. It does not stop an INSERT, so the same
+    statement marks the deletion candidates and only the candidates it has
+    checked are returned for deletion; a row that joins the expired rows
+    later is neither deleted nor signed as a boundary.
 
-    Raises :class:`AuditPruneIntegrityError` at the first row that fails.
+    Every boundary hash must belong to one of the returned rows -- a boundary
+    from a row outside this set would legitimise a gap nobody authenticated.
+
+    Returns ``(candidate_pks, newest_hash)`` in chain order; raises
+    :class:`AuditPruneIntegrityError` at the first row that fails.
     """
     chain = AuditLog.objects.filter(facility=facility)
     checkpoints = chain.filter(action=AuditLog.Action.AUDIT_PRUNE_CHECKPOINT).select_for_update(of=("self",))
     covered = _checkpoint_boundaries(checkpoints.order_by("timestamp", "id"))
-    rows = chain.filter(timestamp__lt=cutoff).select_for_update(of=("self",)).order_by("timestamp", "id")
+    rows = (
+        chain.filter(timestamp__lt=cutoff)
+        .annotate(prunable=Exists(candidates.filter(pk=OuterRef("pk"))))
+        .select_for_update(of=("self",))
+        .order_by("timestamp", "id")
+    )
+    pending = set(boundary_hashes)
+    pks = []
+    newest = ""
     previous = None
     for row in rows.iterator(chunk_size=_AUTHENTICATE_CHUNK_SIZE):
         if not row.entry_hash:
@@ -239,38 +256,22 @@ def _check_expired_links(facility, cutoff) -> None:
         if not linked and link not in covered:
             raise AuditPruneIntegrityError(row.pk, "prev_hash linkage break")
         previous = row.entry_hash
-
-
-def _authenticate_candidates(qs, boundary_hashes):
-    """Lock and authenticate every row the prune is about to delete.
-
-    Refs #2717 (finding no. 9): the deletion criteria (action, timestamp) are
-    hashed fields, but an owner-level role can rewrite them past the trigger.
-    Each candidate must therefore carry an ``entry_hash`` that its stored
-    fields reproduce; otherwise the prune would delete a row on forged
-    criteria and sign its invalid hash as a boundary. ``FOR UPDATE`` keeps the
-    authenticated rows unchanged until the deletion commits.
-
-    Every boundary hash must belong to one of these rows -- a boundary from a
-    row outside this set would legitimise a gap nobody authenticated.
-
-    Returns ``(count, newest_hash)``; raises :class:`AuditPruneIntegrityError`.
-    """
-    pending = set(boundary_hashes)
-    count = 0
-    newest = ""
-    rows = qs.select_for_update(of=("self",)).order_by("timestamp", "id")
-    for row in rows.iterator(chunk_size=_AUTHENTICATE_CHUNK_SIZE):
-        if not row.entry_hash:
-            raise AuditPruneIntegrityError(row.pk, "row without entry_hash")
-        if not hmac.compare_digest(compute_entry_hash(row, row.prev_hash or ""), row.entry_hash):
-            raise AuditPruneIntegrityError(row.pk, "entry_hash mismatch")
-        count += 1
-        newest = row.entry_hash
-        pending.discard(row.entry_hash)
+        if row.prunable:
+            pks.append(row.pk)
+            newest = row.entry_hash
+            pending.discard(row.entry_hash)
     if pending:
         raise AuditPruneIntegrityError(None, "boundary outside the authenticated rows")
-    return count, newest
+    return pks, newest
+
+
+def _delete_checked(candidates, pks):
+    """Delete exactly the checked candidates, in chunks; returns the count."""
+    deleted = 0
+    for start in range(0, len(pks), _AUTHENTICATE_CHUNK_SIZE):
+        chunk_deleted, _ = candidates.filter(pk__in=pks[start : start + _AUTHENTICATE_CHUNK_SIZE]).delete()
+        deleted += chunk_deleted
+    return deleted
 
 
 def prune_auditlog(facility, settings_obj, now=None, dry_run=False):
@@ -328,17 +329,18 @@ def _prune_auditlog(facility, settings_obj, now=None, dry_run=False):
             .values_list("prev_hash", flat=True)
         )
     )
-    _check_expired_links(facility, cutoff)
-    count, newest_boundary = _authenticate_candidates(qs, boundary_hashes)
+    pks, newest_boundary = _check_expired_links(facility, cutoff, qs, boundary_hashes)
+    count = len(pks)
     if count == 0:
         return {"count": 0}
     if connection.vendor == "postgresql":
         with bypass_replication_triggers():
-            deleted, _ = qs.delete()
+            deleted = _delete_checked(qs, pks)
     else:
-        deleted, _ = qs.delete()
-    # The locked rows cannot leave the candidate set; any other count means
-    # rows joined it after the authentication (rolled back with the error).
+        deleted = _delete_checked(qs, pks)
+    # The deletion is bound to the checked primary keys; those rows are
+    # locked and cannot leave the candidate set, so any other count is a
+    # break (rolled back with the error).
     if deleted != count:
         raise AuditPruneIntegrityError(None, "candidate set changed during the prune")
     audit_event(
