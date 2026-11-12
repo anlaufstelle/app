@@ -1,0 +1,127 @@
+"""Execute the demo audit installation with isolated command doubles."""
+
+import json
+import os
+import subprocess
+from pathlib import Path
+
+import pytest
+
+pytestmark = pytest.mark.architecture
+
+
+@pytest.fixture
+def audit_deploy(tmp_path: Path):
+    path = Path("dev-ops/deploy/deploy-demo.sh")
+    if not path.exists():
+        pytest.skip("dev-ops/deploy/deploy-demo.sh is stripped from the public snapshot")
+    text = path.read_text(encoding="utf-8")
+    section = text[text.index("# 6) Install the audit-verification timer") : text.index("\n$COMPOSE ps")]
+    script = tmp_path / "install.sh"
+    script.write_text("set -euo pipefail\n" + section + "\necho DEPLOY_CONTINUED\n", encoding="utf-8")
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    doubles = {
+        "sudo": """#!/bin/bash
+case "$1" in
+  systemctl) exec "$@" ;;
+  tee) exec /usr/bin/tee "$STUB_ROOT/${2##*/}" ;;
+  *) echo "Unexpected sudo command: $*" >&2; exit 99 ;;
+esac
+""",
+        "systemctl": """#!/usr/bin/env python3
+import json
+import os
+import sys
+from pathlib import Path
+root = Path(os.environ["STUB_ROOT"])
+state_path = root / "state.json"
+state = json.loads(state_path.read_text())
+args = sys.argv[1:]
+with (root / "calls.log").open("a") as log:
+    log.write(" ".join(args) + "\\n")
+if args[0] == "show":
+    if "--value" in args:
+        print(state[args[args.index("-p") + 1]])
+    else:
+        for key, value in state.items():
+            print(f"{key}={value}")
+    sys.exit(0)
+if args[0] in ("daemon-reload", "enable"):
+    sys.exit(0)
+if args == ["start", "anlaufstelle-audit-verify.service"]:
+    scenario = os.environ["AUDIT_SCENARIO"]
+    if scenario == "start_failure":
+        print("Start request did not reach the manager", file=sys.stderr)
+        sys.exit(1)
+    start = int(state["ExecMainStartTimestampMonotonic"]) + 100
+    state.update(ExecMainStartTimestampMonotonic=str(start),
+                 ExecMainExitTimestampMonotonic=str(start + 10))
+    red = scenario == "red"
+    state.update(Result="exit-code" if red else "success",
+                 ExecMainStatus="1" if red else "0",
+                 ActiveState="failed" if red else "inactive")
+    state_path.write_text(json.dumps(state))
+    sys.exit(1 if red else 0)
+print(f"Unexpected systemctl command: {args}", file=sys.stderr)
+sys.exit(99)
+""",
+    }
+    for name, content in doubles.items():
+        stub = bindir / name
+        stub.write_text(content, encoding="utf-8")
+        stub.chmod(0o755)
+    state = {
+        "LoadState": "loaded",
+        "ActiveState": "inactive",
+        "Result": "success",
+        "ExecMainStatus": "0",
+        "ExecMainStartTimestampMonotonic": "100",
+        "ExecMainExitTimestampMonotonic": "110",
+    }
+    (tmp_path / "state.json").write_text(json.dumps(state), encoding="utf-8")
+
+    def run(scenario: str = "green") -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["/bin/bash", str(script)],
+            env={
+                **os.environ,
+                "PATH": f"{bindir}:/usr/bin:/bin",
+                "STUB_ROOT": str(tmp_path),
+                "AUDIT_SCENARIO": scenario,
+            },
+            text=True,
+            capture_output=True,
+            timeout=10,
+            check=False,
+        )
+
+    return run
+
+
+def test_start_failure_cannot_reuse_previous_success(audit_deploy) -> None:
+    result = audit_deploy("start_failure")
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert "DEPLOY_CONTINUED" not in result.stdout
+    assert "ERROR" in result.stderr
+    assert "no new completed audit verification run" in result.stderr
+
+
+def test_completed_green_run_continues(audit_deploy) -> None:
+    result = audit_deploy()
+    assert result.returncode == 0, result.stderr
+    assert "completed successfully" in result.stdout
+    assert "DEPLOY_CONTINUED" in result.stdout
+    assert "WARNING" not in result.stderr
+
+
+def test_completed_red_run_warns_and_continues(audit_deploy, tmp_path: Path) -> None:
+    result = audit_deploy("red")
+    assert result.returncode == 0, result.stderr
+    assert "DEPLOY_CONTINUED" in result.stdout
+    assert "WARNING" in result.stderr
+    assert "journalctl -u anlaufstelle-audit-verify.service --no-pager" in result.stderr
+    state = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))
+    assert state["Result"] == "exit-code"
+    assert state["ExecMainStatus"] == "1"
+    assert state["ActiveState"] == "failed"

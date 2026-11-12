@@ -207,18 +207,9 @@ def test_demo_audit_timer_is_installed_idempotently() -> None:
 
 def test_demo_deploy_runs_audit_verification_synchronously_with_warning() -> None:
     text = _demo_deploy_text()
-    match = re.search(
-        r"^if sudo systemctl start anlaufstelle-audit-verify\.service; then\n(.*?)^else\n(.*?)^fi$",
-        text,
-        re.MULTILINE | re.DOTALL,
-    )
-    assert match, "Deploy must wait for the audit service and handle a failed run without aborting"
-    success, failure = match.groups()
-    assert re.search(r"echo .*audit.*(completed|succeeded)", success)
-    assert "WARNING" in failure
-    assert "journalctl -u anlaufstelle-audit-verify.service" in failure
-    assert ">&2" in failure
-    assert not re.search(r"\b(exit|return)\b", failure)
+    start = text.index("sudo systemctl start anlaufstelle-audit-verify.service")
     enable = text.index("sudo systemctl enable --now anlaufstelle-audit-verify.timer")
-    assert enable < match.start() < match.end() < text.index("$COMPOSE ps")
+    assert enable < start < text.index("$COMPOSE ps")
     assert text.count("systemctl start anlaufstelle-audit-verify.service") == 1
+    assert "--no-block" not in text
+    # Success, warning and infrastructure failure are exercised by command doubles.
