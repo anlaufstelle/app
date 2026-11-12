@@ -134,6 +134,7 @@ Event creation (`/events/new/`) saves drafts every 5 seconds in encrypted Indexe
 - **Internationalization:** Uses Django's `gettext` system; complete text coverage is a verification target. German (primary) and English are active. Language switcher in the UI. The package schema has no language key; multilingual package names remain a target feature.
 - **External API target:** A facility-scoped REST API for provider integrations is not implemented; current JSON endpoints are session-bound internal endpoints.
 - **Optional module targets:** Possible additions outside the core include a calendar, wiki and interfaces to third-party systems.
+- **KDS export:** An export for the German addiction-help statistics is not implemented and is not on the roadmap (German concept § 8).
 - **Performance targets:** Page load < 1s (3G), contact save < 500ms, autocomplete < 300ms, six-month statistics query < 5s at 50,000 events.
 - **Scaling target:** 5--30 concurrent users, up to 50,000 events/year per facility.
 - **Deployment:** The production Compose stack includes Caddy, Django, PostgreSQL, Redis, mandatory ClamAV, cron and maintenance services. Hardware requirements: [admin guide § 1 — Prerequisites](admin-guide.md#hardware). Installation prerequisites: [admin guide § 1 — Prerequisites](admin-guide.md#prerequisites).
@@ -372,5 +373,5 @@ The largest collective pre-release to date — the configurability milestones M0
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: cb1f6f269e1156960b3819babd15a2c4751fa13f -->
+<!-- source-hash: 4de4e255b32f5e6d3547fcdc632878a3479dadd2 -->
 <!-- translation-date: 2026-11-12 -->

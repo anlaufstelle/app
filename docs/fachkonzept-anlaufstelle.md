@@ -23,7 +23,7 @@ Version: 1.11
 | 1.8 | September 2026 (2026-09-07) | Einsatzzwecke & Domänen-Pakete (#2140): § 1 Positionierung um die Öffnung über die Ursprungsdomäne ergänzt; § 3 als Arbeitsmodus neu gefasst (offene Sozial-/Lebensberatung und niedrigschwellige Beratungsstellen zuerst, Fit-/Anti-Fit-Tabellen, kuratierte Domänen Awareness/Frauenhaus/Jugendarbeit + generische Beratungsstelle); § 8 Roadmap-Zeile „Domänenbibliotheken" als umgesetzt markiert; § 11 verweist auf die YAML-Paket-Mechanik (`docs/packages.md`) und die vier mitgelieferten Pakete; § 14 Glossar um „Domänen-Paket", „Betreiber-Empfehlung" und „Quick-Exit" ergänzt. |
 | 1.9 | September 2026 (2026-09-10) | § 5 um die Persona der Beratungsstellen-Domäne ergänzt (#2190). |
 | 1.10 | Oktober 2026 (2026-10-07) | Softwarestand v0.99.6: Personenlose Kontakte und die Personen-Kontaktstufen „Nur Pseudonym“ und „Mit Zusatzangaben“ beschreiben die Pseudonymisierung als vorgesehenen Ablauf ohne Pflichtfeld für Klarnamen und unterscheiden Ereignisse ohne Person von inhaltlich anonymen Daten (#2430). |
-| 1.11 | November 2026 (2026-11-12) | Softwarestand v0.99.10: Die Roadmap in § 8 führt Zielbilder ohne Prioritätsspalte, ohne Zusage und ohne Termin; neu aufgenommen sind die Konfigurationsthemen (Berichte, Module, Einrichtung im Browser, Konfigurationspakete, Rechtstexte und E-Mail-Vorlagen). Der KDS-Export entfällt aus der Roadmap in § 8; § 7 und § 22 führen ihn weiterhin als Zielbild ohne Zusage zu Format und Umfang; § 22 nennt IFT und EUDA statt DBDD/EBDD. § 25 beschreibt die Anmeldung mit TOTP und Passkeys sowie die Kontenanlage per Einladung, bei der Ersteinrichtung und im technischen Notfall und verweist nicht mehr auf Roadmap-Schritte, die es nicht gibt (#2718). |
+| 1.11 | November 2026 (2026-11-12) | Softwarestand v0.99.10: Die Roadmap in § 8 führt Zielbilder ohne Prioritätsspalte, ohne Zusage und ohne Termin; neu aufgenommen sind die Konfigurationsthemen (Berichte, Module, Einrichtung im Browser, Konfigurationspakete, Rechtstexte und E-Mail-Vorlagen). § 7 und § 22 beschreiben den KDS-Export als nicht implementiert und nicht in der Roadmap (§ 8); § 22 erhält den Kerndatensatz als fachlichen Kontext und nennt IFT und EUDA statt DBDD/EBDD. § 25 beschreibt die Anmeldung mit TOTP und Passkeys sowie die Kontenanlage per Einladung, bei der Ersteinrichtung und im technischen Notfall und verweist nicht mehr auf Roadmap-Schritte, die es nicht gibt (#2718). |
 
 ---
 
@@ -529,7 +529,8 @@ Die Ökosystem-Ebene öffnet Anlaufstelle nach außen:
 - **Export/Import:** CSV, PDF, JSON — für die Weiterverarbeitung in Excel, für Berichte, für Datenmigration.
 - **Behördenreports:** Formatierte Berichte für Jugendämter und Fördermittelgeber, auf Knopfdruck.
 - **Dokumentenbibliotheken:** Vorkonfigurierte Dokumentationstypen für verschiedene Einrichtungstypen (siehe Kapitel 11).
-- **Optionale Module (Zielbild):** Mögliche Erweiterungen außerhalb des Kerns: Kalender, Wiki, KDS-Export (Export für die Deutsche Suchthilfestatistik; ohne Zusage zu Format und Umfang) und Schnittstellen zu Drittsystemen.
+- **Optionale Module (Zielbild):** Mögliche Erweiterungen außerhalb des Kerns: Kalender, Wiki und Schnittstellen zu Drittsystemen.
+- **KDS-Export:** Ein Export für die Deutsche Suchthilfestatistik ist nicht implementiert und nicht in der Roadmap (§ 8).
 
 ---
 
@@ -1312,7 +1313,7 @@ Das Hauptdokument nennt DSGVO und Sozialdatenschutz (SGB X) als rechtlichen Rahm
 | **SGB X** (§§ 67–85a) | Sozialdatenschutz. Pseudonymisierung und Löschfristen adressieren die Kernanforderungen. | Pseudonymisierung und Fristfunktionen implementiert; Einsatzprüfung durch Einrichtung |
 | **SGB VIII** (§§ 61–65) | Relevant bei Jugendhilfe-Einrichtungen. Besondere Schweigepflicht. | Einsatzprüfung durch Einrichtung; Datenschutzfunktionen siehe § 19 |
 | **§ 203 StGB** | Schweigepflicht. Betrifft die organisatorische Ebene, nicht direkt das System. | Dokumentation |
-| **KDS (Kerndatensatz Suchthilfe)** | Einheitlicher Kerndatensatz der Deutschen Suchthilfestatistik. Ein KDS-Export (Export für die Deutsche Suchthilfestatistik; ohne Zusage zu Format und Umfang) ist Zielbild. Relevant für Einrichtungen, die sich an der Deutschen Suchthilfestatistik beteiligen; ausgewertet wird sie vom IFT Institut für Therapieforschung, München. | Zielbild: domänenspezifischer Export, kein zugesagter Behördennachweis |
+| **KDS (Kerndatensatz Suchthilfe)** | Einheitlicher Kerndatensatz der Deutschen Suchthilfestatistik. Relevant für Einrichtungen, die sich an der Deutschen Suchthilfestatistik beteiligen; ausgewertet wird sie vom IFT Institut für Therapieforschung, München. | KDS-Export nicht implementiert und nicht in der Roadmap (§ 8) |
 | **BASiS (Bundesarbeitsgemeinschaft)** | Standardisierte Leistungsdokumentation in der Suchthilfe. Überlappung mit der Statistik-Zuordnung in der Domänenbibliothek. | Zielbild: domänenspezifischer Export, kein zugesagter Behördennachweis |
 | **BFSG** (Barrierefreiheitsstärkungsgesetz) | Ab Juni 2025 relevant für digitale Produkte. Siehe Kapitel 20. | Querschnitt |
 | **NIS2-Umsetzungsgesetz** | Potenziell relevant für Träger im Gesundheits-/Sozialsektor ab bestimmter Größe. Betrifft IT-Sicherheitsmaßnahmen. | Monitoring |
@@ -1321,7 +1322,7 @@ Das Hauptdokument nennt DSGVO und Sozialdatenschutz (SGB X) als rechtlichen Rahm
 
 Die europäische Ebene, früher EBDD, heißt seit dem 2. Juli 2024 Drogenagentur der Europäischen Union (EUDA).
 
-**Zielbild:** KDS-Export ist in § 8 genannt (Export für die Deutsche Suchthilfestatistik; ohne Zusage zu Format und Umfang). BASiS-Kompatibilität ist ein fachlicher Prüfbedarf, keine zugesagte implementierte Schnittstelle. Einrichtungen müssen prüfen, welche Nachweise ihre konkreten Förder- und Berichtsverhältnisse verlangen.
+**Stand:** Der KDS-Export ist nicht implementiert und nicht in der Roadmap (§ 8). BASiS-Kompatibilität ist ein fachlicher Prüfbedarf, keine zugesagte implementierte Schnittstelle. Einrichtungen müssen prüfen, welche Nachweise ihre konkreten Förder- und Berichtsverhältnisse verlangen.
 
 ---
 
