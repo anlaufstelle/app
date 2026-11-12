@@ -108,6 +108,12 @@ def _verbs(page, base_url, **params):
     return [text.strip() for text in page.locator(_ACTIVITY_VERB).all_inner_texts()]
 
 
+def _open_settled_feed(page, base_url, extra_query=""):
+    """Finish the initial live-watch replacement before inspecting feed rows."""
+    page.goto(f"{base_url}/?date={FEED_DAY}&time_filter=all{extra_query}", wait_until="load")
+    page.evaluate("() => window.zeitstromWatch.checkNow()")
+
+
 class TestEventCardPreview:
     """Event-Karten zeigen Vorschau-Felder und farbige Badges."""
 
@@ -313,7 +319,7 @@ class TestFeedRowsAndGroups:
         page = authenticated_page
         # The work-item filter has exactly one row; the mixed feed has five.
         feed_filter = "&type=workitems" if position == "only" else ""
-        page.goto(f"{base_url}/?date={FEED_DAY}&time_filter=all{feed_filter}", wait_until="domcontentloaded")
+        _open_settled_feed(page, base_url, feed_filter)
         rows = page.locator("#feed-list .feed-row-header")
         count = rows.count()
         assert count == 1 if position == "only" else count >= 5
@@ -356,14 +362,19 @@ class TestFeedRowsAndGroups:
     def test_mobile_rows_keep_a_visible_expansion_indicator(self, authenticated_page, base_url, feed_fixture):
         page = authenticated_page
         page.set_viewport_size({"width": 390, "height": 844})
-        page.goto(f"{base_url}/?date={FEED_DAY}&time_filter=all", wait_until="domcontentloaded")
+        _open_settled_feed(page, base_url)
         toggles = page.locator("#feed-list button.feed-row-header")
         assert toggles.count() >= 4  # Contact, activity and both hourly groups.
         for toggle in toggles.all():
             indicator = toggle.locator('[data-feed-column="by"] > span[aria-hidden="true"]')
             expect(indicator).to_be_visible()
-            bounds = toggle.bounding_box()
-            arrow = indicator.bounding_box()
+            # Read both rectangles in one task: scrolling or a layout change
+            # between separate protocol calls would mix coordinate frames.
+            bounds, arrow = toggle.evaluate("""el => [
+                el.getBoundingClientRect().toJSON(),
+                el.querySelector('[data-feed-column="by"] > span[aria-hidden="true"]')
+                    .getBoundingClientRect().toJSON()
+            ]""")
             assert bounds["height"] >= 44 and bounds["width"] >= 44, bounds
             assert arrow["width"] >= 16 and arrow["height"] >= 16, arrow
             assert bounds["x"] <= arrow["x"] < arrow["x"] + arrow["width"] <= bounds["x"] + bounds["width"]
@@ -396,7 +407,7 @@ class TestFeedRowsAndGroups:
 
     def test_shared_grid_at_desktop_and_mobile(self, authenticated_page, base_url, feed_fixture):
         page = authenticated_page
-        page.goto(f"{base_url}/?date={FEED_DAY}&time_filter=all", wait_until="domcontentloaded")
+        _open_settled_feed(page, base_url)
         page.set_viewport_size({"width": 1440, "height": 900})
         rows = page.locator("#feed-list .feed-row-header")
         assert rows.count() >= 5
