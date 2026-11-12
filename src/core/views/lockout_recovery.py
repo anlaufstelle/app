@@ -30,6 +30,7 @@ from core.models import AuditLog, User
 from core.services.audit import log_audit_event
 from core.services.security import (
     build_recovery_token,
+    is_locked,
     verify_backup_code,
     verify_recovery_token,
 )
@@ -57,6 +58,19 @@ class _RecoveryEmailForm(forms.Form):
     )
 
 
+def _recovery_recipients(email: str) -> list[User]:
+    """Return the active accounts of ``email`` that get their own unlock link.
+
+    An address may belong to several accounts. Each locked one gets a link
+    for itself only, so no link ever unlocks a different account than the
+    one that needs it. When none of them is locked, every account keeps its
+    link as before, so the confirmation text stays true.
+    """
+    accounts = list(User.objects.filter(email__iexact=email, is_active=True).order_by("pk"))
+    locked = [account for account in accounts if is_locked(account)]
+    return locked or accounts
+
+
 # Refs #2391: the request writes an audit row for the account of the entered
 # address, possibly in another facility; a signed-in session gets a notice.
 @method_decorator(ratelimit(key="ip", rate="5/m", method=UNSAFE, block=True), name="dispatch")
@@ -73,37 +87,39 @@ class LockoutRecoveryRequestView(FormView):
 
     def form_valid(self, form):
         email = form.cleaned_data["email"]
-        user = User.objects.filter(email__iexact=email, is_active=True).first()
-        if user is not None:
-            token = build_recovery_token(user)
-            confirm_path = reverse_lazy("core:lockout_recovery_confirm", kwargs={"token": token})
-            # Refs #1967: Schema und Host aus EXTERNAL_ORIGIN statt aus dem
-            # Request — der Entsperr-Link traegt ein Token und darf nicht auf
-            # einen vom Aufrufer bestimmten Host zeigen.
-            confirm_url = build_external_url(str(confirm_path))
-            body = render_to_string(
-                "auth/lockout_recovery_email.txt",
-                {"user": user, "confirm_url": confirm_url},
-            )
-            subject = str(_("Konto entsperren — Anlaufstelle"))
-            try:
-                send_mail(
-                    subject,
-                    body,
-                    settings.DEFAULT_FROM_EMAIL,
-                    [email],
-                )
-            except Exception:
-                logger.exception("Recovery-Mail-Versand fehlgeschlagen")
-            log_audit_event(
-                self.request,
-                AuditLog.Action.PASSWORD_RESET_REQUESTED,
-                user=user,
-                facility=getattr(user, "facility", None),
-                detail={"flow": "lockout_recovery_token"},
-            )
+        for user in _recovery_recipients(email):
+            self._send_recovery_mail(user, email)
         # Anti-Enumeration: gleiche Response, egal ob die E-Mail existiert.
         return super().form_valid(form)
+
+    def _send_recovery_mail(self, user, email: str) -> None:
+        token = build_recovery_token(user)
+        confirm_path = reverse_lazy("core:lockout_recovery_confirm", kwargs={"token": token})
+        # Refs #1967: Schema und Host aus EXTERNAL_ORIGIN statt aus dem
+        # Request — der Entsperr-Link traegt ein Token und darf nicht auf
+        # einen vom Aufrufer bestimmten Host zeigen.
+        confirm_url = build_external_url(str(confirm_path))
+        body = render_to_string(
+            "auth/lockout_recovery_email.txt",
+            {"user": user, "confirm_url": confirm_url},
+        )
+        subject = str(_("Konto entsperren — Anlaufstelle"))
+        try:
+            send_mail(
+                subject,
+                body,
+                settings.DEFAULT_FROM_EMAIL,
+                [email],
+            )
+        except Exception:
+            logger.exception("Recovery-Mail-Versand fehlgeschlagen")
+        log_audit_event(
+            self.request,
+            AuditLog.Action.PASSWORD_RESET_REQUESTED,
+            user=user,
+            facility=getattr(user, "facility", None),
+            detail={"flow": "lockout_recovery_token"},
+        )
 
 
 # Refs #2391: the confirmation belongs to the request above; a signed-in

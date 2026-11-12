@@ -281,7 +281,10 @@ class RateLimitedPasswordResetView(auth_views.PasswordResetView):
         matched_user = None
         facility = None
         try:
-            matched_user = User.objects.filter(email__iexact=email, is_active=True).first()
+            # A shared address names no account: picking one would attribute
+            # the request to an arbitrary, possibly foreign account.
+            matches = list(User.objects.filter(email__iexact=email, is_active=True).order_by("pk")[:2])
+            matched_user = matches[0] if len(matches) == 1 else None
             if matched_user is not None:
                 facility = getattr(matched_user, "facility", None)
         except Exception:

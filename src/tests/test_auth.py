@@ -708,6 +708,26 @@ class TestPasswordResetAuditHash:
         assert isinstance(entry.detail.get("email_hash"), str)
         assert len(entry.detail["email_hash"]) == 64  # Hex-SHA256
 
+    def test_shared_address_names_no_account(self, client, staff_user, second_facility_user):
+        """An address of several active accounts is audited like an unknown one."""
+        from core.services.audit import hmac_hash_email
+
+        for user in (staff_user, second_facility_user):
+            user.email = "shared@example.org"
+            user.save(update_fields=["email"])
+        response = client.post(
+            "/password-reset/",
+            {"email": "shared@example.org"},
+            REMOTE_ADDR="10.55.55.12",
+        )
+        assert response.status_code in (200, 302)
+        entry = AuditLog.objects.filter(action=AuditLog.Action.PASSWORD_RESET_REQUESTED).latest("timestamp")
+        assert entry.user is None
+        assert entry.facility is None
+        assert entry.target_type == ""
+        assert entry.target_id == ""
+        assert entry.detail.get("email_hash") == hmac_hash_email("shared@example.org")
+
     def test_hash_is_stable_across_case_and_whitespace(self):
         from core.services.audit import hmac_hash_email
 

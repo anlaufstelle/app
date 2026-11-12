@@ -833,8 +833,9 @@ class TestTenantModelScopeGuard:
             "Passwort-Reset: E-Mail-Lookup vor jeder Authentifizierung; Anti-Enumeration "
             "ist separat geloest (identische Antwort mit/ohne Treffer, Refs #598/#791)."
         ),
-        "lockout_recovery.py:LockoutRecoveryRequestView.form_valid:User": (
-            "Lockout-Recovery per E-Mail — pre-auth, kein Facility-Kontext vorhanden."
+        "lockout_recovery.py:_recovery_recipients:User": (
+            "Lockout recovery by e-mail runs before authentication without a facility "
+            "context; each active account of the address gets only its own link."
         ),
         "lockout_recovery.py:LockoutRecoveryBackupCodeView.form_valid:User": (
             "Backup-Code-Recovery per Benutzername — pre-auth, kein Facility-Kontext."

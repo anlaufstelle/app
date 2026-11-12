@@ -392,3 +392,66 @@ class TestRecoveryTokenConsumptionRace:
         unlocks = AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.LOGIN_UNLOCK)
         assert unlocks.count() == 1
         assert unlocks.get().ip_address in {"203.0.113.210", "203.0.113.211"}
+
+
+def _recovered_accounts_from_outbox():
+    """Resolve the account of every unlock link that was mailed."""
+    import re
+
+    from core.services.security import verify_recovery_token
+
+    accounts = []
+    for message in mail.outbox:
+        match = re.search(r"/account/recovery/confirm/([^/\s]+)/", message.body)
+        assert match, message.body
+        accounts.append(verify_recovery_token(match.group(1)))
+    return accounts
+
+
+@pytest.mark.django_db
+class TestRecoveryMailForSharedAddress:
+    """An address shared by several active accounts mails one link per locked account."""
+
+    SHARED = "shared@example.org"
+
+    def _share_address(self, *users):
+        for user in users:
+            user.email = self.SHARED
+            user.save(update_fields=["email"])
+        return sorted(users, key=lambda user: user.pk)
+
+    def _request(self, client):
+        response = client.post(reverse("core:lockout_recovery_request"), {"email": self.SHARED})
+        assert response.status_code == 302
+        assert response.url.endswith("/account/recovery/sent/")
+
+    def test_only_the_locked_account_gets_a_link(self, client, staff_user, second_facility_user):
+        unlocked, locked = self._share_address(staff_user, second_facility_user)
+        _lock_account(locked)
+
+        self._request(client)
+
+        assert _recovered_accounts_from_outbox() == [locked]
+        requested = AuditLog.objects.filter(
+            action=AuditLog.Action.PASSWORD_RESET_REQUESTED, detail__flow="lockout_recovery_token"
+        )
+        assert list(requested.values_list("user_id", flat=True)) == [locked.pk]
+
+    def test_every_locked_account_gets_its_own_link(self, client, staff_user, second_facility_user):
+        first, second = self._share_address(staff_user, second_facility_user)
+        _lock_account(first)
+        _lock_account(second)
+
+        self._request(client)
+
+        assert _recovered_accounts_from_outbox() == [first, second]
+        assert all(message.to == [self.SHARED] for message in mail.outbox)
+
+    def test_unique_address_still_gets_one_link(self, client, staff_user):
+        staff_user.email = "unique@example.org"
+        staff_user.save(update_fields=["email"])
+
+        response = client.post(reverse("core:lockout_recovery_request"), {"email": "unique@example.org"})
+
+        assert response.status_code == 302
+        assert _recovered_accounts_from_outbox() == [staff_user]
