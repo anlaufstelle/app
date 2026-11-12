@@ -26,8 +26,8 @@ pytestmark = pytest.mark.django_db
     ],
     ids=["snapshot", "breach"],
 )
-def test_newer_non_success_marker_never_refreshes_the_public_card(action, key, age):
-    """Only successful installation runs set the card age: x__latest__mutmut_14."""
+def test_latest_outcome_preserves_snapshot_age_and_surfaces_breach_failure(action, key, age):
+    """Snapshots retain success age; breach failures display the failed run (Refs #2719)."""
     now = timezone.now()
     success = AuditLog.objects.create(
         action=action,
@@ -46,4 +46,9 @@ def test_newer_non_success_marker_never_refreshes_the_public_card(action, key, a
 
     assert card.status == ComplianceStatus.CRITICAL
     message = "Letzter Lauf: %(timestamp)s" if key == "snapshot_last_run" else "Letzter Scan: %(timestamp)s"
-    assert card.detail == _(message) % {"timestamp": f"{success.timestamp:%Y-%m-%d %H:%M}"}
+    displayed = success if key == "snapshot_last_run" else newer
+    assert card.detail == _(message) % {"timestamp": f"{displayed.timestamp:%Y-%m-%d %H:%M}"}
+    if key == "breach_scan_last_run":
+        assert card.message == _(
+            "Letzter vollständiger Breach-Scan fehlgeschlagen — cron-Logs und Zustellzeilen prüfen."
+        )
