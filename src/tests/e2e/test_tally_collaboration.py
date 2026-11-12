@@ -6,20 +6,19 @@ the live-update path and a JavaScript-disabled context for the POST/Redirect
 fallbacks.
 """
 
-import re
 from urllib.parse import urljoin
 
 import pytest
 from playwright.sync_api import expect
 
-from ._helpers import SEED_PASSWORD, wait_until_htmx_bound
+from ._helpers import SEED_PASSWORD, tally_tile, wait_until_htmx_bound
 
 pytestmark = pytest.mark.e2e
 
 
 def _row(page, document_type):
     """Return the live tally row for a seeded document type."""
-    return page.locator('[data-testid^="tally-row-"]').filter(has_text=re.compile(rf"^\s*{re.escape(document_type)}\b"))
+    return tally_tile(page, document_type)
 
 
 def _count(row):

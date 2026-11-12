@@ -46,6 +46,17 @@ def django_shell(e2e_env, script):
     return [ln for ln in out.stdout.strip().splitlines() if ln.strip()]
 
 
+def tally_tile(scope, name):
+    """The tally tile of the document type called ``name``.
+
+    The tile shows its counter first and the type name below it, so the tile text does not
+    start with the name; match the name element of the tile exactly instead.
+    """
+    page = getattr(scope, "page", scope)
+    name_element = page.locator('[data-testid^="tally-name-"]', has_text=re.compile(rf"^\s*{re.escape(name)}\s*$"))
+    return scope.locator('[data-testid^="tally-row-"]').filter(has=name_element)
+
+
 def wait_until(page, predicate, timeout_ms=15000, interval_ms=250):
     """Python-seitig auf eine Bedingung pollen; ``True`` wenn sie eintrat.
 

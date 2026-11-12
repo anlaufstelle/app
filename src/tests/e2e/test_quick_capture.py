@@ -14,7 +14,7 @@ import time
 import pytest
 from playwright.sync_api import expect
 
-from ._helpers import wait_until, wait_until_htmx_bound
+from ._helpers import tally_tile, wait_until, wait_until_htmx_bound
 
 pytestmark = pytest.mark.e2e
 
@@ -498,7 +498,7 @@ class TestTallyPanel:
         panel = page.locator('[data-testid="tally-panel"]')
         panel.wait_for(state="visible", timeout=5000)
 
-        row = panel.locator('[data-testid^="tally-row-"]').filter(has_text=re.compile(r"^\s*Kontakt\b"))
+        row = tally_tile(panel, "Kontakt")
         expect(row).to_have_count(1)
         button = row.locator('[data-testid^="tally-increment-"]')
         button.wait_for(state="visible", timeout=5000)
@@ -522,7 +522,7 @@ class TestTallyPanel:
         page.goto(f"{base_url}/", wait_until="domcontentloaded")
 
         panel = page.locator('[data-testid="tally-panel"]')
-        row = panel.locator('[data-testid^="tally-row-"]').filter(has_text=re.compile(r"^\s*Spritzentausch\b"))
+        row = tally_tile(panel, "Spritzentausch")
         expect(row).to_have_count(1)
         button = row.locator('[data-testid^="tally-increment-"]')
         dt_id = button.get_attribute("data-testid").replace("tally-increment-", "")
@@ -535,8 +535,10 @@ class TestTallyPanel:
             button.click()
         assert response_info.value.status == 200
 
-        form = row.locator(f'[data-testid="tally-inline-form-{dt_id}"]')
+        # Since #2653 the form opens as a dialog in the panel slot, outside the tile.
+        form = page.locator(f'#tally-number-form-slot [data-testid="tally-inline-form-{dt_id}"]')
         expect(form).to_be_visible()
+        expect(row.locator('[data-testid^="tally-inline-form-"]')).to_have_count(0)
         wait_until_htmx_bound(page, form)
         assert form.locator('input[type="number"]').evaluate_all("els => els.map(el => el.name)") == [
             "ausgabe",
@@ -566,4 +568,4 @@ class TestTallyPanel:
         assert response_info.value.status == 200
 
         expect(row.locator(f'[data-testid="tally-count-{dt_id}"]')).to_have_text(str(before + 1), timeout=5000)
-        expect(row.locator(f'[data-testid="tally-inline-form-{dt_id}"]')).to_have_count(0)
+        expect(page.locator(f'[data-testid="tally-inline-form-{dt_id}"]')).to_have_count(0)

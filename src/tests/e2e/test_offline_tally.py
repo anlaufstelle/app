@@ -20,6 +20,7 @@ from playwright.sync_api import expect
 
 from ._helpers import django_shell as _django_shell
 from ._helpers import do_real_login as _do_real_login
+from ._helpers import tally_tile as _tally_tile
 from ._helpers import wait_for_active_service_worker as _wait_for_active_service_worker
 
 pytestmark = pytest.mark.e2e
@@ -28,7 +29,7 @@ pytestmark = pytest.mark.e2e
 def _tally_row(page, name):
     panel = page.locator('[data-testid="tally-panel"]')
     panel.wait_for(state="visible", timeout=10000)
-    row = panel.locator('[data-testid^="tally-row-"]').filter(has_text=re.compile(rf"^\s*{name}\b"))
+    row = _tally_tile(panel, name)
     expect(row).to_have_count(1)
     return row
 
@@ -259,22 +260,29 @@ class TestOfflineTallyReconciliation:
             }
 
             page.set_viewport_size({"width": 390, "height": 844})
+            # Tile (#2651): counter and action badge share the top line, the type name sits
+            # below them, everything inside the tile and without overflow.
             mobile_layout = contact_row.evaluate(
                 """(row) => {
-                    const name = row.querySelector(':scope > span');
-                    const count = row.querySelector('[data-testid^="tally-count-"]');
-                    const action = row.querySelector('[data-testid^="tally-increment-"]');
-                    const center = (element) => {
-                        const box = element.getBoundingClientRect();
-                        return box.top + box.height / 2;
-                    };
+                    const box = (element) => element.getBoundingClientRect();
+                    const tile = box(row);
+                    const name = box(row.querySelector(':scope > span'));
+                    const count = box(row.querySelector('[data-testid^="tally-count-"]'));
+                    const action = box(row.querySelector('[data-testid^="tally-increment-"]'));
+                    const inside = (b) => b.left >= tile.left - 1 && b.right <= tile.right + 1
+                        && b.top >= tile.top - 1 && b.bottom <= tile.bottom + 1;
                     return {
-                        centers: [center(name), center(count), center(action)],
+                        tops: [count.top, action.top],
+                        nameTop: name.top,
+                        lineBottom: Math.max(count.bottom, action.bottom),
+                        inside: [inside(name), inside(count), inside(action)],
                         overflow: row.scrollWidth - row.clientWidth,
                     };
                 }"""
             )
-            assert max(mobile_layout["centers"]) - min(mobile_layout["centers"]) < 4, mobile_layout
+            assert abs(mobile_layout["tops"][0] - mobile_layout["tops"][1]) < 4, mobile_layout
+            assert mobile_layout["nameTop"] >= mobile_layout["lineBottom"] - 1, mobile_layout
+            assert all(mobile_layout["inside"]), mobile_layout
             assert mobile_layout["overflow"] <= 1, mobile_layout
 
             page.context.set_offline(True)
@@ -335,8 +343,10 @@ class TestOfflineTallyReconciliation:
             page.context.set_offline(True)
             page.evaluate("window.dispatchEvent(new Event('offline'))")
             number_row.locator(f'[data-testid="tally-increment-{number_id}"]').click()
-            number_form = number_row.locator("[data-offline-tally-number-form]")
+            # The locally built form opens as a dialog in the panel slot, outside the tile (#2653).
+            number_form = page.locator("#tally-number-form-slot [data-offline-tally-number-form]")
             expect(number_form).to_be_visible(timeout=10000)
+            expect(number_row.locator("[data-offline-tally-number-form]")).to_have_count(0)
             number_form.locator('input[name="ausgabe"]').fill("10")
             number_form.locator('input[name="rueckgabe"]').fill("4")
             number_form.locator('button[type="submit"]').click()
@@ -429,10 +439,15 @@ class TestOfflineTallyReconciliation:
             # Server. Erst danach fällt das Netz aus; der lokale Warm-Form-
             # Renderer wird in dieser Journey nicht benutzt.
             number_row.locator(f'[data-testid="tally-increment-{number_id}"]').click()
-            number_form = number_row.locator(f'[data-testid="tally-inline-form-{number_id}"]')
+            # Since #2653 the form opens as a dialog in the panel slot, outside the tile.
+            number_form = page.locator(f'#tally-number-form-slot [data-testid="tally-inline-form-{number_id}"]')
             expect(number_form).to_be_visible(timeout=10000)
+            expect(number_row.locator('[data-testid^="tally-inline-form-"]')).to_have_count(0)
             expect(number_form).to_have_attribute("data-offline-tally-form", "")
             idempotency_input = number_form.locator('input[name="idempotency_key"]')
+            key_selector = (
+                f'#tally-number-form-slot [data-testid="tally-inline-form-{number_id}"] input[name="idempotency_key"]'
+            )
             first_key = idempotency_input.input_value()
             assert first_key
 
@@ -468,7 +483,7 @@ class TestOfflineTallyReconciliation:
                     const input = document.querySelector(selector);
                     return input && input.value && input.value !== previous;
                 }""",
-                arg={"selector": f'#tally-row-{number_id} input[name="idempotency_key"]', "previous": first_key},
+                arg={"selector": key_selector, "previous": first_key},
             )
             second_key = idempotency_input.input_value()
 
@@ -481,7 +496,7 @@ class TestOfflineTallyReconciliation:
                     const input = document.querySelector(selector);
                     return input && input.value && input.value !== previous;
                 }""",
-                arg={"selector": f'#tally-row-{number_id} input[name="idempotency_key"]', "previous": second_key},
+                arg={"selector": key_selector, "previous": second_key},
             )
             third_key = idempotency_input.input_value()
             submitted_keys = page.evaluate("window.__e2eTallySubmitKeys")
