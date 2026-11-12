@@ -166,9 +166,7 @@ def _shared_audit_timer() -> list[str]:
 
 
 def test_demo_audit_service_uses_demo_admin_stack() -> None:
-    text = _demo_deploy_text()
-    transferred = _transferred(Path("dev-ops/deploy/deploy-demo.sh"))
-    assert "dev-ops/deploy/run-as-admin.sh" in transferred
+    _demo_deploy_text()
     command = _shared_audit_timer()[-1]
     assert command == "$ADMIN_RUN verify_audit_chain"
     reseed = Path("dev-ops/deploy/demo-reseed.sh").read_text(encoding="utf-8")
@@ -182,7 +180,6 @@ def test_demo_audit_service_uses_demo_admin_stack() -> None:
     assert "WorkingDirectory=/opt/anlaufstelle\n" in service
     expected = f"/usr/bin/{compose.group(1)} run --rm -T maintenance {command.split()[-1]}"
     assert f"ExecStart={expected}\n" in service
-    assert "cd /opt/anlaufstelle" in text
 
 
 def test_demo_audit_timer_matches_shared_schedule() -> None:

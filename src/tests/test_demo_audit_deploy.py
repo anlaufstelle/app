@@ -41,6 +41,8 @@ args = sys.argv[1:]
 with (root / "calls.log").open("a") as log:
     log.write(" ".join(args) + "\\n")
 if args[0] == "show":
+    if os.environ["AUDIT_SCENARIO"] == "unreadable":
+        sys.exit(1)
     if "--value" in args:
         print(state[args[args.index("-p") + 1]])
     else:
@@ -51,12 +53,21 @@ if args[0] in ("daemon-reload", "enable"):
     sys.exit(0)
 if args == ["start", "anlaufstelle-audit-verify.service"]:
     scenario = os.environ["AUDIT_SCENARIO"]
-    if scenario == "start_failure":
+    if scenario in ("start_failure", "no_run", "unloaded"):
+        if scenario == "unloaded":
+            state["LoadState"] = "not-found"
+            state_path.write_text(json.dumps(state))
         print("Start request did not reach the manager", file=sys.stderr)
-        sys.exit(1)
+        sys.exit(0 if scenario == "no_run" else 1)
     start = int(state["ExecMainStartTimestampMonotonic"]) + 100
     state.update(ExecMainStartTimestampMonotonic=str(start),
                  ExecMainExitTimestampMonotonic=str(start + 10))
+    if scenario == "running":
+        state.update(ActiveState="activating", ExecMainExitTimestampMonotonic="0")
+        state_path.write_text(json.dumps(state))
+        sys.exit(0)
+    if scenario == "no_end":
+        state["ExecMainExitTimestampMonotonic"] = "0"
     red = scenario == "red"
     state.update(Result="exit-code" if red else "success",
                  ExecMainStatus="1" if red else "0",
@@ -125,3 +136,42 @@ def test_completed_red_run_warns_and_continues(audit_deploy, tmp_path: Path) -> 
     assert state["Result"] == "exit-code"
     assert state["ExecMainStatus"] == "1"
     assert state["ActiveState"] == "failed"
+
+
+@pytest.mark.parametrize("scenario", ["start_failure", "no_run"])
+def test_never_started_service_cannot_report_default_success(audit_deploy, tmp_path: Path, scenario: str) -> None:
+    state_path = tmp_path / "state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state.update(ExecMainStartTimestampMonotonic="0", ExecMainExitTimestampMonotonic="0")
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    result = audit_deploy(scenario)
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert "DEPLOY_CONTINUED" not in result.stdout
+    assert "no new completed audit verification run" in result.stderr
+
+
+@pytest.mark.parametrize("scenario", ["no_run", "unloaded", "running", "no_end", "unreadable"])
+def test_missing_or_incomplete_run_aborts_deploy(audit_deploy, scenario: str) -> None:
+    result = audit_deploy(scenario)
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert "DEPLOY_CONTINUED" not in result.stdout
+    assert "ERROR" in result.stderr
+
+
+def test_repeated_installation_overwrites_same_units_and_runs_again(audit_deploy, tmp_path: Path) -> None:
+    first = audit_deploy()
+    assert first.returncode == 0, first.stderr
+    units = {path.name: path.read_bytes() for path in tmp_path.glob("*.service")}
+    units.update({path.name: path.read_bytes() for path in tmp_path.glob("*.timer")})
+    assert set(units) == {"anlaufstelle-audit-verify.service", "anlaufstelle-audit-verify.timer"}
+    first_state = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))
+    second = audit_deploy()
+    assert second.returncode == 0, second.stderr
+    assert "DEPLOY_CONTINUED" in second.stdout
+    assert {path.name: path.read_bytes() for path in tmp_path.glob("anlaufstelle-*")} == units
+    second_state = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))
+    assert int(second_state["ExecMainStartTimestampMonotonic"]) > int(first_state["ExecMainStartTimestampMonotonic"])
+    calls = (tmp_path / "calls.log").read_text(encoding="utf-8").splitlines()
+    assert calls.count("daemon-reload") == 2
+    assert calls.count("enable --now anlaufstelle-audit-verify.timer") == 2
+    assert calls.count("start anlaufstelle-audit-verify.service") == 2
