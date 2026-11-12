@@ -11,7 +11,7 @@ from datetime import timedelta
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import F
+from django.db.models import F, Q
 from django.db.models.functions import Coalesce
 from django.db.utils import IntegrityError
 from django.utils import timezone
@@ -585,10 +585,11 @@ def _clear_first_approval(proposal, user, *, reason):
 
 
 def _reopen_for_new_review(proposal, *, reason):
-    """Return an approved proposal to review and discard both approvals, with audit evidence.
+    """Return a proposal to review and discard every approval, with audit evidence.
 
     The caller holds the target and proposal locks. A two-person approval only
-    covers the deadline it was given for (Refs #2714).
+    covers the deadline it was given for, and so does a lone first approval
+    (Refs #2714).
     """
     proposal.status = RetentionProposal.Status.PENDING
     proposal.first_approved_by = None
@@ -617,6 +618,15 @@ def _reopen_for_new_review(proposal, *, reason):
     )
 
 
+def _has_approval(proposal):
+    """Return whether the proposal carries a final or a first approval."""
+    if proposal.status == RetentionProposal.Status.APPROVED:
+        return True
+    return proposal.status == RetentionProposal.Status.PENDING and (
+        proposal.first_approved_by_id is not None or proposal.first_approved_at is not None
+    )
+
+
 def _is_expired(facility, settings_obj, now, event_ids):
     """Return the ids among ``event_ids`` whose retention deadline has passed."""
     expired = set()
@@ -636,19 +646,20 @@ def _earliest_approval_at(proposal):
 
 
 def reset_approval_if_deadline_moved(proposal, settings_obj, now):
-    """Return a locked approved event proposal to review if its deadline moved.
+    """Discard the approvals of a locked event proposal if its deadline moved.
 
     The one decision point for the reset sweep and the deletion loop; the
     caller holds the target rows and the proposal row. An approval covers only
     the deadline it was given for (Refs #2714): the event must be due now and
     must already have been due, by today's anchors and periods, when the first
-    approval was given. New case activity, a reopened case or a longer period
+    approval was given. This holds for a lone first approval as well as for a
+    final one. New case activity, a reopened case or a longer period
     after the approval fail the second test even once the event is due again.
     Only the deadline counts here: holds and processing restrictions keep a due
     event from deletion without voiding its approval. Returns ``True`` when the
     approval was discarded.
     """
-    if proposal.status != RetentionProposal.Status.APPROVED:
+    if not _has_approval(proposal):
         return False
     if not Event.objects.filter(pk=proposal.target_id, facility=proposal.facility_id, is_deleted=False).exists():
         return False
@@ -667,7 +678,7 @@ def reset_approval_if_deadline_moved(proposal, settings_obj, now):
 
 
 def reset_approvals_with_moved_deadline(facility, settings_obj, now):
-    """Check every latest approved event proposal under lock; see :func:`reset_approval_if_deadline_moved`.
+    """Check every latest event proposal with an approval under lock; see :func:`reset_approval_if_deadline_moved`.
 
     Runs after the deletion loop of the qualified step. The event selection is
     read without locks, so an event whose case gained activity while the run
@@ -676,10 +687,14 @@ def reset_approvals_with_moved_deadline(facility, settings_obj, now):
     candidate is decided at its locked rows. Locks follow the approval order:
     target rows first, then the proposal. Returns the number of proposals reset.
     """
+    with_approval = Q(status=RetentionProposal.Status.APPROVED) | Q(
+        Q(first_approved_by__isnull=False) | Q(first_approved_at__isnull=False),
+        status=RetentionProposal.Status.PENDING,
+    )
     candidates = list(
-        RetentionProposal.objects.filter(
-            facility=facility, target_type="Event", status=RetentionProposal.Status.APPROVED
-        ).values_list("pk", "target_id")
+        RetentionProposal.objects.filter(with_approval, facility=facility, target_type="Event").values_list(
+            "pk", "target_id"
+        )
     )
     reset = 0
     for pk, target_id in candidates:

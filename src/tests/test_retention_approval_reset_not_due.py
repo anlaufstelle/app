@@ -274,3 +274,94 @@ def test_deadline_moved_and_passed_between_two_runs_needs_a_new_approval(
     assert proposal.approved_by_id is None
     row = _reset_rows(proposal).get()
     assert row.detail["reason"] == "approved_before_current_deadline"
+
+
+@pytest.fixture
+def first_approved(facility, client_qualified, case, doc_type_contact, lead_user, qualified_period):
+    event = Event.objects.create(
+        facility=facility,
+        client=client_qualified,
+        case=case,
+        document_type=doc_type_contact,
+        occurred_at=_old(),
+        data_json={"duration": 20},
+    )
+    _age_case(case)
+    proposal = create_proposal(facility, "Event", event.pk, timezone.localdate() - timedelta(days=15), {}, "qualified")[
+        0
+    ]
+    approve_proposal(proposal, lead_user)
+    assert proposal.status == RetentionProposal.Status.PENDING
+    assert proposal.first_approved_by_id == lead_user.pk
+    return event, proposal
+
+
+def test_lone_first_approval_does_not_survive_a_moved_deadline(
+    first_approved, facility, client_qualified, case, doc_type_contact, qualified_period, lead_user, admin_user
+):
+    """A first approval from the old deadline plus one new approval must not delete."""
+    event, proposal = first_approved
+    _new_case_activity(facility, client_qualified, case, doc_type_contact, qualified_period)
+    _run(facility)
+    assert not Event.objects.get(pk=event.pk).is_deleted
+    _assert_reset(proposal)
+
+    # Due again; one new approval is only a first approval.
+    _age_case(case)
+    approve_proposal(proposal, admin_user)
+    proposal.refresh_from_db()
+    assert proposal.status == RetentionProposal.Status.PENDING
+    _run(facility)
+    assert not Event.objects.get(pk=event.pk).is_deleted
+
+    approve_proposal(proposal, lead_user)
+    _run(facility)
+    assert Event.objects.get(pk=event.pk).is_deleted
+
+
+def test_first_approval_reset_rows_do_not_raise_mass_delete(
+    facility, client_qualified, case, doc_type_contact, lead_user, qualified_period, settings
+):
+    settings.BREACH_DELETE_THRESHOLD = 2
+    settings.BREACH_DELETE_THRESHOLD_LONG = 2
+    proposals = []
+    for _ in range(3):
+        event = Event.objects.create(
+            facility=facility,
+            client=client_qualified,
+            case=case,
+            document_type=doc_type_contact,
+            occurred_at=_old(),
+            data_json={"duration": 20},
+        )
+        proposal = create_proposal(facility, "Event", event.pk, timezone.localdate(), {}, "qualified")[0]
+        proposals.append(proposal)
+    _age_case(case)
+    for proposal in proposals:
+        approve_proposal(proposal, lead_user)
+    _new_case_activity(facility, client_qualified, case, doc_type_contact, qualified_period)
+    _run(facility)
+    for proposal in proposals:
+        _assert_reset(proposal)
+    assert detect_mass_delete(facility) == []
+
+
+def test_legal_hold_discards_both_approvals_with_audit(approved, facility, lead_user):
+    from core.retention.legal_holds import create_hold_for_target
+
+    event, proposal = approved
+    create_hold_for_target(facility, target_type="Event", target_id=event.pk, user=lead_user, reason="Review")
+    proposal.refresh_from_db()
+    assert proposal.status == RetentionProposal.Status.PENDING
+    assert proposal.first_approved_by_id is None
+    assert proposal.first_approved_at is None
+    assert proposal.approved_by_id is None
+    assert proposal.approved_at is None
+    assert proposal.auto_approved_at is None
+    row = AuditLog.objects.get(
+        facility=facility,
+        target_id=str(event.pk),
+        detail__category="retention_proposal_first_approval_cleared",
+    )
+    assert row.user == lead_user
+    assert row.detail["reason"] == "legal_hold"

@@ -416,6 +416,8 @@ def _reopen_approved_hold_proposals(proposals):
 
     Reopen only the latest approved proposal per target without an existing
     active proposal. Historical decisions are never made active (Refs #2590).
+    The final approval is discarded here and the first one by the caller,
+    with its audit row: neither covers the deadline after the hold (Refs #2714).
     """
     targets = {}
     for proposal in proposals:
@@ -431,9 +433,12 @@ def _reopen_approved_hold_proposals(proposals):
         if latest.status != RetentionProposal.Status.APPROVED:
             continue
         latest.status = RetentionProposal.Status.PENDING
+        latest.approved_by = None
+        latest.approved_at = None
+        latest.auto_approved_at = None
         try:
             with transaction.atomic():
-                latest.save(update_fields=["status"])
+                latest.save(update_fields=["status", "approved_by", "approved_at", "auto_approved_at"])
         except IntegrityError as exc:
             diagnostics = getattr(exc.__cause__, "diag", None)
             if getattr(diagnostics, "constraint_name", None) != "unique_active_retention_proposal":
