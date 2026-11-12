@@ -197,6 +197,10 @@ Set configuration values in `.env`, then recreate `web` with the complete **file
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 docker compose "${compose_files[@]}" up -d --force-recreate web
 ```
 
@@ -416,6 +420,10 @@ docker compose -f docker-compose.prod.yml run --rm \
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 docker compose "${compose_files[@]}" up -d
 
 # 4. Verify the security posture
@@ -485,6 +493,10 @@ Restart the web service with the complete [file set from Section 1](#full-enviro
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 docker compose "${compose_files[@]}" up -d web
 ```
 
@@ -1505,6 +1517,10 @@ docker compose -f docker-compose.prod.yml run --rm \
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 docker compose "${compose_files[@]}" up -d
 ```
 
@@ -1537,6 +1553,10 @@ grep -E '^APP_(VERSION|IMAGE_DIGEST)=' .env
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 
 # 1. Stop background jobs (cron uses application code and schema) and check that
 #    no maintenance one-shot is still running (the output must be empty)
@@ -1564,6 +1584,10 @@ cd /opt/anlaufstelle
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 
 # Same image ID on both lines
 docker inspect --format '{{.Name}} {{.Config.Image}} {{.Image}}' \
@@ -1600,6 +1624,10 @@ cd /opt/anlaufstelle
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 # 2. Recreate web AND cron
 docker compose "${compose_files[@]}" up -d web cron
 
@@ -1823,6 +1851,10 @@ The `cron` sidecar has no HTTP endpoint; its image healthcheck must be disabled 
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 docker compose "${compose_files[@]}" up -d --force-recreate cron
 docker compose -f docker-compose.prod.yml ps cron
 docker compose -f docker-compose.prod.yml logs cron
@@ -2592,5 +2624,5 @@ Person anonymization clears these dynamic fields as well as related titles and g
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: b8e340aacfb98578584dfa7c499107971f575d44 -->
+<!-- source-hash: d8699913e97352ebf5af9e718ba0a553b222773a -->
 <!-- translation-date: 2026-11-12 -->

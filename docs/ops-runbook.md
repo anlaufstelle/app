@@ -178,6 +178,10 @@ cd /opt/anlaufstelle
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 
 # Container-Status
 docker compose "${compose_files[@]}" ps
@@ -253,6 +257,10 @@ cd /opt/anlaufstelle
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 # 2. web UND cron neu erzeugen (beide nutzen dasselbe Image; maintenance
 #    zieht beim nächsten Aufruf automatisch dieselbe Version)
 docker compose "${compose_files[@]}" up -d web cron
@@ -276,6 +284,10 @@ cd /opt/anlaufstelle
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 
 # 0. Hintergrundjobs anhalten, solange das Schema nicht zum Code passt
 docker compose "${compose_files[@]}" stop cron
@@ -349,6 +361,10 @@ cd /opt/anlaufstelle
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 
 # 1. Hintergrundjobs anhalten; db und web bleiben fuer Restore und Medien noetig
 docker compose "${compose_files[@]}" stop cron
@@ -1058,6 +1074,10 @@ docker compose -f docker-compose.prod.yml exec web \
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 docker compose "${compose_files[@]}" up -d web
 ```
 
@@ -1085,6 +1105,10 @@ Zum Passwortwechsel den Wert ändern und Redis plus die dauerhaft laufenden Kons
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 docker compose "${compose_files[@]}" up -d redis web cron
 ```
 
@@ -1103,6 +1127,10 @@ REDIS_URL=
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 docker compose "${compose_files[@]}" up -d --scale redis=0
 ```
 
@@ -1481,6 +1509,10 @@ Migrations-One-Shot) stehen in [§ 1.2](#12-deploy-schritte).
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 
 # Aktivieren (File-Flag im persistenten Web-Volume anlegen)
 docker compose "${compose_files[@]}" exec -T web touch /media/anlaufstelle.maintenance
@@ -1653,6 +1685,10 @@ docker compose -f docker-compose.prod.yml down
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 docker compose "${compose_files[@]}" up -d
 
 # 3. Sentinel ueberprueft Volume-Persistenz
@@ -3262,6 +3298,10 @@ cd /opt/anlaufstelle
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 
 # Arbeitsverzeichnis (nur für den ausführenden Benutzer lesbar) und Volume.
 umask 077
@@ -3311,6 +3351,10 @@ cd /opt/anlaufstelle
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 
 # 4. Alten DB-Container + Volume entfernen — nur mit bestätigtem Dump, nur nach
 #    Schritt 1–3.
@@ -3331,6 +3375,10 @@ cd /opt/anlaufstelle
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 
 dump="$PWD/upgrade-work/pre-upgrade.dump"
 
@@ -3380,6 +3428,10 @@ cd /opt/anlaufstelle
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 
 # 1. Compose-Stand zurückdrehen: Image der alten Major + der damalige Mount
 git checkout <vorheriger-stand> -- docker-compose.prod.yml
