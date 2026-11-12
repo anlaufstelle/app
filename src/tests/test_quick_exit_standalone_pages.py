@@ -94,6 +94,7 @@ class _Document(HTMLParser):
         self.scripts = []
         self.metas = []
         self.button_count = 0
+        self.button_ancestor_classes = []
 
     def handle_starttag(self, tag, attrs):
         attributes = dict(attrs)
@@ -102,6 +103,7 @@ class _Document(HTMLParser):
             self.ids[attributes["id"]] = attributes
         if attributes.get("id") == "quick-exit-button":
             self.button_count += 1
+            self.button_ancestor_classes = [set(a.get("class", "").split()) for _, a in self.stack]
         if tag == "body":
             self.body = attributes
         if tag == "script" and attributes.get("src"):
@@ -227,3 +229,19 @@ class TestRenderedStandalonePages:
         assert document.body.get("data-quick-exit-logout-url") == "/logout/"
         assert any(m.get("name") == "csrf-token" for m in document.metas)
         assert any(src.endswith("js/csrf.js") for src in document.scripts)
+
+    def test_the_geometry_spec_can_find_the_wrapper_of_the_button(self, rendered, name):
+        """The scrolled-state measurement locates the bar with ``closest(<selector>)``.
+
+        A page whose bar carries none of those classes would crash the measurement
+        instead of being measured, so the classes of every rendered page are checked
+        against the selector the spec uses.
+        """
+        spec = (Path(settings.BASE_DIR) / "tests" / "e2e" / "test_quick_exit_geometry.py").read_text(encoding="utf-8")
+        match = re.search(r'button\.closest\("([^"]+)"\)', spec)
+        assert match, "the geometry spec no longer resolves the wrapper with closest()"
+        wrapper_classes = {part.strip().lstrip(".") for part in match.group(1).split(",")}
+        ancestors = _parse(rendered(name)).button_ancestor_classes
+        assert any(classes & wrapper_classes for classes in ancestors), (
+            f"{name}: no ancestor of the button carries one of {sorted(wrapper_classes)}"
+        )

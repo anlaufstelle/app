@@ -136,7 +136,10 @@ _TAP_TRAPS = """
 () => {
     const button = document.getElementById("quick-exit-button");
     const b = button.getBoundingClientRect();
-    const wrapper = button.closest(".sticky, .fixed");
+    // Tailwind pages wrap the button in a ".sticky"/".fixed" element; the session-less
+    // offline fallback spells the same fixed bar with inline CSS as ".quick-exit-bar".
+    const wrapper = button.closest(".sticky, .fixed, .quick-exit-bar");
+    if (!wrapper) throw new Error("the quick-exit button has no sticky or fixed wrapper");
     const w = wrapper.getBoundingClientRect();
     const bottom = Math.min(Math.max(w.bottom, b.bottom) + 2, innerHeight - 1);
     const traps = [];
@@ -145,7 +148,8 @@ _TAP_TRAPS = """
             if (x >= b.left && x <= b.right && y >= b.top && y <= b.bottom) continue;
             const el = document.elementFromPoint(x, y);
             if (el && wrapper.contains(el)
-                && (el === wrapper || el.id === "quick-exit-bar" || el.id === "offline-status")) {
+                && (el === wrapper || el.id === "quick-exit-bar" || el.id === "offline-status"
+                    || el.classList.contains("quick-exit-bar"))) {
                 traps.push([x, y, el.id || "wrapper"]);
             }
         }
