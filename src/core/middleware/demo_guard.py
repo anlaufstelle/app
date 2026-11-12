@@ -1,17 +1,24 @@
-"""Demo-Guard-Middleware (Refs #1062).
+"""Demo guard middleware (Refs #1062).
 
-Sperrt auf der oeffentlichen Demo (``DEMO_MODE``) wenige destruktive
-Aktionen, die die Instanz fuer ALLE lahmlegen und die der stuendliche
-Seed-Reset NICHT heilt — allen voran der Wartungsmodus-Toggle
-(``/system/maintenance/``): er legt eine Flag-Datei an, die ``seed --flush``
-nicht entfernt, sodass die ganze Demo bis zum manuellen Eingriff 503 liefert.
+On the public demo (``DEMO_MODE``) POST is refused for the paths in
+``DEMO_GUARD_BLOCKED_PREFIXES`` and the routes in
+``DEMO_GUARD_BLOCKED_URL_NAMES``. Two kinds of action are listed there:
 
-Konto-/Daten-Sabotage wird bewusst NICHT gesperrt — der stuendliche
-``seed --flush`` stellt den Stand wieder her (Leitprinzip: nur sperren, was
-die Demo dauerhaft fuer alle lahmlegt). No-Op ausserhalb ``DEMO_MODE``.
+* actions that break the demo for EVERYONE and that the hourly seed reset
+  does NOT heal, above all the maintenance mode toggle
+  (``/system/maintenance/``): it creates a flag file that ``seed --flush``
+  leaves in place, so the whole demo answers 503 until someone steps in;
+* actions that lock a shared demo account until the hourly reset: changing
+  its second factor, passkeys or password, and user or settings changes in
+  the admin. :func:`refuse_demo_change` covers the 2FA requirement in forms
+  whose other fields stay open.
 
-Liegt nach der MessageMiddleware, damit die Flash-Message gespeichert wird.
-Settings werden pro Request gelesen (testbar via override_settings).
+Any other change to accounts or data stays open; the hourly ``seed --flush``
+restores it. Both lists match the routed path (``request.path_info``), so a
+script prefix does not bypass them. No-op outside ``DEMO_MODE``.
+
+Placed after the MessageMiddleware so the flash message is stored. Settings
+are read per request (testable with ``override_settings``).
 """
 
 from __future__ import annotations
