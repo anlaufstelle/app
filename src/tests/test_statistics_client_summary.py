@@ -8,8 +8,9 @@ from django.db import connection
 from django.test import Client as WebClient
 from django.test.utils import CaptureQueriesContext
 
-from core.models import Client, DocumentType, Event, Settings
-from core.services.dashboard.snapshot import create_or_update_snapshot, get_statistics_hybrid
+from core.models import Client, DocumentType, Event, Settings, StatisticsSnapshot
+from core.reporting.data_source import LIVE
+from core.services.dashboard.snapshot import SNAPSHOT_AS_OF_KEY, create_or_update_snapshot, get_statistics_hybrid
 from core.services.dashboard.statistics import get_live_client_statistics, get_statistics
 
 pytestmark = pytest.mark.django_db
@@ -38,7 +39,7 @@ def population(facility, second_facility, admin_user):
         person = Client.objects.create(
             facility=facility,
             pseudonym=f"Person {index}",
-            contact_stage="identifiziert",
+            contact_stage=Client.ContactStage.IDENTIFIED,
             is_active=index != 5,
             is_deleted=index == 6,
         )
@@ -108,6 +109,10 @@ def test_hybrid_person_count_at_suppression_boundary(facility, admin_user, perso
                 created_by=admin_user,
                 occurred_at=datetime(2025, month, 11, 12, tzinfo=ZoneInfo("Europe/Berlin")),
             )
+    for month in (1, 2):
+        create_or_update_snapshot(facility, 2025, month)
+    snapshots = StatisticsSnapshot.objects.filter(facility=facility, year=2025, month__in=(1, 2))
+    assert snapshots.count() == 2
     start, end = date(2025, 1, 1), date(2025, 2, 28)
     expected = get_statistics(facility, start, end)
     actual = get_statistics_hybrid(facility, start, end)
@@ -115,12 +120,21 @@ def test_hybrid_person_count_at_suppression_boundary(facility, admin_user, perso
     assert actual["top_clients"] == expected["top_clients"]
     protected_actual = suppress_report_stats(facility, actual)
     protected_expected = suppress_report_stats(facility, expected)
-    assert protected_actual["total_contacts"] == protected_expected["total_contacts"]
+    # Hybrid output also carries snapshot provenance and document type metadata.
+    for row in protected_expected["by_document_type"]:
+        row.update(system_type=doc.system_type or "", document_type_id=str(doc.pk))
+    protected_expected[SNAPSHOT_AS_OF_KEY] = max(snapshot.updated_at for snapshot in snapshots)
+    protected_expected["unique_clients_data_source"] = LIVE
+    assert protected_actual == protected_expected
+    assert protected_actual["unique_clients"] == (None if persons < 5 else persons)
+    assert protected_actual["total_contacts"] == persons * 2
+    if persons < 5:
+        assert "by_age_cluster" not in protected_actual
+        assert "by_contact_stage" not in protected_actual
 
 
 def test_hybrid_query_count(facility, population):
     create_or_update_snapshot(facility, 2025, 1)
     with CaptureQueriesContext(connection) as queries:
         get_statistics_hybrid(facility, date(2025, 1, 1), date(2025, 1, 31))
-    print(f"hybrid query count: {len(queries)}")
     assert len(queries) == 3
