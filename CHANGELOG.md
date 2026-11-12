@@ -23,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Befehl `backfill_audit_chain` entfernt, Audit-Zeilen ohne Hash gelten als Bruch** (#2716) — Der Befehl konnte nach einer Bereinigung die ganze Audit-Kette neu versiegeln und so eine manipulierte Zeile beglaubigen; er entfällt ersatzlos. `verify_audit_chain` meldet jetzt auch eine Zeile ohne Hash vor dem Kettenanfang als Bruch.
 
 ### Changed
+
 - **Strichlisten-Kontakte stündlich zusammengefasst** (#2661) — Der Zeitstrom zeigt je Stunde eine aufklappbare Gruppenzeile mit Gesamtzahl und Aufschlüsselung nach Typ statt vieler Einzelzeilen. Die Zahl aktualisiert sich nach „+1“ und „Rückgängig“ live; ein Link öffnet die gezählten Kontakte des Tages.
 - **Zeitstrom und Kontakte als übersichtliche Spaltenzeilen** (#2656) — Zeit, Typ und Person stehen bündig in einer gemeinsamen Liste; mobil verteilt sich jeder Eintrag auf zwei Zeilen. Kontakte zeigen ihren Typ ohne zusätzliches Art-Badge, aufklappbare Angaben und rollenabhängige Sichtbarkeit bleiben erhalten.
 - **Dezente Rahmen bei klaren Bedienelementen** (#2657) — Dekorative Karten- und Sektionsrahmen sind heller; Strichliste und Handlungsbedarf haben freistehende Sektionslabels. Eingabefelder, Schaltflächen und Fokusmarkierungen behalten ihre kontraststarken Grenzen.
