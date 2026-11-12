@@ -402,3 +402,50 @@ def test_overlapping_failure_does_not_fail_scan_without_webhook(
     with override_settings(BREACH_NOTIFICATION_WEBHOOK_URL=None):
         call_command("detect_breaches", facility=facility.name)
     assert receiver.attempts == 1
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("scope", ["facility", "system"])
+@pytest.mark.parametrize(
+    ("reason", "url", "dns", "transport_error"),
+    [
+        ("scheme", "http://hooks.example.com/private-token?key=secret", "93.184.216.34", False),
+        ("hostname", "https:///private-token?key=secret", "93.184.216.34", False),
+        ("address", "https://[invalid/private-token?key=secret", "93.184.216.34", False),
+        ("unresolvable", "https://hooks.example.com/private-token?key=secret", None, False),
+        ("not_global", "https://hooks.example.com/private-token?key=secret", "127.0.0.1", False),
+        ("transport", "https://hooks.example.com/private-token?key=secret", "93.184.216.34", True),
+    ],
+)
+def test_delivery_failure_reason_is_distinct_and_secret_free(
+    scope, reason, url, dns, transport_error, facility, admin_user, receiver, thresholds, monkeypatch, caplog
+):
+    import socket
+
+    thresholds.BREACH_NOTIFICATION_WEBHOOK_URL = url
+
+    def resolve(host):
+        if dns is None:
+            raise socket.gaierror("DNS unavailable: " + url)
+        return dns
+
+    monkeypatch.setattr("socket.gethostbyname", resolve)
+    receiver.fail = transport_error
+    if scope == "system":
+        _anonymous_burst()
+    else:
+        _login_burst(facility, admin_user)
+    with pytest.raises(CommandError, match="Breach webhook delivery failed 1 time"):
+        call_command("detect_breaches")
+    delivery = AuditLog.objects.get(detail__category="breach_webhook_delivery")
+    assert delivery.detail["result"] == "failed"
+    assert delivery.detail["reason"] == reason
+    error_class = "URLError" if transport_error else "WebhookURLRejectedError"
+    assert delivery.detail["error_class"] == error_class
+    messages = [record.getMessage() for record in caplog.records if "breach_webhook_failed:" in record.getMessage()]
+    assert messages == [f"breach_webhook_failed: {error_class} reason={reason}"]
+    for secret in (url, "hooks.example.com", "private-token", "key=secret", "127.0.0.1"):
+        assert secret not in json.dumps(delivery.detail)
+        assert secret not in caplog.text
+    assert _violations().count() == 1
+    assert _latest_scan_marker().detail["job_run"]["status"] == "failed"

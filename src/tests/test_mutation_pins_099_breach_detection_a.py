@@ -248,15 +248,15 @@ class TestPostWebhookOpenerComposition:
 
 
 class TestPostWebhookRejectionLogging:
-    def test_url_validation_failure_logs_only_error_class(self, settings, caplog):
+    def test_url_validation_failure_logs_class_and_fixed_reason(self, settings, caplog):
         """URL rejection must identify the error without revealing credentials (Refs #2719)."""
         settings.BREACH_NOTIFICATION_WEBHOOK_URL = "https:///private-token?key=secret"
         with caplog.at_level("WARNING", logger="core.services.compliance.breach_detection"):
             assert _post_webhook({"kind": "x"}) is False
         messages = [r.getMessage() for r in caplog.records]
-        assert messages == ["breach_webhook_failed: ValueError"]
+        assert messages == ["breach_webhook_failed: WebhookURLRejectedError reason=hostname"]
 
-    def test_delivery_failure_logs_only_error_class(self, settings, monkeypatch, caplog):
+    def test_delivery_failure_logs_class_and_fixed_reason(self, settings, monkeypatch, caplog):
         """Transport exception messages may contain the secret webhook URL (Refs #2719)."""
 
         def _raise_open(self, req, *args, **kwargs):
@@ -268,7 +268,7 @@ class TestPostWebhookRejectionLogging:
         with caplog.at_level("WARNING", logger="core.services.compliance.breach_detection"):
             assert _post_webhook({"kind": "x"}) is False
         messages = [r.getMessage() for r in caplog.records]
-        assert messages == ["breach_webhook_failed: URLError"]
+        assert messages == ["breach_webhook_failed: URLError reason=transport"]
 
 
 class TestPostWebhookUrlSettingDefault:

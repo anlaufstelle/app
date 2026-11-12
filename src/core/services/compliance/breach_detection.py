@@ -87,6 +87,14 @@ WEBHOOK_DELIVERED = "delivered"
 WEBHOOK_FAILED = "failed"
 
 
+class WebhookURLRejectedError(ValueError):
+    """A validation failure with a fixed reason safe for logs and audit rows."""
+
+    def __init__(self, message: str, *, reason: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+
+
 def _validate_webhook_url(url: str) -> str:
     """Refs #772 — SSRF-Schutz fuer ``BREACH_NOTIFICATION_WEBHOOK_URL``.
 
@@ -105,21 +113,26 @@ def _validate_webhook_url(url: str) -> str:
     Die DNS-Aufloesung kostet ~50 ms, schliesst aber genau die SSRF-Wege,
     die die operatorseitige URL-Konfiguration sonst offen liesse.
     """
-    parsed = urlparse(url)
+    try:
+        parsed = urlparse(url)
+    except ValueError as exc:
+        raise WebhookURLRejectedError("Malformed webhook URL.", reason="address") from exc
     if parsed.scheme != "https":
-        raise ValueError(f"Webhook scheme {parsed.scheme!r} not allowed (https only).")
+        raise WebhookURLRejectedError(f"Webhook scheme {parsed.scheme!r} not allowed (https only).", reason="scheme")
     if not parsed.hostname:
-        raise ValueError(f"Webhook URL has no hostname: {url!r}")
+        raise WebhookURLRejectedError(f"Webhook URL has no hostname: {url!r}", reason="hostname")
     try:
         ip = ipaddress.ip_address(socket.gethostbyname(parsed.hostname))
     except (socket.gaierror, ValueError) as exc:
-        raise ValueError(f"Webhook host unresolvable: {parsed.hostname!r}") from exc
+        raise WebhookURLRejectedError(f"Webhook host unresolvable: {parsed.hostname!r}", reason="unresolvable") from exc
     # A5.3 (Refs #1024 / #1016): nur oeffentlich-routbare Ziele zulassen.
     # ``not is_global`` deckt RFC1918, loopback, link-local, multicast, reserved
     # UND CGNAT (100.64.0.0/10, RFC 6598) ab — letzteres liess die fruehere
     # Einzel-Flag-Kette durch.
     if not ip.is_global:
-        raise ValueError(f"Webhook target {ip} is not globally routable — refused (SSRF).")
+        raise WebhookURLRejectedError(
+            f"Webhook target {ip} is not globally routable — refused (SSRF).", reason="not_global"
+        )
     return str(ip)
 
 
@@ -533,7 +546,7 @@ def _post_webhook(payload: dict, *, error_details: dict | None = None) -> bool:
     """Send through the validated, pinned HTTPS connection without redirects.
 
     Expected URL and transport failures return False. Optional audit metadata
-    contains only the exception class, never a URL or an exception message.
+    contains the exception class and a fixed reason, never a URL or an exception message.
     Payload serialization stays outside the transport error boundary so that
     programming errors are not mistaken for delivery failures (Refs #2719).
     """
@@ -555,9 +568,11 @@ def _post_webhook(payload: dict, *, error_details: dict | None = None) -> bool:
         return True
     except (urllib.error.URLError, OSError, http.client.HTTPException, ValueError) as exc:
         error_class = type(exc).__name__
-        logger.warning("breach_webhook_failed: %s", error_class)
+        reason = exc.reason if isinstance(exc, WebhookURLRejectedError) else "transport"
+        logger.warning("breach_webhook_failed: %s reason=%s", error_class, reason)
         if error_details is not None:
             error_details["error_class"] = error_class
+            error_details["reason"] = reason
         return False
 
 
