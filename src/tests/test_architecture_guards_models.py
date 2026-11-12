@@ -983,6 +983,11 @@ class TestTenantModelScopeGuard:
             "Dedup der installationsweiten (``facility=None``) Findings — gleicher "
             "Grund wie beim Burst-Detektor daneben."
         ),
+        "compliance/breach_detection.py:count_failed_webhook_deliveries:AuditLog": (
+            "Exit code of the installation-wide breach cron: counts failed webhook "
+            "deliveries of the current run across all facilities and the system scope "
+            "(Refs #2719); only the cron command reads it, never a tenant view."
+        ),
         "compliance/audit_events.py:_audit_event_checks:AuditLog": (
             "Zahl kritischer Audit-Events der letzten 24h ueber die ganze Instanz — "
             "Zweck der Compliance-Kachel, gerendert nur im Super-Admin-Bereich."

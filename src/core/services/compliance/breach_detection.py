@@ -71,9 +71,16 @@ from django.db.models import Count, Q
 from django.utils import timezone
 
 from core.models import AuditLog
-from core.services.audit import audit_security_violation
+from core.services.audit import audit_event, audit_security_violation
 
 logger = logging.getLogger(__name__)
+
+# Refs #2719: delivery state of a finding's webhook lives in its own append-only
+# row (the finding row stays untouched). It reuses the breach scan action and is
+# told apart by ``detail.category``; ``target_id`` points at the finding row.
+WEBHOOK_DELIVERY_CATEGORY = "breach_webhook_delivery"
+WEBHOOK_DELIVERED = "delivered"
+WEBHOOK_FAILED = "failed"
 
 
 def _validate_webhook_url(url: str) -> str:
@@ -551,6 +558,51 @@ def _post_webhook(payload: dict) -> bool:
         return False
 
 
+def _webhook_configured() -> bool:
+    return bool(getattr(settings, "BREACH_NOTIFICATION_WEBHOOK_URL", None))
+
+
+def _record_delivery(entry: AuditLog, delivered: bool) -> AuditLog:
+    """Append the outcome of one delivery attempt for finding ``entry``."""
+    return audit_event(
+        AuditLog.Action.BREACH_SCAN_COMPLETED,
+        user=None,
+        facility=entry.facility,
+        target_type="AuditLog",
+        target_id=entry.pk,
+        detail={
+            "category": WEBHOOK_DELIVERY_CATEGORY,
+            "kind": (entry.detail or {}).get("kind"),
+            "result": WEBHOOK_DELIVERED if delivered else WEBHOOK_FAILED,
+        },
+    )
+
+
+def _notify(entry: AuditLog, payload: dict) -> bool | None:
+    """Send the webhook for ``entry`` and record the outcome (Refs #2719).
+
+    Returns ``None`` without a configured URL — no attempt, no delivery row,
+    as before. A rejected URL counts as a failed delivery: the operator set an
+    address that cannot be reached.
+    """
+    if not _webhook_configured():
+        return None
+    delivered = _post_webhook(payload)
+    _record_delivery(entry, delivered)
+    return delivered
+
+
+def count_failed_webhook_deliveries(since) -> int:
+    """Failed delivery attempts recorded since ``since`` — feeds the exit code
+    of ``detect_breaches`` (Refs #2719)."""
+    return AuditLog.objects.filter(
+        action=AuditLog.Action.BREACH_SCAN_COMPLETED,
+        timestamp__gte=since,
+        detail__category=WEBHOOK_DELIVERY_CATEGORY,
+        detail__result=WEBHOOK_FAILED,
+    ).count()
+
+
 def record_finding(facility, finding: dict) -> AuditLog | None:
     """Schreibt SECURITY_VIOLATION-AuditLog + Webhook (sofern konfiguriert).
 
@@ -579,7 +631,8 @@ def record_finding(facility, finding: dict) -> AuditLog | None:
         threshold=finding["threshold"],
         window_minutes=finding["window_minutes"],
     )
-    _post_webhook(
+    _notify(
+        entry,
         {
             "facility": facility.name,
             "kind": finding["kind"],
@@ -589,7 +642,7 @@ def record_finding(facility, finding: dict) -> AuditLog | None:
             "user_id": finding["user_id"],
             "audit_id": str(entry.pk),
             "timestamp": entry.timestamp.isoformat(),
-        }
+        },
     )
     return entry
 
@@ -638,7 +691,8 @@ def record_system_finding(finding: dict, *, notify=True) -> AuditLog | None:
         source_ip=finding.get("source_ip"),
     )
     if notify:
-        _post_webhook(
+        _notify(
+            entry,
             {
                 "facility": None,
                 "kind": finding["kind"],
@@ -649,7 +703,7 @@ def record_system_finding(finding: dict, *, notify=True) -> AuditLog | None:
                 "source_ip": finding.get("source_ip"),
                 "audit_id": str(entry.pk),
                 "timestamp": entry.timestamp.isoformat(),
-            }
+            },
         )
     return entry
 

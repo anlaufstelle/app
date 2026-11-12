@@ -6,10 +6,12 @@ neue Findings. Geeignet als Cron-Job (z.B. stuendlich).
 """
 
 from django.core.management.base import BaseCommand, CommandError
+from django.utils import timezone
 
 from core.models import AuditLog, Facility
 from core.services.audit import audit_event
 from core.services.compliance import run_all_detections, run_system_detections
+from core.services.compliance.breach_detection import count_failed_webhook_deliveries
 
 # Refs #1016/#1070/#1512: zentrale Fail-Loud-Pruefung in services/system/_db_admin —
 # als Modul-Name re-exportiert, damit Tests sie auf Command-Ebene patchen koennen.
@@ -40,6 +42,7 @@ class Command(BaseCommand):
                 "sähe der Lauf 0 Facilities/Zeilen und meldete fälschlich 'Keine neuen "
                 "Breach-Findings.' (Refs #1512)."
             )
+        started_at = timezone.now()
         facility_name = options["facility"]
         facilities = Facility.objects.all()
         if facility_name:
@@ -80,6 +83,9 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING(f"{total} neue Breach-Finding(s) — siehe Audit-Log."))
 
         processed = facilities.count()
+        # Refs #2719: every finding is recorded first; a failed webhook delivery
+        # then turns the run red instead of ending as a quiet log warning.
+        failed_deliveries = count_failed_webhook_deliveries(started_at)
         self.stdout.write(
             f"Run coverage: processed={processed}, skipped=0, failed=0, system_scan={not bool(facility_name)}."
         )
@@ -95,10 +101,15 @@ class Command(BaseCommand):
                     "findings": total,
                     "job_run": {
                         "scope": "installation",
-                        "status": "success",
+                        "status": "failed" if failed_deliveries else "success",
                         "processed": processed,
                         "skipped": 0,
                         "failed": 0,
                     },
                 },
+            )
+        if failed_deliveries:
+            raise CommandError(
+                f"Breach webhook delivery failed {failed_deliveries} time(s); the findings are in the audit log. "
+                "Check BREACH_NOTIFICATION_WEBHOOK_URL and the cron egress network (ops runbook section 6.5b)."
             )
