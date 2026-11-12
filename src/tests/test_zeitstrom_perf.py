@@ -157,24 +157,80 @@ class TestZeitstromViewQueryCount:
 
 
 @pytest.mark.django_db
-def test_hourly_tallies_add_only_one_feed_query(facility, normal_doc_type, staff_user):
+@pytest.mark.parametrize("hours,type_count,per_type", [(1, 1, 250), (6, 1, 40), (6, 3, 20)])
+def test_hourly_tallies_add_only_one_feed_query(facility, normal_doc_type, staff_user, hours, type_count, per_type):
     from django.db import connection
 
-    when = timezone.now()
+    when = timezone.now().replace(hour=8, minute=0, second=0, microsecond=0)
+    types = [normal_doc_type] + [
+        DocumentType.objects.create(facility=facility, name=f"Scale type {index}") for index in range(type_count - 1)
+    ]
     Event.objects.bulk_create(
         [
             Event(
                 facility=facility,
-                document_type=normal_doc_type,
+                document_type=doc_type,
                 created_by=staff_user,
-                occurred_at=when,
+                occurred_at=when + timedelta(hours=hour),
                 is_anonymous=True,
                 created_via=Event.CreatedVia.TALLY,
             )
-            for _ in range(250)
+            for hour in range(hours)
+            for doc_type in types
+            for _ in range(per_type)
         ]
     )
     with CaptureQueriesContext(connection) as captured:
         items = build_feed_items(facility, timezone.localdate(when), "events", user=staff_user)
     assert len(captured) <= 2  # One standard-event read plus one grouped read.
-    assert [i["object"]["total"] for i in items if i["type"] == "tally_group"] == [250]
+    groups = [i["object"] for i in items if i["type"] == "tally_group"]
+    assert [group["total"] for group in groups] == [type_count * per_type] * hours
+    assert all(len(group["types"]) == type_count for group in groups)
+
+
+@pytest.mark.django_db
+def test_tally_watch_queries_stay_constant_across_hours_and_types(client, facility, staff_user):
+    from django.db import connection
+
+    from core.services.zeitstrom_watch import build_zeitstrom_page_scope
+    from tests.test_zeitstrom_watch import _watch
+
+    when = timezone.now().replace(hour=8, minute=0, second=0, microsecond=0)
+    types = [DocumentType.objects.create(facility=facility, name=f"Watch scale {index}") for index in range(3)]
+    Event.objects.create(
+        facility=facility,
+        document_type=types[0],
+        created_by=staff_user,
+        occurred_at=when,
+        is_anonymous=True,
+        created_via=Event.CreatedVia.TALLY,
+    )
+    client.force_login(staff_user)
+    params = {"date": timezone.localdate(when).isoformat(), "time_filter": "all", "type": "events"}
+    scope = build_zeitstrom_page_scope(staff_user, facility)
+    # Warm request-level caches before comparing the two data sizes.
+    assert _watch(client, params=params, scope=scope).status_code == 200
+    with CaptureQueriesContext(connection) as one:
+        before = _watch(client, params=params, scope=scope)
+    assert before.status_code == 200
+    Event.objects.bulk_create(
+        [
+            Event(
+                facility=facility,
+                document_type=doc_type,
+                created_by=staff_user,
+                occurred_at=when + timedelta(hours=hour),
+                is_anonymous=True,
+                created_via=Event.CreatedVia.TALLY,
+            )
+            for hour in range(6)
+            for doc_type in types
+            for _ in range(20)
+        ]
+    )
+    with CaptureQueriesContext(connection) as many:
+        after = _watch(client, params=params, scope=scope)
+    assert after.status_code == 200
+    assert before.json()["validators"]["feed"] != after.json()["validators"]["feed"]
+    assert len(many) == len(one), f"Watch queries grew across tally hours/types: {len(one)} -> {len(many)}"
+    assert len(many) <= 21
