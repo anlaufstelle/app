@@ -94,6 +94,68 @@
         return typeof startedAt === "number" && Date.now() - startedAt < _LOGOUT_NAV_GRACE_MS;
     }
 
+    // Refs #2730: a takeover reload aborts whatever request is under way. The
+    // server still completes a native form POST or an HTMX write, but the
+    // browser drops the answer and with it a renewed session cookie (seen when
+    // a passkey is removed). Both are tracked here; while one runs, the
+    // takeover shows the update prompt instead of reloading.
+    //
+    // A navigation is a timestamp like the logout mark: it is never taken
+    // back because the page normally goes away. A navigation that does not
+    // replace the page (204, download) only turns the next takeover into a
+    // prompt until the window has passed.
+    var _NAVIGATION_GRACE_MS = 30000;
+    var _navigationStartedAt = null;
+    var _runningWrites = new Set();
+
+    function _navigationInFlight() {
+        return (
+            typeof _navigationStartedAt === "number" && Date.now() - _navigationStartedAt < _NAVIGATION_GRACE_MS
+        );
+    }
+
+    // A request whose afterRequest event never arrived (element left the DOM
+    // before it finished) is recognised as done by its readyState.
+    function _writeInFlight() {
+        _runningWrites.forEach(function (xhr) {
+            if (xhr.readyState === 4 || xhr.readyState === 0) _runningWrites.delete(xhr);
+        });
+        return _runningWrites.size > 0;
+    }
+
+    function _requestInFlight() {
+        return _navigationInFlight() || _writeInFlight();
+    }
+
+    // Registered on window so it runs after the document and form handlers:
+    // a submit that HTMX or the offline handlers took over is prevented by
+    // then and starts no navigation.
+    window.addEventListener("submit", function (event) {
+        if (event.defaultPrevented) return;
+        var form = event.target;
+        if (form && String(form.getAttribute && form.getAttribute("method")).toLowerCase() === "dialog") return;
+        _navigationStartedAt = Date.now();
+    });
+
+    // Links, location changes and form.submit() fire no submit event; the
+    // Navigation API reports them where the browser has it.
+    if (window.navigation && typeof window.navigation.addEventListener === "function") {
+        window.navigation.addEventListener("navigate", function (event) {
+            if (!event.destination || event.destination.sameDocument || event.downloadRequest) return;
+            _navigationStartedAt = Date.now();
+        });
+    }
+
+    document.addEventListener("htmx:beforeSend", function (event) {
+        var detail = event.detail || {};
+        var verb = detail.requestConfig && detail.requestConfig.verb;
+        if (detail.xhr && verb && String(verb).toLowerCase() !== "get") _runningWrites.add(detail.xhr);
+    });
+    document.addEventListener("htmx:afterRequest", function (event) {
+        var detail = event.detail || {};
+        if (detail.xhr) _runningWrites.delete(detail.xhr);
+    });
+
     // Ungespeicherte Eingaben erkennen. Capture-Phase, damit auch Felder in
     // HTMX-eingeswappten Fragmenten erfasst werden.
     document.addEventListener("input", _markDirty, true);
@@ -419,12 +481,13 @@
             _doReload();
             return;
         }
-        if (_dirty) {
+        if (_dirty || _requestInFlight()) {
             _showUpdatePrompt(_registration);
             return;
         }
         _queuePending().then(function (pending) {
-            if (pending) {
+            // Refs #2730: a request may have started while the queue was counted.
+            if (pending || _requestInFlight()) {
                 _showUpdatePrompt(_registration);
             } else {
                 _doReload();
