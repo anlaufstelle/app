@@ -1661,10 +1661,19 @@ The flush is only allowed outside production. It empties the AuditLog and,
 as the last step of the flush transaction, replaces the anchor file at
 `DJANGO_AUDIT_HWM_PATH` with a signed empty state. The file itself is not part
 of the transaction: if it cannot be written, the flush aborts and the database
-stays unchanged; if the commit fails afterwards, the flush puts the previous
-anchor file back. Only a hard crash between the file replacement and the
-commit leaves an empty anchor file behind the full data; the next check run
-then anchors the chains like a first run. Without a flush, an anchor for a
+stays unchanged; if the commit fails afterwards or the run is interrupted
+(for example with Ctrl+C), the flush puts the previous anchor file back. An
+empty anchor file behind the full data remains in two cases only: an abort
+after which Python no longer cleans up (SIGKILL, SIGTERM, crash) between the
+file replacement and the commit, and a failure to write the previous file
+back. In the second case `seed --flush` ends with the error of the write-back
+(for example `PermissionError`), with the original error above it (“During
+handling of the above exception, another exception occurred”); the database
+has been rolled back. The next check run then anchors the chains like a first
+run and cannot detect a truncation in the meantime. Therefore put the anchor
+file back from the anchor copy of a backup, if there is one
+(`backups/daily/audit_hwm-<timestamp>.json`, see below), before the next check
+run. Without a flush, an anchor for a
 missing facility remains a reason for `verify_audit_chain` to abort.
 
 **Trust boundary:** The read-only mount prevents the web process from writing
@@ -3349,4 +3358,4 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.10 -->
 <!-- translation-date: 2026-11-12 -->
-<!-- source-hash: 672060e8efd620cc226ccb7ce530386c31f04615 -->
+<!-- source-hash: 8d4c1796910c87b2f37c0be94611f4df08066303 -->

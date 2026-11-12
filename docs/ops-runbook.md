@@ -1676,10 +1676,19 @@ Der Flush ist nur außerhalb der Produktion erlaubt. Er leert das AuditLog und
 ersetzt die Ankerdatei unter `DJANGO_AUDIT_HWM_PATH` als letzten Schritt der
 Flush-Transaktion durch einen signierten leeren Stand. Die Datei selbst ist
 nicht Teil der Transaktion: Lässt sie sich nicht schreiben, bricht der Flush ab
-und die Datenbank bleibt unverändert; scheitert danach der Commit, stellt der
-Flush die vorherige Ankerdatei wieder her. Nur ein harter Abbruch zwischen
-Dateiwechsel und Commit hinterlässt eine leere Ankerdatei bei vollem Bestand;
-der nächste Prüflauf verankert die Ketten dann wie ein Erstlauf. Ohne Flush
+und die Datenbank bleibt unverändert; scheitert danach der Commit oder wird
+der Lauf unterbrochen (etwa mit Strg+C), stellt der Flush die vorherige
+Ankerdatei wieder her. Eine leere Ankerdatei bei vollem Bestand bleibt nur in
+zwei Fällen zurück: bei einem Abbruch, nach dem Python nicht mehr aufräumt
+(SIGKILL, SIGTERM, Absturz), zwischen Dateiwechsel und Commit, und wenn das
+Zurückschreiben der vorherigen Datei selbst scheitert. Im zweiten Fall endet
+`seed --flush` mit dem Fehler des Zurückschreibens (etwa `PermissionError`),
+der ursprüngliche Fehler steht darüber („During handling of the above
+exception, another exception occurred“); die Datenbank ist zurückgerollt. Der
+nächste Prüflauf verankert die Ketten dann wie ein Erstlauf und kann ein
+zwischenzeitliches Abschneiden nicht erkennen. Deshalb vor dem nächsten
+Prüflauf die Ankerdatei aus der Ankerkopie einer Sicherung zurücklegen, sofern
+vorhanden (`backups/daily/audit_hwm-<Zeitstempel>.json`, siehe unten). Ohne Flush
 bleibt ein Anker für eine fehlende Einrichtung ein Abbruchgrund von
 `verify_audit_chain`.
 

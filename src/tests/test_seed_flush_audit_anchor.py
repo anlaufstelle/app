@@ -13,6 +13,8 @@ Covered here:
   next flush -> verify green again (facility chain and system chain);
 - the flush leaves a valid, signed, empty anchor file;
 - an anchor file that cannot be written rolls the flush back;
+- a failed commit or an interrupt right after the file replacement puts the
+  previous anchor back;
 - without a flush an orphaned anchor still aborts the run (the #2296 check
   stays strict outside the flush path).
 """
@@ -20,6 +22,7 @@ Covered here:
 from __future__ import annotations
 
 import io
+import os
 
 import pytest
 from django.core.management import call_command
@@ -123,6 +126,36 @@ class TestFlushResetsTheAnchor:
             flush_seed_data()
         monkeypatch.undo()
 
+        assert Facility.objects.filter(pk=facility.pk).exists()
+        assert (tmp_path / "audit_hwm.json").read_bytes() == anchor_before
+        ok, out = _verify()
+        assert ok, out
+
+    def test_interrupt_right_after_the_file_replacement_puts_the_anchor_back(
+        self, settings, tmp_path, facility, monkeypatch
+    ):
+        settings.AUDIT_HWM_PATH = str(tmp_path / "audit_hwm.json")
+        audit_event(AuditLog.Action.LOGIN, user=None, facility=facility)
+        ok, out = _verify()
+        assert ok, out
+        anchor_before = (tmp_path / "audit_hwm.json").read_bytes()
+        real_replace = os.replace
+        calls = []
+
+        def replace_then_interrupt(source, destination):
+            real_replace(source, destination)
+            calls.append(destination)
+            if len(calls) == 1:
+                # The empty store is in place; the interrupt arrives before
+                # the save returns to the guard.
+                raise KeyboardInterrupt
+
+        monkeypatch.setattr(os, "replace", replace_then_interrupt)
+        with pytest.raises(KeyboardInterrupt):
+            flush_seed_data()
+        monkeypatch.undo()
+
+        assert calls[0] == settings.AUDIT_HWM_PATH
         assert Facility.objects.filter(pk=facility.pk).exists()
         assert (tmp_path / "audit_hwm.json").read_bytes() == anchor_before
         ok, out = _verify()

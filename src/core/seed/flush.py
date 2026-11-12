@@ -76,9 +76,11 @@ class _AuditAnchorReset:
 
     The file is not part of the database transaction. Entered before
     ``transaction.atomic()``, this guard leaves its block only after the
-    commit: if the transaction fails once the file has been replaced, the
-    previous file is put back, so a failed commit never leaves the full audit
-    log behind an empty anchor.
+    commit: if the block fails once the replacement has started -- an error,
+    a failed commit or a catchable interrupt such as ``KeyboardInterrupt`` --
+    the previous file is put back, so the full audit log is never left behind
+    an empty anchor. If putting it back fails as well, that error propagates
+    with the original one as its context.
     """
 
     def __enter__(self):
@@ -89,8 +91,11 @@ class _AuditAnchorReset:
 
     def reset(self) -> None:
         if self.path:
-            HighWaterMarkStore(path=self.path, chains={}).save()
+            # Set before the save: an interrupt can arrive after the file was
+            # replaced but before ``save()`` returns. Putting the previous
+            # bytes back when the file was not replaced is harmless.
             self.replaced = True
+            HighWaterMarkStore(path=self.path, chains={}).save()
 
     def __exit__(self, exc_type, exc, tb):
         if exc_type is not None and self.replaced:
@@ -112,9 +117,10 @@ def flush_seed_data() -> None:
     transaction (Refs #2708); the file itself is written before the commit and
     is not rolled back with it. If it cannot be written, the whole flush rolls
     back instead of leaving an empty AuditLog behind a stale anchor; if the
-    commit fails afterwards, the previous file is put back. Only a hard crash
-    between the file replacement and the commit leaves an empty anchor behind
-    the full audit log; the next chain check then anchors it like a first run.
+    commit fails afterwards or the run is interrupted, the previous file is put
+    back. Only a hard crash between the file replacement and the commit, or a
+    failure to put the previous file back, leaves an empty anchor behind the
+    full audit log; the next chain check then anchors it like a first run.
     The seed command runs this flush as its outermost transaction.
     """
     with _AuditAnchorReset() as anchor, transaction.atomic():
