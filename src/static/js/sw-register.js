@@ -100,19 +100,22 @@
     // a passkey is removed). Both are tracked here; while one runs, the
     // takeover shows the update prompt instead of reloading.
     //
-    // A navigation is a timestamp like the logout mark: it is never taken
-    // back because the page normally goes away. A navigation that does not
-    // replace the page (204, download) only turns the next takeover into a
-    // prompt until the window has passed.
-    var _NAVIGATION_GRACE_MS = 30000;
-    var _navigationStartedAt = null;
+    // Navigation has no safe fixed deadline: upstream timeouts are configurable
+    // and a response may still be arriving. Clear the mark only on completion.
+    // Without Navigation API completion events, keep the conservative prompt
+    // until this document leaves (including a later bfcache restoration).
+    var _navigationPending = false;
     var _runningWrites = new Set();
 
     function _navigationInFlight() {
-        return (
-            typeof _navigationStartedAt === "number" && Date.now() - _navigationStartedAt < _NAVIGATION_GRACE_MS
-        );
+        return _navigationPending;
     }
+
+    function _navigationFinished() {
+        _navigationPending = false;
+    }
+
+    window.addEventListener("pagehide", _navigationFinished);
 
     // A request whose afterRequest event never arrived (element left the DOM
     // before it finished) is recognised as done by its readyState.
@@ -134,7 +137,7 @@
         if (event.defaultPrevented) return;
         var form = event.target;
         if (form && String(form.getAttribute && form.getAttribute("method")).toLowerCase() === "dialog") return;
-        _navigationStartedAt = Date.now();
+        _navigationPending = true;
     });
 
     // Links, location changes and form.submit() fire no submit event; the
@@ -142,8 +145,10 @@
     if (window.navigation && typeof window.navigation.addEventListener === "function") {
         window.navigation.addEventListener("navigate", function (event) {
             if (!event.destination || event.destination.sameDocument || event.downloadRequest) return;
-            _navigationStartedAt = Date.now();
+            _navigationPending = true;
         });
+        window.navigation.addEventListener("navigatesuccess", _navigationFinished);
+        window.navigation.addEventListener("navigateerror", _navigationFinished);
     }
 
     document.addEventListener("htmx:beforeSend", function (event) {

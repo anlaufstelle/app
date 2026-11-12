@@ -106,15 +106,14 @@ function htmxEvent(type, verb, xhr) {
 }
 
 function fakeNavigation() {
-    const listeners = [];
-    return {
-        addEventListener: (type, cb) => {
-            if (type === "navigate") listeners.push(cb);
-        },
-        navigate(sameDocument) {
-            listeners.forEach((cb) => cb({ destination: { sameDocument }, downloadRequest: null }));
-        },
+    const navigation = new EventTarget();
+    navigation.navigate = (sameDocument) => {
+        const event = new Event("navigate");
+        event.destination = { sameDocument };
+        event.downloadRequest = null;
+        navigation.dispatchEvent(event);
     };
+    return navigation;
 }
 
 afterEach(() => {
@@ -189,11 +188,39 @@ describe("takeover reload while a navigation is under way", () => {
         expect(h.reload).toHaveBeenCalledTimes(1);
     });
 
-    it("reloads again once the navigation window has passed (the page stayed)", async () => {
+    it("does not reload while a native navigation is still running after sixty seconds", async () => {
         const h = await freshLoad();
         const start = Date.now();
         submit(nativeForm());
         vi.spyOn(Date, "now").mockReturnValue(start + 60000);
+
+        h.takeOver();
+        await settle();
+
+        expect(h.reload).not.toHaveBeenCalled();
+        expect(updatePrompt()).not.toBeNull();
+    });
+
+    it.each(["navigatesuccess", "navigateerror"])("reloads exactly once after navigation ends with %s", async (type) => {
+        const navigation = fakeNavigation();
+        const h = await freshLoad({ navigation });
+        submit(nativeForm());
+        navigation.navigate(false);
+        navigation.dispatchEvent(new Event(type));
+
+        h.takeOver();
+        await settle();
+        h.takeOver();
+        await settle();
+
+        expect(h.reload).toHaveBeenCalledTimes(1);
+    });
+
+    it("clears the navigation when leaving the document before a bfcache restore", async () => {
+        const h = await freshLoad();
+        submit(nativeForm());
+        window.dispatchEvent(new Event("pagehide"));
+        window.dispatchEvent(new Event("pageshow"));
 
         h.takeOver();
         await settle();
