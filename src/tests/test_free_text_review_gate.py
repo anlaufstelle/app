@@ -166,3 +166,20 @@ def test_confirmation_right_without_lead_role_does_not_open_the_review(client, s
     client.force_login(staff_user)
 
     assert client.get(reverse("core:free_text_review_list")).status_code == 403
+
+
+@pytest.mark.parametrize("role", ALLOWED)
+def test_field_with_unknown_sensitivity_is_not_listed(request, facility, sample_event, doc_type_contact, role):
+    """An unknown sensitivity ranks above every role maximum, so even lead and admin never see the field."""
+    from core.models import DocumentTypeField, FieldTemplate
+
+    field = FieldTemplate.objects.create(facility=facility, name="Odd", field_type="text")
+    DocumentTypeField.objects.create(document_type=doc_type_contact, field_template=field)
+    sample_event.data_json = {"notiz": "Visible", "odd": "Hidden"}
+    sample_event.save()
+    user = request.getfixturevalue(role)
+    assert {entry.field_key for entry in list_page(facility, user, "Event").entries} == {"notiz", "odd"}
+
+    FieldTemplate.objects.filter(pk=field.pk).update(sensitivity="bogus")
+
+    assert {entry.field_key for entry in list_page(facility, user, "Event").entries} == {"notiz"}
