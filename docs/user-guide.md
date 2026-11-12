@@ -741,7 +741,7 @@ Unterhalb der Kennzahlen zeigt das Dashboard drei interaktive Diagramme:
 
 Die Charts aktualisieren sich automatisch beim Wechsel des Zeitraums.
 
-**Datenquellen-Anzeige:** Im Liniendiagramm zeigt die Legende, ob ein Datenpunkt aus einem **Snapshot** (vorberechnete Monatsdaten) oder aus **Live-Daten** (aktuelle Datenbankabfrage) stammt. Snapshots stellen sicher, dass historische Trends auch nach Ablauf von Löschfristen erhalten bleiben.
+**Datenquellen-Anzeige:** Ohne Dokumentationstyp-Filter zeigt die Legende im Liniendiagramm, ob ein Datenpunkt aus einem **Snapshot** (vorberechnete Monatsdaten) oder aus **Live-Daten** (aktuelle Datenbankabfrage) stammt. Snapshots stellen sicher, dass historische Trends auch nach Ablauf von Löschfristen erhalten bleiben; mit Dokumentationstyp-Filter rechnet das Diagramm vollständig live.
 
 **Dokumentationstyp-Filter:** Über das Dropdown „Alle Dokumentationstypen" oberhalb der Charts können Sie die Ansicht auf einen bestimmten Dokumentationstyp einschränken.
 

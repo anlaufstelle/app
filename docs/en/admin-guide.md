@@ -2475,15 +2475,15 @@ With the app role and without the variables set, the protected tables visibly re
 
 ## 8. Statistics Snapshots
 
-Statistics use live queries against events and monthly snapshots. Complete past months use an available snapshot; partial months, the current month and missing snapshots use live data. The full-period person terms remain live. There is no separate materialized statistics cache or hourly refresh job.
+Statistics use live queries against events and monthly snapshots. Without a document type filter, complete past months use an available snapshot; partial months, the current month and missing snapshots use live data. The full-period person terms remain live. With a document type filter, the Overview uses live data throughout. There is no separate materialized statistics cache or hourly refresh job.
 
 ### What Are Statistics Snapshots?
 
 Anlaufstelle computes statistics (dashboard, half-year reports, example activity report PDFs) from the event table and monthly snapshots. When automatic data deletion (`enforce_retention`) removes old events, those events would disappear from the statistics.
 
-**Statistics snapshots** persist monthly aggregates that keep counting events deleted by the retention run. Reports use hybrid logic: stored snapshots for past months, live event data for the current month.
+**Statistics snapshots** persist monthly aggregates that keep counting events deleted by the retention run. Without a document type filter, the Overview uses hybrid logic: stored snapshots for past months, live event data for the current month.
 
-> **Important: snapshot protection does not cover every report.** The Overview reads event counts from monthly aggregates with live fallback; person metrics remain live. The Overview has no PDF export. On **Dataset reports**, only the **example activity report PDF** reads monthly aggregates with live fallback for missing snapshots and partial months; distinct persons are counted live across the entire period there too. Its preview and CSV/JSON/XML, and all formats of other reports, are live. After `enforce_retention` cleans up records, live figures can therefore be lower, down to zero. The effect depends on the population. **Retain released files yourself:** they cannot necessarily be reproduced identically later. Check the source for each format and the rules under [“Releasing Reports”](#releasing-reports-what-you-need-to-know).
+> **Important: snapshot protection does not cover every report.** Without a document type filter, the Overview reads event counts from monthly aggregates with live fallback; person metrics remain live. The Overview has no PDF export. On **Dataset reports**, only the **example activity report PDF** reads monthly aggregates with live fallback for missing snapshots and partial months; distinct persons are counted live across the entire period there too. Its preview and CSV/JSON/XML, and all formats of other reports, are live. After `enforce_retention` cleans up records, live figures can therefore be lower, down to zero. The effect depends on the population. **Retain released files yourself:** they cannot necessarily be reproduced identically later. Check the source for each format and the rules under [“Releasing Reports”](#releasing-reports-what-you-need-to-know).
 
 ### Automatic Capture
 
@@ -2591,5 +2591,5 @@ Person anonymization clears these dynamic fields as well as related titles and g
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: 4cfab459ded227cf49fab4a953e87a50d9e09346 -->
+<!-- source-hash: 78b71a9c26ce595e0cfb9703cb4219c415bde599 -->
 <!-- translation-date: 2026-11-12 -->

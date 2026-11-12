@@ -743,7 +743,7 @@ Below the key figures, the dashboard shows three interactive charts:
 
 The charts update automatically when the time period is changed.
 
-**Data Source Indicator:** The line chart legend shows whether a data point comes from a **Snapshot** (pre-computed monthly data) or from **Live Data** (current database query). Snapshots ensure that historical trends are preserved even after retention periods expire.
+**Data Source Indicator:** Without a documentation type filter, the line chart legend shows whether a data point comes from a **Snapshot** (pre-computed monthly data) or from **Live Data** (current database query). Snapshots ensure that historical trends are preserved even after retention periods expire; with a documentation type filter, the chart uses live data throughout.
 
 **Documentation Type Filter:** Use the "All document types" dropdown above the charts to filter the view to a specific documentation type.
 
@@ -1207,5 +1207,5 @@ Phone, email, date and address patterns are detected heuristically and locally o
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: f389d27f695c07dba7448cf967a59db127650292 -->
+<!-- source-hash: 30d72f1f44724c7d34cb3b3ab077bac7c61934e8 -->
 <!-- translation-date: 2026-11-12 -->
