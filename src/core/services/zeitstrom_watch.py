@@ -211,6 +211,12 @@ def _dynamic_projection(row, field_configs):
         value = data.get(slug)
         if value is None or value == "" or (isinstance(value, list) and not value):
             continue
+        # An encrypted ``False`` is an envelope and passes this check, unlike in
+        # the rendered preview. That is harmless here: the validator only has to
+        # change whenever the rendered card can change. Any change of the stored
+        # value writes a fresh, randomised ciphertext, so no visible change is
+        # missed; the worst case is one refresh that renders the same card.
+        # Decrypting here would add a decrypt per row to every watch poll.
         if field_type == "boolean" and not value:
             continue
         # Raw encrypted values are safe inside the server-side HMAC source.

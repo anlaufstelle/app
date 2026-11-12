@@ -21,6 +21,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Changelog-Einträge folgen einer festen Form** (#2704) — Für Mitwirkende: Ein Eintrag hat höchstens zwei Sätze (Redaktionsregel) und 350 Zeichen (Betreiber-Aktionen 600), je Ticket und Abschnitt einen Eintrag, die Abschnitte stehen in fester Folge. `make changelog-check` prüft Länge, Ticket-Dopplung, Folge und Leerzeilen; Nachrunden ändern den Eintrag, sie hängen nichts an.
 - **CI: apt-Schritte erreichen bei einem Spiegelausfall den Ausweichspiegel** (#2707) — Lint-, Test- und E2E-Workflow installieren Systempakete über ein gemeinsames Hilfsskript: Sind sie vorhanden, entfällt apt; sonst wechselt apt von einem toten ersten Spiegel sofort zum nächsten, und ein Teilausfall lässt den Lauf fehlschlagen statt mit veralteten Listen weiterzulaufen.
 
+### Fixed
+
+- **Verschlüsseltes Ja/Nein-Feld in der Vorschau korrekt** (#2712) — Zeitstrom, Kontaktliste und Übergabe zeigten ein verschlüsseltes Ja/Nein-Feld wie „Krankenhaus“ aus dem Standardpaket immer als „Ja“, auch wenn kein Häkchen gesetzt war. Die Vorschau entschlüsselt den Wert jetzt vor der Prüfung; ein nicht lesbarer Wert erscheint als „[verschlüsselt]“.
+
 ## [0.99.10] - 2026-11-11
 
 Weiterer Release-Kandidat vor 1.0: bündelt neue Basis-Image-Digests für PostgreSQL, Redis, ClamAV und Caddy (Betreiber-Aktion), einen Schwachstellen-Scan für App- und Fremdimages als Release-Gate mit befristeten Ausnahmen, die Advisory- und SBOM-Prüfung manuell vendorter JavaScript-Bibliotheken, ein offen bleibendes Offline-Bearbeitungsformular, Barrierefreiheits-Korrekturen, einen gehärteten Sprachcookie sowie Sicherheitsupdates für Entwicklungsabhängigkeiten.

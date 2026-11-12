@@ -13,7 +13,7 @@ from core.models import Activity, Case, Client, Event, WorkItem
 from core.services.compliance import user_can_see_field
 from core.services.config import iter_fields_in_block_order
 from core.services.dynamic_data import option_label_map
-from core.services.file_vault import is_encrypted_value, safe_decrypt
+from core.services.file_vault import safe_decrypt
 from core.services.workitem_visibility import readable_person_filter, workitems_for_read
 
 
@@ -285,14 +285,15 @@ def build_feed_items(facility, target_date, feed_type, time_filter=None, user=No
     )[:FEED_MAX_PER_TYPE]
 
 
+#: Returned by ``safe_decrypt`` for a corrupt token; never a stored value.
+_UNDECRYPTABLE = object()
+_ENCRYPTED_PLACEHOLDER = "[verschlüsselt]"
+
+
 def _format_preview_value(value, ft):
     """Format a data_json value for preview display."""
     if ft.field_type == "boolean":
         return "Ja" if value else "Nein"
-
-    # Encrypted selections are stored as an envelope; unwrap before mapping labels.
-    if ft.field_type in ("select", "multi_select") and ft.options_json and is_encrypted_value(value):
-        value = safe_decrypt(value)
 
     if ft.field_type == "select" and ft.options_json and isinstance(value, str):
         return option_label_map(ft.options_json).get(value, value)
@@ -311,7 +312,7 @@ def _format_preview_value(value, ft):
         if value.get("__files__"):
             count = len(value.get("entries") or [])
             return ngettext("[%(n)d Datei]", "[%(n)d Dateien]", count) % {"n": count}
-        return safe_decrypt(value, default="[verschlüsselt]")
+        return safe_decrypt(value, default=_ENCRYPTED_PLACEHOLDER)
 
     return str(value)
 
@@ -334,14 +335,20 @@ def _build_event_preview_fields(event, field_templates, user):
     for ft in field_templates:
         if not user_can_see_field(user, doc_sensitivity, ft.sensitivity):
             continue
-        value = data.get(ft.slug)
-        if value is None or value == "":
-            continue
-        if isinstance(value, list) and len(value) == 0:
-            continue
-        if ft.field_type == "boolean" and not value:
-            continue
-        formatted = _format_preview_value(value, ft)
+        # Encrypted values are stored as an envelope dict, which is never
+        # empty or falsy. Decrypt first so the empty and boolean checks see the
+        # stored value: an encrypted ``False`` must not preview as "Ja".
+        value = safe_decrypt(data.get(ft.slug), default=_UNDECRYPTABLE)
+        if value is _UNDECRYPTABLE:
+            formatted = _ENCRYPTED_PLACEHOLDER
+        else:
+            if value is None or value == "":
+                continue
+            if isinstance(value, list) and len(value) == 0:
+                continue
+            if ft.field_type == "boolean" and not value:
+                continue
+            formatted = _format_preview_value(value, ft)
         entry = {"label": ft.name, "value": formatted, "is_textarea": ft.field_type == "textarea"}
         expanded_fields.append(entry)
         # Preview bleibt kompakt (max 3 Felder, keine textareas);
