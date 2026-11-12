@@ -40,7 +40,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Verschlüsseltes Ja/Nein-Feld in der Vorschau korrekt** (#2712) — Zeitstrom, Kontaktliste und Übergabe zeigten ein verschlüsseltes Ja/Nein-Feld wie „Krankenhaus“ aus dem Standardpaket immer als „Ja“, auch wenn kein Häkchen gesetzt war. Die Vorschau entschlüsselt den Wert jetzt vor der Prüfung; ein nicht lesbarer Wert erscheint als „[verschlüsselt]“.
 - **Feld-Board behält den Fokus nach einer Aktion** (#2709) — Nach „Feld zuordnen“ oder „Neue Gruppe“ sprang Fokus (und bei kleinem Fenster die Ansicht) zum Abschnitt „Bedingte Sichtbarkeit“. Jetzt bleibt beides am Feld-Board.
 - **Im Hintergrund abgelehnte Offline-Bearbeitung wird nicht mehr bei jedem Seitenaufruf neu gesendet** (#2720) — Lehnt der Server eine Offline-Bearbeitung ab, erscheint sie unter „Nicht übertragbar“, lässt sich in der Personenansicht korrigieren und zählt nicht mehr gegen das Schreiblimit.
-- **Sammelfixes aus dem Code-Audit** (#2717) — Der Dokumentationstyp-Filter im Zeitstrom findet auch an vollen Tagen alle Treffer, Fotos mit eingebettetem Zweitbild werden angenommen. Fälle von Personen im Papierkorb bleiben dort, Pseudonym-Doppelung und ungültige Fall-Suche enden nicht mehr als Serverfehler, und Aufheben einer Zusammenführung löscht keine eigenen Zusatzfelder mehr.
+- **Sammelfixes aus dem Code-Audit** (#2717) — Der Dokumentationstyp-Filter im Zeitstrom findet an vollen Tagen alle Treffer, Fotos mit Zweitbild werden angenommen. Fälle von Personen im Papierkorb bleiben dort. Doppelte Pseudonyme und ungültige Fall-Suche ergeben keinen Serverfehler. Aufheben einer Zusammenführung wird abgelehnt, wenn es eigene Zusatzfelder der behaltenen Person löschen würde.
 
 ## [0.99.10] - 2026-11-11
 
