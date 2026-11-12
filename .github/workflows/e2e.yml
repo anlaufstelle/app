@@ -76,8 +76,15 @@ jobs:
       # (DeprecationWarning), unter ``filterwarnings = error`` stirbt damit
       # django.setup() beim pytest-Start (Stage-CI #137, v0.96.0). Zeile analog
       # test.yml; ``playwright install --with-deps`` bringt das Paket nicht mit.
-      - run: sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update && sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y libharfbuzz-subset0
-        timeout-minutes: 5
+      # apt budget (scripts/ci/apt_install.sh): skips apt when the packages are present; otherwise a dead
+      # first mirror costs at most 2 attempts x (4 InRelease + 3 .deb) x 20 s = 280 s of the 480 s limit,
+      # so the fallback mirror is still reached (#2707).
+      - run: scripts/ci/apt_install.sh libharfbuzz-subset0
+        timeout-minutes: 8
+      # ``playwright install --with-deps`` / ``install-deps`` run their own apt-get, which we cannot give -o
+      # options; the drop-in gives them the same retry/timeout budget (their steps keep the 10-minute limit).
+      - run: scripts/ci/apt_install.sh --configure-only
+        timeout-minutes: 2
       - run: npm ci
       - run: npx @tailwindcss/cli -i src/static/css/input.css -o src/static/css/styles.css --minify
       - run: cd src && python manage.py collectstatic --noinput

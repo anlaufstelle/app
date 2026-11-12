@@ -74,8 +74,11 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
           python-version: "3.14"
-      - run: sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update && sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y gettext
-        timeout-minutes: 5
+      # apt budget (scripts/ci/apt_install.sh): skips apt when the packages are present; otherwise a dead
+      # first mirror costs at most 2 attempts x (4 InRelease + 3 .deb) x 20 s = 280 s of the 480 s limit,
+      # so the fallback mirror is still reached (#2707).
+      - run: scripts/ci/apt_install.sh gettext
+        timeout-minutes: 8
       - run: python scripts/check_translations.py
 
   typecheck:
