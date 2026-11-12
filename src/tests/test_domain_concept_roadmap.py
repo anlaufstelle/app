@@ -23,6 +23,12 @@ KDS_MENTION_RE = re.compile(r"\bKDS\b", re.IGNORECASE)
 KDS_SCOPE_RE = re.compile(r"3\.0|XML|JSON|Aggregat|BASiS[-\s]+Schema", re.IGNORECASE)
 ACCOUNT_IMPORT_RE = re.compile(r"CSV[-\s]Import", re.IGNORECASE)
 ACCOUNT_RE = re.compile(r"Benutzer|Konten|Konto|Zugänge", re.IGNORECASE)
+# Match a small set of explicit future claims, not general planning language.
+# The status disclaimer must not cancel a promise to add an unlisted target.
+AUTH_FUTURE_RE = re.compile(
+    r"\bwird\b[^.!?\n]*\b(?:ergänzt|umgesetzt|kommen)\b|\b(?:geplant|vorgesehen|später\w*|künftig\w*)\b",
+    re.IGNORECASE,
+)
 
 
 def _section(text: str, heading: str) -> str:
@@ -122,7 +128,7 @@ def test_regulatory_section_names_current_bodies(concept):
 
 
 def _authentication_violations(concept: str) -> list[str]:
-    """Require a listed target or an explicit disclaimer in each claim sentence."""
+    """Check implementation status and future promises independently per sentence."""
     auth = _subsection(_section(concept, "25. Administration und Betrieb"), "Authentifizierung")
     roadmap = "\n".join(_roadmap_table(concept))
     sentences = re.split(r"(?<=[.!?])\s+|\n(?=\s*[-*+] )", auth)
@@ -137,14 +143,15 @@ def _authentication_violations(concept: str) -> list[str]:
             unlisted |= not any(
                 ACCOUNT_IMPORT_RE.search(row) and ACCOUNT_RE.search(row) for row in _roadmap_table(concept)
             )
-        if unlisted and "nicht implementiert" not in " ".join(sentence.casefold().split()):
+        status_disclaimed = "nicht implementiert" in " ".join(sentence.casefold().split())
+        if unlisted and (not status_disclaimed or AUTH_FUTURE_RE.search(sentence)):
             violations.append(sentence)
     return violations
 
 
 def test_authentication_points_to_listed_roadmap_steps_only(concept):
     violations = _authentication_violations(concept)
-    assert not violations, "Unlisted authentication target without disclaimer:\n" + "\n".join(violations)
+    assert not violations, "Unlisted authentication target or future promise:\n" + "\n".join(violations)
 
 
 @pytest.mark.parametrize("target", ["SAML", "OIDC", "CSV-Import von Benutzerlisten"])
@@ -160,6 +167,30 @@ def test_authentication_guard_accepts_disclaimed_or_listed_targets(concept, targ
     text = concept.replace("### Authentifizierung\n", f"### Authentifizierung\n\n{sentence}\n")
     if listed:
         text = text.replace("| Thema | Beschreibung |", f"| {target} | Zielbild |\n| Thema | Beschreibung |")
+    assert not _authentication_violations(text)
+
+
+@pytest.mark.parametrize("target", ["SAML", "OIDC", "CSV-Import von Benutzerlisten"])
+@pytest.mark.parametrize(
+    "future",
+    [
+        "wird aber in späteren Roadmap-Schritten ergänzt",
+        "wird ergänzt",
+        "wird umgesetzt",
+        "wird kommen",
+        "ist geplant",
+        "ist später verfügbar",
+        "ist künftig verfügbar",
+    ],
+)
+def test_authentication_guard_rejects_future_promises_despite_current_status(concept, target, future):
+    sentence = f"{target} ist nicht implementiert, {future}."
+    text = concept.replace("### Authentifizierung\n", f"### Authentifizierung\n\n{sentence}\n")
+    assert sentence in [claim.strip() for claim in _authentication_violations(text)]
+
+
+def test_authentication_guard_accepts_status_only_for_combined_protocols(concept):
+    text = concept.replace("### Authentifizierung\n", "### Authentifizierung\n\nSAML/OIDC: Nicht implementiert.\n")
     assert not _authentication_violations(text)
 
 
