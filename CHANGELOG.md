@@ -8,7 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Erforderliche Betreiber-Aktionen
 
-- Keine.
+- **Neue Digests für PostgreSQL und Caddy übernehmen** (#2705) — Die Pins von `postgres:18-alpine` und `caddy:2-alpine` zeigen in allen Compose-Dateien auf die aktuellen Index-Digests. Vorher ein Backup anlegen, dann `docker compose -f docker-compose.prod.yml pull db caddy` und `docker compose -f docker-compose.prod.yml up -d` ausführen (Zusatzdateien wie im [Ops-Runbook § 1.2](https://github.com/anlaufstelle/app/blob/main/docs/ops-runbook.md) mit `-f` anhängen). Dev-, Demo- und Staging-Stack analog mit ihrer Datei und `--env-file` (Dienste `db caddy`), die lokale Entwicklungs-Compose mit `docker compose pull db`.
+
+### Changed
+
+- **Basis-Images von PostgreSQL und Caddy aktualisiert, Ausnahmen neu befristet** (#2705) — Neue Index-Digests der Tags `18-alpine` und `2-alpine`; damit entfallen die Befunde in `brotli-libs`, `libcurl` und `go-jose` v4. Die übrigen 46 Ausnahmen (44 PostgreSQL, 2 Caddy) laufen bis 2027-01-15, ihre Begründungen nennen den Stand vom 2026-11-12 und die Erreichbarkeit je Stack.
 
 ### Changed
 

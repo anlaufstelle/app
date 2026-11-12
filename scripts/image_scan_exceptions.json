@@ -5,372 +5,350 @@
       "image": "caddy",
       "package": "github.com/go-jose/go-jose/v3",
       "target": "/usr/bin/caddy",
-      "reason": "github.com/go-jose/go-jose/v3 v3.0.5 in /usr/bin/caddy; Trivy lists no fixed version for this module, the upstream caddy:2-alpine image has not been rebuilt yet.",
-      "expires": "2026-12-05"
-    },
-    {
-      "vulnerability": "CVE-2026-116587",
-      "image": "caddy",
-      "package": "github.com/go-jose/go-jose/v4",
-      "target": "/usr/bin/caddy",
-      "reason": "github.com/go-jose/go-jose/v4 v4.1.5 in /usr/bin/caddy; the fixed version 4.1.6 is published, the upstream caddy:2-alpine image has not been rebuilt with it yet.",
-      "expires": "2026-12-05"
+      "reason": "github.com/go-jose/go-jose/v3 v3.0.5 in /usr/bin/caddy (caddy 2.11.9, index built 2026-11-05); Trivy lists no fixed version for the v3 module (as of 2026-11-12), so neither a rebuild nor a newer digest removes it yet.",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-78661",
       "image": "caddy",
       "package": "golang.org/x/net",
       "target": "/usr/bin/caddy",
-      "reason": "golang.org/x/net v0.60.0 in /usr/bin/caddy; the fixed version 0.62.0 is published, the upstream caddy:2-alpine image has not been rebuilt with it yet.",
-      "expires": "2026-12-05"
-    },
-    {
-      "vulnerability": "CVE-2026-111497",
-      "image": "postgres",
-      "package": "brotli-libs",
-      "reason": "Alpine package brotli-libs 1.2.0-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.2.1-r0, the upstream image has not been rebuilt yet.",
-      "expires": "2026-12-05"
+      "reason": "golang.org/x/net v0.60.0 in /usr/bin/caddy (caddy 2.11.9, index built 2026-11-05); the fixed version 0.62.0 is published, no caddy:2-alpine image built with it is available as of 2026-11-12.",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-107364",
       "image": "postgres",
       "package": "krb5-libs",
-      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
-      "expires": "2026-12-05"
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image (index built 2026-11-05); Alpine ships the fixed version 1.22.3-r0, the upstream tag has not been rebuilt with it as of 2026-11-12. No stack publishes the database beyond the host: the production, staging, demo and dev stacks publish no database port (internal Compose network only), the local development compose binds 127.0.0.1. No Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network or, locally, from the host loopback, and the remaining impact is availability.",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-112315",
       "image": "postgres",
       "package": "krb5-libs",
-      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
-      "expires": "2026-12-05"
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image (index built 2026-11-05); Alpine ships the fixed version 1.22.3-r0, the upstream tag has not been rebuilt with it as of 2026-11-12. No stack publishes the database beyond the host: the production, staging, demo and dev stacks publish no database port (internal Compose network only), the local development compose binds 127.0.0.1. No Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network or, locally, from the host loopback, and the remaining impact is availability.",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-112316",
       "image": "postgres",
       "package": "krb5-libs",
-      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
-      "expires": "2026-12-05"
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image (index built 2026-11-05); Alpine ships the fixed version 1.22.3-r0, the upstream tag has not been rebuilt with it as of 2026-11-12. No stack publishes the database beyond the host: the production, staging, demo and dev stacks publish no database port (internal Compose network only), the local development compose binds 127.0.0.1. No Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network or, locally, from the host loopback, and the remaining impact is availability.",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-112317",
       "image": "postgres",
       "package": "krb5-libs",
-      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
-      "expires": "2026-12-05"
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image (index built 2026-11-05); Alpine ships the fixed version 1.22.3-r0, the upstream tag has not been rebuilt with it as of 2026-11-12. No stack publishes the database beyond the host: the production, staging, demo and dev stacks publish no database port (internal Compose network only), the local development compose binds 127.0.0.1. No Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network or, locally, from the host loopback, and the remaining impact is availability.",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-112318",
       "image": "postgres",
       "package": "krb5-libs",
-      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
-      "expires": "2026-12-05"
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image (index built 2026-11-05); Alpine ships the fixed version 1.22.3-r0, the upstream tag has not been rebuilt with it as of 2026-11-12. No stack publishes the database beyond the host: the production, staging, demo and dev stacks publish no database port (internal Compose network only), the local development compose binds 127.0.0.1. No Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network or, locally, from the host loopback, and the remaining impact is availability.",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-112319",
       "image": "postgres",
       "package": "krb5-libs",
-      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
-      "expires": "2026-12-05"
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image (index built 2026-11-05); Alpine ships the fixed version 1.22.3-r0, the upstream tag has not been rebuilt with it as of 2026-11-12. No stack publishes the database beyond the host: the production, staging, demo and dev stacks publish no database port (internal Compose network only), the local development compose binds 127.0.0.1. No Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network or, locally, from the host loopback, and the remaining impact is availability.",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-112320",
       "image": "postgres",
       "package": "krb5-libs",
-      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
-      "expires": "2026-12-05"
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image (index built 2026-11-05); Alpine ships the fixed version 1.22.3-r0, the upstream tag has not been rebuilt with it as of 2026-11-12. No stack publishes the database beyond the host: the production, staging, demo and dev stacks publish no database port (internal Compose network only), the local development compose binds 127.0.0.1. No Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network or, locally, from the host loopback, and the remaining impact is availability.",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-112321",
       "image": "postgres",
       "package": "krb5-libs",
-      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
-      "expires": "2026-12-05"
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image (index built 2026-11-05); Alpine ships the fixed version 1.22.3-r0, the upstream tag has not been rebuilt with it as of 2026-11-12. No stack publishes the database beyond the host: the production, staging, demo and dev stacks publish no database port (internal Compose network only), the local development compose binds 127.0.0.1. No Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network or, locally, from the host loopback, and the remaining impact is availability.",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-112322",
       "image": "postgres",
       "package": "krb5-libs",
-      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
-      "expires": "2026-12-05"
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image (index built 2026-11-05); Alpine ships the fixed version 1.22.3-r0, the upstream tag has not been rebuilt with it as of 2026-11-12. No stack publishes the database beyond the host: the production, staging, demo and dev stacks publish no database port (internal Compose network only), the local development compose binds 127.0.0.1. No Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network or, locally, from the host loopback, and the remaining impact is availability.",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-112323",
       "image": "postgres",
       "package": "krb5-libs",
-      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
-      "expires": "2026-12-05"
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image (index built 2026-11-05); Alpine ships the fixed version 1.22.3-r0, the upstream tag has not been rebuilt with it as of 2026-11-12. No stack publishes the database beyond the host: the production, staging, demo and dev stacks publish no database port (internal Compose network only), the local development compose binds 127.0.0.1. No Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network or, locally, from the host loopback, and the remaining impact is availability.",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-118380",
       "image": "postgres",
       "package": "krb5-libs",
-      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
-      "expires": "2026-12-05"
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image (index built 2026-11-05); Alpine ships the fixed version 1.22.3-r0, the upstream tag has not been rebuilt with it as of 2026-11-12. No stack publishes the database beyond the host: the production, staging, demo and dev stacks publish no database port (internal Compose network only), the local development compose binds 127.0.0.1. No Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network or, locally, from the host loopback, and the remaining impact is availability.",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-119079",
       "image": "postgres",
       "package": "krb5-libs",
-      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
-      "expires": "2026-12-05"
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image (index built 2026-11-05); Alpine ships the fixed version 1.22.3-r0, the upstream tag has not been rebuilt with it as of 2026-11-12. No stack publishes the database beyond the host: the production, staging, demo and dev stacks publish no database port (internal Compose network only), the local development compose binds 127.0.0.1. No Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network or, locally, from the host loopback, and the remaining impact is availability.",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-40355",
       "image": "postgres",
       "package": "krb5-libs",
-      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
-      "expires": "2026-12-05"
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image (index built 2026-11-05); Alpine ships the fixed version 1.22.3-r0, the upstream tag has not been rebuilt with it as of 2026-11-12. No stack publishes the database beyond the host: the production, staging, demo and dev stacks publish no database port (internal Compose network only), the local development compose binds 127.0.0.1. No Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network or, locally, from the host loopback, and the remaining impact is availability.",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-40356",
       "image": "postgres",
       "package": "krb5-libs",
-      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
-      "expires": "2026-12-05"
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image (index built 2026-11-05); Alpine ships the fixed version 1.22.3-r0, the upstream tag has not been rebuilt with it as of 2026-11-12. No stack publishes the database beyond the host: the production, staging, demo and dev stacks publish no database port (internal Compose network only), the local development compose binds 127.0.0.1. No Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network or, locally, from the host loopback, and the remaining impact is availability.",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-71199",
       "image": "postgres",
       "package": "krb5-libs",
-      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
-      "expires": "2026-12-05"
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image (index built 2026-11-05); Alpine ships the fixed version 1.22.3-r0, the upstream tag has not been rebuilt with it as of 2026-11-12. No stack publishes the database beyond the host: the production, staging, demo and dev stacks publish no database port (internal Compose network only), the local development compose binds 127.0.0.1. No Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network or, locally, from the host loopback, and the remaining impact is availability.",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-71200",
       "image": "postgres",
       "package": "krb5-libs",
-      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image; Alpine ships the fixed version 1.22.3-r0, the upstream image has not been rebuilt yet. The database is not published beyond the host (only the internal Compose network, or 127.0.0.1 in the local setup) and no Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network, and the remaining impact is availability.",
-      "expires": "2026-12-05"
-    },
-    {
-      "vulnerability": "CVE-2026-92392",
-      "image": "postgres",
-      "package": "libcurl",
-      "reason": "Alpine package libcurl 8.22.0-r0 in the upstream postgres:18-alpine image; Alpine ships the fixed version 8.23.0-r0, the upstream image has not been rebuilt yet.",
-      "expires": "2026-12-05"
+      "reason": "Alpine package krb5-libs 1.22.2-r1 in the upstream postgres:18-alpine image (index built 2026-11-05); Alpine ships the fixed version 1.22.3-r0, the upstream tag has not been rebuilt with it as of 2026-11-12. No stack publishes the database beyond the host: the production, staging, demo and dev stacks publish no database port (internal Compose network only), the local development compose binds 127.0.0.1. No Kerberos/GSSAPI authentication is configured; the pre-authentication GSS encryption request is reachable only from containers on that network or, locally, from the host loopback, and the remaining impact is availability.",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-87636",
       "image": "postgres",
       "package": "libxslt",
-      "reason": "Alpine package libxslt 1.1.43-r3 in the upstream postgres:18-alpine image, loaded only by the contrib extension xml2, which the application never installs; Alpine ships the fixed version 1.1.43-r4, the upstream image has not been rebuilt yet.",
-      "expires": "2026-12-05"
+      "reason": "Alpine package libxslt 1.1.43-r3 in the upstream postgres:18-alpine image (index built 2026-11-05), loaded only by the contrib extension xml2, which the application never installs. In the stacks with deploy/postgres-init (production, staging, demo, dev) the app and admin roles are NOSUPERUSER and cannot create it; in the local development compose the app role is the bootstrap superuser. Alpine ships the fixed version 1.1.43-r4, the upstream tag has not been rebuilt with it as of 2026-11-12.",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-9947",
       "image": "postgres",
       "package": "libxslt",
-      "reason": "Alpine package libxslt 1.1.43-r3 in the upstream postgres:18-alpine image, loaded only by the contrib extension xml2, which the application never installs; Alpine ships the fixed version 1.1.43-r4, the upstream image has not been rebuilt yet.",
-      "expires": "2026-12-05"
+      "reason": "Alpine package libxslt 1.1.43-r3 in the upstream postgres:18-alpine image (index built 2026-11-05), loaded only by the contrib extension xml2, which the application never installs. In the stacks with deploy/postgres-init (production, staging, demo, dev) the app and admin roles are NOSUPERUSER and cannot create it; in the local development compose the app role is the bootstrap superuser. Alpine ships the fixed version 1.1.43-r4, the upstream tag has not been rebuilt with it as of 2026-11-12.",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2025-61726",
       "image": "postgres",
       "package": "stdlib",
       "target": "/usr/local/bin/gosu",
-      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu, a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.24.12, 1.25.6), the upstream postgres:18-alpine image has not been rebuilt yet.",
-      "expires": "2026-12-05"
+      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu (gosu 1.19.0), a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.24.12, 1.25.6). The gosu release binary is built with this Go version, so a rebuild of the upstream postgres:18-alpine image does not bring the fix; it needs a gosu release built with a newer Go (as of 2026-11-12).",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2025-61729",
       "image": "postgres",
       "package": "stdlib",
       "target": "/usr/local/bin/gosu",
-      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu, a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.24.11, 1.25.5), the upstream postgres:18-alpine image has not been rebuilt yet.",
-      "expires": "2026-12-05"
+      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu (gosu 1.19.0), a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.24.11, 1.25.5). The gosu release binary is built with this Go version, so a rebuild of the upstream postgres:18-alpine image does not bring the fix; it needs a gosu release built with a newer Go (as of 2026-11-12).",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2025-68121",
       "image": "postgres",
       "package": "stdlib",
       "target": "/usr/local/bin/gosu",
-      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu, a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.24.13, 1.25.7, 1.26.0-rc.3), the upstream postgres:18-alpine image has not been rebuilt yet.",
-      "expires": "2026-12-05"
+      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu (gosu 1.19.0), a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.24.13, 1.25.7, 1.26.0-rc.3). The gosu release binary is built with this Go version, so a rebuild of the upstream postgres:18-alpine image does not bring the fix; it needs a gosu release built with a newer Go (as of 2026-11-12).",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-111943",
       "image": "postgres",
       "package": "stdlib",
       "target": "/usr/local/bin/gosu",
-      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu, a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.26.10, 1.27.3), the upstream postgres:18-alpine image has not been rebuilt yet.",
-      "expires": "2026-12-05"
+      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu (gosu 1.19.0), a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.26.10, 1.27.3). The gosu release binary is built with this Go version, so a rebuild of the upstream postgres:18-alpine image does not bring the fix; it needs a gosu release built with a newer Go (as of 2026-11-12).",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-25679",
       "image": "postgres",
       "package": "stdlib",
       "target": "/usr/local/bin/gosu",
-      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu, a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.8, 1.26.1), the upstream postgres:18-alpine image has not been rebuilt yet.",
-      "expires": "2026-12-05"
+      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu (gosu 1.19.0), a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.8, 1.26.1). The gosu release binary is built with this Go version, so a rebuild of the upstream postgres:18-alpine image does not bring the fix; it needs a gosu release built with a newer Go (as of 2026-11-12).",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-27145",
       "image": "postgres",
       "package": "stdlib",
       "target": "/usr/local/bin/gosu",
-      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu, a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.11, 1.26.4), the upstream postgres:18-alpine image has not been rebuilt yet.",
-      "expires": "2026-12-05"
+      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu (gosu 1.19.0), a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.11, 1.26.4). The gosu release binary is built with this Go version, so a rebuild of the upstream postgres:18-alpine image does not bring the fix; it needs a gosu release built with a newer Go (as of 2026-11-12).",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-32280",
       "image": "postgres",
       "package": "stdlib",
       "target": "/usr/local/bin/gosu",
-      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu, a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.9, 1.26.2), the upstream postgres:18-alpine image has not been rebuilt yet.",
-      "expires": "2026-12-05"
+      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu (gosu 1.19.0), a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.9, 1.26.2). The gosu release binary is built with this Go version, so a rebuild of the upstream postgres:18-alpine image does not bring the fix; it needs a gosu release built with a newer Go (as of 2026-11-12).",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-32281",
       "image": "postgres",
       "package": "stdlib",
       "target": "/usr/local/bin/gosu",
-      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu, a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.9, 1.26.2), the upstream postgres:18-alpine image has not been rebuilt yet.",
-      "expires": "2026-12-05"
+      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu (gosu 1.19.0), a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.9, 1.26.2). The gosu release binary is built with this Go version, so a rebuild of the upstream postgres:18-alpine image does not bring the fix; it needs a gosu release built with a newer Go (as of 2026-11-12).",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-32283",
       "image": "postgres",
       "package": "stdlib",
       "target": "/usr/local/bin/gosu",
-      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu, a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.9, 1.26.2), the upstream postgres:18-alpine image has not been rebuilt yet.",
-      "expires": "2026-12-05"
+      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu (gosu 1.19.0), a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.9, 1.26.2). The gosu release binary is built with this Go version, so a rebuild of the upstream postgres:18-alpine image does not bring the fix; it needs a gosu release built with a newer Go (as of 2026-11-12).",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-33811",
       "image": "postgres",
       "package": "stdlib",
       "target": "/usr/local/bin/gosu",
-      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu, a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.10, 1.26.3), the upstream postgres:18-alpine image has not been rebuilt yet.",
-      "expires": "2026-12-05"
+      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu (gosu 1.19.0), a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.10, 1.26.3). The gosu release binary is built with this Go version, so a rebuild of the upstream postgres:18-alpine image does not bring the fix; it needs a gosu release built with a newer Go (as of 2026-11-12).",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-33814",
       "image": "postgres",
       "package": "stdlib",
       "target": "/usr/local/bin/gosu",
-      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu, a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.10, 1.26.3), the upstream postgres:18-alpine image has not been rebuilt yet.",
-      "expires": "2026-12-05"
+      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu (gosu 1.19.0), a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.10, 1.26.3). The gosu release binary is built with this Go version, so a rebuild of the upstream postgres:18-alpine image does not bring the fix; it needs a gosu release built with a newer Go (as of 2026-11-12).",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-33818",
       "image": "postgres",
       "package": "stdlib",
       "target": "/usr/local/bin/gosu",
-      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu, a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.13, 1.26.6, 1.27.0-rc.3), the upstream postgres:18-alpine image has not been rebuilt yet.",
-      "expires": "2026-12-05"
+      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu (gosu 1.19.0), a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.13, 1.26.6, 1.27.0-rc.3). The gosu release binary is built with this Go version, so a rebuild of the upstream postgres:18-alpine image does not bring the fix; it needs a gosu release built with a newer Go (as of 2026-11-12).",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-39820",
       "image": "postgres",
       "package": "stdlib",
       "target": "/usr/local/bin/gosu",
-      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu, a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.10, 1.26.3), the upstream postgres:18-alpine image has not been rebuilt yet.",
-      "expires": "2026-12-05"
+      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu (gosu 1.19.0), a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.10, 1.26.3). The gosu release binary is built with this Go version, so a rebuild of the upstream postgres:18-alpine image does not bring the fix; it needs a gosu release built with a newer Go (as of 2026-11-12).",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-39821",
       "image": "postgres",
       "package": "stdlib",
       "target": "/usr/local/bin/gosu",
-      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu, a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.13, 1.26.6, 1.27.0-rc.3), the upstream postgres:18-alpine image has not been rebuilt yet.",
-      "expires": "2026-12-05"
+      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu (gosu 1.19.0), a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.13, 1.26.6, 1.27.0-rc.3). The gosu release binary is built with this Go version, so a rebuild of the upstream postgres:18-alpine image does not bring the fix; it needs a gosu release built with a newer Go (as of 2026-11-12).",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-39822",
       "image": "postgres",
       "package": "stdlib",
       "target": "/usr/local/bin/gosu",
-      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu, a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.12, 1.26.5, 1.27.0-rc.2), the upstream postgres:18-alpine image has not been rebuilt yet.",
-      "expires": "2026-12-05"
+      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu (gosu 1.19.0), a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.12, 1.26.5, 1.27.0-rc.2). The gosu release binary is built with this Go version, so a rebuild of the upstream postgres:18-alpine image does not bring the fix; it needs a gosu release built with a newer Go (as of 2026-11-12).",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-39836",
       "image": "postgres",
       "package": "stdlib",
       "target": "/usr/local/bin/gosu",
-      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu, a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.10, 1.26.3), the upstream postgres:18-alpine image has not been rebuilt yet.",
-      "expires": "2026-12-05"
+      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu (gosu 1.19.0), a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.10, 1.26.3). The gosu release binary is built with this Go version, so a rebuild of the upstream postgres:18-alpine image does not bring the fix; it needs a gosu release built with a newer Go (as of 2026-11-12).",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-42499",
       "image": "postgres",
       "package": "stdlib",
       "target": "/usr/local/bin/gosu",
-      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu, a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.10, 1.26.3), the upstream postgres:18-alpine image has not been rebuilt yet.",
-      "expires": "2026-12-05"
+      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu (gosu 1.19.0), a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.10, 1.26.3). The gosu release binary is built with this Go version, so a rebuild of the upstream postgres:18-alpine image does not bring the fix; it needs a gosu release built with a newer Go (as of 2026-11-12).",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-42504",
       "image": "postgres",
       "package": "stdlib",
       "target": "/usr/local/bin/gosu",
-      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu, a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.11, 1.26.4), the upstream postgres:18-alpine image has not been rebuilt yet.",
-      "expires": "2026-12-05"
+      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu (gosu 1.19.0), a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.11, 1.26.4). The gosu release binary is built with this Go version, so a rebuild of the upstream postgres:18-alpine image does not bring the fix; it needs a gosu release built with a newer Go (as of 2026-11-12).",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-56853",
       "image": "postgres",
       "package": "stdlib",
       "target": "/usr/local/bin/gosu",
-      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu, a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.13, 1.26.6, 1.27.0-rc.3), the upstream postgres:18-alpine image has not been rebuilt yet.",
-      "expires": "2026-12-05"
+      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu (gosu 1.19.0), a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.13, 1.26.6, 1.27.0-rc.3). The gosu release binary is built with this Go version, so a rebuild of the upstream postgres:18-alpine image does not bring the fix; it needs a gosu release built with a newer Go (as of 2026-11-12).",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-56858",
       "image": "postgres",
       "package": "stdlib",
       "target": "/usr/local/bin/gosu",
-      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu, a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.13, 1.26.6, 1.27.0-rc.3), the upstream postgres:18-alpine image has not been rebuilt yet.",
-      "expires": "2026-12-05"
+      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu (gosu 1.19.0), a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.13, 1.26.6, 1.27.0-rc.3). The gosu release binary is built with this Go version, so a rebuild of the upstream postgres:18-alpine image does not bring the fix; it needs a gosu release built with a newer Go (as of 2026-11-12).",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-56859",
       "image": "postgres",
       "package": "stdlib",
       "target": "/usr/local/bin/gosu",
-      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu, a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.13, 1.26.6, 1.27.0-rc.3), the upstream postgres:18-alpine image has not been rebuilt yet.",
-      "expires": "2026-12-05"
+      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu (gosu 1.19.0), a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.13, 1.26.6, 1.27.0-rc.3). The gosu release binary is built with this Go version, so a rebuild of the upstream postgres:18-alpine image does not bring the fix; it needs a gosu release built with a newer Go (as of 2026-11-12).",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-56860",
       "image": "postgres",
       "package": "stdlib",
       "target": "/usr/local/bin/gosu",
-      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu, a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.13, 1.26.6, 1.27.0-rc.3), the upstream postgres:18-alpine image has not been rebuilt yet.",
-      "expires": "2026-12-05"
+      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu (gosu 1.19.0), a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.13, 1.26.6, 1.27.0-rc.3). The gosu release binary is built with this Go version, so a rebuild of the upstream postgres:18-alpine image does not bring the fix; it needs a gosu release built with a newer Go (as of 2026-11-12).",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-56862",
       "image": "postgres",
       "package": "stdlib",
       "target": "/usr/local/bin/gosu",
-      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu, a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.13, 1.26.6, 1.27.0-rc.3), the upstream postgres:18-alpine image has not been rebuilt yet.",
-      "expires": "2026-12-05"
+      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu (gosu 1.19.0), a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.25.13, 1.26.6, 1.27.0-rc.3). The gosu release binary is built with this Go version, so a rebuild of the upstream postgres:18-alpine image does not bring the fix; it needs a gosu release built with a newer Go (as of 2026-11-12).",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-78667",
       "image": "postgres",
       "package": "stdlib",
       "target": "/usr/local/bin/gosu",
-      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu, a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.26.9, 1.27.2), the upstream postgres:18-alpine image has not been rebuilt yet.",
-      "expires": "2026-12-05"
+      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu (gosu 1.19.0), a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.26.9, 1.27.2). The gosu release binary is built with this Go version, so a rebuild of the upstream postgres:18-alpine image does not bring the fix; it needs a gosu release built with a newer Go (as of 2026-11-12).",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-78669",
       "image": "postgres",
       "package": "stdlib",
       "target": "/usr/local/bin/gosu",
-      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu, a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.26.9, 1.27.2), the upstream postgres:18-alpine image has not been rebuilt yet.",
-      "expires": "2026-12-05"
+      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu (gosu 1.19.0), a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.26.9, 1.27.2). The gosu release binary is built with this Go version, so a rebuild of the upstream postgres:18-alpine image does not bring the fix; it needs a gosu release built with a newer Go (as of 2026-11-12).",
+      "expires": "2027-01-15"
     },
     {
       "vulnerability": "CVE-2026-97031",
       "image": "postgres",
       "package": "stdlib",
       "target": "/usr/local/bin/gosu",
-      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu, a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.26.9, 1.27.2), the upstream postgres:18-alpine image has not been rebuilt yet.",
-      "expires": "2026-12-05"
+      "reason": "Go standard library v1.24.6 in /usr/local/bin/gosu (gosu 1.19.0), a helper that only runs in the image entrypoint to drop privileges and is no network service; Trivy names fixed Go versions (1.26.9, 1.27.2). The gosu release binary is built with this Go version, so a rebuild of the upstream postgres:18-alpine image does not bring the fix; it needs a gosu release built with a newer Go (as of 2026-11-12).",
+      "expires": "2027-01-15"
     }
   ]
 }
