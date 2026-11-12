@@ -102,8 +102,10 @@
     //
     // Navigation has no safe fixed deadline: upstream timeouts are configurable
     // and a response may still be arriving. Clear the mark only on completion.
-    // Without Navigation API completion events, keep the conservative prompt
-    // until this document leaves (including a later bfcache restoration).
+    // Without Navigation API completion events, or when a submitted form
+    // downloads a file or targets _blank, the mark can remain until pagehide.
+    // This only keeps the update prompt visible; it does not block the page.
+    // Leaving the document clears it, including before a bfcache restoration.
     var _navigationPending = false;
     var _runningWrites = new Set();
 
