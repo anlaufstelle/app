@@ -69,7 +69,6 @@ def test_roadmap_intro_keeps_the_no_commitment_statement(concept):
 def test_roadmap_lists_the_agreed_topics(concept):
     table = "\n".join(_roadmap_table(concept))
     for topic in (
-        "KDS-Export",
         "Externe API für Trägersysteme",
         "Berichte je Einrichtung konfigurierbar",
         "Module je Einrichtung schaltbar",

@@ -133,7 +133,7 @@ Event creation (`/events/new/`) saves drafts every 5 seconds in encrypted Indexe
 - **Mobile / PWA:** Progressive Web App, installable on home screens. Optimized quick-capture for smartphones with large touch targets and autocomplete. Field-ready offline mode: staff take selected persons offline into an encrypted local cache, read and edit their records, and create new contacts and tasks without connectivity; the timeline and task list also render offline in-place at their canonical URLs from the local snapshot. Offline work syncs on reconnect with explicit, resolvable conflicts rather than silent overwrites, and permanently undeliverable entries surface in a dead-letter view instead of disappearing.
 - **Internationalization:** Uses Django's `gettext` system; complete text coverage is a verification target. German (primary) and English are active. Language switcher in the UI. The package schema has no language key; multilingual package names remain a target feature.
 - **External API target:** A facility-scoped REST API for provider integrations is not implemented; current JSON endpoints are session-bound internal endpoints.
-- **Optional module targets:** Possible additions outside the core include a calendar, wiki, a KDS export (an export for the German addiction-help statistics, with no commitment on format or scope) and interfaces to third-party systems.
+- **Optional module targets:** Possible additions outside the core include a calendar, wiki and interfaces to third-party systems.
 - **Performance targets:** Page load < 1s (3G), contact save < 500ms, autocomplete < 300ms, six-month statistics query < 5s at 50,000 events.
 - **Scaling target:** 5--30 concurrent users, up to 50,000 events/year per facility.
 - **Deployment:** The production Compose stack includes Caddy, Django, PostgreSQL, Redis, mandatory ClamAV, cron and maintenance services. Hardware requirements: [admin guide § 1 — Prerequisites](admin-guide.md#hardware). Installation prerequisites: [admin guide § 1 — Prerequisites](admin-guide.md#prerequisites).
@@ -372,5 +372,5 @@ The largest collective pre-release to date — the configurability milestones M0
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: 28b1b48a70afc767051d0f590942cdf9008946b9 -->
+<!-- source-hash: cb1f6f269e1156960b3819babd15a2c4751fa13f -->
 <!-- translation-date: 2026-11-12 -->
