@@ -1445,7 +1445,7 @@ A failed (red) `detect_breaches` run reporting `Breach webhook delivery failed` 
 
 Successful deliveries as well as rejected URLs, HTTP protocol errors and network errors including timeouts each append their own audit row (`detail.category=breach_webhook_delivery`, `result=failed` or `delivered`, targeting the finding row). On failure, the audit row and warning contain only the exception class, no URL or exception message; `detail.run_id` associates the delivery row with its invocation. System-wide finding rows are also retained on these failures. The next scan retries failed deliveries within 24 hours of the finding, even if the pattern has subsided. This creates no second finding row; retries stop after successful delivery. After that window expires the old finding is no longer delivered; an ongoing detected pattern can create a new finding. Without a webhook URL there is no delivery or retry.
 
-The full scan writes a failed run marker on delivery failure. However, the operations overview currently considers only successful markers and their age: it does **not immediately turn red** after a new failure. Until that display is updated, check the command error, cron logs and delivery rows.
+The full scan writes a failed run marker on delivery failure. The operations overview shows the latest failed full scan as **red immediately**; after a successful full retry, the age check applies again. Filtered runs and individual delivery rows do not change this status. On failure, check the command error, cron logs and delivery rows.
 
 #### Manual Process on SECURITY_VIOLATION
 
@@ -3446,4 +3446,4 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.10 -->
 <!-- translation-date: 2026-11-12 -->
-<!-- source-hash: 16bdbd78ffaf21eb69ffc9d08d5254ce10a688b1 -->
+<!-- source-hash: fbc16f9dabd9c9d2812b426c0b331460f62f4c6c -->

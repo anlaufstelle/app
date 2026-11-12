@@ -12,6 +12,7 @@ Jobs unter der Kategorie „Hintergrundjobs".
 
 from __future__ import annotations
 
+from django.db.models import Q
 from django.utils.translation import gettext as _
 
 from core.models import AuditLog
@@ -29,12 +30,16 @@ def _cron_action_hint() -> str:
 def _latest(action: str) -> AuditLog | None:
     entries = AuditLog.objects.filter(action=action, facility__isnull=True)
     if action in {AuditLog.Action.SNAPSHOT_RUN_COMPLETED, AuditLog.Action.BREACH_SCAN_COMPLETED}:
-        entries = entries.filter(
-            detail__job_run__scope="installation",
+        successful = Q(
             detail__job_run__status="success",
             detail__job_run__skipped=0,
             detail__job_run__failed=0,
         )
+        outcomes = successful
+        if action == AuditLog.Action.BREACH_SCAN_COMPLETED:
+            # A failed full scan must stay visible until a complete success.
+            outcomes |= Q(detail__job_run__status="failed")
+        entries = entries.filter(outcomes, detail__job_run__scope="installation")
     return entries.order_by("-timestamp").only("timestamp", "detail").first()
 
 
@@ -98,7 +103,7 @@ def _snapshot_checks() -> list[ComplianceCheck]:
 
 
 def _breach_scan_checks() -> list[ComplianceCheck]:
-    """Breach-Detection — stündlicher Cron."""
+    """Hourly breach scan: latest full outcome, then age of success."""
     key, label = "breach_scan_last_run", _("Breach-Detection-Scan")
     entry = _latest(AuditLog.Action.BREACH_SCAN_COMPLETED)
     if entry is None:
@@ -114,6 +119,18 @@ def _breach_scan_checks() -> list[ComplianceCheck]:
         ]
     age = _age_hours(entry)
     detail = _("Letzter Scan: %(timestamp)s") % {"timestamp": f"{entry.timestamp:%Y-%m-%d %H:%M}"}
+    if entry.detail["job_run"]["status"] == "failed":
+        return [
+            ComplianceCheck(
+                key=key,
+                label=label,
+                category=_CATEGORY,
+                status=ComplianceStatus.CRITICAL,
+                message=_("Letzter vollständiger Breach-Scan fehlgeschlagen — cron-Logs und Zustellzeilen prüfen."),
+                detail=detail,
+                action_hint=_cron_action_hint(),
+            )
+        ]
     if age <= 3:
         return [
             ComplianceCheck(
