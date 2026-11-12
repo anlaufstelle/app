@@ -53,7 +53,9 @@ Decision rule
   upstream maintainer time to rebuild and us time to take over the new digest.
   A finding without fix, with an unclear fix status, at ``critical``, known
   when the image was built, or without usable dates (missing, without offset,
-  later than the scan) gets no grace period. The app image has none.
+  later than the scan, or a build date before ``EARLIEST_BUILD_DATE``, which
+  the summary notes as a likely placeholder) gets no grace period. The app
+  image has none.
 * Exit 1: at least one blocking finding or an expired exception.
 * Exit 2: the check is incomplete — exceptions file unusable (see below),
   app image given without a valid digest or
@@ -118,6 +120,11 @@ MAX_EXCEPTION_DAYS = 90
 GRACE_DAYS = 14
 # Highest severity that gets a grace period; ``critical`` always blocks.
 GRACE_MAX_SEVERITY = "high"
+# Earliest build date trusted for a grace period. ``created`` is set upstream;
+# reproducible builds often fix it to a placeholder such as the Unix epoch,
+# which would make every identifier look newer than the image. An older build
+# date gives no grace period (the finding blocks as before) and is reported.
+EARLIEST_BUILD_DATE = dt.datetime(2000, 1, 1, tzinfo=dt.UTC)
 DEFAULT_PLATFORMS = ("linux/amd64", "linux/arm64")
 SEVERITIES = ("low", "medium", "high", "critical")
 SUPERCRONIC = "usr/local/bin/supercronic"
@@ -380,10 +387,11 @@ def grace_until(published: object, created: object, now: dt.datetime) -> dt.date
 
     Only an identifier published after the image was built gets one, ending
     ``GRACE_DAYS`` days after the publication (UTC date). A missing or
-    implausible date gives none (fail-closed), so it never extends the window.
+    implausible date gives none (fail-closed), so it never extends the window;
+    a build date before ``EARLIEST_BUILD_DATE`` counts as implausible.
     """
     published_at, built_at = _timestamp(published, now), _timestamp(created, now)
-    if published_at is None or built_at is None or published_at <= built_at:
+    if published_at is None or built_at is None or built_at < EARLIEST_BUILD_DATE or published_at <= built_at:
         return None
     return published_at.astimezone(dt.UTC).date() + dt.timedelta(days=GRACE_DAYS)
 
@@ -401,11 +409,18 @@ def decide(scan: dict, exceptions: list[dict], level: str, now: dt.datetime) -> 
     class: a finding not covered by an exception, below ``critical``, with a
     published fix and published after the image build waits there until the end
     of its grace period (``grace_until``), after that it blocks with ``grace_ended``.
+    A third-party build date before ``EARLIEST_BUILD_DATE`` is noted in ``build_date_note``.
     """
     today = now.date()
     threshold = SEVERITIES.index(level)
     for key in ("blocking", "excepted", "grace", "unfixed", "below_threshold", "unrated"):
         scan[key] = []
+    built_at = _timestamp(scan.get("image_created"), now)
+    if scan["role"] != "app" and built_at is not None and built_at < EARLIEST_BUILD_DATE:
+        scan["build_date_note"] = (
+            f"build date {scan['image_created']} is before {EARLIEST_BUILD_DATE.date().isoformat()}, "
+            "likely a placeholder: no grace period"
+        )
     for finding in scan.pop("findings"):
         severity = finding["severity"]
         if severity not in SEVERITIES:
@@ -482,6 +497,8 @@ def summary_text(report: dict) -> str:
             f"grace {len(scan['grace'])} (not blocking), unfixed {len(scan['unfixed'])} (not blocking), "
             f"below threshold {len(scan['below_threshold'])}, unrated {len(scan['unrated'])}"
         )
+        if scan.get("build_date_note"):
+            lines.append(f"    NOTE {scan['build_date_note']}")
         lines += [f"    BLOCKING {_blocking_line(f)}" for f in scan["blocking"]]
         lines += [f"    excepted until {f['expires']}: {_line(f)} — {f['reason']}" for f in scan["excepted"]]
         lines += [f"    grace until {f['grace_until']}: {_line(f)}" for f in scan["grace"]]

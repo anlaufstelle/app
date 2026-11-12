@@ -1120,6 +1120,40 @@ class TestGracePeriodForThirdPartyFixes:
         )
         self._assert_only_the_guard_withholds_grace(code, scan, _scan_of(report, other))
 
+    @pytest.mark.parametrize("created", ["1970-01-01T00:00:00Z", "1980-01-01T00:00:00Z", "1999-12-31T23:59:59+00:00"])
+    def test_implausibly_old_build_date_gets_no_grace_period(self, tmp_path, monkeypatch, created):
+        # A placeholder build date (reproducible builds often use the Unix epoch) would
+        # make every identifier look newer than the image; it is not trusted.
+        other = _other_third_party_ref()
+        code, scan, summary, report = self._scan(
+            tmp_path, monkeypatch, _fresh(), now=SCAN_TIME, created=created, control_ref=other
+        )
+        self._assert_only_the_guard_withholds_grace(code, scan, _scan_of(report, other))
+        note = f"build date {created} is before 2000-01-01, likely a placeholder: no grace period"
+        assert scan["build_date_note"] == note
+        assert f"    NOTE {note}" in summary.splitlines()
+        assert "build_date_note" not in _scan_of(report, other)
+
+    def test_earliest_plausible_build_date_allows_a_grace_period(self, tmp_path, monkeypatch):
+        code, scan, summary, _ = self._scan(
+            tmp_path, monkeypatch, _fresh(), now=SCAN_TIME, created="2000-01-01T00:00:00Z"
+        )
+        assert code == 0, summary
+        assert [f["id"] for f in scan["grace"]] == [GUARDED]
+        assert "build_date_note" not in scan
+        assert "NOTE" not in summary
+
+    def test_app_image_gets_no_build_date_note(self, tmp_path, monkeypatch):
+        code, scan, summary, _ = self._scan(
+            tmp_path, monkeypatch, now=SCAN_TIME, created="1970-01-01T00:00:00Z", ref=APP, app=APP
+        )
+        assert code == 0, summary
+        assert "build_date_note" not in scan
+        assert "NOTE" not in summary
+
+    def test_earliest_build_date_constant(self):
+        assert _load_module().EARLIEST_BUILD_DATE.isoformat() == "2000-01-01T00:00:00+00:00"
+
     @pytest.mark.parametrize(
         "published",
         [ABSENT, None, "", "soon", "2026-11-09T14:15:22", "2026-11-11T00:00:00Z", 1730000000],
