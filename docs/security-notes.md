@@ -1890,8 +1890,9 @@ abgedeckt: kein hartes Blocking, aber eine forensische Spur plus optionaler Webh
 Die beiden anfragebasierten Versandpfade für E-Mail-Accounts antworten für existierende wie für
 nicht existierende Adressen gleich (ein Redirect auf die bestätigende „gesendet"-Seite), unterscheiden
 sich aber **zeitlich**: `LockoutRecoveryRequestView.form_valid`
-([`lockout_recovery.py`](../src/core/views/lockout_recovery.py)) versendet bei einem Treffer eine
-Recovery-Token-Mail via `send_mail(...)` synchron im Anfragepfad; die
+([`lockout_recovery.py`](../src/core/views/lockout_recovery.py)) versendet bei einem Treffer je Konto eine
+eigene Recovery-Token-Mail via `send_mail(...)` synchron im Anfragepfad (teilen sich mehrere aktive Konten
+die Adresse, geht je gesperrtem Konto ein Link heraus, ist keines gesperrt, je Konto einer); die
 `RateLimitedPasswordResetView` ([`auth.py`](../src/core/views/auth.py)) versendet den
 Password-Reset-Link über Djangos `PasswordResetForm.save()` ebenfalls synchron. Über den echten
 SMTP-Transport ist der Unterschied zwischen Treffer (Tokenbau + Template-Render + SMTP-Versand, bei der

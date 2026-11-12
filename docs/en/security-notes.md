@@ -40,5 +40,5 @@ Marks contain no source text: only target, field, date, account, timestamp and a
 
 <!-- translation-source: docs/security-notes.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: c31cc156bbe0bde5d8d90100a2abff81ebde599f -->
+<!-- source-hash: ed995996417de20f212c3be61fb337e70989a596 -->
 <!-- translation-date: 2026-11-12 -->

@@ -215,7 +215,7 @@ Release v0.10.0 sharpens the low-threshold fit and strengthens the privacy archi
 
 ### v0.16.0 (2026-06-25)
 
-- **Public demo instance** (`demo.anlaufstelle.app`): a `DEMO_MODE` banner and login panel showing the demo credentials and the next reset time, a `DemoGuardMiddleware` that blocks damaging actions (maintenance toggle, 2FA setup, password change, user management), an hourly reset, and email routed to the console. Demo builds are versioned per tagged release (ADR-028).
+- **Public demo instance** (`demo.anlaufstelle.app`): a `DEMO_MODE` banner and login panel showing the demo credentials and the next reset time, a `DemoGuardMiddleware` that blocks damaging actions (maintenance toggle, 2FA setup, password change, user management; it now also blocks every other change of a second factor or passkey: device change, passkey registration and removal, regenerating backup codes, disabling 2FA and the account-management reset of another account's second factor), an hourly reset, and email routed to the console. Demo builds are versioned per tagged release (ADR-028).
 - **Two-column task work view** and a rate-limited system audit-log export; `cryptography` upgraded to 49.
 
 ### v0.20.0 (2026-07-10)
