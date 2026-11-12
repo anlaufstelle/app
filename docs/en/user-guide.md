@@ -179,11 +179,15 @@ The feed combines four sources for the current day:
 | **Tasks** (Work Items) | Hints and tasks with priority and status |
 | **Entry Bans** | Active entry bans -- additionally shown as a red banner on top |
 
+**Header row.** At the very top, a single row holds the title, the date switcher, the shift selection and the **Feed | Handover** switch; it applies to both views. The shift is named only there. On desktop, **New** groups **Create task** and **Create person** for social workers and higher roles. On a phone, date and shift are one shared tap target that opens a sheet from the bottom; **Close**, the Escape key or a tap beside the sheet closes it again, and the focus returns to the tap target.
+
 The right sidebar contains **“Team tasks needing attention”**, a team focus box with up to **8 entries**, regardless of assignment. It groups tasks by **Overdue**, **Due today**, **Urgent · Important** and **In progress**; each task appears only in its highest applicable pressure group. Within groups, tasks are sorted by due date, priority and creation time. Open normal-priority tasks without a deadline remain available through **To task overview**.
 
 ### Tally
 
 When the administration has enabled suitable documentation types, the **tally** appears in the Timeline. It counts anonymous contacts per type for the current time window. When a shift is currently running, its time window applies; otherwise the current calendar day applies.
+
+Above the tiles there is only the time window (for example `14:00–22:00`; if it crosses midnight it reads `22:00–06:00 (+1)`), not shift and date again -- the header row names both.
 
 Each type appears as a **tile** with a large counter, an action mark (`+1` or `+ …`) and the type name. The whole tile is the tap target; it flashes briefly after a tally. While a tally has not yet reached the server, its status is shown on the tile.
 
@@ -194,12 +198,13 @@ Each type appears as a **tile** with a large counter, an action mark (`+1` or `+
 
 ### Changing the date
 
-- **Arrow buttons** above the feed: jump to the previous or next day.
-- **Today** link: returns to the current day.
+- **Arrow buttons** in the header row: jump to the previous or next day. Today, "next day" is disabled.
+- **Today** link: appears when another day is selected and returns to the current day.
+- The date appears in the format of the selected language (for example "Fri, October 23" or "Fr, 23. Oktober").
 
 ### Shift filter
 
-Below the date navigation you find **TimeFilter tabs** (e.g., "Early shift", "Late shift", "Night shift" -- configurable by the administration). When you open the Timeline, the shift that matches the current time is auto-selected; night shifts crossing midnight are handled correctly.
+In the header row you choose the shift in the **Shift** selection list: **Whole day** or a configured shift with its times (e.g., "Early shift", "Late shift", "Night shift" -- configurable by the administration; a night shift carries `(+1)` after the end time). In the feed, changing it updates the feed and figures without a page reload; in the handover it opens that shift's handover. When you open the Timeline, the shift that matches the current time is auto-selected; night shifts crossing midnight are handled correctly.
 
 **Daylight-saving changes.** On both changeover weekends a clock time is ambiguous, and the shift filter resolves that explicitly. On the night the clocks fall back to standard time, the hour from 02:00 to 03:00 runs twice; a shift that ends within that hour ends at the **second** occurrence -- a night shift from 20:00 to 02:45 therefore actually lasts 7 hours 45 minutes that night, and everything documented during the extra hour stays visible in the Timeline, the handover, and the tally. On the night the clocks spring forward to daylight-saving time, the hour from 02:00 to 03:00 is skipped; a shift that would have ended within it instead ends after its agreed duration from shift start and is actually one hour shorter. Full-day views are unaffected -- the changeover day in autumn still spans 25 hours, the one in spring 23.
 
@@ -212,6 +217,8 @@ For the application the two hours really are different points in time, one hour 
 **When editing** a contact the timestamp can no longer be changed at all; it is shown there for reference only. So you make the choice when creating the contact. If an entry ended up in the wrong hour by mistake, create it again and have the wrong entry deleted ([Deleting a Contact](#deleting-a-contact)).
 
 On the night the clocks spring forward, by contrast, the hour from 02:00 to 03:00 **does not exist at all** -- there the form still rejects a time from that window and says why. There is nothing to choose: a time that does not exist is not made real by any selection.
+
+If the selection is not the running shift (another day or another shift), a hint "You are viewing …" with the link **to the running shift** appears below the header row; while the running shift is selected it does not appear.
 
 The permanently visible **Current shift** box above the feed shows contacts, new tasks, new people and important occurrences for the ongoing shift. It is independent of the selected Timeline filter and appears only while a configured shift is running.
 
@@ -1189,5 +1196,5 @@ Phone, email, date and address patterns are detected heuristically and locally o
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: 306d8e286824ab0db834b0448c9077166a5b34c6 -->
+<!-- source-hash: 1c04e57d546db42f2248371ae11116f09eec0c99 -->
 <!-- translation-date: 2026-11-12 -->

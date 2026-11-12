@@ -45,6 +45,7 @@ from core.services.events import (
 )
 from core.services.events.list_filters import event_list_params_from_zeitstrom
 from core.services.system import get_active_bans
+from core.services.zeitstrom_display import format_shift_window
 from core.services.zeitstrom_filters import ZEITSTROM_FILTER_KEYS, resolve_zeitstrom_state
 from core.services.zeitstrom_watch import (
     WATCH_COMPONENTS,
@@ -129,6 +130,55 @@ def _feed_context(facility, user, state):
     return {"feed_items": feed_items}
 
 
+def _selection_url(state, day, *, shift=None, keep_shift=True):
+    """Query string for the same view on *day* (and optionally another shift)."""
+    params = {"date": day.isoformat()}
+    if state.is_handover:
+        params["view"] = "uebergabe"
+    else:
+        if state.feed_type:
+            params["type"] = state.feed_type
+        if state.doc_type_id:
+            params["doc_type"] = state.doc_type_id
+    if shift is not None:
+        params["time_filter"] = shift
+    elif keep_shift:
+        params["time_filter"] = state.time_filter_id
+    return "?" + urlencode(params)
+
+
+def _selection_context(state, *, today):
+    """Header facts shared by the full page and the feed refresh.
+
+    The header is the only place that names the selected date and shift. When
+    the selection is not the running shift, a hint line says so and links back.
+    """
+    live_filter = state.live_context.time_filter
+    in_feed = not state.is_handover
+    selection_is_live = in_feed and state.is_live_tally_context
+    hint = None
+    if in_feed and not selection_is_live:
+        hint = {
+            "shift_label": state.time_filter.label if state.time_filter is not None else "",
+            "has_live_shift": live_filter is not None,
+        }
+    prev_day = state.target_date - timedelta(days=1)
+    next_day = state.target_date + timedelta(days=1)
+    return {
+        "prev_url": _selection_url(state, prev_day),
+        "next_url": _selection_url(state, next_day) if next_day <= today else None,
+        "today_url": ("?view=uebergabe" if state.is_handover else reverse("core:zeitstrom")),
+        "shift_urls": {
+            "all": _selection_url(state, state.target_date, shift="all"),
+            **{item.pk: _selection_url(state, state.target_date, shift=str(item.pk)) for item in state.time_filters},
+        },
+        "live_time_filter": live_filter,
+        "live_shift_date": state.live_context.shift_date,
+        "selection_is_live": selection_is_live,
+        "selection_hint": hint,
+    }
+
+
 def _filter_context(facility, user, state, *, today):
     """Date navigation, shift and type filters, and the document-type choices."""
     from core.services.compliance import allowed_sensitivities_for_user
@@ -145,6 +195,7 @@ def _filter_context(facility, user, state, *, today):
         .order_by("name")
     )
     return {
+        **_selection_context(state, today=today),
         "time_filters": state.time_filters,
         "selected_filter": state.time_filter,
         "selected_filter_id": state.time_filter_id,
@@ -210,6 +261,8 @@ def _tally_context(facility, user, state):
     """Live tally panel; the costly summary is built only when the panel is shown."""
     show_tally_panel = state.is_live_tally_context
     tally_summary = build_tally_summary(facility, user, context=state.live_context) if show_tally_panel else None
+    if tally_summary is not None:
+        tally_summary["window_text"] = format_shift_window(tally_summary["window_start"], tally_summary["window_end"])
     return {"show_tally_panel": show_tally_panel, "tally_summary": tally_summary}
 
 
@@ -712,6 +765,8 @@ class ZeitstromFeedPartialView(AssistantOrAboveRequiredMixin, ZeitstromWatchFoll
         context["zeitstrom_filter_state"] = filter_state
         context.update(_contacts_navigation_context(self.request.user, state))
         context["contacts_navigation_oob"] = True
+        context.update(_selection_context(state, today=timezone.localdate()))
+        context["selection_hint_oob"] = True
         return context
 
 
@@ -816,7 +871,8 @@ class ZeitstromCurrentShiftPartialView(AssistantOrAboveRequiredMixin, ZeitstromW
                     request.current_facility,
                     request.user,
                     state,
-                )
+                ),
+                "selection_is_live": not state.is_handover and state.is_live_tally_context,
             }
             return self.render_watch_followup(request, self.template_name, context, state)
 

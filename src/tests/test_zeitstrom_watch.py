@@ -730,7 +730,7 @@ class TestZeitstromWatchRefreshPartials:
         }
 
         page = client.get(reverse("core:zeitstrom"), params)
-        assert page.content.decode().count('hx-sync="#feed-list:replace"') == 2
+        assert page.content.decode().count('hx-sync="#feed-list:replace"') == 1  # the shift select
         requested = {**params, "time_filter": str(selected.pk)}
 
         response = client.get(

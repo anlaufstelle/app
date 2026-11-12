@@ -1,107 +1,139 @@
-// Refs #1059 (A11Y-017/008): HTMX swaps the feed list, leaving time-filter
-// controls mounted. The script must update their selection and contrast.
-// Previously only Tailwind classes changed: selection stayed on the old
-// button and the time range retained text-ink-muted, whose contrast on
-// bg-accent-light is only 4.31:1.
-//
-// Der Zustand steht in ``aria-pressed`` und NICHT in ``aria-selected``: die
-// Knoepfe sind unabhaengige Umschalter, kein ARIA-Tab-Widget (kein
-// Roving-Tabindex, keine Pfeilnavigation, kein zugeordnetes ``tabpanel``).
+// Header selection (date + shift): the native shift <select> keeps the filter
+// state in sync, the navigation links follow the shift, and on small screens
+// the date/shift trigger opens a sheet that closes on Escape or outside tap and
+// returns focus to the trigger.
 
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 beforeAll(async () => {
     await import("../../src/static/js/time-filter-tabs.js");
 });
 
-function tab(id, { active = false, withTime = true } = {}) {
-    const button = document.createElement("button");
-    button.id = id;
-    button.className = "time-filter-tab";
-    button.setAttribute("aria-pressed", active ? "true" : "false");
-    if (withTime) {
-        const span = document.createElement("span");
-        span.className = `time-filter-tab-time ${active ? "text-accent" : "text-ink-muted"}`;
-        button.appendChild(span);
-    }
-    document.body.appendChild(button);
-    return button;
-}
+const PAGE = `
+<button id="zeitstrom-selection-trigger" aria-expanded="false" aria-controls="zeitstrom-selection" data-live-label="läuft">
+  <span data-sheet-date>Fr, 23. Oktober</span>
+  <span data-sheet-shift>Ganzer Tag</span>
+  <span data-sheet-range></span>
+</button>
+<div id="zeitstrom-selection-backdrop" class="hidden" data-sheet-backdrop></div>
+<div id="zeitstrom-selection" class="hidden md:flex" data-sheet>
+  <button type="button" data-sheet-close>Schließen</button>
+  <a id="prev" data-date-nav-link href="?date=2026-10-22&time_filter=old">prev</a>
+  <a id="today" href="/zeitstrom/">today</a>
+  <select id="zeitstrom-shift-select" class="time-filter-tab" data-zeitstrom-time-filter="all">
+    <option value="all" data-label="Ganzer Tag" data-range="" data-href="?date=2026-10-23&time_filter=all" selected>Ganzer Tag</option>
+    <option value="night" data-label="Nachtdienst" data-range="22:00–06:00 (+1)" data-live="1" data-href="?date=2026-10-23&time_filter=night">Nachtdienst</option>
+  </select>
+</div>`;
 
-/** Feuert ``htmx:beforeRequest`` so, wie htmx es tut: am Quell-Element. */
-function click(element) {
-    element.dispatchEvent(new CustomEvent("htmx:beforeRequest", { bubbles: true }));
+function choose(value, { navigate = false } = {}) {
+    const select = document.getElementById("zeitstrom-shift-select");
+    if (navigate) select.dataset.navigate = "1";
+    select.value = value;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    return select;
 }
 
 beforeEach(() => {
-    document.body.innerHTML = "";
+    document.body.innerHTML = PAGE;
+    window.__navigated = null;
+    window.__zeitstromNavigate = (url) => {
+        window.__navigated = url;
+    };
 });
 
-describe("aria-pressed wandert mit (A11Y-017)", () => {
-    it("setzt den angeklickten Tab auf true und alle anderen auf false", () => {
-        const alle = tab("alle", { active: true, withTime: false });
-        const nacht = tab("nacht");
-        const tagsueber = tab("tagsueber");
-
-        click(nacht);
-
-        expect(nacht.getAttribute("aria-pressed")).toBe("true");
-        expect(alle.getAttribute("aria-pressed")).toBe("false");
-        expect(tagsueber.getAttribute("aria-pressed")).toBe("false");
+describe("shift select keeps the filter state in sync", () => {
+    it("writes the chosen shift into the data attribute read by the request config", () => {
+        const select = choose("night");
+        expect(select.dataset.zeitstromTimeFilter).toBe("night");
     });
 
-    it("laesst genau EINEN Knopf gedrueckt, auch nach mehrfachem Umschalten", () => {
-        const tabs = [tab("a", { active: true }), tab("b"), tab("c")];
-
-        click(tabs[1]);
-        click(tabs[2]);
-        click(tabs[0]);
-
-        const pressed = tabs.filter((t) => t.getAttribute("aria-pressed") === "true");
-        expect(pressed).toEqual([tabs[0]]);
+    it("moves the shift parameter of the date links along", () => {
+        choose("night");
+        expect(document.getElementById("prev").getAttribute("href")).toContain("time_filter=night");
+        expect(document.getElementById("prev").getAttribute("href")).toContain("date=2026-10-22");
+        choose("all");
+        expect(document.getElementById("prev").getAttribute("href")).toContain("time_filter=all");
     });
 
-    it("ignoriert Elemente ohne .time-filter-tab", () => {
-        const aktiv = tab("aktiv", { active: true });
-        const fremd = document.createElement("button");
-        document.body.appendChild(fremd);
+    it("leaves links without the date-link marker alone", () => {
+        choose("night");
+        expect(document.getElementById("today").getAttribute("href")).toBe("/zeitstrom/");
+    });
 
-        click(fremd);
-
-        expect(aktiv.getAttribute("aria-pressed")).toBe("true");
+    it("updates the mobile trigger text with shift, window and running marker", () => {
+        choose("night");
+        expect(document.querySelector("[data-sheet-shift]").textContent).toBe("Nachtdienst");
+        expect(document.querySelector("[data-sheet-range]").textContent).toBe("22:00–06:00 (+1) · läuft");
+        choose("all");
+        expect(document.querySelector("[data-sheet-shift]").textContent).toBe("Ganzer Tag");
+        expect(document.querySelector("[data-sheet-range]").textContent).toBe("");
     });
 });
 
-describe("Kontrast der Uhrzeit-Spanne (A11Y-008)", () => {
-    function time(button) {
-        return button.querySelector(".time-filter-tab-time").className;
-    }
-
-    it("faerbt die Spanne des aktiven Tabs auf text-accent um", () => {
-        const alt = tab("alt", { active: true });
-        const neu = tab("neu");
-
-        click(neu);
-
-        expect(time(neu)).toContain("text-accent");
-        expect(time(neu)).not.toContain("text-ink-muted");
+describe("handover mode navigates instead of swapping", () => {
+    it("opens the option's address on change", () => {
+        choose("night", { navigate: true });
+        expect(window.__navigated).toBe("?date=2026-10-23&time_filter=night");
     });
 
-    it("nimmt sie dem vorher aktiven Tab wieder weg", () => {
-        const alt = tab("alt", { active: true });
-        const neu = tab("neu");
+    it("does not navigate in feed mode", () => {
+        choose("night");
+        expect(window.__navigated).toBeNull();
+    });
+});
 
-        click(neu);
+describe("mobile sheet", () => {
+    const trigger = () => document.getElementById("zeitstrom-selection-trigger");
+    const sheet = () => document.getElementById("zeitstrom-selection");
+    const backdrop = () => document.getElementById("zeitstrom-selection-backdrop");
 
-        expect(time(alt)).toContain("text-ink-muted");
-        expect(time(alt)).not.toContain("text-accent");
+    it("opens on tap and exposes the state", () => {
+        trigger().click();
+        expect(trigger().getAttribute("aria-expanded")).toBe("true");
+        expect(sheet().classList.contains("hidden")).toBe(false);
+        expect(backdrop().classList.contains("hidden")).toBe(false);
+        expect(sheet().getAttribute("role")).toBe("dialog");
     });
 
-    it("kommt mit dem Alle-Tab ohne Uhrzeit-Spanne zurecht", () => {
-        const alle = tab("alle", { withTime: false });
-        tab("nacht", { active: true });
+    it("moves focus into the sheet", () => {
+        trigger().focus();
+        trigger().click();
+        expect(sheet().contains(document.activeElement)).toBe(true);
+    });
 
-        expect(() => click(alle)).not.toThrow();
-        expect(alle.getAttribute("aria-pressed")).toBe("true");
+    it("closes on Escape and returns focus to the trigger", () => {
+        trigger().click();
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        expect(trigger().getAttribute("aria-expanded")).toBe("false");
+        expect(sheet().classList.contains("hidden")).toBe(true);
+        expect(document.activeElement).toBe(trigger());
+    });
+
+    it("closes on a tap outside the sheet", () => {
+        trigger().click();
+        backdrop().click();
+        expect(trigger().getAttribute("aria-expanded")).toBe("false");
+        expect(backdrop().classList.contains("hidden")).toBe(true);
+        expect(document.activeElement).toBe(trigger());
+    });
+
+    it("closes with the close button", () => {
+        trigger().click();
+        document.querySelector("[data-sheet-close]").click();
+        expect(trigger().getAttribute("aria-expanded")).toBe("false");
+    });
+
+    it("closes after a shift was chosen", () => {
+        trigger().click();
+        choose("night");
+        expect(trigger().getAttribute("aria-expanded")).toBe("false");
+    });
+
+    it("ignores Escape while closed", () => {
+        const spy = vi.fn();
+        trigger().addEventListener("focus", spy);
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+        expect(spy).not.toHaveBeenCalled();
     });
 });

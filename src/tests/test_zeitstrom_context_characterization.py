@@ -68,6 +68,14 @@ BASE_KEYS = {
     "zeitstrom_filter_state",
     "contacts_navigation",
     "contacts_list_params",
+    "prev_url",
+    "next_url",
+    "today_url",
+    "shift_urls",
+    "live_time_filter",
+    "live_shift_date",
+    "selection_is_live",
+    "selection_hint",
     "tally_next",
     "zeitstrom_page_scope",
     "zeitstrom_tally_topology",
@@ -112,6 +120,8 @@ def _norm_tally(summary):
         {key: item for key, item in row.items() if key not in {"idempotency_key", "tally_increment_url"}}
         for row in summary["rows"]
     ]
+    # ``window_text`` is display text the view adds to the service result.
+    summary = {key: item for key, item in summary.items() if key != "window_text"}
     return _norm({**summary, "rows": rows})
 
 

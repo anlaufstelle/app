@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n static %}
+{% load i18n static core_tags %}
 
 {% block title %}{% trans "Zeitstrom" %} – Anlaufstelle{% endblock %}
 
@@ -19,24 +19,93 @@
     <input type="hidden" name="{{ name }}" value="{{ value }}">
     {% endfor %}
 </form>
-{# PageHeader (Design: als-screens.jsx PageHeader) #}
-<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+{# One header row for both modes: title, date, shift, Feed/Übergabe, actions. #}
+{% with chevron_class="p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center bg-surface border border-subtle rounded-[10px] text-ink-muted hover:text-ink" %}
+<div id="zeitstrom-head" data-testid="zeitstrom-head" class="mb-4 flex flex-wrap items-center gap-x-4 gap-y-3">
     <h1 class="text-[22px] font-bold text-ink">{% trans "Zeitstrom" %}</h1>
-    <div class="hidden md:flex md:flex-wrap gap-2">
+
+    {# Mobile: date and shift are one tap target that opens the sheet below. #}
+    <button type="button" id="zeitstrom-selection-trigger" data-testid="zeitstrom-selection-trigger"
+            aria-expanded="false" aria-controls="zeitstrom-selection" aria-haspopup="dialog" data-live-label="{% trans 'läuft' %}"
+            class="md:hidden order-last w-full text-left min-h-[44px] px-3 py-1.5 bg-surface border border-subtle rounded-[10px]">
+        <span class="block text-[13px] font-semibold text-ink">
+            <span data-sheet-date>{{ target_date|date:"D" }}, {% if target_date.year == today.year %}{{ target_date|date:"MONTH_DAY_FORMAT" }}{% else %}{{ target_date|date:"DATE_FORMAT" }}{% endif %}</span>
+            · <span data-sheet-shift>{% if selected_filter %}{{ selected_filter.label }}{% else %}{% trans "Ganzer Tag" %}{% endif %}</span> <span aria-hidden="true">▾</span>
+        </span>
+        <span class="block text-[12px] text-ink-muted" data-sheet-range>{% if selected_filter %}{{ selected_filter.start_time|time:"H:i" }}–{{ selected_filter.end_time|time:"H:i" }}{% if selected_filter.start_time > selected_filter.end_time %} (+1){% endif %}{% if selection_is_live %} · {% trans "läuft" %}{% endif %}{% endif %}</span>
+    </button>
+    <div id="zeitstrom-selection-backdrop" data-sheet-backdrop aria-hidden="true" class="hidden fixed inset-0 z-40 bg-black/40"></div>
+    <div id="zeitstrom-selection" data-testid="zeitstrom-selection" data-sheet
+         class="hidden md:flex md:flex-wrap md:items-center gap-3">
+        <button type="button" data-sheet-close class="md:hidden self-end min-h-[44px] px-3 text-[13px] font-semibold text-accent">{% trans "Schließen" %}</button>
+        <nav aria-label="{% trans 'Tag wechseln' %}" data-testid="zeitstrom-date-nav" class="flex items-center justify-center gap-2">
+            <a href="{{ prev_url }}" data-date-nav-link aria-label="{% trans 'Vorheriger Tag' %}" class="{{ chevron_class }}">
+                <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+            </a>
+            <span class="font-semibold text-[15px] text-ink min-w-[8rem] text-center" data-testid="zeitstrom-date-text">{{ target_date|date:"D" }}, {% if target_date.year == today.year %}{{ target_date|date:"MONTH_DAY_FORMAT" }}{% else %}{{ target_date|date:"DATE_FORMAT" }}{% endif %}</span>
+            {% if next_url %}
+            <a href="{{ next_url }}" data-date-nav-link aria-label="{% trans 'Nächster Tag' %}" class="{{ chevron_class }}">
+                <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+            </a>
+            {% else %}
+            <span aria-label="{% trans 'Nächster Tag' %}" aria-disabled="true" role="link" class="{{ chevron_class }} opacity-30">
+                <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+            </span>
+            {% endif %}
+            {% if target_date != today %}<a href="{{ today_url }}" data-testid="zeitstrom-date-today" class="inline-flex items-center min-h-[44px] md:min-h-0 px-1 text-[12px] font-semibold text-accent hover:underline">{% trans "Heute" %}</a>{% endif %}
+        </nav>
+        {% if time_filters %}
+        <div class="flex items-center gap-2">
+            <label for="zeitstrom-shift-select" class="text-[12px] text-ink-muted">{% trans "Schicht" %}</label>
+            <select id="zeitstrom-shift-select" data-testid="zeitstrom-shift-select"
+                    class="time-filter-tab rounded-md border border-subtle bg-surface text-[13px] text-ink-soft px-2.5 py-1.5 min-h-[44px] md:min-h-0"
+                    data-zeitstrom-time-filter="{{ selected_filter_id }}"
+                    {% if uebergabe_mode %}data-navigate="1"{% else %}
+                    hx-get="{% url 'core:zeitstrom_feed_partial' %}?date={{ target_date|date:'Y-m-d' }}"
+                    hx-trigger="change"
+                    hx-include="#zeitstrom-filter-state"
+                    hx-target="#feed-list"
+                    hx-swap="innerHTML"
+                    hx-sync="#feed-list:replace"{% endif %}>
+                <option value="all" data-label="{% trans 'Ganzer Tag' %}" data-range="" data-href="{{ shift_urls.all }}" {% if selected_filter_id == 'all' %}selected{% endif %}>{% trans "Ganzer Tag" %}</option>
+                {% for tf in time_filters %}
+                <option value="{{ tf.pk }}" data-label="{{ tf.label }}" data-range="{{ tf.start_time|time:'H:i' }}–{{ tf.end_time|time:'H:i' }}{% if tf.start_time > tf.end_time %} (+1){% endif %}" {% if tf == live_time_filter and target_date == live_shift_date %}data-live="1"{% endif %} data-href="{{ shift_urls|get_item:tf.pk }}" {% if tf == selected_filter %}selected{% endif %}>{{ tf.label }} · {{ tf.start_time|time:"H:i" }}–{{ tf.end_time|time:"H:i" }}{% if tf.start_time > tf.end_time %} (+1){% endif %}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+    </div>
+
+    {# Feed ⇄ Übergabe (Refs #1124) #}
+    <div class="order-last flex w-full gap-1.5 md:order-none md:w-auto" role="group" aria-label="{% trans 'Ansicht' %}">
+        <a href="{% url 'core:zeitstrom' %}" data-testid="zeitstrom-tab-feed" {% if not uebergabe_mode %}aria-current="page"{% endif %} class="inline-flex items-center min-h-[44px] md:min-h-0 px-3 py-1.5 rounded-md text-[13px] font-medium border {% if not uebergabe_mode %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">{% trans "Feed" %}</a>
+        <a href="?view=uebergabe" data-testid="zeitstrom-tab-uebergabe" {% if uebergabe_mode %}aria-current="page"{% endif %} class="inline-flex items-center min-h-[44px] md:min-h-0 px-3 py-1.5 rounded-md text-[13px] font-medium border {% if uebergabe_mode %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">{% trans "Übergabe" %}</a>
+    </div>
+
+    <div class="hidden md:flex md:flex-wrap gap-2 md:ml-auto">
+        {% if user.is_staff_or_above %}
+        <details class="relative" data-testid="zeitstrom-create-menu">
+            <summary class="inline-flex min-h-[44px] cursor-pointer list-none items-center gap-1.5 rounded-md border border-subtle bg-surface px-3.5 py-2 text-[13px] font-medium text-ink-soft hover:bg-canvas">
+                {% trans "Neu" %} <span aria-hidden="true">▾</span>
+            </summary>
+            <div class="absolute right-0 z-20 mt-2 w-48 rounded-md border border-subtle bg-surface p-1 shadow-lg">
+                <a href="{% url 'core:workitem_create' %}" class="flex min-h-[44px] items-center rounded-md px-3 text-[13px] font-medium text-ink-soft hover:bg-canvas" data-testid="zeitstrom-create-workitem">
+                    {% trans "Aufgabe erstellen" %}
+                </a>
+                <a href="{% url 'core:client_create' %}" class="flex min-h-[44px] items-center rounded-md px-3 text-[13px] font-medium text-ink-soft hover:bg-canvas" data-testid="zeitstrom-create-client">
+                    {% trans "Person anlegen" %}
+                </a>
+            </div>
+        </details>
+        {% endif %}
         <a href="{% url 'core:event_create' %}" class="inline-flex items-center gap-1.5 btn-primary px-3.5 py-2" data-testid="zeitstrom-create-event">
             <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
             {% trans "Kontakt dokumentieren" %}
         </a>
-        {% if user.is_staff_or_above %}
-        <a href="{% url 'core:workitem_create' %}" class="inline-flex items-center gap-1.5 bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas" data-testid="zeitstrom-create-workitem">
-            {% trans "Aufgabe erstellen" %}
-        </a>
-        <a href="{% url 'core:client_create' %}" class="inline-flex items-center gap-1.5 bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas" data-testid="zeitstrom-create-client">
-            {% trans "Person anlegen" %}
-        </a>
-        {% endif %}
     </div>
 </div>
+{% endwith %}
+{% if not uebergabe_mode %}{% include "core/zeitstrom/partials/selection_hint.html" %}{% endif %}
 
 {% include "core/zeitstrom/partials/contacts_navigation.html" %}
 
@@ -74,58 +143,11 @@
 </div>
 {% endif %}
 
-{# Feed ⇄ Übergabe (Refs #1124) #}
-<div class="flex gap-1.5 mb-5">
-    <a href="{% url 'core:zeitstrom' %}" data-testid="zeitstrom-tab-feed" class="inline-flex items-center min-h-[44px] md:min-h-0 px-3 py-1.5 rounded-md text-[13px] font-medium border {% if not uebergabe_mode %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">{% trans "Feed" %}</a>
-    <a href="?view=uebergabe" data-testid="zeitstrom-tab-uebergabe" class="inline-flex items-center min-h-[44px] md:min-h-0 px-3 py-1.5 rounded-md text-[13px] font-medium border {% if uebergabe_mode %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">{% trans "Übergabe" %}</a>
-</div>
-
 {% include "core/zeitstrom/partials/bans_slot.html" %}
 
 {% if uebergabe_mode %}
-{# Datums-Navigation (Übergabe-Modus, behält view=uebergabe bei) #}
-<div class="flex items-center justify-center gap-4 mb-5">
-    <a href="?date={{ prev_date|date:'Y-m-d' }}&view=uebergabe{% if selected_filter %}&time_filter={{ selected_filter.pk }}{% endif %}" aria-label="{% trans 'Vorheriger Tag' %}" class="p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center bg-surface border border-subtle rounded-[10px] text-ink-muted hover:text-ink">
-        <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
-    </a>
-    <div class="text-center">
-        <span class="font-semibold text-[15px] text-ink">{{ target_date|date:"l, j. F Y" }}</span>
-        {% if target_date != today %}<a href="?view=uebergabe" class="ml-2 text-[12px] font-semibold text-accent hover:underline">{% trans "Heute" %}</a>{% endif %}
-    </div>
-    <a href="?date={{ next_date|date:'Y-m-d' }}&view=uebergabe{% if selected_filter %}&time_filter={{ selected_filter.pk }}{% endif %}" aria-label="{% trans 'Nächster Tag' %}" {% if next_date > today %}aria-disabled="true" tabindex="-1"{% endif %} class="p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center bg-surface border border-subtle rounded-[10px] text-ink-muted hover:text-ink {% if next_date > today %}opacity-30 pointer-events-none{% endif %}">
-        <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
-    </a>
-</div>
-{# Schicht-Tabs (Pills) #}
-{% if time_filters %}
-<div class="flex flex-wrap gap-1.5 mb-5 justify-center">
-    <a href="?date={{ target_date|date:'Y-m-d' }}&view=uebergabe" class="inline-flex items-center min-h-[44px] md:min-h-0 px-3 py-1 rounded-full text-[12px] font-medium border {% if not selected_filter %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">{% trans "Ganzer Tag" %}</a>
-    {% for tf in time_filters %}
-    <a href="?date={{ target_date|date:'Y-m-d' }}&time_filter={{ tf.pk }}&view=uebergabe" class="inline-flex items-center min-h-[44px] md:min-h-0 px-3 py-1 rounded-full text-[12px] font-medium border {% if selected_filter.pk == tf.pk %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">{{ tf.label }} <span class="font-mono text-[12px] ml-1">{{ tf.start_time|time:"H:i" }}–{{ tf.end_time|time:"H:i" }}</span></a>
-    {% endfor %}
-</div>
-{% endif %}
 {% include "core/handover/partials/_summary_full.html" with summary=uebergabe_summary %}
 {% else %}
-{# Datums-Navigation (zentriert, Card-Buttons + Heute-Link) #}
-<div class="flex items-center justify-center gap-4 mb-5">
-    <a href="?date={{ prev_date|date:'Y-m-d' }}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if selected_filter_id != 'all' %}&time_filter={{ selected_filter_id }}{% endif %}" aria-label="{% trans 'Vorheriger Tag' %}" class="p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center bg-surface border border-subtle rounded-[10px] text-ink-muted hover:text-ink">
-        <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
-    </a>
-    <div class="text-center">
-        <span class="font-semibold text-[15px] text-ink">{{ target_date|date:"l, j. F Y" }}</span>
-        {% if target_date != today %}
-        <a href="{% url 'core:zeitstrom' %}" class="ml-2 text-[12px] font-semibold text-accent hover:underline">{% trans "Heute" %}</a>
-        {% endif %}
-    </div>
-    <a href="?date={{ next_date|date:'Y-m-d' }}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if selected_filter_id != 'all' %}&time_filter={{ selected_filter_id }}{% endif %}" aria-label="{% trans 'Nächster Tag' %}" {% if next_date > today %}aria-disabled="true" tabindex="-1"{% endif %} class="p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center bg-surface border border-subtle rounded-[10px] text-ink-muted hover:text-ink {% if next_date > today %}opacity-30 pointer-events-none{% endif %}">
-        <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
-    </a>
-</div>
-
-{# TimeFilter-Tabs (Schicht-Auswahl) #}
-{% include "components/_time_filter_dropdown.html" with feed_target_id="feed-list" events_partial_url="core:zeitstrom_feed_partial" %}
-
 {# Aktueller Dienst (Refs #1138): dauerhaft sichtbare Dienst-Übersicht der laufenden Schicht — nicht aufklappbar, nicht an die Zeitstrom-Auswahl gekoppelt. #}
 {% include "core/zeitstrom/partials/current_shift_slot.html" %}
 

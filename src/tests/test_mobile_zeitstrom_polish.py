@@ -33,30 +33,12 @@ def test_tally_action_has_mobile_44px_touch_target():
     assert {"min-h-[44px]", "min-w-[44px]"} <= classes
 
 
-def test_time_filter_tabs_have_mobile_touch_height_and_scroll_hint():
-    time_filter = SimpleNamespace(
-        pk="00000000-0000-0000-0000-000000000002",
-        label="Spätdienst",
-        start_time=None,
-        end_time=None,
-    )
+def test_shift_select_and_date_trigger_have_mobile_touch_height():
+    source = (ROOT / "src/templates/core/zeitstrom/index.html").read_text()
 
-    html = render_to_string(
-        "components/_time_filter_dropdown.html",
-        {
-            "time_filters": [time_filter],
-            "selected_filter": None,
-            "selected_filter_id": "all",
-            "target_date": None,
-            "events_partial_url": "core:zeitstrom_feed_partial",
-            "feed_target_id": "feed-list",
-        },
-    )
-
-    assert 'data-testid="time-filter-scroll-hint"' in html
-    assert "pointer-events-none" in _classes_for_testid(html, "time-filter-scroll-hint")
-    assert "min-h-[44px]" in _classes_for_testid(html, "time-filter-all")
-    assert "min-h-[44px]" in _classes_for_testid(html, "time-filter-spatdienst")
+    assert "min-h-[44px]" in _classes_for_testid(source, "zeitstrom-shift-select")
+    assert "min-h-[44px]" in _classes_for_testid(source, "zeitstrom-selection-trigger")
+    assert "time-filter-scroll-hint" not in source
 
 
 def test_zeitstrom_subnav_chips_have_mobile_touch_height():

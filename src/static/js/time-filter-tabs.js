@@ -1,74 +1,170 @@
 /*
- * Time-Filter-Tab-Highlighting (Refs #692).
+ * Zeitstrom header selection: shift <select> and mobile date/shift sheet.
  *
- * Ersetzt die fruehere Inline-Loesung ueber ``hx-on::before-request`` in
- * ``components/_time_filter_dropdown.html``. Inline-HTMX-Handler werden
- * intern per ``Function()`` evaluiert und brauchen ``script-src 'unsafe-eval'``,
- * was unter dem strengen CSP nach #690 nicht mehr erlaubt ist.
+ * The shift is a native <select>. In the feed it carries the HTMX attributes
+ * (the feed reloads without a page load); in the handover it navigates to the
+ * address stored on the chosen <option>. The select keeps the class
+ * ``time-filter-tab`` because ``zeitstrom-filter-state.js`` and the live watch
+ * identify the transition request by it; ``data-zeitstrom-time-filter`` has to
+ * hold the chosen value *before* HTMX serializes the request, so the change
+ * listener runs in the capture phase.
  *
- * Der Listener filtert global auf ``htmx:beforeRequest`` und reagiert nur,
- * wenn das Quell-Element die ``.time-filter-tab``-Klasse hat. Aktive
- * Stilklassen werden dabei vom vorherigen aktiven Tab entfernt und auf den
- * gerade angeklickten Tab gesetzt.
+ * Inline HTMX handlers are not allowed under the strict CSP (#690), hence this
+ * external script.
  *
- * Refs #1059 (A11Y-017/008, R-B2p-10): Die Leiste selbst wird beim
- * Umschalten NICHT neu gerendert (der Swap trifft die Feed-Liste). Was hier
- * nicht mitgezogen wird, bleibt also auf dem Server-Stand stehen - deshalb
- * wandern ``aria-pressed`` (der Auswahlzustand war vorher rein visuell) und
- * die Textfarbe der Uhrzeit-Spanne (``text-ink-muted`` erreicht auf
- * ``bg-accent-light`` nur 4,31:1) zusammen mit den Stilklassen.
- *
- * Bewusst ``aria-pressed`` statt ``aria-selected``/``role="tab"``: die
- * Knoepfe sind unabhaengige Umschalter, kein ARIA-Tab-Widget (kein
- * Roving-Tabindex, keine Pfeilnavigation, kein zugeordnetes ``tabpanel``).
+ * Mobile: the date/shift trigger opens ``#zeitstrom-selection`` as a bottom
+ * sheet. Escape, a tap on the backdrop, the close button and choosing a shift
+ * close it; focus moves into the sheet on open and back to the trigger on
+ * close. From the ``md`` breakpoint the same element is an ordinary inline
+ * control row, so there is only one date navigation and one shift select.
  */
 (function () {
     "use strict";
 
-    var ACTIVE = [
-        "bg-accent-light",
-        "text-accent",
-        "border-b-2",
-        "border-accent",
-        "font-semibold",
+    var SELECT_ID = "zeitstrom-shift-select";
+    var SHEET_CLASSES = [
+        "fixed",
+        "inset-x-0",
+        "bottom-0",
+        "z-50",
+        "flex",
+        "flex-col",
+        "gap-4",
+        "p-4",
+        "bg-surface",
+        "border-t",
+        "border-subtle",
+        "rounded-t-xl",
+        "shadow-lg",
+        "max-h-[85vh]",
+        "overflow-y-auto",
     ];
-    var INACTIVE = ["text-ink-muted", "hover:text-ink", "hover:bg-canvas"];
-    // Uhrzeit-Spanne im Tab (nur die benannten Zeitfilter haben eine).
-    var TIME_SPAN = ".time-filter-tab-time";
-    var TIME_ACTIVE = "text-accent";
-    var TIME_INACTIVE = "text-ink-muted";
 
-    function _setTimeSpanState(tab, active) {
-        var span = tab.querySelector(TIME_SPAN);
-        if (!span) {
-            return;
-        }
-        span.classList.remove(active ? TIME_INACTIVE : TIME_ACTIVE);
-        span.classList.add(active ? TIME_ACTIVE : TIME_INACTIVE);
+    function byId(id) {
+        return document.getElementById(id);
     }
 
-    document.body.addEventListener("htmx:beforeRequest", function (event) {
-        var target = event.target;
-        if (!target || !target.classList || !target.classList.contains("time-filter-tab")) {
+    function navigate(url) {
+        if (typeof window.__zeitstromNavigate === "function") {
+            window.__zeitstromNavigate(url);
             return;
         }
-        document.querySelectorAll(".time-filter-tab").forEach(function (b) {
-            ACTIVE.forEach(function (cls) {
-                b.classList.remove(cls);
-            });
-            INACTIVE.forEach(function (cls) {
-                b.classList.add(cls);
-            });
-            b.setAttribute("aria-pressed", "false");
-            _setTimeSpanState(b, false);
+        window.location.assign(url);
+    }
+
+    function selectedOption(select) {
+        return select.options[select.selectedIndex] || null;
+    }
+
+    function syncDateLinks(value) {
+        document.querySelectorAll("a[data-date-nav-link]").forEach(function (link) {
+            var href = link.getAttribute("href") || "";
+            var query = href.indexOf("?") === -1 ? "" : href.slice(href.indexOf("?") + 1);
+            var params = new URLSearchParams(query);
+            params.set("time_filter", value);
+            link.setAttribute("href", "?" + params.toString());
         });
-        INACTIVE.forEach(function (cls) {
-            target.classList.remove(cls);
+    }
+
+    function syncTrigger(select) {
+        var trigger = byId("zeitstrom-selection-trigger");
+        var option = selectedOption(select);
+        if (!trigger || !option) return;
+        var shift = trigger.querySelector("[data-sheet-shift]");
+        var range = trigger.querySelector("[data-sheet-range]");
+        if (shift) shift.textContent = option.dataset.label || option.textContent.trim();
+        if (range) {
+            var text = option.dataset.range || "";
+            if (text && option.dataset.live === "1" && trigger.dataset.liveLabel) {
+                text += " · " + trigger.dataset.liveLabel;
+            }
+            range.textContent = text;
+        }
+    }
+
+    function sheet() {
+        return byId("zeitstrom-selection");
+    }
+
+    function isOpen() {
+        var el = sheet();
+        var trigger = byId("zeitstrom-selection-trigger");
+        return !!el && !!trigger && trigger.getAttribute("aria-expanded") === "true";
+    }
+
+    function openSheet() {
+        var el = sheet();
+        var trigger = byId("zeitstrom-selection-trigger");
+        var backdrop = byId("zeitstrom-selection-backdrop");
+        if (!el || !trigger) return;
+        el.classList.remove("hidden");
+        SHEET_CLASSES.forEach(function (cls) {
+            el.classList.add(cls);
         });
-        ACTIVE.forEach(function (cls) {
-            target.classList.add(cls);
+        el.setAttribute("role", "dialog");
+        el.setAttribute("aria-label", trigger.textContent.replace(/\s+/g, " ").trim());
+        if (backdrop) backdrop.classList.remove("hidden");
+        trigger.setAttribute("aria-expanded", "true");
+        var first = el.querySelector("a[href], select, button");
+        if (first) first.focus();
+    }
+
+    function closeSheet(returnFocus) {
+        var el = sheet();
+        var trigger = byId("zeitstrom-selection-trigger");
+        var backdrop = byId("zeitstrom-selection-backdrop");
+        if (!el || !trigger) return;
+        SHEET_CLASSES.forEach(function (cls) {
+            el.classList.remove(cls);
         });
-        target.setAttribute("aria-pressed", "true");
-        _setTimeSpanState(target, true);
+        el.classList.add("hidden");
+        el.removeAttribute("role");
+        el.removeAttribute("aria-label");
+        if (backdrop) backdrop.classList.add("hidden");
+        trigger.setAttribute("aria-expanded", "false");
+        if (returnFocus !== false) trigger.focus();
+    }
+
+    // Capture phase: runs before the HTMX listener on the select itself.
+    document.addEventListener(
+        "change",
+        function (event) {
+            var select = event.target;
+            if (!select || select.id !== SELECT_ID) return;
+            var value = select.value;
+            select.dataset.zeitstromTimeFilter = value;
+            syncDateLinks(value);
+            syncTrigger(select);
+            if (isOpen()) closeSheet();
+            if (select.dataset.navigate === "1") {
+                var option = selectedOption(select);
+                if (option && option.dataset.href) navigate(option.dataset.href);
+            }
+        },
+        true,
+    );
+
+    document.addEventListener("click", function (event) {
+        var target = event.target;
+        if (!target || !target.closest) return;
+        if (target.closest("#zeitstrom-selection-trigger")) {
+            if (isOpen()) {
+                closeSheet();
+            } else {
+                openSheet();
+            }
+            return;
+        }
+        if (!isOpen()) return;
+        if (target.closest("[data-sheet-close]") || target.closest("[data-sheet-backdrop]")) {
+            closeSheet();
+        }
+    });
+
+    document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape" && isOpen()) {
+            event.preventDefault();
+            closeSheet();
+        }
     });
 })();

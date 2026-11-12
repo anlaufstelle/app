@@ -23,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Zeitstrom: eine Kopfzeile für Datum, Schicht und Ansicht** (#2654) — Datum, Schicht-Auswahl und Feed/Übergabe-Wahl stehen in einer Kopfzeile, die Schicht wird nur dort genannt. Weicht die Auswahl vom laufenden Dienst ab, führt ein Hinweis zurück; mobil öffnen Datum und Schicht gemeinsam ein Auswahlblatt.
 - **Demo-Hinweis mobil einzeilig und aufklappbar** (#2663) — Auf dem Handy zeigt die Zeile „Demo · synthetisch · Reset 18:00“, Bereich und Wechsel-Link klappen per Tipp auf (je Sitzung gemerkt). Die Zeile bleibt immer sichtbar; ohne JavaScript steht der volle Hinweis da.
 - **„Schnell verlassen“ als kompakter Knopf oben rechts statt deckender Leiste** (#2660) — Der Knopf nimmt keine eigene Zeile mehr ein; mobil steht „Verlassen“, breit der Volltext. Der Inhalt beginnt auf jeder Breite unterhalb des Knopfs, Hinweisleisten und Offline-Navigation lassen rechts Platz, Statusbalken bleiben voll breit. Auch Passwortwechsel, 2FA-Einrichtung und Offline-Ausweichseite tragen ihn; Kürzel und Tab-Position bleiben.
 - **Basis-Images von PostgreSQL und Caddy aktualisiert, Ausnahmen neu befristet** (#2705) — Neue Index-Digests der Tags `18-alpine` und `2-alpine`; damit entfallen die Befunde in `brotli-libs`, `libcurl` und `go-jose` v4. Die übrigen 46 Ausnahmen (44 PostgreSQL, 2 Caddy) laufen bis 2027-01-15, ihre Begründungen nennen den Stand vom 2026-11-12 und die Erreichbarkeit je Stack.

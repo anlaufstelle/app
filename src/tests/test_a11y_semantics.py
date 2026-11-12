@@ -333,91 +333,56 @@ def time_filters(facility):
 
 
 @pytest.mark.django_db
-class TestTimeFilterTabs:
-    """A11Y-017/008 — der aktive Zeitfilter war rein visuell.
+class TestShiftSelect:
+    """A11Y-017 (superseded): the shift choice is a native ``<select>`` with a visible label.
 
-    R-B2p-10: bewusst KEIN ARIA-Tab-Pattern. ``role="tablist"``/``role="tab"``
-    versprechen ein Composite-Widget (Roving-Tabindex, Pfeilnavigation,
-    zugeordnetes ``tabpanel``), das diese unabhaengigen HTMX-Filterknoepfe nicht
-    liefern. Der Auswahlzustand steht deshalb in ``aria-pressed`` am ``<button>``.
+    The former strip of toggle buttons carried its state in ``aria-pressed``.
+    A native select exposes name, role and value to assistive technology
+    without ARIA, so there is no state attribute left to keep in sync.
     """
 
-    def _tabs(self, html: str) -> list[str]:
-        strip = html[html.index('data-testid="time-filter-tabs"') :]
-        strip = strip[: strip.index("time-filter-scroll-hint")]
-        return re.findall(r"<button[^>]*time-filter-tab[^>]*>", strip, re.DOTALL)
+    def _select(self, html: str) -> str:
+        return re.search(r'<select[^>]*id="zeitstrom-shift-select".*?</select>', html, re.DOTALL).group(0)
 
-    def test_no_half_tab_pattern_is_promised(self, client, staff_user, time_filters):
-        """Weder Rollen noch aria-selected — sonst verspraeche die Rolle mehr,
-        als die Leiste einloest (Cross-Review B2', MITTEL)."""
-        html = _html(client, staff_user, reverse("core:zeitstrom"))
-        strip = html[html.index('data-testid="time-filter-tabs"') :]
-        strip = strip[: strip.index("time-filter-scroll-hint")]
-
-        assert 'role="tablist"' not in strip
-        assert 'role="tab"' not in strip
-        assert "aria-selected" not in strip
-
-    def test_the_group_keeps_its_accessible_name(self, client, staff_user, time_filters):
-        html = _html(client, staff_user, reverse("core:zeitstrom"))
-        group = _tag_with(html, 'aria-label="Zeitfilter"')
-
-        assert 'role="group"' in group, group
-
-    def test_every_filter_carries_aria_pressed(self, client, staff_user, time_filters):
-        html = _html(client, staff_user, reverse("core:zeitstrom"))
-        tabs = self._tabs(html)
-
-        assert len(tabs) == len(time_filters) + 1, "Alle-Knopf plus je ein Zeitfilter"
-        assert all("aria-pressed=" in tag for tag in tabs), tabs
-
-    def test_exactly_one_filter_is_pressed(self, client, staff_user, time_filters):
+    def test_select_has_a_visible_label(self, client, staff_user, time_filters):
         html = _html(client, staff_user, reverse("core:zeitstrom"))
 
-        pressed = [t for t in self._tabs(html) if 'aria-pressed="true"' in t]
-        assert len(pressed) == 1, self._tabs(html)
+        assert re.search(r'<label[^>]*for="zeitstrom-shift-select"[^>]*>\s*Schicht\s*</label>', html)
 
-    def test_the_pressed_filter_is_the_chosen_one(self, client, staff_user, time_filters):
-        chosen = time_filters[1]
-        client.force_login(staff_user)
-        response = client.get(reverse("core:zeitstrom"), {"time_filter": str(chosen.pk)})
-        html = response.content.decode()
+    def test_no_toggle_button_pattern_is_left(self, client, staff_user, time_filters):
+        html = _html(client, staff_user, reverse("core:zeitstrom"))
+        select = self._select(html)
 
-        pressed = [t for t in self._tabs(html) if 'aria-pressed="true"' in t]
-        assert len(pressed) == 1
-        assert f'data-zeitstrom-time-filter="{chosen.pk}"' in pressed[0]
+        assert "aria-pressed" not in select
+        assert 'role="tab' not in html
 
-    def test_all_filter_is_pressed_by_default(self, client, staff_user, time_filters):
-        client.force_login(staff_user)
-        response = client.get(reverse("core:zeitstrom"), {"time_filter": "all"})
-        html = response.content.decode()
+    def test_exactly_one_option_is_selected(self, client, staff_user, time_filters):
+        html = _html(client, staff_user, reverse("core:zeitstrom"))
 
-        pressed = [t for t in self._tabs(html) if 'aria-pressed="true"' in t]
-        assert pressed and 'data-zeitstrom-time-filter="all"' in pressed[0]
+        assert len(re.findall(r"<option[^>]*\bselected\b", self._select(html))) == 1
 
-    def test_active_tab_time_span_switches_to_the_readable_colour(self, client, staff_user, time_filters):
-        """text-ink-muted auf bg-accent-light sind 4,31:1 — unter der AA-Schwelle."""
+    def test_the_selected_option_is_the_chosen_shift(self, client, staff_user, time_filters):
         chosen = time_filters[1]
         client.force_login(staff_user)
         html = client.get(reverse("core:zeitstrom"), {"time_filter": str(chosen.pk)}).content.decode()
 
-        spans = re.findall(r'<span class="time-filter-tab-time[^"]*"', html)
-        assert len(spans) == len(time_filters)
-        assert sum("text-accent" in span for span in spans) == 1
-        assert sum("text-ink-muted" in span for span in spans) == len(time_filters) - 1
+        selected = re.findall(r"<option[^>]*\bselected\b[^>]*>", self._select(html))
+        assert len(selected) == 1
+        assert f'value="{chosen.pk}"' in selected[0]
 
-    def test_inactive_time_spans_stay_muted(self, client, staff_user, time_filters):
-        """Auf „Alle" ist kein Zeitfilter aktiv — dann bleibt jede Spanne gedaempft.
-
-        Ohne ``time_filter=all`` waehlt die Ansicht den Dienst der aktuellen
-        Uhrzeit vor; der Test waere dann tageszeitabhaengig.
-        """
+    def test_all_is_selected_for_the_whole_day(self, client, staff_user, time_filters):
         client.force_login(staff_user)
         html = client.get(reverse("core:zeitstrom"), {"time_filter": "all"}).content.decode()
 
-        spans = re.findall(r'<span class="time-filter-tab-time[^"]*"', html)
-        assert spans and all("text-ink-muted" in span for span in spans)
-        assert not any("text-accent" in span for span in spans)
+        selected = re.findall(r"<option[^>]*\bselected\b[^>]*>", self._select(html))
+        assert len(selected) == 1 and 'value="all"' in selected[0]
+
+    def test_the_view_switch_names_its_group_and_marks_the_current_view(self, client, staff_user, time_filters):
+        html = _html(client, staff_user, reverse("core:zeitstrom"))
+        group = _tag_with(html, 'aria-label="Ansicht"')
+
+        assert 'role="group"' in group, group
+        assert len(re.findall(r'data-testid="zeitstrom-tab-[a-z]+"[^>]*aria-current="page"', html)) == 1
 
 
 @pytest.mark.django_db

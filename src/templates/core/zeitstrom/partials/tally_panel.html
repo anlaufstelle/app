@@ -11,7 +11,7 @@ durch denselben create_event-Pfad.{% endcomment %}
         <div>
             <h2 id="tally-heading" class="text-[11px] font-bold text-ink-muted uppercase tracking-wider leading-none">{% trans "Strichliste" %}</h2>
             <span class="text-[13px] font-semibold text-ink-soft" data-testid="tally-live-context">
-                {% if tally_summary.time_filter %}{{ tally_summary.time_filter.label }} · {% endif %}{{ tally_summary.window_start|date:"d.m.Y H:i" }}–{{ tally_summary.window_end|date:"d.m.Y H:i" }}
+                {{ tally_summary.window_text }}
             </span>
         </div>
         <p class="text-[12px] text-ink-muted md:ml-auto" data-testid="tally-hint">{% trans "tippen zählt +1 · anonym" %}</p>

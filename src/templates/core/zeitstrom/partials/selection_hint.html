@@ -1,0 +1,12 @@
+{% load i18n %}
+{% comment %}Z2: the header names the selected date and shift once. This line appears only when the
+selection is not the running shift and links back to it. The slot stays in the page when empty
+so the shift change (HTMX out-of-band swap) always has a target.{% endcomment %}
+<div id="zeitstrom-selection-hint-slot" {% if selection_hint_oob %}hx-swap-oob="outerHTML"{% endif %}>
+    {% if selection_hint %}
+    <p class="mb-4 text-[13px] text-ink-soft" data-testid="zeitstrom-selection-hint">
+        {% if selection_hint.shift_label %}{% blocktrans with shift=selection_hint.shift_label day=target_date|date:"SHORT_DATE_FORMAT" %}Du siehst {{ shift }}, {{ day }} —{% endblocktrans %}{% else %}{% blocktrans with day=target_date|date:"SHORT_DATE_FORMAT" %}Du siehst den ganzen Tag, {{ day }} —{% endblocktrans %}{% endif %}
+        <a href="{{ today_url }}" class="inline-flex items-center min-h-[44px] md:min-h-0 font-semibold text-accent hover:underline">{% if selection_hint.has_live_shift %}{% trans "zum laufenden Dienst" %}{% else %}{% trans "zu heute" %}{% endif %}</a>
+    </p>
+    {% endif %}
+</div>

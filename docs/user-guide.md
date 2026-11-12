@@ -177,11 +177,15 @@ Der Feed fasst vier Quellen des aktuellen Tages zusammen:
 | **Aufgaben** (WorkItems) | Hinweise und Aufgaben mit Priorität und Status |
 | **Hausverbote** | Aktive Hausverbote — zusätzlich als rotes Banner oben |
 
+**Kopfzeile.** Ganz oben steht eine einzige Zeile mit dem Titel, dem Datumswechsler, der Schicht-Auswahl und der Umschaltung **Feed | Übergabe**; sie gilt für beide Ansichten. Die Schicht wird nur dort genannt. Am Desktop bündelt **Neu** ab der Rolle Fachkraft die Aktionen **Aufgabe erstellen** und **Person anlegen**. Am Handy sind Datum und Schicht ein gemeinsames Tipp-Ziel, das ein Auswahlblatt von unten öffnet; **Schließen**, die Escape-Taste oder ein Tipp neben das Blatt schließen es wieder, der Fokus kehrt zum Tipp-Ziel zurück.
+
 In der rechten Seitenspalte steht die Team-Fokusbox **„Team-Aufgaben mit Handlungsbedarf“** mit bis zu **8 Einträgen**, unabhängig von der Zuweisung. Sie gruppiert nach **Überfällig**, **Heute fällig**, **Dringend · Wichtig** und **In Bearbeitung**; jede Aufgabe erscheint nur in der höchsten zutreffenden Druckstufe. Innerhalb der Gruppen wird nach Fälligkeit, Priorität und Erstellzeit sortiert. Offene normale Aufgaben ohne Frist bleiben über **Zur Aufgabenübersicht** erreichbar.
 
 ### Strichliste
 
 Wenn die Verwaltung geeignete Dokumentationstypen freigegeben hat, steht im Zeitstrom die **Strichliste**. Sie zählt anonyme Kontakte je Typ im aktuellen Zeitfenster. Läuft gerade eine Schicht, gilt deren Zeitfenster; sonst der heutige Kalendertag.
+
+Über den Kacheln steht nur das Zeitfenster (zum Beispiel `14:00–22:00`; überschreitet es Mitternacht, steht `22:00–06:00 (+1)`), nicht noch einmal Schicht und Datum — beides nennt die Kopfzeile.
 
 Jeder Typ erscheint als **Kachel** mit großem Zähler, Aktionsmarke (`+1` oder `+ …`) und Typname. Die ganze Kachel ist die Tippfläche; sie leuchtet nach einem Strich kurz auf. Ist ein Strich noch nicht an den Server übertragen, steht dessen Status auf der Kachel.
 
@@ -192,12 +196,13 @@ Jeder Typ erscheint als **Kachel** mit großem Zähler, Aktionsmarke (`+1` oder 
 
 ### Datum wechseln
 
-- **Pfeil-Buttons** über dem Feed: zum vorherigen oder nächsten Tag.
-- Link **Heute**: springt zurück auf den aktuellen Tag.
+- **Pfeil-Buttons** in der Kopfzeile: zum vorherigen oder nächsten Tag. Heute ist „nächster Tag“ deaktiviert.
+- Link **Heute**: erscheint, wenn ein anderer Tag gewählt ist, und springt zurück auf den aktuellen Tag.
+- Das Datum erscheint im Format der gewählten Sprache (zum Beispiel „Fr, 23. Oktober“ bzw. „Fri, October 23“).
 
 ### Schichtfilter
 
-Unter der Datumsnavigation stehen **TimeFilter-Tabs** (z. B. „Frühdienst", „Spätdienst", „Nachtdienst" — konfigurierbar durch die Administration). Beim Öffnen des Zeitstroms wird die Schicht, die zur aktuellen Uhrzeit passt, automatisch vorausgewählt; Nachtschichten mit Mitternachts-Überlappung werden korrekt behandelt.
+In der Kopfzeile wählen Sie die Schicht in der Auswahlliste **Schicht**: **Ganzer Tag** oder eine eingerichtete Schicht mit Uhrzeiten (z. B. „Frühdienst", „Spätdienst", „Nachtdienst" — konfigurierbar durch die Administration; eine Nachtschicht trägt `(+1)` hinter der Endzeit). Im Feed aktualisiert der Wechsel Feed und Kennzahlen ohne Seitenwechsel; in der Übergabe öffnet er die Übergabe der Schicht. Beim Öffnen des Zeitstroms wird die Schicht, die zur aktuellen Uhrzeit passt, automatisch vorausgewählt; Nachtschichten mit Mitternachts-Überlappung werden korrekt behandelt.
 
 **Zeitumstellung.** An den beiden Umstellungswochenenden ist eine Uhrzeit nicht eindeutig, und der Schichtfilter legt das ausdrücklich fest. In der Nacht zur Winterzeit läuft die Stunde von 02:00 bis 03:00 zweimal; eine Schicht, die in dieser Stunde endet, endet beim **zweiten** Mal — eine Nachtschicht von 20:00 bis 02:45 dauert an diesem Tag also real 7 Stunden 45, und alles, was in der zusätzlichen Stunde dokumentiert wurde, bleibt in Zeitstrom, Übergabe und Strichliste sichtbar. In der Nacht zur Sommerzeit fällt die Stunde von 02:00 bis 03:00 aus; eine Schicht, die dort enden würde, endet stattdessen nach der vereinbarten Dauer ab Schichtbeginn und ist real eine Stunde kürzer. Ganztagsansichten sind davon nicht betroffen — der Umstellungstag im Herbst umfasst weiterhin 25 Stunden, der im Frühjahr 23.
 
@@ -210,6 +215,8 @@ Die beiden Stunden sind für die Anwendung wirklich verschiedene Zeitpunkte, die
 **Beim Bearbeiten** eines Kontakts lässt sich der Zeitpunkt grundsätzlich nicht mehr ändern; er steht dort nur zur Ansicht. Die Auswahl treffen Sie also beim Anlegen. Ist ein Eintrag versehentlich in der falschen Stunde gelandet, legen Sie ihn neu an und lassen den falschen Eintrag löschen ([Kontakt löschen](#kontakt-löschen)).
 
 In der Nacht zur Sommerzeit gibt es die Stunde von 02:00 bis 03:00 dagegen **gar nicht** — dort weist das Formular eine Uhrzeit aus diesem Fenster weiterhin zurück und nennt den Grund. Eine Auswahl gibt es hier nicht: eine Uhrzeit, die es nicht gibt, wird durch keine Angabe real.
+
+Zeigt die Auswahl nicht den laufenden Dienst (anderer Tag oder andere Schicht), steht unter der Kopfzeile ein Hinweis „Du siehst …“ mit dem Link **zum laufenden Dienst**; bei laufendem Dienst erscheint er nicht.
 
 Oberhalb des Feeds steht die dauerhaft sichtbare Box **Aktueller Dienst** mit Kontakten, neuen Aufgaben, neuen Personen und wichtigen Vorkommnissen der laufenden Schicht. Sie ist unabhängig vom gewählten Zeitstrom-Filter und erscheint nur, wenn gerade eine eingerichtete Schicht läuft.
 
