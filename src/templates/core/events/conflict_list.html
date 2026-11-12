@@ -142,6 +142,11 @@
                                     </ul>
                                 </div>
                             </template>
+                            <template x-if="item.showEditCorrectionHint">
+                                <p class="mt-1 text-xs text-ink-muted" data-testid="dead-event-correction-hint">
+                                    {% trans "Hier lässt sich der Eintrag nicht ändern: „Erneut versuchen“ sendet ihn unverändert. Zum Korrigieren die Person öffnen und den Eintrag dort erneut bearbeiten." %}
+                                </p>
+                            </template>
                         </div>
                         <div class="flex items-center gap-2 flex-shrink-0">
                             <button type="button" @click="exportNote(item)"

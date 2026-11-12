@@ -299,3 +299,27 @@ describe("#1828 — Aktions-Skelett retry/discard/reapply", () => {
         expect(c.feedback).toBe("retried");
     });
 });
+
+describe("#2720 — correction hint for a rejected edit", () => {
+    function item(data) {
+        const c = makeComponent();
+        c._reasonText = { invalid: "Vom Server als ungültig abgelehnt" };
+        return c._eventItem({ pk: "ev-x", data: { documentTypeName: "Kontakt", ...data } }, true);
+    }
+
+    it("is shown for a rejected edit of an existing event", () => {
+        expect(item({ deadReason: "invalid", formData: { dauer: "11" } }).showEditCorrectionHint).toBe(true);
+    });
+
+    it("is not shown for a rejected create, a work item or another reason", () => {
+        expect(item({ deadReason: "invalid", wasNew: true }).showEditCorrectionHint).toBe(false);
+        expect(item({ deadReason: "invalid", kind: "workitem" }).showEditCorrectionHint).toBe(false);
+        expect(item({ deadReason: "not-found" }).showEditCorrectionHint).toBe(false);
+    });
+
+    it("is not shown for a conflict entry", () => {
+        const c = makeComponent();
+        const conflict = c._eventItem({ pk: "ev-c", data: { deadReason: "invalid" } }, false);
+        expect(conflict.showEditCorrectionHint).toBe(false);
+    });
+});

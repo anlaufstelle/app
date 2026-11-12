@@ -335,7 +335,7 @@ describe("#2289 — Edit-Replay (Aenderungen)", () => {
         expect(store.updateEventLocalStatus).toHaveBeenCalledWith(eventPkA, "clean");
     });
 
-    it("laesst Konflikt- und Validierungsfaelle unberuehrt", async () => {
+    it("laesst Konflikte unberuehrt und legt eine abgelehnte Bearbeitung als nicht uebertragbar ab", async () => {
         const record = modifiedRecord(eventPkA);
         rows.set(record.pk, record);
         vi.stubGlobal(
@@ -351,8 +351,10 @@ describe("#2289 — Edit-Replay (Aenderungen)", () => {
             vi.fn(async () => resp({ ok: false, status: 422, json: async () => ({ errors: { notiz: [{ code: "required" }] } }) }))
         );
         const invalid = await window.offlineEdit.replayModifiedEvent(record, { replay: true });
-        expect(invalid.status).toBe("invalid");
-        expect(store.updateEventLocalStatus).toHaveBeenCalledWith(eventPkA, "modified");
+        // Refs #2720: a rejected background replay is kept as failed, not resent on every page load.
+        expect(invalid.status).toBe("dead");
+        expect(store.markEventDead).toHaveBeenCalledWith(eventPkA, "invalid", JSON.stringify({ notiz: ["required"] }));
+        expect(store.updateEventLocalStatus).not.toHaveBeenCalledWith(eventPkA, "modified");
     });
 });
 

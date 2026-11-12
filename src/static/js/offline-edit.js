@@ -574,6 +574,19 @@
     }
 
     /*
+     * Refs #2187/#2720: Nur Feldnamen + Fehlercodes ins Dead-Letter-Detail;
+     * serverseitige Meldungen koennen Eingabewerte enthalten.
+     */
+    function _errorCodesOnly(fieldErrors) {
+        return Object.fromEntries(
+            Object.entries(fieldErrors || {}).map(([key, items]) => [
+                key,
+                Array.isArray(items) ? items.map((item) => (item && item.code) || "").filter(Boolean) : [],
+            ])
+        );
+    }
+
+    /*
      * Gemeinsame Antwort-Klassifikation fuer Create-Replays — genutzt von
      * replayNewEvent UND replayNewWorkItem (Refs #1398), nach dem
      * HTTP-Replay-Contract (ADR-030). Store-Side-Effects laufen zentral hier:
@@ -642,8 +655,9 @@
             // (kein Server-Re-Render, keine Feld-UI im Create-Kontext). Der
             // Record wird ins Dead-Letter geschoben; Feldfehler-Codes
             // (PII-frei) gehen mit, damit die Dead-Letter-Liste den Grund
-            // anzeigen kann. Der Edit-Pfad (replayModifiedEvent) bleibt
-            // unveraendert: dort ist 422 reparabel.
+            // anzeigen kann. Der Edit-Pfad (replayModifiedEvent) behandelt
+            // den unbeaufsichtigten Replay ebenso (Refs #2720); nur mit
+            // sichtbarem Formular bleibt der Edit "modified".
             let body = null;
             try {
                 body = await response.json();
@@ -657,14 +671,7 @@
             if (!options || options.replay !== true) {
                 return { status: "invalid", errors: fieldErrors };
             }
-            // Refs #2187: Nur Feldnamen + Fehlercodes ins Dead-Letter-Detail;
-            // serverseitige Meldungen koennen Eingabewerte enthalten.
-            const errorCodes = Object.fromEntries(
-                Object.entries(fieldErrors).map(([key, items]) => [
-                    key,
-                    Array.isArray(items) ? items.map((item) => (item && item.code) || "").filter(Boolean) : [],
-                ])
-            );
+            const errorCodes = _errorCodesOnly(fieldErrors);
             await _store().markEventDead(record.pk, "invalid", JSON.stringify(errorCodes));
             _fireCountEvent();
             return { status: "dead", deadReason: "invalid", errors: errorCodes, statusCode: response.status };
@@ -936,17 +943,32 @@
         }
         if (response.status === 422) {
             // Server-seitige Formularvalidierung fehlgeschlagen (#1111): Edit NICHT
-            // verwerfen, als "modified" behalten und dem Nutzer zur Korrektur
-            // melden — sonst ginge die dokumentierte Aenderung still verloren.
+            // verwerfen — sonst ginge die dokumentierte Aenderung still verloren.
             let body = null;
             try {
                 body = await response.json();
             } catch (_e) {
                 body = {};
             }
+            const fieldErrors = (body && body.errors) || {};
+            // Refs #2720: Der unbeaufsichtigte Hintergrund-Replay (options.replay)
+            // hat kein Formular, an dem die Fehler stehen koennten. Als "modified"
+            // gaelte der Edit weiter als sendbare Arbeit und ginge bei jedem
+            // Seitenstart erneut raus (jeder Versuch zaehlt gegen das
+            // Schreiblimit). Wie beim Anlegen (#2187) wandert er ins Dead-Letter:
+            // erhalten, in der Liste "Nicht uebertragbar" sichtbar, nur
+            // Feldnamen + Fehlercodes im Detail.
+            if (options && options.replay === true) {
+                const errorCodes = _errorCodesOnly(fieldErrors);
+                await _store().markEventDead(record.pk, "invalid", JSON.stringify(errorCodes));
+                _fireCountEvent();
+                return { status: "dead", deadReason: "invalid", errors: errorCodes, statusCode: response.status };
+            }
+            // Mit sichtbarem Formular: als "modified" behalten und die Fehler dort
+            // melden.
             await _store().updateEventLocalStatus(record.pk, "modified");
             _fireCountEvent();
-            return { status: "invalid", errors: (body && body.errors) || {} };
+            return { status: "invalid", errors: fieldErrors };
         }
         if (response.status === 404 || response.status === 410) {
             // Refs #1351/#1384: das Edit-Ziel existiert serverseitig
