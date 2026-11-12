@@ -140,3 +140,10 @@ Successful TOTP and passkey verification records `MFA_VERIFIED` with the fixed m
 HTTP 429 rejections record `RATE_LIMITED` with a masked route class, a fixed reason (`request_rate` or `super_admin_backoff`), and the user/facility where already known. Unresolved paths are recorded only as `unresolved`; bodies, queries and actual URL tokens stay out of the details. The cache caps the trail at one row per route class and known account/facility in sixty seconds (anonymous requests share a bucket across all source IPs). If the audit write fails, the response stays 429 and an equally capped security log line names the route class, reason and known identifiers without request contents. Passkey failures and denied backup regeneration also count as critical audit events; successful verification and ordinary throttling alone do not trigger a compliance warning.
 
 All registered admin models audit system-administrator output paths; read-audit failures deny content with HTTP 403. Configuration mutations carry an attributed audit record, while event/history admin pages show only metadata. The anchor volume is read-only for web and writable for cron/maintenance; a configured missing, empty or unreadable anchor aborts backup before publication. The host/owner trust boundary remains.
+
+
+## Nachtrag 2026-11-12: Frist und Einfügesperre bei der Bereinigung
+
+Bei einer echten Bereinigung liest `prune_auditlog` die vorhandenen Einrichtungs-Einstellungen unter Zeilensperre neu, bevor es Personen und weitere Ziele sperrt: Schutz-Gate → Settings → Ziele → Audit-Kette; die so gelesene Frist bestimmt die Löschentscheidung und bleibt bis zum Commit stabil, während `dry_run` ohne diese Sperren auskommt (#2716).
+
+Ab Löschbeginn hält `ALTER TABLE … DISABLE TRIGGER` in `bypass_replication_triggers` eine Tabellensperre (`SHARE ROW EXCLUSIVE`) bis zum Commit, die jedes nebenläufige `INSERT` blockiert und damit auch nach der abschließenden Kandidatenprüfung (`qs.exists()`) bis zum Commit keine weitere Zeile hineinlässt.
