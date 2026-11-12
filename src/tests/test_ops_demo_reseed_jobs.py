@@ -14,7 +14,11 @@ Pinned here:
   soft-deletes seeded anonymous events (older than the 90-day retention);
 * a failing job is reported to the journal like a failed reset and makes the
   script exit non-zero, without stopping the remaining jobs;
-* a failed seed runs no job at all.
+* a failed seed runs no job at all;
+* reseed x audit anchor (Refs #2708): ``seed --flush`` resets the anchor, so
+  the seed and ``verify_audit_chain`` run through the one service that mounts
+  the anchor volume writable at ``DJANGO_AUDIT_HWM_PATH``, and the script does
+  not touch the anchor file itself.
 """
 
 from __future__ import annotations
@@ -25,12 +29,14 @@ import subprocess
 from pathlib import Path
 
 import pytest
+import yaml
 
 pytestmark = pytest.mark.architecture
 
 ROOT = Path(__file__).parents[2]
 SCRIPT = ROOT / "dev-ops/deploy/demo-reseed.sh"
 CRONTAB = ROOT / "deploy" / "crontab"
+COMPOSE_DEMO = ROOT / "docker-compose.demo.yml"
 
 _EXPECTED_DEMO_JOBS = [
     "verify_audit_chain",
@@ -177,3 +183,35 @@ class TestResetRunsTheJobs:
 
         assert result.returncode != 0
         assert "check_db_roles" in _journal(tmp_path)
+
+
+class TestResetAndAuditAnchor:
+    """Refs #2708: the anchor reset happens in ``seed --flush``, not in the script."""
+
+    def _maintenance(self) -> dict:
+        _script_text()
+        compose = yaml.safe_load(COMPOSE_DEMO.read_text(encoding="utf-8"))
+        return compose["services"]["maintenance"]
+
+    def test_maintenance_mounts_the_anchor_volume_writable_at_the_anchor_path(self):
+        service = self._maintenance()
+        anchor_path = service["environment"]["DJANGO_AUDIT_HWM_PATH"]
+        default = re.fullmatch(r"\$\{DJANGO_AUDIT_HWM_PATH:-(.+)\}", anchor_path)
+        assert default, anchor_path
+        directory = str(Path(default.group(1)).parent)
+        assert f"audit-anchor:{directory}:rw" in service["volumes"]
+
+    def test_seed_and_chain_check_share_the_anchor_writing_service(self, tmp_path):
+        result = _run_reseed(tmp_path)
+
+        assert result.returncode == 0, result.stderr
+        calls = _calls(tmp_path)
+        seed = next(call for call in calls if call.endswith("seed --flush --scale=demo"))
+        verify = next(call for call in calls if call.endswith(" verify_audit_chain"))
+        assert seed.rsplit(" seed ", 1)[0] == verify.rsplit(" verify_audit_chain", 1)[0]
+        assert calls.index(seed) < calls.index(verify)
+
+    def test_script_leaves_the_anchor_file_to_the_flush(self):
+        code = "\n".join(line.split("#", 1)[0] for line in _script_text().splitlines())
+        assert "audit_hwm" not in code
+        assert "--retire-chain" not in code

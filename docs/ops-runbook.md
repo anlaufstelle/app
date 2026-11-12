@@ -1671,6 +1671,13 @@ und erst nach erfolgreicher Prüfung Jobs freigeben. Kein neuer Erstlauf darf
 einen vorhandenen Anker ersetzen; das gesicherte Original behalten. Dies ist
 ein Betreiber-Schritt, keine Datenbankmigration.
 
+**`seed --flush` setzt den Anker zurück** (#2708):
+Der Flush ist nur außerhalb der Produktion erlaubt. Er leert das AuditLog und
+ersetzt die Ankerdatei unter `DJANGO_AUDIT_HWM_PATH` in derselben Transaktion
+durch einen signierten leeren Stand; lässt sie sich nicht schreiben, bricht der
+Flush ab und die Datenbank bleibt unverändert. Ohne Flush bleibt ein Anker für
+eine fehlende Einrichtung ein Abbruchgrund von `verify_audit_chain`.
+
 **Vertrauensgrenze:** Der ro-Mount verhindert Schreiben durch den Webprozess
 auf dieses Volume. Er schützt nicht gegen Host-/Docker-Zugriff oder die
 Wartungs-/Owner-Rolle; `web` besitzt weiterhin den Audit-HMAC-Schlüssel. Die

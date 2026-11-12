@@ -68,6 +68,8 @@ SEED_CODE_GLOBS = (
     # The models (defaults, save logic) and the k-threshold helpers the reserve size comes from.
     "src/core/models/**/*.py",
     "src/core/services/dashboard/external_report.py",
+    # The flush resets the external audit anchor through this store (Refs #2708).
+    "src/core/services/audit/hwm.py",
 )
 GUARD_ORDER = ("perf-medium", "perf-large", "demo", "public-skips", "docs-screens")
 PASS, FAIL, SKIP = "PASS", "FAIL", "SKIP"

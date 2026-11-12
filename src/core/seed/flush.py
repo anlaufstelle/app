@@ -1,5 +1,6 @@
 """Flush helper: deletes all seed-able data."""
 
+from django.conf import settings
 from django.db import connection, transaction
 
 from core.models import (
@@ -30,7 +31,22 @@ from core.models import (
     User,
     WorkItem,
 )
+from core.services.audit.hwm import HighWaterMarkStore
 from core.services.dynamic_protection import lock_dynamic_protection_many
+
+
+def _reset_audit_anchor() -> None:
+    """Replace the external audit anchor with a signed, empty store (Refs #2708).
+
+    The flush empties the AuditLog and deletes every facility, but the anchor
+    file lives outside the database and survives. An anchor left behind points
+    to chains that were removed on purpose; ``verify_audit_chain`` would then
+    abort on every following run (orphaned chain, Refs #2296). Only this path
+    resets the anchor -- outside the flush the orphan check stays strict.
+    """
+    path = getattr(settings, "AUDIT_HWM_PATH", "") or ""
+    if path:
+        HighWaterMarkStore(path=path, chains={}).save()
 
 
 def flush_seed_data() -> None:
@@ -42,6 +58,10 @@ def flush_seed_data() -> None:
     Der gesamte Flush läuft in einer Transaktion: schlägt ein später Schritt
     fehl (z.B. ``ALTER TABLE`` mangels Rechten), bleiben die früheren Deletes
     nicht committed zurück. Refs #1040 (S1).
+
+    The external audit anchor is reset as the last step inside the same
+    transaction (Refs #2708): if it cannot be written, the whole flush rolls
+    back instead of leaving an empty AuditLog behind a stale anchor.
     """
     with transaction.atomic():
         lock_dynamic_protection_many(Facility.objects.values_list("pk", flat=True), exclusive=True)
@@ -111,3 +131,4 @@ def flush_seed_data() -> None:
         User.objects.all().delete()
         Facility.objects.all().delete()
         Organization.objects.all().delete()
+        _reset_audit_anchor()

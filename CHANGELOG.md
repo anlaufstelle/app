@@ -50,6 +50,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - **Kettenprüfung bleibt nach Bereinigung einer ruhenden Einrichtung grün** (#2717) — Schrieb eine Einrichtung länger als ihre Audit-Frist keinen Eintrag, löschte die Bereinigung den extern verankerten jüngsten Eintrag und `verify_audit_chain` meldete danach jede Nacht einen Kettenbruch. Der Anker gilt jetzt als bereinigt, wenn der signierte Prüfpunkt ihn führt und er laut Ankerdatei vor der Fristgrenze lag.
+- **Demo-Reset: Audit-Kettenprüfung bleibt nach `seed --flush` grün** (#2708) — `seed --flush` setzt die externe Audit-Ankerdatei jetzt zusammen mit dem Audit-Protokoll zurück. Bisher blieb `verify_audit_chain` dauerhaft rot, sobald ein Prüflauf eine Kette aus dem Seed-Fenster verankert hatte, etwa nach einer Anmeldung während des stündlichen Resets.
 
 ## [0.99.10] - 2026-11-11
 
