@@ -1413,9 +1413,9 @@ docker compose --env-file .env logs --tail=100 cron
 
 This file list applies whenever creating or recreating `cron`, including updates and key rotation (§ 1.2). It connects only `cron` to the additional `cron-egress` network. This network allows general egress, **not an allowlist limited to the webhook address**; `cron` receives the entire `.env` and uses the admin database role. The webhook itself accepts only HTTPS targets with a public IP, connects to the validated IP and does not follow redirects. The overlay gives no egress to `maintenance`; use the command above inside the `cron` container to verify delivery.
 
-A failed (red) `detect_breaches` run reporting `Breach webhook delivery failed` means at least one delivery failed, for example because egress is missing or the URL was rejected. All detected findings are recorded before the command exits with an error. A green run without a finding or pending delivery attempt proves no reachability: trigger a test finding in a test instance and match its `audit_id` at the receiver.
+A failed (red) `detect_breaches` run reporting `Breach webhook delivery failed` means at least one of its own deliveries failed; the failure status and run marker account only for delivery attempts of this invocation, including when scans overlap. All detected findings are recorded before the command exits with an error. A green run without a finding or pending delivery attempt proves no reachability: trigger a test finding in a test instance and match its `audit_id` at the receiver.
 
-Every delivery attempt appends its own audit row (`detail.category=breach_webhook_delivery`, `result=failed` or `delivered`, targeting the finding row). The next scan retries failed deliveries within 24 hours of the finding, even if the pattern has subsided. This creates no second finding row; retries stop after successful delivery. After that window expires the old finding is no longer delivered; an ongoing detected pattern can create a new finding. Without a webhook URL there is no delivery or retry.
+Successful deliveries as well as rejected URLs, HTTP protocol errors and network errors including timeouts each append their own audit row (`detail.category=breach_webhook_delivery`, `result=failed` or `delivered`, targeting the finding row). On failure, the audit row and warning contain only the exception class, no URL or exception message; `detail.run_id` associates the delivery row with its invocation. System-wide finding rows are also retained on these failures. The next scan retries failed deliveries within 24 hours of the finding, even if the pattern has subsided. This creates no second finding row; retries stop after successful delivery. After that window expires the old finding is no longer delivered; an ongoing detected pattern can create a new finding. Without a webhook URL there is no delivery or retry.
 
 The full scan writes a failed run marker on delivery failure. However, the operations overview currently considers only successful markers and their age: it does **not immediately turn red** after a new failure. Until that display is updated, check the command error, cron logs and delivery rows.
 
@@ -3394,4 +3394,4 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.10 -->
 <!-- translation-date: 2026-11-12 -->
-<!-- source-hash: 775a1c08b4ca59a856d59ea13075df5bcc268e02 -->
+<!-- source-hash: 9978b1a3e6d2cf5758832f4db2c93b63b57e2cde -->
