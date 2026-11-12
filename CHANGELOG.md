@@ -21,17 +21,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Changelog-Einträge folgen einer festen Form** (#2704) — Für Mitwirkende: Ein Eintrag hat höchstens zwei Sätze (Redaktionsregel) und 350 Zeichen (Betreiber-Aktionen 600), je Ticket und Abschnitt einen Eintrag, die Abschnitte stehen in fester Folge. `make changelog-check` prüft Länge, Ticket-Dopplung, Folge und Leerzeilen; Nachrunden ändern den Eintrag, sie hängen nichts an.
 - **CI: apt-Schritte erreichen bei einem Spiegelausfall den Ausweichspiegel** (#2707) — Lint-, Test- und E2E-Workflow installieren Systempakete über ein gemeinsames Hilfsskript: Sind sie vorhanden, entfällt apt; sonst wechselt apt von einem toten ersten Spiegel sofort zum nächsten, und ein Teilausfall lässt den Lauf fehlschlagen statt mit veralteten Listen weiterzulaufen.
 - **Zeitstrom berechnet die Schicht-Zusammenfassung nur noch einmal je Seitenaufruf** (#1997) — Zeigten Schichtfilter, Übergabe und Dienst-Übersicht dieselbe Schicht, wurde ihre Zusammenfassung bis zu dreimal berechnet; die Startseite braucht dadurch weniger Datenbankabfragen. Inhalt und Anzeige bleiben unverändert.
+- **Python-Abhängigkeiten aktualisiert** (#2693, #2695, #2696, #2697) — Django 6.1.3, django-unfold 0.110.1, python-dotenv 1.2.4, mutmut 3.8.1, playwright 1.64.1 (Dev). sentry-sdk bleibt unter 2.72 (#2694), weil Versionen ab 2.72.0 `send_default_pii` als veraltet melden.
+- **Frontend-Werkzeuge aktualisiert** (#2698, #2699, #2700, #2701) — vitest 5.1.0, jsdom 31.0.0, tailwindcss und @tailwindcss/cli 4.3.4 (nur Entwicklungswerkzeuge, keine ausgelieferte Bibliothek betroffen); die erzeugte Stylesheet-Datei weicht in einzelnen Selektoren und Variablen ab, die Sichtprüfung steht als Hand-Check an.
+- **GitHub-Actions-Pins aktualisiert** (#2692) — codeql-action 4.39.3, docker/login-action 4.8.0 und cosign-installer 4.1.3, weiterhin als volle Commit-SHA mit Versionskommentar.
 
 ### Fixed
 
 - **Verschlüsseltes Ja/Nein-Feld in der Vorschau korrekt** (#2712) — Zeitstrom, Kontaktliste und Übergabe zeigten ein verschlüsseltes Ja/Nein-Feld wie „Krankenhaus“ aus dem Standardpaket immer als „Ja“, auch wenn kein Häkchen gesetzt war. Die Vorschau entschlüsselt den Wert jetzt vor der Prüfung; ein nicht lesbarer Wert erscheint als „[verschlüsselt]“.
 - **Dokumentationstyp-Filter im Zeitstrom findet auch an vollen Tagen alle Treffer** (#2717) — Der Filter griff erst nach der Grenze von 200 Einträgen; an einem Tag mit mehr Einträgen blieb er leer, obwohl es Treffer gab. Er filtert jetzt vor der Grenze, auch für die automatische Aktualisierung.
-
-### Changed
-
-- **Python-Abhängigkeiten aktualisiert** (#2693, #2695, #2696, #2697) — Django 6.1.3, django-unfold 0.110.1, python-dotenv 1.2.4, mutmut 3.8.1, playwright 1.64.1 (Dev). sentry-sdk bleibt unter 2.72 (#2694), weil Versionen ab 2.72.0 `send_default_pii` als veraltet melden.
-- **Frontend-Werkzeuge aktualisiert** (#2698, #2699, #2700, #2701) — vitest 5.1.0, jsdom 31.0.0, tailwindcss und @tailwindcss/cli 4.3.4 (nur Entwicklungswerkzeuge, keine ausgelieferte Bibliothek betroffen); die erzeugte Stylesheet-Datei weicht in einzelnen Selektoren und Variablen ab, die Sichtprüfung steht als Hand-Check an.
-- **GitHub-Actions-Pins aktualisiert** (#2692) — codeql-action 4.39.3, docker/login-action 4.8.0 und cosign-installer 4.1.3, weiterhin als volle Commit-SHA mit Versionskommentar.
 
 ## [0.99.10] - 2026-11-11
 
