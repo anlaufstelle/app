@@ -162,3 +162,45 @@ class TestWiederherstellenEntscheidetAmGesperrtenStand:
         stand = Case.objects.filter(pk=case_trashed.pk).values("is_deleted", "client_id").get()
         assert stand == {"is_deleted": False, "client_id": andere_person.pk}
         assert _restore_zeilen(case_trashed).count() == 1
+
+
+class TestRestoreRequiresLiveClient:
+    """A case must not leave the trash while its person is trashed or revoked."""
+
+    @pytest.mark.parametrize(
+        "client_state",
+        [
+            {"is_deleted": True, "deleted_at": timezone.now()},
+            {"is_active": False},
+        ],
+        ids=["client-in-trash", "client-inactive"],
+    )
+    def test_case_of_unavailable_client_stays_in_trash(self, case_trashed, admin_user, client_state):
+        Client.objects.filter(pk=case_trashed.client_id).update(**client_state)
+        before = _loeschstand(case_trashed)
+
+        with pytest.raises(ValidationError) as excinfo:
+            restore_case(case_trashed, admin_user)
+
+        assert "Person" in str(excinfo.value)
+        assert _loeschstand(case_trashed) == before
+        assert before["is_deleted"] is True
+        assert not _restore_zeilen(case_trashed).exists()
+
+    def test_case_of_live_client_is_still_restored(self, case_trashed, admin_user):
+        restore_case(case_trashed, admin_user)
+
+        assert _loeschstand(case_trashed)["is_deleted"] is False
+        assert _restore_zeilen(case_trashed).count() == 1
+
+    def test_restore_view_reports_the_refusal(self, client, case_trashed, admin_user):
+        from django.urls import reverse
+
+        Client.objects.filter(pk=case_trashed.client_id).update(is_deleted=True, deleted_at=timezone.now())
+        client.force_login(admin_user)
+
+        response = client.post(reverse("core:case_restore", kwargs={"pk": case_trashed.pk}))
+
+        assert response.status_code == 302
+        assert response.url == reverse("core:case_trash")
+        assert Case.objects.get(pk=case_trashed.pk).is_deleted is True

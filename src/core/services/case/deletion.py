@@ -39,6 +39,7 @@ from django.utils.translation import gettext_lazy as _
 from core.models import Activity, AuditLog, Case, Client, DeletionRequest
 from core.retention.legal_holds import case_has_active_hold, exclude_cases_with_active_holds
 from core.services.audit import audit_event
+from core.services.case.state_contract import _raise_if_clients_revoked
 from core.services.dashboard import log_activity
 from core.services.dynamic_protection import lock_dynamic_protection_gate
 
@@ -463,6 +464,10 @@ def restore_case(case, user):
         raise ValidationError(_("Der Fall liegt nicht im Papierkorb."))
     if locked.anonymized_at is not None:
         raise ValidationError(_("Der Fall wurde endgültig anonymisiert und kann nicht wiederhergestellt werden."))
+    # The person row is locked by the chain above: a case must not leave the
+    # trash while its person is trashed or revoked (it would vanish from the
+    # case list and the trash alike).
+    _raise_if_clients_revoked([locked.client_id], actor_facility_id)
     locked.restore()
     # Die Instanz des Aufrufers bekommt den frischen Stand der Zeile — auch
     # einen zwischenzeitlich geaenderten Personenbezug.
