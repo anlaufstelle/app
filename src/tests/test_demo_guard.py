@@ -1,10 +1,17 @@
 """Tests fuer die DemoGuardMiddleware (Refs #1062)."""
 
+import ast
+from functools import cache
+
+import pytest
+from django.contrib.messages import get_messages
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.http import HttpResponse
 from django.test import RequestFactory, SimpleTestCase, override_settings
+from django.urls import reverse
 
 from core.middleware.demo_guard import DemoGuardMiddleware
+from tests.test_demo_settings import _run_demo_import
 
 
 def _request(method, path, **extra):
@@ -74,25 +81,89 @@ class DemoGuardTests(SimpleTestCase):
         allowed = DemoGuardMiddleware(_passthrough)(_request("POST", "/system/maintenance/"))
         self.assertEqual(allowed.content, b"passed")
 
-    @override_settings(
-        DEMO_MODE=True,
-        DEMO_GUARD_BLOCKED_PREFIXES=(
-            "/system/maintenance/",
-            "/mfa/setup/",
-            "/password-change/",
-            "/admin-mgmt/core/user/",
-        ),
-    )
     def test_blocks_full_demo_denylist(self):
-        for path in (
-            "/system/maintenance/",
-            "/mfa/setup/",
-            "/password-change/",
-            "/admin-mgmt/core/user/123/change/",
-        ):
-            resp = DemoGuardMiddleware(_passthrough)(_request("POST", path))
-            self.assertEqual(resp.status_code, 302, path)
-        # Kern-Demo-Aktionen + 2FA-Deaktivieren bleiben erlaubt.
-        for path in ("/event/create/", "/client/5/edit/", "/mfa/disable/"):
-            resp = DemoGuardMiddleware(_passthrough)(_request("POST", path))
-            self.assertEqual(resp.content, b"passed", path)
+        with override_settings(DEMO_MODE=True, DEMO_GUARD_BLOCKED_PREFIXES=_demo_blocked_prefixes()):
+            for path in (
+                "/system/maintenance/",
+                "/mfa/setup/",
+                "/password-change/",
+                "/admin-mgmt/core/user/123/change/",
+            ):
+                resp = DemoGuardMiddleware(_passthrough)(_request("POST", path))
+                self.assertEqual(resp.status_code, 302, path)
+            # Core demo actions stay allowed.
+            for path in ("/event/create/", "/client/5/edit/"):
+                resp = DemoGuardMiddleware(_passthrough)(_request("POST", path))
+                self.assertEqual(resp.content, b"passed", path)
+
+
+@cache
+def _demo_blocked_prefixes():
+    """The denylist exactly as the demo settings module defines it."""
+    result = _run_demo_import(
+        "from anlaufstelle.settings.demo import DEMO_GUARD_BLOCKED_PREFIXES;print(repr(DEMO_GUARD_BLOCKED_PREFIXES))"
+    )
+    assert result.returncode == 0, result.stderr
+    return ast.literal_eval(result.stdout.strip())
+
+
+def _demo_post(path):
+    request = _request("POST", path, HTTP_REFERER="/mfa/settings/")
+    with override_settings(DEMO_MODE=True, DEMO_GUARD_BLOCKED_PREFIXES=_demo_blocked_prefixes()):
+        response = DemoGuardMiddleware(_passthrough)(request)
+    return request, response
+
+
+# Every path that changes the second factor or the passkeys of a shared demo account.
+FACTOR_CHANGING_ROUTES = (
+    ("mfa_setup", {}),
+    ("mfa_device_change", {}),
+    ("otp_webauthn:credential-registration-begin", {}),
+    ("otp_webauthn:credential-registration-complete", {}),
+    ("mfa_backup_codes_regenerate", {}),
+    ("mfa_disable", {}),
+    ("mfa_passkey_delete", {"pk": 1}),
+)
+
+# Signing in with a second factor stays possible on the demo.
+SIGN_IN_ROUTES = (
+    ("login", {}),
+    ("mfa_verify", {}),
+    ("otp_webauthn:credential-authentication-begin", {}),
+    ("otp_webauthn:credential-authentication-complete", {}),
+)
+
+
+@pytest.mark.parametrize(("name", "kwargs"), FACTOR_CHANGING_ROUTES)
+def test_demo_blocks_factor_change(name, kwargs):
+    request, response = _demo_post(reverse(name, kwargs=kwargs))
+
+    assert response.status_code == 302
+    assert response["Location"] == "/mfa/settings/"
+    assert [str(message) for message in get_messages(request)] == ["Diese Aktion ist im Demo-Modus deaktiviert."]
+
+
+@pytest.mark.parametrize(("name", "kwargs"), SIGN_IN_ROUTES)
+def test_demo_keeps_sign_in_with_second_factor_open(name, kwargs):
+    _request_obj, response = _demo_post(reverse(name, kwargs=kwargs))
+
+    assert response.content == b"passed"
+
+
+@pytest.mark.django_db
+def test_demo_sign_in_with_totp_completes(client, staff_user):
+    from django_otp.oath import totp
+
+    from core.models import EncryptedTOTPDevice
+
+    device = EncryptedTOTPDevice.objects.create(user=staff_user, name="demo", confirmed=True)
+    token = f"{totp(device.bin_key, step=device.step, t0=device.t0, digits=device.digits):0{device.digits}d}"
+
+    with override_settings(DEMO_MODE=True, DEMO_GUARD_BLOCKED_PREFIXES=_demo_blocked_prefixes()):
+        login = client.post(reverse("login"), {"username": "teststaff", "password": "testpass123"})
+        verify = client.post(reverse("mfa_verify"), {"token": token})
+
+    assert login.status_code == 302
+    assert verify.status_code == 302
+    assert verify.url != reverse("mfa_verify")
+    assert client.session.get("mfa_verified") is True

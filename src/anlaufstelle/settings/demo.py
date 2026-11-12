@@ -80,15 +80,22 @@ DEMO_LOGINS = [
     {"username": "felix", "role": "assistant"},
 ]
 
-# Demo-Guard: POST auf diese Pfade wird bei DEMO_MODE gesperrt (Refs #1062).
-# Nur Aktionen, die die Demo fuer ALLE lahmlegen (Wartungsmodus — vom Reset
-# NICHT heilbar, da Flag-Datei) oder ein geteiltes Konto bis zum stuendlichen
-# Reset aussperren (2FA aktivieren, Passwort aendern, User deaktivieren/
-# Rolle/Loeschen). Nur POST — GET bleibt erlaubt, Besucher koennen die UI also
-# ansehen, nur nicht ausfuehren.
+# Demo guard: POST to these paths is refused when DEMO_MODE is set (Refs #1062).
+# Only actions that break the demo for EVERYONE (maintenance mode — not healed
+# by the reset, it is a flag file) or lock a shared account until the hourly
+# reset: changing the second factor or the passkeys of an account (setup,
+# device change, passkey registration and removal, regenerating backup codes,
+# disabling 2FA), changing the password, deactivating, deleting or re-roling
+# users. Signing in with a second factor stays open. POST only — visitors can
+# still view every page.
 DEMO_GUARD_BLOCKED_PREFIXES = (
     "/system/maintenance/",
     "/mfa/setup/",
+    "/mfa/change-device/",
+    "/mfa/backup-codes/regenerate/",
+    "/mfa/disable/",
+    "/mfa/passkey/",
+    "/webauthn/registration/",
     "/password-change/",
     "/admin-mgmt/core/user/",
 )
