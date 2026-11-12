@@ -138,3 +138,87 @@ def test_deploy_ships_every_sourced_repo_file(script: str) -> None:
         + "\n  ".join(missing)
         + "\nTransfer them to the same path under $REMOTE_DIR."
     )
+
+
+def _demo_deploy_text() -> str:
+    path = Path("dev-ops/deploy/deploy-demo.sh")
+    if not path.exists():
+        pytest.skip("dev-ops/deploy/deploy-demo.sh is stripped from the public snapshot")
+    return path.read_text(encoding="utf-8")
+
+
+def _demo_audit_unit(kind: str) -> str:
+    match = re.search(
+        rf"^sudo tee /etc/systemd/system/anlaufstelle-audit-verify\.{kind} >[^\n]*<<'UNIT'\n(.*?)^UNIT$",
+        _demo_deploy_text(),
+        re.MULTILINE | re.DOTALL,
+    )
+    assert match, f"Demo deploy must install anlaufstelle-audit-verify.{kind}"
+    return match.group(1)
+
+
+def _shared_audit_timer() -> list[str]:
+    path = Path("dev-ops/deploy/install-timers.sh")
+    if not path.exists():
+        pytest.skip("dev-ops/deploy/install-timers.sh is stripped from the public snapshot")
+    audit_call = next(line for line in _flat(path).splitlines() if line.startswith("install_timer audit-verify "))
+    return shlex.split(audit_call)
+
+
+def test_demo_audit_service_uses_demo_admin_stack() -> None:
+    text = _demo_deploy_text()
+    transferred = _transferred(Path("dev-ops/deploy/deploy-demo.sh"))
+    assert "dev-ops/deploy/run-as-admin.sh" in transferred
+    command = _shared_audit_timer()[-1]
+    assert command == "$ADMIN_RUN verify_audit_chain"
+    reseed = Path("dev-ops/deploy/demo-reseed.sh").read_text(encoding="utf-8")
+    compose = re.search(r'^COMPOSE="(.*?)"$', reseed, re.MULTILINE)
+    assert compose
+    assert '$COMPOSE run --rm -T maintenance "$job"' in reseed
+    service = _demo_audit_unit("service")
+    assert "Type=oneshot\n" in service
+    assert "After=docker.service\n" in service
+    assert "Requires=docker.service\n" in service
+    assert "WorkingDirectory=/opt/anlaufstelle\n" in service
+    expected = f"/usr/bin/{compose.group(1)} run --rm -T maintenance {command.split()[-1]}"
+    assert f"ExecStart={expected}\n" in service
+    assert "cd /opt/anlaufstelle" in text
+
+
+def test_demo_audit_timer_matches_shared_schedule() -> None:
+    _demo_deploy_text()
+    schedule = _shared_audit_timer()[2]
+    assert schedule == "*-*-* 03:30:00"
+    timer = _demo_audit_unit("timer")
+    assert f"OnCalendar={schedule}\n" in timer
+    assert "Persistent=true\n" in timer
+    assert "WantedBy=timers.target\n" in timer
+
+
+def test_demo_audit_timer_is_installed_idempotently() -> None:
+    text = _demo_deploy_text()
+    service = text.index("sudo tee /etc/systemd/system/anlaufstelle-audit-verify.service")
+    timer = text.index("sudo tee /etc/systemd/system/anlaufstelle-audit-verify.timer")
+    reload = text.index("sudo systemctl daemon-reload", timer)
+    enable = text.index("sudo systemctl enable --now anlaufstelle-audit-verify.timer", reload)
+    assert text.index("$COMPOSE up -d --remove-orphans") < service < timer < reload < enable
+    assert enable < text.index("$COMPOSE ps")
+
+
+def test_demo_deploy_runs_audit_verification_synchronously_with_warning() -> None:
+    text = _demo_deploy_text()
+    match = re.search(
+        r"^if sudo systemctl start anlaufstelle-audit-verify\.service; then\n(.*?)^else\n(.*?)^fi$",
+        text,
+        re.MULTILINE | re.DOTALL,
+    )
+    assert match, "Deploy must wait for the audit service and handle a failed run without aborting"
+    success, failure = match.groups()
+    assert re.search(r"echo .*audit.*(completed|succeeded)", success)
+    assert "WARNING" in failure
+    assert "journalctl -u anlaufstelle-audit-verify.service" in failure
+    assert ">&2" in failure
+    assert not re.search(r"\b(exit|return)\b", failure)
+    enable = text.index("sudo systemctl enable --now anlaufstelle-audit-verify.timer")
+    assert enable < match.start() < match.end() < text.index("$COMPOSE ps")
+    assert text.count("systemctl start anlaufstelle-audit-verify.service") == 1
