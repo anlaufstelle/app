@@ -625,47 +625,64 @@ def _is_expired(facility, settings_obj, now, event_ids):
     return expired
 
 
-def reopen_approved_proposal_if_not_due(proposal, settings_obj, now):
-    """Reopen a locked approved proposal whose event is no longer due.
+def _earliest_approval_at(proposal):
+    """Return the time of the earliest recorded approval, or ``None``."""
+    stamps = [
+        stamp
+        for stamp in (proposal.first_approved_at, proposal.approved_at, proposal.auto_approved_at)
+        if stamp is not None
+    ]
+    return min(stamps, default=None)
 
-    Only the deadline counts here: holds and processing restrictions keep a
-    due event from deletion without voiding its approval. Returns ``True``
-    when the proposal was reopened.
+
+def reset_approval_if_deadline_moved(proposal, settings_obj, now):
+    """Return a locked approved event proposal to review if its deadline moved.
+
+    The one decision point for the reset sweep and the deletion loop; the
+    caller holds the target rows and the proposal row. An approval covers only
+    the deadline it was given for (Refs #2714): the event must be due now and
+    must already have been due, by today's anchors and periods, when the first
+    approval was given. New case activity, a reopened case or a longer period
+    after the approval fail the second test even once the event is due again.
+    Only the deadline counts here: holds and processing restrictions keep a due
+    event from deletion without voiding its approval. Returns ``True`` when the
+    approval was discarded.
     """
     if proposal.status != RetentionProposal.Status.APPROVED:
         return False
-    if proposal.target_id in _is_expired(proposal.facility, settings_obj, now, [proposal.target_id]):
+    if not Event.objects.filter(pk=proposal.target_id, facility=proposal.facility_id, is_deleted=False).exists():
         return False
-    _reopen_for_new_review(proposal, reason="no_longer_due")
+    target = [proposal.target_id]
+    if proposal.target_id not in _is_expired(proposal.facility, settings_obj, now, target):
+        reason = "no_longer_due"
+    else:
+        approved_at = _earliest_approval_at(proposal)
+        if approved_at is None or proposal.target_id in _is_expired(
+            proposal.facility, settings_obj, approved_at, target
+        ):
+            return False
+        reason = "approved_before_current_deadline"
+    _reopen_for_new_review(proposal, reason=reason)
     return True
 
 
-def reopen_approved_proposals_not_due(facility, settings_obj, now):
-    """Reopen every latest approved event proposal whose event is no longer due.
+def reset_approvals_with_moved_deadline(facility, settings_obj, now):
+    """Check every latest approved event proposal under lock; see :func:`reset_approval_if_deadline_moved`.
 
-    New case activity, a reopened case or a longer retention period can move
-    the deadline back into the future after the second approval. The event then
-    drops out of the deletion run; without this step the old approval would
-    delete it once it is due again (Refs #2714). Locks follow the approval
-    order: target rows first, then the proposal. Returns the number reopened.
+    Runs after the deletion loop of the qualified step. The event selection is
+    read without locks, so an event whose case gained activity while the run
+    was underway drops out of it and is never locked there; this sweep decides
+    it all the same. There is no unlocked filter on the deadline: each
+    candidate is decided at its locked rows. Locks follow the approval order:
+    target rows first, then the proposal. Returns the number of proposals reset.
     """
-    approved = list(
+    candidates = list(
         RetentionProposal.objects.filter(
             facility=facility, target_type="Event", status=RetentionProposal.Status.APPROVED
         ).values_list("pk", "target_id")
     )
-    if not approved:
-        return 0
-    live = set(
-        Event.objects.filter(
-            facility=facility, pk__in={target_id for _, target_id in approved}, is_deleted=False
-        ).values_list("pk", flat=True)
-    )
-    expired = _is_expired(facility, settings_obj, now, live)
-    reopened = 0
-    for pk, target_id in approved:
-        if target_id not in live or target_id in expired:
-            continue
+    reset = 0
+    for pk, target_id in candidates:
         with transaction.atomic():
             _lock_target_rows_for_approval(
                 RetentionProposal(facility=facility, target_type="Event", target_id=target_id)
@@ -679,8 +696,8 @@ def reopen_approved_proposals_not_due(facility, settings_obj, now):
             # Historical decisions are never made active (Refs #2590).
             if latest is None or latest.pk != pk:
                 continue
-            reopened += int(reopen_approved_proposal_if_not_due(latest, settings_obj, now))
-    return reopened
+            reset += int(reset_approval_if_deadline_moved(latest, settings_obj, now))
+    return reset
 
 
 @transaction.atomic

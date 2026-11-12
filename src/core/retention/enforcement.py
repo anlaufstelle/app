@@ -300,17 +300,17 @@ def _soft_delete_events(
                         if is_qualified:
                             raise
                 if current_settings is not None:
+                    if is_qualified:
+                        # The approval covers only the deadline it was given for (Refs #2714).
+                        from core.retention.proposals import reset_approval_if_deadline_moved
+
+                        if reset_approval_if_deadline_moved(latest, current_settings, now or timezone.now()):
+                            continue
                     if (
                         not collect_doomed_events(facility, current_settings, now or timezone.now())
                         .filter(pk=pk)
                         .exists()
                     ):
-                        if is_qualified:
-                            # The approval does not cover a deadline that moved back
-                            # into the future after selection (Refs #2714).
-                            from core.retention.proposals import reopen_approved_proposal_if_not_due
-
-                            reopen_approved_proposal_if_not_due(latest, current_settings, now or timezone.now())
                         continue
                 else:
                     # Direct callers may supply an explicit period without facility settings.
@@ -572,12 +572,27 @@ def enforce_qualified(
     Returns ``{"count": N}``.
     """
 
-    from core.retention.proposals import create_proposals_for_facility, reopen_approved_proposals_not_due
+    from core.retention.proposals import reset_approvals_with_moved_deadline
 
+    result = _enforce_qualified_events(
+        facility,
+        settings_obj,
+        now,
+        dry_run,
+        deferred_ids=deferred_ids,
+        failed_ids=failed_ids,
+        approval_blocked_ids=approval_blocked_ids,
+    )
     if not dry_run:
-        # Refs #2714: an approval whose event is no longer due must not delete
-        # it later; the proposal goes back to two-person review.
-        reopen_approved_proposals_not_due(facility, settings_obj, now)
+        # Refs #2714: after the selection, so an event that dropped out of it
+        # because its deadline moved during the run still loses its approval.
+        reset_approvals_with_moved_deadline(facility, settings_obj, now)
+    return result
+
+
+def _enforce_qualified_events(facility, settings_obj, now, dry_run, *, deferred_ids, failed_ids, approval_blocked_ids):
+    """Propose expired qualified events and delete the approved ones; see :func:`enforce_qualified`."""
+    from core.retention.proposals import create_proposals_for_facility
 
     # Security N8 (Refs #1445): defensiver Abbruch bei 0/negativer Frist (s. enforce_anonymous).
     if settings_obj.retention_qualified_days < 1:

@@ -8,6 +8,7 @@ audit row. A later deletion needs a new two-person approval.
 
 from datetime import timedelta
 from io import StringIO
+from unittest.mock import patch
 
 import pytest
 from django.core.management import call_command
@@ -202,3 +203,74 @@ def test_reset_rows_do_not_raise_mass_delete(
     for proposal in proposals:
         _assert_reset(proposal)
     assert detect_mass_delete(facility) == []
+
+
+def test_activity_between_run_start_and_selection_cannot_reuse_the_approval(
+    approved, facility, client_qualified, case, doc_type_contact, qualified_period, monkeypatch
+):
+    """New case activity lands after the run started but before the event selection.
+
+    The event drops out of the selection, so the deletion loop never locks it.
+    The proposal must still go back to review in this run, and the next daily
+    run must not delete the event on the old approval.
+    """
+    from core.retention import proposals as proposal_service
+
+    event, proposal = approved
+    qualified_period.retention_qualified_days = 1
+    qualified_period.save(update_fields=["retention_qualified_days"])
+    first_run_at = timezone.now()
+    activity_at = first_run_at + timedelta(seconds=1)
+    next_run_at = activity_at + timedelta(days=1, seconds=1)
+    real_create = proposal_service.create_proposals_for_facility
+    calls = []
+
+    def create_then_activity(*args, **kwargs):
+        result = real_create(*args, **kwargs)
+        calls.append(kwargs.get("qualified_only"))
+        # The second call sits in the qualified step, right before its selection.
+        if len(calls) == 2:
+            with patch("django.utils.timezone.now", return_value=activity_at):
+                _new_case_activity(facility, client_qualified, case, doc_type_contact, qualified_period)
+        return result
+
+    with monkeypatch.context() as scheduled:
+        scheduled.setattr(proposal_service, "create_proposals_for_facility", create_then_activity)
+        with patch("django.utils.timezone.now", return_value=first_run_at):
+            _run(facility)
+    assert len(calls) == 2
+    assert not Event.objects.get(pk=event.pk).is_deleted
+    _assert_reset(proposal)
+
+    # The next daily run is slightly later; there was no new human approval.
+    with patch("django.utils.timezone.now", return_value=next_run_at):
+        _run(facility)
+    assert not Event.objects.get(pk=event.pk).is_deleted
+    proposal.refresh_from_db()
+    assert proposal.status == RetentionProposal.Status.PENDING
+
+
+def test_deadline_moved_and_passed_between_two_runs_needs_a_new_approval(
+    approved, facility, client_qualified, case, doc_type_contact, qualified_period
+):
+    """The deadline moves after approval and passes again before any run looks.
+
+    No run ever sees the event as not due; the approval still predates the
+    current deadline and must not carry the deletion.
+    """
+    event, proposal = approved
+    qualified_period.retention_qualified_days = 1
+    qualified_period.save(update_fields=["retention_qualified_days"])
+    activity_at = timezone.now() + timedelta(seconds=1)
+    with patch("django.utils.timezone.now", return_value=activity_at):
+        _new_case_activity(facility, client_qualified, case, doc_type_contact, qualified_period)
+
+    with patch("django.utils.timezone.now", return_value=activity_at + timedelta(days=1, seconds=1)):
+        _run(facility)
+    assert not Event.objects.get(pk=event.pk).is_deleted
+    proposal.refresh_from_db()
+    assert proposal.status == RetentionProposal.Status.PENDING
+    assert proposal.first_approved_by_id is None
+    assert proposal.approved_by_id is None
+    row = _reset_rows(proposal).get()
+    assert row.detail["reason"] == "approved_before_current_deadline"
