@@ -23,6 +23,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Wächter für die Actions-Richtlinie** (#2711) — Ein Test im Entwicklungs-Repo schlägt an, wenn ein ausgelieferter Workflow eine Action außerhalb der am öffentlichen Repo erlaubten Liste (von GitHub erstellte Actions, vier `docker/*`-Actions, `sigstore/cosign-installer`) oder ohne vollen Commit-SHA verwendet; ein Verstoß fällt so vor dem Release auf statt erst im Release-Workflow der App.
 - **Schonfrist für frische Upstream-Fixes in Fremdimages** (#2705) — Ein Treffer unter `critical` mit Fix, dessen Kennung nach dem Build des Fremdimages veröffentlicht wurde, blockiert den Image-Scan erst 14 Tage nach der Veröffentlichung; bis dahin steht er mit Fristende als `grace` im Bericht. Ohne Fix, bei `critical`, ohne verwertbares Datum und im App-Image gilt die bisherige Regel.
 
+### Changed
+
+- **Basis-Images von PostgreSQL und Caddy aktualisiert, Ausnahmen neu befristet** (#2705) — Neue Index-Digests der Tags `18-alpine` und `2-alpine`; damit entfallen die Befunde in `brotli-libs`, `libcurl` und `go-jose` v4. Die übrigen 46 Ausnahmen (44 PostgreSQL, 2 Caddy) laufen bis 2027-01-15, ihre Begründungen nennen den Stand vom 2026-11-12 und die Erreichbarkeit je Stack.
+
 ## [0.99.10] - 2026-11-11
 
 Weiterer Release-Kandidat vor 1.0: bündelt neue Basis-Image-Digests für PostgreSQL, Redis, ClamAV und Caddy (Betreiber-Aktion), einen Schwachstellen-Scan für App- und Fremdimages als Release-Gate mit befristeten Ausnahmen, die Advisory- und SBOM-Prüfung manuell vendorter JavaScript-Bibliotheken, ein offen bleibendes Offline-Bearbeitungsformular, Barrierefreiheits-Korrekturen, einen gehärteten Sprachcookie sowie Sicherheitsupdates für Entwicklungsabhängigkeiten.
