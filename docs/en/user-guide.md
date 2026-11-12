@@ -189,6 +189,7 @@ Each type appears as a **tile** with a large counter, an action mark (`+1` or `+
 
 - **Without required fields:** One tap on the tile (`+1`) immediately creates one anonymous contact.
 - **With required number fields:** The tile carries the mark `+ …`; a tap opens a compact value form. Enter every required value and select **Count contact**. This creates exactly one anonymous contact. For a needle exchange, for example, issued and returned needles belong to the same contact rather than counting multiple contacts.
+- **Undo:** After a tally, a fixed bar with **Undo** and the remaining time appears for 60 seconds, below the tally on desktop and above the bottom navigation on a phone. It always refers to the tally you counted last; it disappears when the time is up.
 - A type appears only when it is enabled for the tally and your role may see it as well as every required field. Types with other required field types do not appear in the tally.
 
 ### Changing the date
@@ -1188,5 +1189,5 @@ Phone, email, date and address patterns are detected heuristically and locally o
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: cb17fd75810ed2b7bfcea01502dac21a2139989f -->
+<!-- source-hash: 073986965d7e3443f7793276072bc83d2ea73305 -->
 <!-- translation-date: 2026-11-12 -->

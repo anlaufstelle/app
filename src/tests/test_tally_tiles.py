@@ -31,6 +31,15 @@ class _Node:
     def find_testid(self, testid):
         return next((n for n in self.descendants() if n.attrs.get("data-testid") == testid), None)
 
+    def find_by_id(self, node_id):
+        return next((n for n in self.descendants() if n.attrs.get("id") == node_id), None)
+
+    def find_by_attr(self, name):
+        return next((n for n in self.descendants() if name in n.attrs), None)
+
+    def all_text(self):
+        return self.text + "".join(child.all_text() for child in self.children)
+
     def contains(self, other):
         node = other
         while node is not None:

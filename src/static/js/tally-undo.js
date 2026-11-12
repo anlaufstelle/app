@@ -14,19 +14,39 @@
 (function () {
     "use strict";
 
+    // Countdown + expiry of the undo bar. The bar shows the remaining seconds in an
+    // aria-hidden suffix, so assistive technology hears only the static label.
     function scheduleExpiry(root) {
         root.querySelectorAll("[data-tally-undo-expires-at]").forEach(function (form) {
+            if (form.dataset.tallyUndoBound) return;
             var expiresAt = Date.parse(form.dataset.tallyUndoExpiresAt || "");
             if (Number.isNaN(expiresAt)) return;
+            form.dataset.tallyUndoBound = "1";
+            var label = form.querySelector("[data-tally-undo-remaining]");
+            var timer = null;
             var remove = function () {
-                form.remove();
+                if (timer !== null) window.clearInterval(timer);
+                var bar = form.closest("[data-tally-undo-bar]") || form;
+                bar.remove();
             };
-            var remaining = expiresAt - Date.now();
-            if (remaining <= 0) {
+            var tick = function () {
+                if (!form.isConnected) {
+                    // Replaced by a newer tap or emptied by an undo: stop quietly.
+                    window.clearInterval(timer);
+                    return;
+                }
+                var remaining = expiresAt - Date.now();
+                if (remaining <= 0) {
+                    remove();
+                    return;
+                }
+                if (label) label.textContent = String(Math.ceil(remaining / 1000));
+            };
+            if (expiresAt - Date.now() <= 0) {
                 remove();
                 return;
             }
-            window.setTimeout(remove, remaining + 10);
+            timer = window.setInterval(tick, 1000);
         });
     }
 
@@ -46,9 +66,12 @@
         scheduleExpiry(document);
         pulseFreshTiles(document);
     });
-    document.body.addEventListener("htmx:afterSwap", function (event) {
-        scheduleExpiry(event.target);
-        // The swapped-in tile replaces the old target, so look at the whole page.
+    function onSwap() {
+        // The swapped-in tile replaces the old target and the undo bar arrives
+        // out of band, so look at the whole page.
+        scheduleExpiry(document);
         pulseFreshTiles(document);
-    });
+    }
+    document.body.addEventListener("htmx:afterSwap", onSwap);
+    document.body.addEventListener("htmx:oobAfterSwap", onSwap);
 })();

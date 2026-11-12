@@ -1,0 +1,3 @@
+{% comment %}Out-of-band-Inhalt für #tally-undo-slot: mit Token die Leiste des letzten Strichs,
+ohne Token (nach der Rücknahme) leer. innerHTML-Swap: der Slot bleibt als Live-Region bestehen.{% endcomment %}
+<div id="tally-undo-slot" hx-swap-oob="innerHTML">{% if tally_undo_token %}{% include "core/zeitstrom/partials/tally_undo_bar.html" %}{% endif %}</div>

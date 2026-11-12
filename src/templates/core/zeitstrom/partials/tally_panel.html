@@ -21,5 +21,8 @@ durch denselben create_event-Pfad.{% endcomment %}
         {% include "core/zeitstrom/partials/tally_row.html" %}
         {% endfor %}
     </div>
+    {# Fester Platz der Rückgängig-Leiste (OOB-Ziel); ausserhalb des Kachelrasters. #}
+    <div id="tally-undo-slot" class="md:min-h-[44px] md:px-4 md:py-2 md:border-t md:border-subtle" aria-live="polite"
+         data-testid="tally-undo-slot"></div>
 </section>
 {% endif %}

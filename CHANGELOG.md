@@ -40,6 +40,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - **Strichliste als Tap-Kacheln** (#2651) — Jeder Typ ist eine Kachel mit großem Zähler und `+1`-Marke; die ganze Kachel zählt, leuchtet kurz auf und zeigt den Offline-Status auf sich selbst. Typen mit Zahlenfeldern tragen `+ …`.
+- **Rückgängig der Strichliste als feste Leiste mit Countdown** (#2652) — Nach einem Strich erscheint 60 Sekunden lang eine feste Leiste mit „Rückgängig · 58 s“ unter der Strichliste, am Handy über der Navigation. Die Kacheln springen nicht mehr; die Leiste zeigt immer den letzten Strich.
 
 ## [0.99.10] - 2026-11-11
 

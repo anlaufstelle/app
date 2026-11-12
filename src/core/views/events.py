@@ -1,6 +1,7 @@
 """Views for event recording and management."""
 
 import logging
+import math
 from contextlib import suppress
 from datetime import date, timedelta
 from urllib.parse import urlencode
@@ -10,6 +11,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
+from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -834,6 +836,11 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
             "tally_undo_expires_at": (
                 event.created_at + timedelta(seconds=TALLY_UNDO_SECONDS) if tally_undo_token else None
             ),
+            "tally_undo_seconds_left": (
+                max(1, math.ceil(TALLY_UNDO_SECONDS - (timezone.now() - event.created_at).total_seconds()))
+                if tally_undo_token
+                else None
+            ),
         }
 
     @staticmethod
@@ -876,6 +883,11 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
             "core/zeitstrom/partials/tally_row.html",
             context,
         )
+        if tally_undo_token:
+            # The undo bar lives in a fixed slot outside the tile grid.
+            response.content += render_to_string(
+                "core/zeitstrom/partials/tally_undo_slot_oob.html", context, request=request
+            ).encode()
         response["HX-Retarget"] = f"#tally-row-{event.document_type_id}"
         response["HX-Reswap"] = "outerHTML"
         response["HX-Trigger-After-Swap"] = "zeitstrom-changed"
@@ -1157,6 +1169,10 @@ class TallyUndoView(AssistantOrAboveRequiredMixin, View):
             response = HttpResponse("")
         else:
             response = render(request, "core/zeitstrom/partials/tally_row.html", context)
+        # Empty out-of-band slot: the undo bar disappears together with the entry.
+        response.content += render_to_string(
+            "core/zeitstrom/partials/tally_undo_slot_oob.html", {"tally_undo_token": None}, request=request
+        ).encode()
         response["HX-Retarget"] = f"#tally-row-{event.document_type_id}"
         response["HX-Reswap"] = "outerHTML"
         response["HX-Trigger-After-Swap"] = "zeitstrom-changed"

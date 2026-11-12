@@ -187,6 +187,7 @@ Jeder Typ erscheint als **Kachel** mit großem Zähler, Aktionsmarke (`+1` oder 
 
 - **Ohne Pflichtfelder:** Ein Tipp auf die Kachel (`+1`) legt sofort einen anonymen Kontakt an.
 - **Mit Zahlen-Pflichtfeldern:** Die Kachel trägt die Marke `+ …`; ein Tipp öffnet eine kompakte Werteingabe. Tragen Sie alle Pflichtwerte ein und wählen Sie **Kontakt zählen**. Das erzeugt genau einen anonymen Kontakt. Bei einem Spritzentausch gehören zum Beispiel Ausgabe und Rückgabe zu demselben Kontakt, statt mehrere Kontakte zu zählen.
+- **Rückgängig:** Nach einem Strich erscheint für 60 Sekunden eine feste Leiste mit **Rückgängig** und der Restzeit, am Desktop unter der Strichliste, am Handy über der unteren Navigation. Sie bezieht sich immer auf Ihren zuletzt gezählten Strich; nach Ablauf verschwindet sie.
 - Ein Typ ist nur sichtbar, wenn er für die Strichliste freigegeben ist und Ihre Rolle ihn sowie alle erforderlichen Felder sehen darf. Typen mit anderen Pflichtfeldarten erscheinen nicht in der Strichliste.
 
 ### Datum wechseln
