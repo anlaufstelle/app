@@ -34,6 +34,17 @@ def hidden_values(response):
     return parser.values
 
 
+def _update_module(kind):
+    """Module whose names the update path of ``kind`` looks up at call time.
+
+    Client and case views drive their update themselves; the event update runs
+    through its workflow service (Refs #2569).
+    """
+    if kind == "event":
+        return "core.services.events.update_workflow"
+    return f"core.views.{ {'client': 'clients', 'case': 'cases'}[kind] }"
+
+
 @pytest.fixture(params=["client", "case"])
 def edit_target(request, client, staff_user):
     return _prepare_edit_target(request, request.param, client, staff_user)
@@ -136,7 +147,7 @@ def test_service_error_keeps_draft_and_original_guards(client, edit_target):
     kind, target, url, payload, field = edit_target
     payload[field] = "Own text kept after service failure"
     with patch(
-        f"core.views.{ {'client': 'clients', 'case': 'cases', 'event': 'events'}[kind] }.update_{kind}",
+        f"{_update_module(kind)}.update_{kind}",
         side_effect=ValidationError("Service rejected"),
     ):
         response = client.post(url, payload)
@@ -198,7 +209,7 @@ def test_uploaded_file_is_named_for_reselection_and_staging_is_cleaned(client, e
     payload[field] = "Main draft"
     payload[text_field.slug] = "Dynamic draft"
     payload[file_field.slug] = SimpleUploadedFile("test.pdf", b"%PDF-1.4\n", content_type="application/pdf")
-    module = f"core.views.{ {'client': 'clients', 'case': 'cases', 'event': 'events'}[kind] }"
+    module = _update_module(kind)
     staged_path = tmp_path / "staged.enc"
 
     def stage(*args, **kwargs):
@@ -290,7 +301,7 @@ def test_service_time_access_loss_is_not_rerendered(client, edit_target, state):
         raise ValidationError("Access rejected")
 
     with patch(
-        f"core.views.{ {'client': 'clients', 'case': 'cases', 'event': 'events'}[kind] }.stage_attachment_uploads",
+        f"{_update_module(kind)}.stage_attachment_uploads",
         side_effect=refuse,
     ):
         response = client.post(url, payload)
@@ -321,7 +332,7 @@ def test_field_restricted_during_submission_is_not_reflected(client, edit_target
         raise ValidationError({secret.slug: "Secret minimum 99"})
 
     with patch(
-        f"core.views.{ {'client': 'clients', 'case': 'cases', 'event': 'events'}[kind] }.stage_attachment_uploads",
+        f"{_update_module(kind)}.stage_attachment_uploads",
         side_effect=refuse,
     ):
         response = client.post(url, payload)

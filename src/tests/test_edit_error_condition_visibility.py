@@ -90,8 +90,13 @@ def test_policy_change_removes_condition_metadata_but_preserves_readable_conditi
         restricted.save(update_fields=["sensitivity"])
         raise ValidationError("Save rejected", code="version_conflict" if failure == "conflict" else "invalid")
 
-    module = {"client": "clients", "case": "cases", "event": "events"}[owner_kind]
-    with patch(f"core.views.{module}.stage_attachment_uploads", side_effect=reject_after_policy_change) as staging:
+    # The event update stages through its workflow service (Refs #2569).
+    module = {
+        "client": "core.views.clients",
+        "case": "core.views.cases",
+        "event": "core.services.events.update_workflow",
+    }[owner_kind]
+    with patch(f"{module}.stage_attachment_uploads", side_effect=reject_after_policy_change) as staging:
         response = client.post(url, payload)
     staging.assert_called_once()
     assert response.status_code == 200

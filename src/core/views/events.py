@@ -23,9 +23,7 @@ from core.forms.events import DynamicEventDataForm, EventMetaForm
 from core.forms.tally import TallyNumberDataForm
 from core.models import Client, DocumentType, Event
 from core.services.attachments import (
-    lock_attachment_batch_before_audit,
     quota_backstop_audit_boundary,
-    stage_attachment_uploads,
     stage_uploads,
 )
 from core.services.case import get_case_or_none
@@ -45,7 +43,6 @@ from core.services.events import (
     TALLY_IDEMPOTENCY_SCOPE,
     TALLY_UNDO_SECONDS,
     TallyUndoDenied,
-    apply_attachment_changes,
     build_attachment_context,
     build_event_conflict_state,
     build_event_detail_context,
@@ -72,10 +69,10 @@ from core.services.events import (
     split_file_and_text_data,
     tally_request_matches_live_context,
     undo_tally_event,
-    update_event,
 )
-from core.services.events.crud import event_form_state_token, lock_event_for_edit
+from core.services.events.crud import event_form_state_token
 from core.services.events.fields import file_marker_slugs, stage_index
+from core.services.events.update_workflow import EventUpdateInput, removal_actions, update_event_with_attachments
 from core.services.scoping import get_scoped_object
 from core.services.zeitstrom_filters import zeitstrom_filter_state
 from core.utils.formatting import isoformat_or_none
@@ -1315,81 +1312,25 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
             # Formular-Pfad. JSON-/HTMX-Clients (Offline-Replay) behalten ihren
             # Versionsvertrag unveraendert: jeder Mismatch = 409.
             expected_form_state = None if wants_json else (request.POST.get("expected_form_state") or None)
-            # Event-Update + Attachment-Versionierung atomar (Refs #584/#587/#622).
-            # Refs #1956: Scan + Fernet-Verschluesselung liegen als Staging VOR
-            # dem atomic — im Block faellt nur noch der schnelle DB-Write an.
-            # Refs #1958: ``update_event`` schreibt in diesem Block jetzt
-            # tatsaechlich eine AuditLog-Zeile — ihr per-Einrichtung-Advisory-
-            # Lock faellt erst mit dem Commit, hier also erst nach dem
-            # ``apply_attachment_changes`` darunter, und laege ohne das Staging
-            # zusaetzlich ueber dem gesamten ClamAV-Scan. ``merged`` traegt die
-            # kuenftige Markerlage (``merge_update_payload``), damit die
-            # REPLACE-Aufloesung beider Seiten identisch ist.
-            committed = False
-            staged_all: list = []
+            # Refs #2569: staging, lock order, atomic write and cleanup of
+            # prepared files live in the workflow service; this view only
+            # translates its errors into responses. ``merged`` carries the
+            # future markers (``merge_update_payload``) so staging and locking
+            # resolve replacements identically.
+            update = EventUpdateInput(
+                data_json=merged,
+                file_fields=file_fields,
+                uploads=request.FILES,
+                removals=removal_actions(request.POST),
+                expected_updated_at=expected_updated_at,
+                expected_form_state=expected_form_state,
+                # Refs #1338: JSON-/Offline-Replay-Clients müssen den
+                # Versions-Token mitschicken (kein stilles Last-Write-Wins
+                # mehr). Der klassische HTML-Formular-Pfad bleibt unverändert.
+                require_version_token=wants_json,
+            )
             try:
-                staged_by_key, staged_all = stage_attachment_uploads(
-                    event,
-                    request.user,
-                    request.FILES,
-                    file_fields,
-                    event.document_type,
-                    data_json=merged,
-                )
-                # Refs #2178: Der Rand fuer die Kontingent-Rechenschaft liegt UM die
-                # Transaktion. Reisst das Speicherkontingent erst im Commit, rollt der
-                # ValidationError den ganzen Vorgang zurueck — die
-                # ATTACHMENT_QUOTA_EXCEEDED-Zeile entsteht deshalb erst hier, nach dem
-                # Rollback, statt mit ihm zu verschwinden.
-                with quota_backstop_audit_boundary():
-                    with transaction.atomic():
-                        # Refs #2359: Person -> Ereignis als ERSTE Sperre, mit der
-                        # frisch gelesenen Bindung. Die Anhangs-Vorsperre darunter
-                        # leitet die Person aus der Instanz ab — nach einem
-                        # parallelen Zusammenfuehren waere das die alte Person,
-                        # und ``update_event`` sperrte die neue erst hinter dem
-                        # Ereignis (Zyklus mit der Fallzuordnung, die Person ->
-                        # Fall -> Ereignis sperrt). Der Helfer gleicht die Instanz
-                        # an; alle folgenden Sperren finden beide Zeilen gehalten.
-                        lock_event_for_edit(event)
-                        # Refs #2260: einrichtungsweite Sperr-Reihenfolge — die
-                        # Bestandszeilen dieses Batches werden VOR dem ersten
-                        # Audit-Write gesperrt. ``update_event`` nimmt mit seiner
-                        # AuditLog-Zeile den Ketten-Advisory-Lock der Einrichtung,
-                        # der bis zum Commit haelt; die Zeilensperren des
-                        # ``apply_attachment_changes`` darunter fielen sonst
-                        # dahinter und bildeten mit den Pfaden, die zuerst die
-                        # Zeile und danach den Ketten-Lock nehmen, einen Zyklus.
-                        lock_attachment_batch_before_audit(
-                            event,
-                            request.user,
-                            request.POST,
-                            staged_by_key,
-                            event.document_type,
-                            data_json=merged,
-                        )
-                        update_event(
-                            event,
-                            request.user,
-                            merged,
-                            expected_updated_at=expected_updated_at,
-                            expected_form_state=expected_form_state,
-                            # Refs #1338: JSON-/Offline-Replay-Clients müssen den
-                            # Versions-Token mitschicken (kein stilles Last-Write-
-                            # Wins mehr). Der klassische HTML-Formular-Pfad bleibt
-                            # unverändert (kein require).
-                            require_version_token=wants_json,
-                        )
-                        apply_attachment_changes(
-                            event,
-                            request.user,
-                            request.POST,
-                            request.FILES,
-                            file_fields,
-                            event.document_type,
-                            staged_by_key=staged_by_key,
-                        )
-                    committed = True
+                update_event_with_attachments(event, request.user, update)
             except ValidationError as e:
                 # #1936: Nur die drei expliziten Optimistic-Locking-Codes
                 # duerfen in den 409-Konfliktresolver. Fachliche/service-seitige
@@ -1454,13 +1395,6 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
                 }
                 context.update(edit_error_context(e, data_form, restricted_keys, **comparison))
                 return render(request, "core/events/edit.html", context)
-            finally:
-                # Refs #1345/#1956: Jeder Nicht-Commit-Ausgang laesst die
-                # vorab verschluesselten ``.enc`` verwaisen — restlos entfernen
-                # (Cleanup-Garantie aus #662).
-                if not committed:
-                    for staged in staged_all:
-                        staged.output_path.unlink(missing_ok=True)
 
             # Refs #2289: belastbare Erfolgsbestaetigung fuer den
             # Offline-Replay statt des Redirects (siehe EventCreateView).

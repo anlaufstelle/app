@@ -206,8 +206,8 @@ class TestEditAfterMergeLocksFreshPersonFirst:
 
         from core.models import Client, DocumentType, DocumentTypeField, FieldTemplate
         from core.services.client.merge import merge_clients
+        from core.services.events import update_workflow
         from core.services.file_vault import store_encrypted_file
-        from core.views import events as event_views
 
         source = Client.objects.create(
             facility=facility,
@@ -246,7 +246,7 @@ class TestEditAfterMergeLocksFreshPersonFirst:
         event.data_json = {ft_file.slug: {"__files__": True, "entries": [{"id": str(attachment.pk), "sort": 0}]}}
         event.save(update_fields=["data_json"])
 
-        real_stage = event_views.stage_attachment_uploads
+        real_stage = update_workflow.stage_attachment_uploads
         merged_at: list[int] = []
 
         def stage_after_parallel_merge(*args, **kwargs):
@@ -257,7 +257,7 @@ class TestEditAfterMergeLocksFreshPersonFirst:
 
         client.force_login(staff_user)
         with (
-            patch.object(event_views, "stage_attachment_uploads", stage_after_parallel_merge),
+            patch.object(update_workflow, "stage_attachment_uploads", stage_after_parallel_merge),
             CaptureQueriesContext(connection) as captured,
         ):
             response = client.post(

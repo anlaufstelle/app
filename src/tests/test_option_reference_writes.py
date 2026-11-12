@@ -291,7 +291,9 @@ def test_event_view_maps_option_removal_after_form_validation_to_field_error(
         remove_choice(field)
         return public_writer(*args, **kwargs)
 
-    monkeypatch.setattr(f"core.views.events.{path}_event", remove_then_write)
+    # The event update runs through its workflow service (Refs #2569).
+    writer_module = {"create": "core.views.events", "update": "core.services.events.update_workflow"}[path]
+    monkeypatch.setattr(f"{writer_module}.{path}_event", remove_then_write)
     payload = {
         "document_type": str(target.pk),
         "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),

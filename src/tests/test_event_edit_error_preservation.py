@@ -67,7 +67,9 @@ def test_event_edit_never_writes_or_renders_posted_case(
     elif failure == "success":
         response = client.post(url, payload)
     else:
-        with patch("core.views.events.update_event", side_effect=ValidationError("Service rejected")):
+        with patch(
+            "core.services.events.update_workflow.update_event", side_effect=ValidationError("Service rejected")
+        ):
             response = client.post(url, payload)
     assert response.status_code == (302 if failure == "success" else 200)
     sample_event.refresh_from_db()

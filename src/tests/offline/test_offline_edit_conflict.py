@@ -149,7 +149,7 @@ def _patch_sensitive_event_validation_error(monkeypatch, error_key, hidden_slug)
     """Inject a field-keyed service error whose complete payload is secret."""
     from django.core.exceptions import ValidationError
 
-    from core.views import events as event_views
+    from core.services.events import update_workflow
 
     sensitive_message = (
         f"Verborgene Zahl | slug={hidden_slug} | value=-90071992547409 | min=31415926535897 | max=27182818284590"
@@ -166,7 +166,7 @@ def _patch_sensitive_event_validation_error(monkeypatch, error_key, hidden_slug)
             }
         )
 
-    monkeypatch.setattr(event_views, "update_event", reject_update)
+    monkeypatch.setattr(update_workflow, "update_event", reject_update)
     return sensitive_message, sensitive_code
 
 
@@ -467,19 +467,19 @@ class TestEventUpdateConflict:
         Validierung bleiben echt. So prueft der Endpoint den sonst seltenen
         TOCTOU-Pfad ohne eine synthetische ``ValidationError`` zu mocken.
         """
-        from core.views import events as event_views
+        from core.services.events import update_workflow
 
         number_field = sample_event.document_type.fields.get(field_template__slug="dauer").field_template
         original_data = sample_event.data_json.copy()
         original_updated_at = sample_event.updated_at
         history_count = EventHistory.objects.filter(event=sample_event).count()
-        real_update_event = event_views.update_event
+        real_update_event = update_workflow.update_event
 
         def update_after_range_tightening(*args, **kwargs):
             FieldTemplate.objects.filter(pk=number_field.pk).update(max_value=10)
             return real_update_event(*args, **kwargs)
 
-        monkeypatch.setattr(event_views, "update_event", update_after_range_tightening)
+        monkeypatch.setattr(update_workflow, "update_event", update_after_range_tightening)
         client.force_login(staff_user)
         response = client.post(
             reverse("core:event_update", kwargs={"pk": sample_event.pk}),
@@ -518,16 +518,16 @@ class TestEventUpdateConflict:
         request_headers,
     ):
         """#1936: Visible service errors stay actionable after redirects."""
-        from core.views import events as event_views
+        from core.services.events import update_workflow
 
         number_field = sample_event.document_type.fields.get(field_template__slug="dauer").field_template
-        real_update_event = event_views.update_event
+        real_update_event = update_workflow.update_event
 
         def update_after_range_tightening(*args, **kwargs):
             FieldTemplate.objects.filter(pk=number_field.pk).update(max_value=10)
             return real_update_event(*args, **kwargs)
 
-        monkeypatch.setattr(event_views, "update_event", update_after_range_tightening)
+        monkeypatch.setattr(update_workflow, "update_event", update_after_range_tightening)
         client.force_login(staff_user)
         response = client.post(
             reverse("core:event_update", kwargs={"pk": sample_event.pk}),

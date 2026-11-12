@@ -365,7 +365,7 @@ def lock_event_for_edit(event):
 
     **Erste Sperre des Vorgangs** (Refs #2359): Wer vor der Bearbeitung
     weitere Zeilen dieses Ereignisses sperrt (die Anhangs-Vorsperre in
-    ``EventUpdateView.post``), ruft diesen Helfer ZUERST. Die Vorsperre leitet
+    ``update_event_with_attachments``), ruft diesen Helfer ZUERST. Die Vorsperre leitet
     die Person aus ``event.client_id`` ab; nach einem Zusammenfuehren traegt die
     Instanz dort noch die alte Person. Liefe sie zuerst, hielte der Vorgang
     bereits das Ereignis, wenn dieser Helfer die frisch gelesene Person
@@ -434,7 +434,7 @@ def update_event(
     erlaubten Felder ist aber **leer**. ``update_event`` war die letzte der
     vier Update-Services ohne Mass-Assignment-Prüfung (Restpunkt aus #1786):
     jedes durchgereichte Feld landete blind im ``setattr``. Kein heutiger
-    Aufrufer nutzt Kwargs — ``EventUpdateView.post`` übergibt ausschließlich
+    Aufrufer nutzt Kwargs — ``update_event_with_attachments`` übergibt ausschließlich
     ``data_json``. Ein künftiges Update-Feld muss deshalb bewusst in
     ``allowed`` eingetragen werden, statt still durchzurutschen.
     """

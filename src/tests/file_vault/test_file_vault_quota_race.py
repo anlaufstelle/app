@@ -729,6 +729,9 @@ class TestQueryBudget:
 
 
 VIEW_MODULE_NAMES = ("events.py", "clients.py", "cases.py")
+#: Workflow services that own a view's commit block (Refs #2569: the event
+#: update runs through ``update_event_with_attachments``).
+WORKFLOW_MODULE_PATHS = (("services", "events", "update_workflow.py"),)
 ATTACHMENT_COMMIT_ENTRIES = ("finalize_staged_files", "apply_attachment_changes")
 
 
@@ -777,10 +780,12 @@ class TestAudRandAnJederAufrufstelle:
     """
 
     def test_jede_view_aufrufstelle_liegt_in_einem_audit_rand(self):
-        views = pathlib.Path(__file__).resolve().parents[2] / "core" / "views"
+        core = pathlib.Path(__file__).resolve().parents[2] / "core"
+        sources = [core / "views" / name for name in VIEW_MODULE_NAMES]
+        sources += [core.joinpath(*parts) for parts in WORKFLOW_MODULE_PATHS]
         gefunden = 0
-        for name in VIEW_MODULE_NAMES:
-            quelle = views / name
+        for quelle in sources:
+            name = quelle.name
             tree = ast.parse(quelle.read_text(encoding="utf-8"))
             for aufruf, zeile, stack in _commit_call_sites(tree):
                 gefunden += 1
