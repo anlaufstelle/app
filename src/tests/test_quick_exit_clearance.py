@@ -45,6 +45,7 @@ class _Page(HTMLParser):
         self.wrapper_depth = None
         self.wrapper = None
         self.inside = []  # (tag, attrs) of every element inside the content wrapper
+        self.bar_parent = None  # attrs of the sticky wrapper around #quick-exit-bar
         self.status_depth = None
         self.status_children = []  # attrs of the direct children of #offline-status
 
@@ -54,6 +55,8 @@ class _Page(HTMLParser):
             self.by_id[attributes["id"]] = attributes
         if self.status_depth is not None and len(self.stack) == self.status_depth + 1:
             self.status_children.append(attributes)
+        if attributes.get("id") == "quick-exit-bar" and self.stack:
+            self.bar_parent = self.stack[-1][1]
         if attributes.get("id") == "offline-status":
             self.status_depth = len(self.stack)
         if attributes.get("id") == "flash-messages" and self.stack:
@@ -184,6 +187,7 @@ class TestFullWidthNoticesKeepTheRightEdgeFree:
         wrapper = _classes(page.by_id["offline-status"])
         own_padding = [n for n in wrapper if re.match(r"^(md:)?(p|pr|px|mr|mx)-", n)]
         assert not own_padding, f"#offline-status must not carry spacing on the right: {own_padding}"
+        assert not any(n.endswith("ml-60") for n in wrapper), "the sidebar indent belongs to the sticky wrapper"
         reserve = _child_reserve(wrapper)
         self._assert_reserve({"pr-%g" % (reserve[0] / 4), "md:pr-%g" % (reserve[1] / 4)})
         assert page.status_children, "the status wrapper must contain the bars"
@@ -199,6 +203,14 @@ class TestFullWidthNoticesKeepTheRightEdgeFree:
         client.force_login(staff_user)
         page = _parse(client.get(reverse("core:zeitstrom")).content.decode())
         self._assert_bars_carry_the_reserve(page)
+
+    def test_sticky_wrapper_is_indented_by_the_sidebar_not_its_children(self, client, staff_user, settings_obj):
+        """A full-width wrapper above the fixed sidebar would catch taps on its top corner."""
+        client.force_login(staff_user)
+        page = _parse(client.get(reverse("core:zeitstrom")).content.decode())
+        assert page.bar_parent is not None
+        classes = _classes(page.bar_parent)
+        assert {"sticky", "top-0", "md:ml-60"} <= classes
 
     def test_offline_shell_status_bar_and_navigation(self, client, settings_obj):
         html = client.get(reverse("core:offline_client_shell")).content.decode()

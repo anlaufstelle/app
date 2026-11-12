@@ -120,6 +120,11 @@
     The sticky wrapper also encloses the offline status bar (which carried the
     stickiness itself before, Refs #1495): two separate sticky elements on top-0
     would overlap instead of stacking.
+    From md the wrapper itself is indented by the sidebar width (``md:ml-60``), not
+    its children: the wrapper sits above the fixed sidebar (z-30), so a full-width
+    wrapper would catch taps on the sidebar's top corner for as long as a status
+    bar is visible. Its right edge stays the viewport edge, so the button does not
+    move.
 
     z-30 instead of z-50 (follow-up to #2136): the mobile search overlay is
     ``fixed inset-x-0 top-0 z-[60]`` but lives INSIDE the bottom nav
@@ -135,7 +140,7 @@
     overlays. Against dialogs/toasts from ``<main>`` (``z-50``, later sibling)
     it lost anyway.
     {% endcomment %}
-    <div class="sticky top-0 z-30">
+    <div class="sticky top-0 z-30 md:ml-60">
         <div id="quick-exit-bar" class="flex h-0 items-start justify-end px-4 md:px-8">
             <button type="button" id="quick-exit-button" data-testid="quick-exit-button"
                     aria-keyshortcuts="Control+Shift+X Shift+Escape"
@@ -168,7 +173,7 @@
              data-sync-complete-message="{% trans 'Übertragung beendet.' %}"
              data-queue-unknown-message="{% trans 'Stand der wartenden Änderungen unklar. Bitte erneut versuchen.' %}"
              data-conflict-message="{% trans 'Neuer Konflikt. Öffnen Sie die Seite „Konflikte“ über den Link im Konfliktbanner zur Auflösung.' %}"
-             id="offline-status" class="md:ml-60 [&>:not(.sr-only)]:pr-36 md:[&>:not(.sr-only)]:pr-56">
+             id="offline-status" class="[&>:not(.sr-only)]:pr-36 md:[&>:not(.sr-only)]:pr-56">
             <span class="sr-only" role="status" aria-live="polite" aria-atomic="true"
                   data-testid="offline-status-announcer" x-text="announcement"></span>
             <div x-show="offline" x-cloak
