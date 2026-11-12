@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-12 16:09+0100\n"
+"POT-Creation-Date: 2026-11-12 16:39+0100\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12546,10 +12546,6 @@ msgstr "Demonstration of accountability (GDPR Art. 5(2)). Detection of misuse, e
 msgid "Append-Only durch DB-Konvention und RLS-Policies; Ausnahme ist das Löschen abgelaufener Einträge durch den Aufbewahrungslauf"
 msgstr "Append-only through DB convention and RLS policies; the exception is the deletion of expired entries by the retention run"
 
-#: src/core/services/compliance/vvt.py:310
-msgid "Unveränderbarkeit per DB-Trigger erzwungen (UPDATE/DELETE blockiert); der Aufbewahrungslauf umgeht den Trigger transaktional, um abgelaufene Einträge zu löschen, die Wartungsfunktion für die Hash-Kette, um nur deren Prüfwerte neu zu setzen; fachliche Inhalte ändert keiner der beiden Wege"
-msgstr "Immutability enforced by DB trigger (UPDATE/DELETE blocked); the retention run bypasses the trigger within a transaction to delete expired entries, the maintenance function for the hash chain to reset only its check values; neither path changes business content"
-
 #: src/core/services/compliance/vvt.py:444
 msgid "Leitung der Einrichtung (4-Augen bei der Löschung von Personen sowie von Ereignissen und Fällen der Stufe „Mit Zusatzangaben“)"
 msgstr "Facility management (four eyes when deleting persons and events and cases at the “With additional details” stage)"
@@ -15164,3 +15160,7 @@ msgstr "The daily retention run creates deletion proposals for expired events \"
 #: src/templates/auth/_demo_credentials.html:58
 msgid "Wartungsmodus, Änderungen an 2FA und Passkeys (auch an der 2FA-Pflicht), Passwortänderung sowie Benutzer und Einstellungen im Admin sind gesperrt. Bei bestehenden Konten sind auch Änderungen an Aktivstatus, Rolle und Benutzername gesperrt, einschließlich des eigenen Kontos."
 msgstr "Maintenance mode, changes to 2FA and passkeys (including the 2FA requirement), password changes, and users and settings in the admin are blocked. For existing accounts, changes to active status, role and username are blocked as well, including your own account."
+
+#: src/core/services/compliance/vvt.py:317
+msgid "Unveränderbarkeit per DB-Trigger erzwungen (UPDATE/DELETE blockiert); der Aufbewahrungslauf umgeht den Trigger transaktional, um abgelaufene Einträge zu löschen; fachliche Inhalte ändert er nicht"
+msgstr "Immutability enforced by a DB trigger (UPDATE/DELETE blocked); the retention run bypasses the trigger within a transaction to delete expired entries; it does not change any content"

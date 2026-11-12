@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-12 16:09+0100\n"
+"POT-Creation-Date: 2026-11-12 16:39+0100\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -12634,10 +12634,6 @@ msgstr "Nachweis der Rechenschaftspflicht (DSGVO Art. 5 Abs. 2). Erkennung von M
 msgid "Append-Only durch DB-Konvention und RLS-Policies; Ausnahme ist das Löschen abgelaufener Einträge durch den Aufbewahrungslauf"
 msgstr "Append-Only durch DB-Konvention und RLS-Policies; Ausnahme ist das Löschen abgelaufener Einträge durch den Aufbewahrungslauf"
 
-#: src/core/services/compliance/vvt.py:310
-msgid "Unveränderbarkeit per DB-Trigger erzwungen (UPDATE/DELETE blockiert); der Aufbewahrungslauf umgeht den Trigger transaktional, um abgelaufene Einträge zu löschen, die Wartungsfunktion für die Hash-Kette, um nur deren Prüfwerte neu zu setzen; fachliche Inhalte ändert keiner der beiden Wege"
-msgstr "Unveränderbarkeit per DB-Trigger erzwungen (UPDATE/DELETE blockiert); der Aufbewahrungslauf umgeht den Trigger transaktional, um abgelaufene Einträge zu löschen, die Wartungsfunktion für die Hash-Kette, um nur deren Prüfwerte neu zu setzen; fachliche Inhalte ändert keiner der beiden Wege"
-
 #: src/core/services/compliance/vvt.py:444
 msgid "Leitung der Einrichtung (4-Augen bei der Löschung von Personen sowie von Ereignissen und Fällen der Stufe „Mit Zusatzangaben“)"
 msgstr "Leitung der Einrichtung (4-Augen bei der Löschung von Personen sowie von Ereignissen und Fällen der Stufe „Mit Zusatzangaben“)"
@@ -15252,3 +15248,7 @@ msgstr "Der tägliche Aufbewahrungslauf legt für abgelaufene Ereignisse „Mit 
 #: src/templates/auth/_demo_credentials.html:58
 msgid "Wartungsmodus, Änderungen an 2FA und Passkeys (auch an der 2FA-Pflicht), Passwortänderung sowie Benutzer und Einstellungen im Admin sind gesperrt. Bei bestehenden Konten sind auch Änderungen an Aktivstatus, Rolle und Benutzername gesperrt, einschließlich des eigenen Kontos."
 msgstr "Wartungsmodus, Änderungen an 2FA und Passkeys (auch an der 2FA-Pflicht), Passwortänderung sowie Benutzer und Einstellungen im Admin sind gesperrt. Bei bestehenden Konten sind auch Änderungen an Aktivstatus, Rolle und Benutzername gesperrt, einschließlich des eigenen Kontos."
+
+#: src/core/services/compliance/vvt.py:317
+msgid "Unveränderbarkeit per DB-Trigger erzwungen (UPDATE/DELETE blockiert); der Aufbewahrungslauf umgeht den Trigger transaktional, um abgelaufene Einträge zu löschen; fachliche Inhalte ändert er nicht"
+msgstr "Unveränderbarkeit per DB-Trigger erzwungen (UPDATE/DELETE blockiert); der Aufbewahrungslauf umgeht den Trigger transaktional, um abgelaufene Einträge zu löschen; fachliche Inhalte ändert er nicht"
