@@ -198,7 +198,8 @@ def _rotate_dynamic_json_model(model, *, dry_run: bool, on_contended: Callable[[
     """Rotate nullable-type carriers, including deleted rows and timestamp-less episodes.
 
     Compare the stored payload and, where present, its update timestamp before
-    writing. Concurrent writers win over stale rotation candidates.
+    writing. Concurrent writers win over stale rotation candidates. The update
+    timestamp itself is left unchanged.
     """
     updated = 0
     pks = list(model.objects.values_list("pk", flat=True))
@@ -216,8 +217,11 @@ def _rotate_dynamic_json_model(model, *, dry_run: bool, on_contended: Callable[[
             expected = {"data_json": obj.data_json}
             updates = {"data_json": healed}
             if hasattr(obj, "updated_at"):
+                # Compare only: a concurrent business write still wins (Refs #2131).
+                # ``updated_at`` of people and tasks anchors the inactivity period
+                # before anonymization; a key change is no business change and
+                # must not postpone it (Refs #2715, pattern of the handover notes).
                 expected["updated_at"] = obj.updated_at
-                updates["updated_at"] = timezone.now()
             if _locked_compare_and_swap(model, pk, expected=expected, updates=updates):
                 updated += 1
             elif on_contended is not None:

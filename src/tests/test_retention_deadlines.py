@@ -295,10 +295,14 @@ def test_rotation_does_not_restart_case_deadline(make_event, facility, periods, 
     from core.services.file_vault import rotation
 
     event = make_event(case_status=Case.Status.OPEN)
+    event.case.refresh_from_db()
+    updated_before = event.case.updated_at
     with patch.object(rotation, "_reencrypt_data_json", return_value=({"rotated": "ciphertext"}, True)):
         rotation.rotate_all(dry_run=False)
     event.case.refresh_from_db()
-    assert event.case.updated_at >= clock
+    # The rotation wrote the case but keeps its update timestamp (Refs #2715).
+    assert event.case.data_json == {"rotated": "ciphertext"}
+    assert event.case.updated_at == updated_before
     assert create_proposals_for_facility(facility, periods, clock)["count"] == 1
 
 

@@ -542,6 +542,10 @@ class TestRotateAll:
         assert set(calls_by_model[Event][2]) == {"data_json", "updated_at"}
         assert set(calls_by_model[Client][1]) == {"updated_at", "data_json"}
         assert set(calls_by_model[Case][1]) == {"updated_at", "data_json"}
+        # Refs #2715: ``updated_at`` is compared, never written — it anchors the
+        # inactivity period of people; a rotation must not postpone anonymization.
+        assert set(calls_by_model[Client][2]) == {"data_json"}
+        assert set(calls_by_model[Case][2]) == {"data_json"}
         assert set(calls_by_model[Attachment][1]) == {"original_filename_encrypted"}
         assert set(calls_by_model[RectificationRequest][1]) == {
             "old_value",
