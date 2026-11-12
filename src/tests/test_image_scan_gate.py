@@ -1120,6 +1120,22 @@ class TestGracePeriodForThirdPartyFixes:
         )
         self._assert_only_the_guard_withholds_grace(code, scan, _scan_of(report, other))
 
+    @pytest.mark.parametrize("created", [PUBLISHED_RAW, "2026-11-09T15:15:22.517+01:00"], ids=["same", "same-instant"])
+    def test_identifier_published_at_the_build_time_gets_no_grace_period(self, tmp_path, monkeypatch, created):
+        # Only an identifier published after the build gets a grace period; at the same
+        # instant it may already have been known to the build.
+        other = _other_third_party_ref()
+        code, scan, _, report = self._scan(
+            tmp_path, monkeypatch, _fresh(), now=SCAN_TIME, created=created, control_ref=other
+        )
+        self._assert_only_the_guard_withholds_grace(code, scan, _scan_of(report, other))
+
+    def test_identifier_published_just_after_the_build_gets_a_grace_period(self, tmp_path, monkeypatch):
+        created = (PUBLISHED - dt.timedelta(milliseconds=1)).isoformat()
+        code, scan, summary, _ = self._scan(tmp_path, monkeypatch, _fresh(), now=SCAN_TIME, created=created)
+        assert code == 0, summary
+        assert [f["id"] for f in scan["grace"]] == [GUARDED]
+
     @pytest.mark.parametrize("created", ["1970-01-01T00:00:00Z", "1980-01-01T00:00:00Z", "1999-12-31T23:59:59+00:00"])
     def test_implausibly_old_build_date_gets_no_grace_period(self, tmp_path, monkeypatch, created):
         # A placeholder build date (reproducible builds often use the Unix epoch) would
