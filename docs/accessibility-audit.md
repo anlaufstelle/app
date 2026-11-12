@@ -210,7 +210,7 @@ Zusätzlich bestätige (bewusst akzeptierte) Ausgangswerte ohne Korrekturbedarf:
 
 #### Zweistufige Rahmen im Zeitstrom (#2657)
 
-`--border-soft: oklch(0.87 0.01 75)` ist ausschließlich dekorativ und nicht für WCAG 1.4.11 relevante Bedienelement-Begrenzungen bestimmt. `.card`, Strichlisten-Inhalt, Hausverbot-Hülle und Filterpanel/-Chips nutzen den weichen Rahmen explizit; die globale Default-Regel bleibt `var(--border)`. Der Strichlisten-Titel steht als 12-px-Versallabel vor dem Inhalt; die Fokusbox verwendet bereits ein freistehendes 12-px-Label.
+`--border-soft: oklch(0.87 0.01 75)` ist ausschließlich dekorativ und nicht für WCAG 1.4.11 relevante Bedienelement-Begrenzungen bestimmt. `.card`, Strichlisten-Inhalt und Filterpanel/-Chips nutzen den weichen Rahmen explizit; die globale Default-Regel bleibt `var(--border)`. Die Hausverbot-Hülle verwendet als Warnsignal den vollen roten Rahmen `border-ban` (`--kind-ban`): 4,963:1 gegen `--kind-ban-bg` und 5,468:1 gegen Canvas. Der Strichlisten-Titel steht als 12-px-Versallabel vor dem Inhalt; die Fokusbox verwendet bereits ein freistehendes 12-px-Label.
 
 Rechenweg: OKLCH → OKLab (`a=C·cos(h)`, `b=C·sin(h)`) → lineares sRGB; `Y=0,2126·R+0,7152·G+0,0722·B`, Kontrast `(Yhell+0,05)/(Ydunkel+0,05)`. Leuchtdichten: Weiß `1`, Canvas `0,898026`, harter Rahmen `0,261810`, weicher Rahmen `0,658007`, Akzent `0,097304`, gedämpfter Text `0,157266`. Beispiel Rahmen/Canvas: `(0,898026+0,05)/(0,261810+0,05)=3,040:1`.
 
@@ -222,7 +222,7 @@ Rechenweg: OKLCH → OKLab (`a=C·cos(h)`, `b=C·sin(h)`) → lineares sRGB; `Y=
 | Sekundärbutton, Filteröffner | `.btn-secondary`, `--border` | 3,367:1 | 3,040:1 | ≥ 3:1 |
 | Strichlisten-Kachel, Datumsauslöser, Tagespfeile, inaktives Segment | `border-subtle` | 3,367:1 | 3,040:1 | ≥ 3:1 |
 | Primärbutton, aktives Segment | Akzentfüllung/-rahmen | 7,128:1 | 6,436:1 | ≥ 3:1 |
-| Tastatur-Fokusrahmen (Links, Buttons, Inputs, Selects, Textareas) | `ring-accent`, 2 px Abstand | 7,128:1 | 6,436:1 | ≥ 3:1 |
+| Tastatur-Fokusrahmen (Links, Buttons, Inputs, Selects, Textareas) | `ring-accent`, 2 px Abstand; Feed-Zeilen: 2-px-Innenkontur mit `--accent` | 7,128:1 | 6,436:1 | ≥ 3:1 |
 | Karten-/Listenrahmen, Zeilentrenner | `--border-soft` | 1,483:1 | 1,339:1 | rein dekorativ |
 | Spaltentexte, Uhrzeit, Versallabel | `text-ink-muted` | 5,066:1 | 4,574:1 | ≥ 4,5:1 |
 

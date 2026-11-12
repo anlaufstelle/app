@@ -48,3 +48,16 @@ def test_tally_section_label_is_outside_the_decorative_card():
     assert "border-subtle-soft" in section
     assert "text-[12px]" in re.search(r"<h2\b[^>]*>", html)[0]
     assert html.index('id="tally-heading"') < html.index("<section")
+
+
+def test_ban_warning_border_retains_warning_colour_and_contrast(monkeypatch):
+    html = render_to_string("core/zeitstrom/partials/bans_slot.html", {"active_bans": [{"grund": "Warning"}]})
+    warning = re.search(r'<div class="([^"]*bg-ban-soft[^"]*)"', html)[1].split()
+    assert "border-ban" in warning
+    css = (ROOT / "src/static/css/input.css").read_text()
+    for token in ("kind-ban", "kind-ban-bg", "bg"):
+        match = re.search(rf"--{token}: oklch\(([^)]+)\)", css)
+        assert match, token
+        monkeypatch.setitem(TOKENS, token, tuple(map(float, match[1].split())))
+    for background in ("kind-ban-bg", "surface", "bg"):
+        assert contrast("kind-ban", background) >= 3
