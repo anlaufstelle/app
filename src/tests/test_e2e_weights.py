@@ -297,6 +297,22 @@ def test_converter_rejects_empty_malformed_and_unknown_csv(tmp_path, content):
     assert not output.exists()
 
 
+@pytest.fixture(scope="module")
+def collected_e2e_nodes():
+    collected = subprocess.run(
+        [sys.executable, "-m", "pytest", "-m", "e2e", "--collect-only", "-q", "-p", "no:cacheprovider"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert collected.returncode == 0, collected.stdout + collected.stderr
+    nodes = [line for line in collected.stdout.splitlines() if ".py::" in line]
+    assert nodes
+    assert len(nodes) == len(set(nodes))
+    return nodes
+
+
 def _slice_summary(count):
     result = run("scripts/e2e_slice.py", "--slices", count, "--summary")
     assert result.returncode == 0, result.stderr
@@ -307,7 +323,7 @@ def _slice_summary(count):
     return loads, ratio, unmeasured
 
 
-def test_committed_weights_balance_slices_within_limits():
+def test_committed_weights_balance_slices_within_limits(collected_e2e_nodes):
     """Measured and test-count fallback loads stay balanced within the estimated job budget."""
     job = yaml.safe_load((ROOT / ".github/workflows/e2e.yml").read_text())["jobs"]["test-e2e"]
     count = job["env"]["E2E_SLICES"]
@@ -321,8 +337,16 @@ def test_committed_weights_balance_slices_within_limits():
     # 10% of total test seconds (Stage 2026-11-11 baseline: 2/174 specs and about 8.6%).
     assert unmeasured / (len(data) - 1 + unmeasured) <= 0.02
     assert sum(counts.values()) * calibration["seconds_per_test"] / sum(loads) <= 0.10
-    # Weights estimate test time on the runner; each job also spends setup time (checkout,
-    # dependencies, browser, assets), measured at about six minutes in the workflow comment.
+    measured_counts = Counter(
+        Path(node.split("::", 1)[0]).relative_to("src/tests/e2e").as_posix() for node in collected_e2e_nodes
+    )
+    measured_counts = {name: count for name, count in measured_counts.items() if name in data}
+    assert measured_counts
+    measured_seconds_per_test = sum(data[name] for name in measured_counts) / sum(measured_counts.values())
+    # Allow the robust per-test median to differ from this aggregate mean, including
+    # fixture costs and collection drift, but reject rates below half the measured baseline.
+    assert calibration["seconds_per_test"] >= 0.5 * measured_seconds_per_test
+    # Reserve six minutes for job setup; measure this estimate in the next Stage runs.
     setup_seconds = 6 * 60
     limit_seconds = job["timeout-minutes"] * 60 * 0.7
     assert max(loads) + setup_seconds <= limit_seconds
@@ -358,21 +382,11 @@ def test_partition_manifest_validation(tmp_path, corruption):
         assert "Invalid partition" in result.stderr
 
 
-def test_workflow_slices_cover_collected_e2e_nodes_exactly_once(tmp_path):
+def test_workflow_slices_cover_collected_e2e_nodes_exactly_once(tmp_path, collected_e2e_nodes):
     job = yaml.safe_load((ROOT / ".github/workflows/e2e.yml").read_text())["jobs"]["test-e2e"]
     count = job["env"]["E2E_SLICES"]
     assert job["strategy"]["matrix"]["slice"] == list(range(1, count + 1))
-    collected = subprocess.run(
-        [sys.executable, "-m", "pytest", "-m", "e2e", "--collect-only", "-q", "-p", "no:cacheprovider"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert collected.returncode == 0, collected.stdout + collected.stderr
-    nodes = [line for line in collected.stdout.splitlines() if ".py::" in line]
-    assert nodes
-    assert len(nodes) == len(set(nodes))
+    nodes = collected_e2e_nodes
     buckets = []
     selected = []
     for index in job["strategy"]["matrix"]["slice"]:
