@@ -511,6 +511,66 @@ class TestOfflineEditReplay:
                 page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
             context.close()
 
+    def test_rejected_edit_is_corrected_on_the_person_view(self, browser, base_url, e2e_env):
+        """Refs #2720: An edit the server rejects (422) during the background
+        replay lands under "Nicht uebertragbar". The person opens the person's
+        offline view, finds "Bearbeiten" with the stored value and the rejected
+        field named, corrects the value and saves: the edit is sent and
+        the server holds the corrected value."""
+        client_pk, event_pk = _seed_client_with_event(e2e_env)
+        limit_script = (
+            "from core.models import FieldTemplate;"
+            " FieldTemplate.objects.filter(facility__name='Hauptstelle', slug='dauer').update(max_value={limit})"
+        )
+        context = browser.new_context(locale="de-DE")
+        page = context.new_page()
+        page.set_default_timeout(30000)
+        try:
+            _do_real_login(page, base_url)
+            assert _cache_bundle(page, client_pk)["ok"]
+            _open_offline_detail(page, base_url, client_pk)
+
+            _go_offline(page)
+            page.locator(f"[data-testid='offline-edit-btn-{event_pk}']").click()
+            page.locator("[data-testid='offline-edit-form']").wait_for(state="visible", timeout=10000)
+            page.locator("[data-testid='offline-edit-input-dauer']").fill("99")
+            page.locator("[data-testid='offline-edit-save']").click()
+            page.locator("[data-testid='event-unsynced-badge']").first.wait_for(state="visible", timeout=10000)
+
+            # The server now refuses the stored value (maximum below it).
+            _shell(e2e_env, limit_script.format(limit=20))
+            _go_online(page)
+            page.locator("[data-testid='event-dead-badge']").first.wait_for(state="visible", timeout=20000)
+            assert page.locator("[data-testid='event-unsynced-badge']").count() == 0
+
+            # Reopen the person: the rejected edit is editable and prefilled.
+            _open_offline_detail(page, base_url, client_pk)
+            page.locator(f"[data-testid='offline-edit-btn-{event_pk}']").click()
+            page.locator("[data-testid='offline-edit-form']").wait_for(state="visible", timeout=10000)
+            assert page.locator("[data-testid='offline-edit-input-dauer']").input_value() == "99"
+            assert (
+                "dauer"
+                in page.locator("[data-testid='offline-edit-form'] [data-testid='offline-edit-error']").inner_text()
+            )
+
+            page.locator("[data-testid='offline-edit-input-dauer']").fill("15")
+            page.locator("[data-testid='offline-edit-save']").click()
+            page.locator("[data-testid='event-dead-badge']").first.wait_for(state="hidden", timeout=20000)
+            page.locator("[data-testid='event-unsynced-badge']").first.wait_for(state="hidden", timeout=20000)
+
+            page.wait_for_timeout(500)
+            stored = _shell(
+                e2e_env,
+                f"from core.models import Event; print(Event.objects.get(pk='{event_pk}').data_json.get('dauer'))",
+            )[-1]
+            assert stored == "15"
+        finally:
+            with suppress(Exception):
+                _shell(e2e_env, limit_script.format(limit="None"))
+            with suppress(Exception):
+                page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()
+
     def test_open_edit_form_survives_counter_rebuild(self, browser, base_url, e2e_env):
         """Refs #2688: a sync counter event rebuilds the offline view from
         IndexedDB; an inline edit form opened before must stay open with the
