@@ -208,7 +208,7 @@ RETENTION_PROPOSAL_CATEGORY_PREFIX = "retention_proposal_"
 def _detect_facility_action_burst(
     facility, *, actions, kind, short_threshold, long_threshold, exclude=None
 ) -> list[dict]:
-    """Facility-weiter Burst einer Action-Menge ueber zwei Fenster (kurz + Langzeit).
+    """Facility-wide burst of a set of actions over two windows (short and long).
 
     ``exclude`` is an optional ``Q`` of rows that carry one of ``actions`` but
     do not count towards the burst."""
@@ -304,7 +304,7 @@ def detect_mass_export(facility) -> list[dict]:
 
 
 def detect_mass_delete(facility) -> list[dict]:
-    """Mehr als N DELETE-Aktionen facility-weit im Fenster (kurz + Langzeit).
+    """More than N DELETE actions facility-wide within a window (short and long).
 
     Decisions on retention proposals (approve, reject, defer, reactivate,
     discarded approvals) are written as ``DELETE`` with a category starting
