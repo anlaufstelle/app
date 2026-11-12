@@ -6,9 +6,9 @@ const KEY = "anlaufstelle.demoBanner.open";
 
 const MARKUP = `
     <div id="demo-banner" data-testid="demo-banner" class="group">
-        <span data-demo-banner-summary>Demo · synthetische Daten · Reset 18:00</span>
+        <span data-demo-banner-summary>Demo · synthetisch · Reset 18:00</span>
         <button type="button" hidden data-demo-banner-toggle aria-expanded="true"
-                aria-controls="demo-banner-details">Demo · synthetische Daten · Reset 18:00</button>
+                aria-controls="demo-banner-details">Demo · synthetisch · Reset 18:00</button>
         <span id="demo-banner-details">Details</span>
     </div>
 `;

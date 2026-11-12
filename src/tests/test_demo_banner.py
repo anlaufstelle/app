@@ -80,11 +80,23 @@ class TestDemoBanner:
         parsed = _parse(demo_page)
         banner = parsed.elements[0][1]
         assert banner["data-testid"] == "demo-banner"
-        assert re.search(r"Demo · synthetische Daten · Reset \d{2}:\d{2}", demo_page)
+        assert re.search(r"Demo · synthetisch · Reset \d{2}:\d{2}", demo_page)
         summary = [a for t, a in parsed.elements if "data-demo-banner-summary" in a]
         assert len(summary) == 1
         assert "hidden" not in _classes(summary[0]), "the summary must stay visible on every width"
         assert "hidden" not in summary[0]
+
+    def test_summary_is_short_enough_for_one_line_next_to_the_button_at_390px(self, demo_page):
+        """390 px - 16 px left padding - 144 px reserve for the quick-exit button = 230 px.
+
+        DM Sans at 12 px measures about 5.6 px per character of this text, plus
+        the chevron (16 px): up to 38 characters would still fit the 230 px, the
+        previous wording "Demo · synthetische Daten · Reset 18:00" (39) measured
+        about 240 px and wrapped. 36 characters keeps a margin.
+        """
+        match = re.search(r"Demo · [^<]*Reset \d{2}:\d{2}", demo_page)
+        assert match, "the one-line summary must render"
+        assert len(match.group(0)) <= 36, f"{match.group(0)!r} would wrap at 390 px"
 
     def test_toggle_is_a_button_wired_to_the_details(self, demo_page):
         parsed = _parse(demo_page)

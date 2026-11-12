@@ -235,8 +235,13 @@
         {# and the reset time are a transparency duty of the public demo (Refs #1062, #1604). #}
         {# Without JavaScript the complete notice is visible; demo-banner.js swaps the static #}
         {# line for the toggle and folds the details on mobile (data-collapsed). #}
-        {# pr-36/md:pr-56 keep the right edge free for the quick-exit button (Refs #2660). #}
-        {% blocktrans with reset=demo_next_reset|time:"H:i" asvar demo_summary %}Demo · synthetische Daten · Reset {{ reset }}{% endblocktrans %}
+        {# pr-36/md:pr-56 keep the right edge free for the quick-exit button (Refs #2660, see #}
+        {# the comment above it). The short text is chosen so that it stays on ONE line at 390 px #}
+        {# next to the button: DM Sans 12 px, text about 180 px + chevron 16 px = 196 px against #}
+        {# 390 - 16 (left) - 144 (right reserve) = 230 px; the longer wording "synthetische #}
+        {# Daten" needed about 240 px and wrapped. The folded details and the desktop sentence #}
+        {# carry the full wording. #}
+        {% blocktrans with reset=demo_next_reset|time:"H:i" asvar demo_summary %}Demo · synthetisch · Reset {{ reset }}{% endblocktrans %}
         <div id="demo-banner" class="group bg-amber-100 border-b border-amber-300 text-amber-900 text-center text-xs md:text-[13px] py-1 pl-4 pr-36 md:pr-56" data-testid="demo-banner">
             <span class="md:hidden" data-demo-banner-summary>{{ demo_summary }}</span>
             <button type="button" hidden aria-expanded="true" aria-controls="demo-banner-details" data-demo-banner-toggle data-testid="demo-banner-toggle"
