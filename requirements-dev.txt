@@ -699,9 +699,9 @@ defusedxml==0.7.1 \
     --hash=sha256:1bb3032db185915b62d7c6209c5a8792be6a32ab2fedacc84e01b52c51aa3e69 \
     --hash=sha256:a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61
     # via py-serializable
-django==6.1.2 \
-    --hash=sha256:141efee6ec64d1db6db90683bf734c550102450f444fb099063b0be1bd27d991 \
-    --hash=sha256:a1e92451ccb8b514e91bbb3b6d186d20b4030558f116b5d9de6535455ff210b7
+django==6.1.3 \
+    --hash=sha256:a0530e3fdac55d34ccc5893c36f6c57d7a7083064f3d414537e51473648b3290 \
+    --hash=sha256:b5d2d9e35295065d13b1927b3f19a59bd119f737aa6299def14ccca1ae3c8c0d
     # via
     #   -r requirements.in
     #   django-csp
@@ -746,9 +746,9 @@ django-test-migrations==1.7.0 \
     --hash=sha256:409d5437f7a2a9a47c4c9384902c8fa6d072c142f73b1d75a6df310831f9edea \
     --hash=sha256:9b199fa3817b28846455d8a13434eed44d15cd1bd89a5144902f8e5212bc1199
     # via -r requirements-dev.in
-django-unfold==0.110.0 \
-    --hash=sha256:5b20e87cf389376398dee19f9e168ad1f8c4cd5e53850b4b7d38bb1e17c14f9a \
-    --hash=sha256:cd0bbfd3b96454b6e6eccea98996f9de634e1aa08956807943011b12f2fbcdf2
+django-unfold==0.110.1 \
+    --hash=sha256:8274da7e3c92583c7f875b3ac3ceef0ed75346a1a28b03bede667aba3205e286 \
+    --hash=sha256:92b1bb09e56fcbc8535cef53d19579bd417483fdb8981ceac00de409e8cc5a98
     # via -r requirements.in
 execnet==2.1.2 \
     --hash=sha256:63d83bfdd9a23e35b9c6a3261412324f964c2ec8dcd8d3c6916ee9373e0befcd \
@@ -1208,9 +1208,9 @@ msgpack==1.2.3 \
     --hash=sha256:fafc3b8898b432b841d30a61082c599fa7f4d06885f9dc58ad72259e12059fa6 \
     --hash=sha256:fcc6800daac4922960f6eeb7a0dda3dd4105e0bf7bce0e83ebc465a78cb7bdba
     # via cachecontrol
-mutmut==3.8.0 \
-    --hash=sha256:4c0abcef6b8d1116f2adfaad19df12e1c621e4a402d4367ef15bf8cba497b91d \
-    --hash=sha256:bc670276518f893ab356f1d28826c49b7e606e7cf89c300e3888c0b52fc1d2ed
+mutmut==3.8.1 \
+    --hash=sha256:9fb7cfc23caabff22a938e33b8d34317f5fa79b1deab82642cd5e014f3f400aa \
+    --hash=sha256:e424d72c0557b6a52a721d9b71e2d18eb9590af746db0bbad50b71e8d4d8ed78
     # via -r requirements-dev.in
 mypy==2.3.1 \
     --hash=sha256:114dff494000f18bd10d5d95d84b8567b26da60279ecbe838131841df20e635d \
@@ -1403,15 +1403,15 @@ platformdirs==4.9.6 \
     # via
     #   pip-audit
     #   textual
-playwright==1.63.0 \
-    --hash=sha256:1e4a3a838ce22fb68ad17193fcd142a19610d9d70fb9966d2239f5dddc0cc05b \
-    --hash=sha256:2f9a707a6c6c91157ed77bff2b8caeb04b3c8d46e70d585fc134298cbe4b5cc6 \
-    --hash=sha256:354e15b29503565fc598b89f16fbe070459343bef9d7498a93e304864000c6a7 \
-    --hash=sha256:660c00c62639e31b16700ba5456b351ddba55bb766b7ce8261223aa34928e482 \
-    --hash=sha256:84c540759e8e7f01e690e197e04060f48899d37cea322299f255843273d3385d \
-    --hash=sha256:ad21bc07516b187965a7521c5cf0df0bd657b17482eaad74335272d35a2b07de \
-    --hash=sha256:c89fc4736502a1f0fac2c8ca5d10c0cbc1c669f1f4774a2d8507a43140e4d53f \
-    --hash=sha256:fd1aa00631d44d55e56e0975bf3f3f285fac4a9fd2813183f0c12a488f1a1b24
+playwright==1.64.1 \
+    --hash=sha256:29453ff76e25c17d0b45658cacd6b92e9eec46e8db21e134fb3b7143df50f013 \
+    --hash=sha256:577b8d88778c245cfbd145ae17cf53044f084b1b46c55c69081d4069d56057e2 \
+    --hash=sha256:59f7b041284ce8d1b72098ae50ca48a2d83692eec25154ab5ba79d4b6b4fe8a9 \
+    --hash=sha256:5e240a79464434c9260957b9ef59a5808e02e96e3fcabdc717fd7485260b9730 \
+    --hash=sha256:6a6f99adad1ae40e6ee62efe89785db861ce7ddd57651521cb31894183cc4ae3 \
+    --hash=sha256:983ccd085453ea5a7588193657fc349a6ffbf7bf7ba663fd58dc81e4aa3af9d9 \
+    --hash=sha256:a29fda44725e11b0b625c4bff6458a1f6dbee97b88c9788d12e18a8344458c2d \
+    --hash=sha256:d3c48b31da426c2f3562d0919cb9ea4e5415f6dbd29d7211fa4d66cca24fbd2f
     # via
     #   -r requirements-dev.in
     #   pytest-playwright
@@ -1582,9 +1582,9 @@ pytest-xdist==3.8.0 \
     --hash=sha256:202ca578cfeb7370784a8c33d6d05bc6e13b4f25b5053c30a152269fd10f0b88 \
     --hash=sha256:7e578125ec9bc6050861aa93f2d59f1d8d085595d6551c2c90b6f4fad8d3a9f1
     # via -r requirements-dev.in
-python-dotenv==1.2.3 \
-    --hash=sha256:904552145e8bfed22162c09dab1c2b9b54fefa7b23ba780f4f26ca0316b0f0d9 \
-    --hash=sha256:a20a594dabeaa385725aa239d5244871c143ecb356add8a20fcf23773a6c3a35
+python-dotenv==1.2.4 \
+    --hash=sha256:42269a8a5b3fd54ffa6f3d84b18abed50064717576b4ecf03dc4a55d8aa04fdc \
+    --hash=sha256:f0d53e69935a851c0dcc78f3ab7aaccd8cabef0b92382b576b824212902873c0
     # via -r requirements.in
 python-magic==0.4.27 \
     --hash=sha256:c1ba14b08e4a5f5c31a302b7721239695b2f0f058d125bd5ce1ee36b9d9d3c3b \

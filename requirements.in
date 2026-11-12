@@ -24,7 +24,10 @@ python-dotenv>=1.2.3
 weasyprint>=70.0,<71
 django-unfold>=0.110.0
 django-csp>=4.0
-sentry-sdk[django]>=2.71.0
+# Upper bound: 2.72.0 and later deprecate send_default_pii (fails under
+# filterwarnings=error) and its replacement data_collection drops the SDK's
+# default scrubber; see #2694
+sentry-sdk[django]>=2.71.0,<2.72
 pyclamd>=0.4.0
 django-otp>=1.7.5
 # Passkeys/WebAuthn als zweiter Faktor (ADR-032, Refs #1492). Zieht
