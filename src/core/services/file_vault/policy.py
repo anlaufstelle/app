@@ -557,7 +557,9 @@ def enforce_image_limits(facility, uploaded_file, owner, user, detected_mime=Non
                             max_pixels=max_pixels,
                         )
                 else:
-                    frames = getattr(img, "n_frames", 1)
+                    # MPO is a JPEG carrying embedded secondary images (previews,
+                    # gain maps); only the primary image is ever decoded and stored.
+                    frames = 1 if img.format == "MPO" else getattr(img, "n_frames", 1)
                     pixels = img.width * img.height * frames
                     decoded_bytes = pixels * max(4, len(img.getbands())) * _image_buffer_reserve(img.format, frames)
                     _check_image_budget(

@@ -676,3 +676,49 @@ def test_twelve_megapixel_photos_remain_allowed_with_default_budget(image_owner,
         image.load()
         assert image.size == (4000, 3000)
         assert getattr(image, "n_frames", 1) == 1
+
+
+def _mpo_photo(size, second_size):
+    """Build a JPEG with an embedded second image, which Pillow reads as MPO."""
+    buffer = io.BytesIO()
+    with Image.new("RGB", size, "red") as primary, Image.new("RGB", second_size, "blue") as second:
+        primary.save(buffer, format="MPO", save_all=True, append_images=[second])
+    return buffer.getvalue()
+
+
+def test_twelve_megapixel_photo_with_embedded_second_image_is_allowed(image_owner, staff_user):
+    owner, field = image_owner
+    Settings.objects.filter(facility=owner.facility).update(allowed_file_types="jpg")
+    data = _mpo_photo((4000, 3000), (320, 240))
+    with Image.open(io.BytesIO(data)) as probe:
+        assert probe.format == "MPO"
+        assert probe.n_frames == 2
+    upload = SimpleUploadedFile("photo.jpg", data, content_type="image/jpeg")
+    attachment = store_encrypted_file(owner.facility, upload, field, owner, staff_user)
+    assert attachment.pk is not None
+    assert not AuditLog.objects.filter(
+        action=AuditLog.Action.SECURITY_VIOLATION, detail__reason__startswith="image_"
+    ).exists()
+
+
+def test_oversized_photo_with_embedded_second_image_is_still_rejected(image_owner, staff_user, settings):
+    owner, field = image_owner
+    Settings.objects.filter(facility=owner.facility).update(allowed_file_types="jpg")
+    settings.FILE_VAULT_MAX_IMAGE_PIXELS = 1_000_000
+    upload = SimpleUploadedFile("photo.jpg", _mpo_photo((1200, 1000), (32, 32)), content_type="image/jpeg")
+    with pytest.raises(ValidationError):
+        store_encrypted_file(owner.facility, upload, field, owner, staff_user)
+    assert AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION, detail__reason="image_too_large").exists()
+
+
+def test_multi_page_tiff_keeps_aggregate_memory_budget_at_photo_size(image_owner, staff_user):
+    owner, field = image_owner
+    buffer = io.BytesIO()
+    with Image.new("RGB", (4000, 3000), "red") as first, Image.new("RGB", (4000, 3000), "blue") as second:
+        first.save(buffer, format="TIFF", save_all=True, append_images=[second], compression="tiff_adobe_deflate")
+    upload = SimpleUploadedFile("scan.tiff", buffer.getvalue(), content_type="image/tiff")
+    with pytest.raises(ValidationError):
+        store_encrypted_file(owner.facility, upload, field, owner, staff_user)
+    assert AuditLog.objects.filter(
+        action=AuditLog.Action.SECURITY_VIOLATION, detail__reason="image_memory_budget"
+    ).exists()
