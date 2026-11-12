@@ -802,7 +802,8 @@
             },
             startEditWorkItem(wi) {
                 this.wiValidationActive = false;
-                this.wiError = "";
+                // Refs #2720: a rejected edit opens with the server's field errors.
+                this.wiError = wi.is_dead ? this._deadFieldErrorText(wi.last_error) : "";
                 this.lastSyncResult = "";
                 this._setEditing(null);
                 this.creating = false;

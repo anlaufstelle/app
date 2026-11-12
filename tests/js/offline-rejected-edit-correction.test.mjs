@@ -13,6 +13,7 @@ import { importOfflineStoreModules } from "./_offline_store_modules.mjs";
 const PK_CLIENT = "99999999-9999-4999-8999-999999999999";
 const PK_EVENT = "11111111-1111-4111-8111-111111111111";
 const PK_OTHER = "22222222-2222-4222-8222-222222222222";
+const PK_TASK = "44444444-4444-4444-8444-444444444444";
 const TOKEN = "2026-11-01T10:00:00+00:00";
 
 let factory;
@@ -54,7 +55,21 @@ function bundle({ canEdit = true } = {}) {
             },
         ],
         cases: [],
-        workitems: [],
+        workitems: [
+            {
+                pk: PK_TASK,
+                title: "Call back",
+                item_type: "task",
+                priority: "normal",
+                status: "open",
+                due_date: "",
+                remind_at: "",
+                recurrence: "none",
+                assigned_to_pk: "",
+                updated_at: TOKEN,
+                can_edit: canEdit,
+            },
+        ],
         assignable_users: [],
         generated_at: new Date().toISOString(),
         expires_at: new Date(Date.now() + 3600 * 1000).toISOString(),
@@ -280,5 +295,87 @@ describe("a background-rejected edit of an existing event", () => {
         expect(eventByPk(PK_EVENT).can_edit_ui).toBe(false);
         expect(eventByPk(PK_OTHER).is_dead).toBe(true);
         expect(eventByPk(PK_OTHER).can_edit_ui).toBe(false);
+    });
+});
+
+describe("a background-rejected edit of a task", () => {
+    function taskByPk(pk) {
+        return component.data.workitems.find((w) => w.pk === pk);
+    }
+
+    async function makeRejectedTaskEdit() {
+        onLine(false);
+        await openPerson();
+        await window.offlineEdit.markWorkItemModified(
+            PK_TASK,
+            { item_type: "task", title: "Call back tomorrow", priority: "normal", recurrence: "none" },
+            { clientPk: PK_CLIENT, expectedUpdatedAt: TOKEN },
+        );
+        onLine(true);
+        vi.stubGlobal(
+            "fetch",
+            vi.fn(async () => rejection({ title: [{ message: "Titel (Klientin Muster).", code: "max_length" }] })),
+        );
+        await window.offlineEdit.replayAllModifiedEvents();
+        vi.unstubAllGlobals();
+        await component.load();
+    }
+
+    it("can be edited again, prefilled and showing the rejected fields", async () => {
+        await makeRejectedTaskEdit();
+
+        const wi = taskByPk(PK_TASK);
+        expect(wi.localStatus).toBe("dead");
+        expect(wi.can_edit_ui).toBe(true);
+        component.startEditWorkItem(wi);
+        expect(component.wiValues.title).toBe("Call back tomorrow");
+        expect(component.wiError).toContain("title");
+        expect(component.wiError).toContain("max_length");
+        expect(component.wiError).not.toContain("Muster");
+    });
+
+    it("turns into one sendable change on save, which is sent exactly once", async () => {
+        await makeRejectedTaskEdit();
+        const wi = taskByPk(PK_TASK);
+        component.startEditWorkItem(wi);
+        component.wiValues.title = "Call back";
+        component.validateWorkItem = () => true;
+        onLine(false);
+
+        await component.saveEditWorkItem(wi);
+
+        expect((await store.db.events.get(PK_TASK)).localStatus).toBe("modified");
+        expect(await store.listDeadEvents()).toEqual([]);
+
+        onLine(true);
+        const post = vi.fn(async () => saved());
+        vi.stubGlobal("fetch", post);
+        await window.offlineEdit.replayAllModifiedEvents();
+        await window.offlineEdit.replayAllModifiedEvents();
+
+        expect(post).toHaveBeenCalledTimes(1);
+        expect(post.mock.calls[0][0]).toContain("/workitems/" + PK_TASK + "/edit/");
+    });
+
+    it("stays read-only when the server did not allow the person to edit the task", async () => {
+        onLine(false);
+        await store.saveClientBundle(bundle({ canEdit: false }));
+        await store.saveOfflineEdit({
+            pk: PK_TASK,
+            clientPk: PK_CLIENT,
+            localStatus: "modified",
+            data: { kind: "workitem", formData: { title: "x" }, expectedUpdatedAt: TOKEN },
+        });
+        await store.markEventDead(PK_TASK, "invalid", JSON.stringify({ title: ["max_length"] }));
+        const root = document.createElement("div");
+        root.setAttribute("data-pk", PK_CLIENT);
+        document.body.append(root);
+        component = factory();
+        component.$el = root;
+        component.init();
+        await component.load();
+
+        expect(taskByPk(PK_TASK).localStatus).toBe("dead");
+        expect(taskByPk(PK_TASK).can_edit_ui).toBe(false);
     });
 });

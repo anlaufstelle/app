@@ -256,6 +256,8 @@
             updated_at: data.expectedUpdatedAt || "",
             localStatus: r.localStatus || "clean",
             deadReason: data.deadReason || "",
+            // Refs #2720: rejected field names + codes for the correction form.
+            last_error: data.lastError || "",
         };
     }
 
@@ -290,6 +292,7 @@
                 updated_at: ov.updated_at || wi.updated_at,
                 localStatus: ov.localStatus,
                 deadReason: ov.deadReason,
+                last_error: ov.last_error,
             });
         });
         // Uebrig gebliebene Overlays = offline neu angelegte WorkItems ohne
