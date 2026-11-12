@@ -317,22 +317,25 @@ class TestPruneKeepsEvidenceOfMissingRows:
         ]
         assert verify_chain(facility, hwm=store).ok
 
+    @pytest.mark.django_db(transaction=True)
     def test_a_row_inserted_after_the_link_check_is_not_pruned(self, facility, tmp_path, monkeypatch):
         """Only rows the link check has seen are deleted and signed.
 
         ``FOR UPDATE`` does not stop an INSERT. An owner-level role deletes a
         protected row and the anchored tail behind it, then replays the tail
-        byte for byte once the link check has passed. Deleted unchecked, the
-        replay would become the signed boundary that legitimises the missing
-        anchor, and the chain would pass as complete.
+        byte for byte from a second connection once the link check has
+        passed. Deleted unchecked, the replay would become the signed boundary
+        that legitimises the missing anchor, and the chain would pass as
+        complete. The replay is never deleted; as a late deletion candidate it
+        aborts the prune.
         """
+        from django.db import connections
+
         from core.retention import audit_pruning
 
         rows, store = _expired_chain(facility, tmp_path, LOGIN_VIOLATION_LOGOUT)
         anchor_before = (tmp_path / "anchor.json").read_bytes()
-        replay = AuditLog(
-            **{field.attname: getattr(rows[2], field.attname) for field in AuditLog._meta.concrete_fields}
-        )
+        fields = AuditLog._meta.concrete_fields
         with transaction.atomic(), bypass_replication_triggers():
             AuditLog.objects.filter(pk__in=[rows[1].pk, rows[2].pk]).delete()
         assert not verify_chain(facility, hwm=store).ok
@@ -340,7 +343,19 @@ class TestPruneKeepsEvidenceOfMissingRows:
 
         def check_then_replay(*args, **kwargs):
             checked = original(*args, **kwargs)
-            AuditLog.objects.bulk_create([replay])
+            other = connections.create_connection("default")
+            try:
+                values = [field.get_db_prep_save(getattr(rows[2], field.attname), other) for field in fields]
+                with other.cursor() as cursor:
+                    cursor.execute(
+                        "INSERT INTO core_auditlog ({}) VALUES ({})".format(
+                            ", ".join(other.ops.quote_name(field.column) for field in fields),
+                            ", ".join(["%s"] * len(fields)),
+                        ),
+                        values,
+                    )
+            finally:
+                other.close()
             return checked
 
         monkeypatch.setattr(audit_pruning, "_check_expired_links", check_then_replay)
@@ -348,7 +363,9 @@ class TestPruneKeepsEvidenceOfMissingRows:
         result = prune_auditlog(facility, PERIOD)
 
         assert AuditLog.objects.filter(pk=rows[2].pk).exists(), "the unchecked replay was deleted"
-        assert result == {"count": 1}
+        assert result == {"count": 0, "integrity_break": "candidate set changed during the prune"}
+        assert AuditLog.objects.filter(pk=rows[0].pk).exists()
+        assert not _checkpoints(facility).exists()
         assert (tmp_path / "anchor.json").read_bytes() == anchor_before
         after = verify_chain(facility, hwm=HighWaterMarkStore.load(store.path))
         assert not after.ok, f"A replayed tail concealed a missing protected row: {after!r}"

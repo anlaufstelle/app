@@ -225,7 +225,8 @@ def _check_expired_links(facility, cutoff, candidates, boundary_hashes):
     this check and the deletion. It does not stop an INSERT, so the same
     statement marks the deletion candidates and only the candidates it has
     checked are returned for deletion; a row that joins the expired rows
-    later is neither deleted nor signed as a boundary.
+    later is neither deleted nor signed as a boundary (a late deletion
+    candidate makes the caller abort the prune).
 
     Every boundary hash must belong to one of the returned rows -- a boundary
     from a row outside this set would legitimise a gap nobody authenticated.
@@ -340,8 +341,10 @@ def _prune_auditlog(facility, settings_obj, now=None, dry_run=False):
         deleted = _delete_checked(qs, pks)
     # The deletion is bound to the checked primary keys; those rows are
     # locked and cannot leave the candidate set, so any other count is a
-    # break (rolled back with the error).
-    if deleted != count:
+    # break. A candidate left after the deletion joined after the link check
+    # (the locks do not block an INSERT); the prune aborts rather than sign a
+    # boundary next to an unchecked row. Both roll back with the error.
+    if deleted != count or qs.exists():
         raise AuditPruneIntegrityError(None, "candidate set changed during the prune")
     audit_event(
         AuditLog.Action.AUDIT_PRUNE_CHECKPOINT,
