@@ -31,6 +31,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Python-Abhängigkeiten aktualisiert** (#2693, #2695, #2696, #2697) — Django 6.1.3, django-unfold 0.110.1, python-dotenv 1.2.4, mutmut 3.8.1, playwright 1.64.1 (Dev). sentry-sdk bleibt unter 2.72 (#2694), weil Versionen ab 2.72.0 `send_default_pii` als veraltet melden.
 - **Frontend-Werkzeuge aktualisiert** (#2698, #2699, #2700, #2701) — vitest 5.1.0, jsdom 31.0.0, tailwindcss und @tailwindcss/cli 4.3.4 (nur Entwicklungswerkzeuge, keine ausgelieferte Bibliothek betroffen); die erzeugte Stylesheet-Datei weicht in einzelnen Selektoren und Variablen ab, die Sichtprüfung steht als Hand-Check an.
+- **GitHub-Actions-Pins aktualisiert** (#2692) — codeql-action 4.39.3, docker/login-action 4.8.0 und cosign-installer 4.1.3, weiterhin als volle Commit-SHA mit Versionskommentar.
 
 ## [0.99.10] - 2026-11-11
 
