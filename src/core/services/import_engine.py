@@ -537,7 +537,12 @@ def store_import_upload(
     storage_filename = f"{uuid.uuid4()}.enc"
     output_path = _import_dir(facility) / storage_filename
     # A4.5-Muster: Chunks an die Storage-ID binden (v2-Format).
-    encrypt_file(io.BytesIO(raw), output_path, file_id=storage_filename)
+    try:
+        encrypt_file(io.BytesIO(raw), output_path, file_id=storage_filename)
+    except Exception:
+        # A failed write (e.g. the directory sync) must not leave a half-written ``.enc`` behind.
+        output_path.unlink(missing_ok=True)
+        raise
     try:
         job.storage_filename = storage_filename
         job.original_filename_encrypted = encrypt_field(getattr(uploaded_file, "name", "") or "import.csv")

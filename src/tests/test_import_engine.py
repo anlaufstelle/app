@@ -107,6 +107,23 @@ class TestStoreImportUpload:
         assert job.facility == facility
         assert job.created_by == admin_user
 
+    def test_failed_directory_sync_leaves_no_orphaned_file(self, facility, admin_user, media_root, monkeypatch):
+        """A write that fails after the file was created must not leave a half-written upload behind."""
+
+        def failing_fsync_directory(directory):
+            raise OSError("directory sync not supported")
+
+        monkeypatch.setattr("core.services.file_vault.encryption.fsync_directory", failing_fsync_directory)
+
+        with pytest.raises(OSError, match="directory sync not supported"):
+            import_engine.store_import_upload(
+                facility, admin_user, _upload(PSEUDONYM_HEADER + "A;;;\n"), target_type=ImportJob.TargetType.CLIENT
+            )
+
+        import_dir = import_engine._import_dir(facility)
+        assert list(import_dir.glob("*.enc")) == []
+        assert not ImportJob.objects.filter(facility=facility).exists()
+
     def test_file_on_disk_is_encrypted(self, facility, admin_user, media_root):
         job = import_engine.store_import_upload(
             facility,
