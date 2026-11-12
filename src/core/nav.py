@@ -435,9 +435,9 @@ LOESCHFRISTEN = NavItem(
     gates=("is_lead_or_admin",),
     icon="retention",
 )
-# Refs #2689: Datenschutz-Werkzeug fuer den Anlass, kein Alltagseintrag — ein
-# Reiter im Datenschutz-Hub, nur Leitung und Anwendungsbetreuung. Dasselbe Gate
-# traegt View und Service; der Hub-Anker leitet sein Gate daraus ab.
+# Refs #2689: privacy tool for the occasion, not an everyday entry — a tab of the
+# privacy hub for lead and facility admin only. The same gate guards view and
+# service; the hub anchor derives its gate from it.
 FREE_TEXT_REVIEW = NavItem(
     key="free-text-review",
     label=_("Freitext-Review"),
