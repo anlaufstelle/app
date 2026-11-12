@@ -461,6 +461,8 @@ services:
     # (Refs #919/#1335) und sind damit ein echter Wirksamkeits-Nachweis
     # statt eines blossen Prozess-Liveness-Checks.
     restart: unless-stopped
+    # Internal only by design (Refs #2719): the breach webhook needs the optional
+    # docker-compose.breach-webhook.yml overlay, which adds cron-egress for cron.
     networks:
       - internal
 

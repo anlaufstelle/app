@@ -1,0 +1,23 @@
+# Optional overlay: lets the cron container reach the breach webhook
+# (BREACH_NOTIFICATION_WEBHOOK_URL, Refs #2719).
+#
+# The standard installation keeps cron on the egress-less "internal" network:
+# cron runs with the admin database role and receives the whole .env. Only an
+# installation that sets the webhook URL adds this file to every compose call
+# that creates cron; without it cron loses the egress again and a scan with a
+# finding ends red. Usage and checks: docs/ops-runbook.md § 6.5b.
+#
+#   docker compose -f docker-compose.prod.yml \
+#     -f docker-compose.breach-webhook.yml up -d cron
+#
+# The network serves cron alone (same pattern as the scanner's own egress
+# network); no other service joins it, and the overlay changes nothing else.
+services:
+  cron:
+    networks:
+      - internal
+      - cron-egress
+
+networks:
+  cron-egress:
+    internal: false
