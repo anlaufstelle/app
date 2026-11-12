@@ -22,8 +22,42 @@ from ._helpers import django_shell as _django_shell
 from ._helpers import do_real_login as _do_real_login
 from ._helpers import tally_tile as _tally_tile
 from ._helpers import wait_for_active_service_worker as _wait_for_active_service_worker
+from .test_event_list import filter_by, open_filter_panel
 
 pytestmark = pytest.mark.e2e
+
+
+def _open_number_contacts_from_group(page, base_url, document_type_id):
+    """Follow the visible hour-group link to its individual number contacts."""
+    query = urlencode({"date": timezone.localdate().isoformat(), "time_filter": "all"})
+    page.goto(f"{base_url}/?{query}", wait_until="domcontentloaded")
+    group = page.get_by_test_id("tally-group").filter(has_text=re.compile(r"\bSpritzentausch\b")).first
+    expect(group).to_be_visible(timeout=15000)
+    group.get_by_test_id("tally-group-toggle").click()
+    group.get_by_role("link", name="Gezählte Kontakte anzeigen").click()
+    open_filter_panel(page)
+    expect(page.get_by_role("combobox", name="Erfassungsweg", exact=True)).to_have_value("tally")
+    type_filter = page.get_by_role("combobox", name="Typ", exact=True)
+    filter_by(page, lambda: type_filter.select_option(document_type_id))
+    expect(page).to_have_url(re.compile(rf"doc_type={document_type_id}"))
+    type_filter.focus()
+    page.keyboard.press("Escape")
+    expect(page.locator("[data-filter-panel]")).not_to_have_attribute("open", "")
+    return page.get_by_test_id("event-card-toggle")
+
+
+def _expect_number_contact_values(page, header):
+    """Read the submitted values from the contact reached through the actual UI."""
+    header.click()
+    detail_id = header.get_attribute("aria-controls")
+    details = page.locator(f"#{detail_id}")
+    expect(details).to_be_visible(timeout=5000)
+    details.get_by_role("link", name="Zum Eintrag").click()
+    expect(page).to_have_url(re.compile(rf"/events/{detail_id.removeprefix('event-detail-')}/$"))
+    for label, value in (("Ausgabe", "10"), ("Rückgabe", "4")):
+        field = page.get_by_role("term").filter(has_text=re.compile(rf"^\s*{label}\s*$")).locator("..")
+        expect(field.get_by_role("definition")).to_have_text(value)
+    return detail_id
 
 
 def _tally_row(page, name):
@@ -385,26 +419,11 @@ class TestOfflineTallyReconciliation:
             )
             page.remove_listener("request", number_listener)
 
-            # Explizite Online-Navigation auf den Django-heutigen, ganzen Tag:
-            # der Standard-Kontext kann beim Schichtwechsel die frische
-            # Erfassung sonst aus dem Feed schneiden. Nicht nur der
-            # Tally-Snapshot, sondern die servergerenderte Eventkarte muss die
-            # beiden Zahlen tragen.
-            query = urlencode({"date": timezone.localdate().isoformat(), "time_filter": "all"})
-            page.goto(f"{base_url}/?{query}", wait_until="domcontentloaded")
-            newest_number_card = (
-                page.locator("#feed-list div[x-data='expandableCard']")
-                .filter(has_text=re.compile(r"\bSpritzentausch\b"))
-                .first
-            )
-            newest_number_card.wait_for(state="visible", timeout=15000)
-            number_header = newest_number_card.locator("button[aria-controls^='event-detail-']")
-            number_header.click()
-            number_detail_id = number_header.get_attribute("aria-controls")
-            number_details = newest_number_card.locator(f"#{number_detail_id}")
-            expect(number_details).to_be_visible(timeout=5000)
-            expect(number_details).to_contain_text(re.compile(r"Ausgabe:\s*10"))
-            expect(number_details).to_contain_text(re.compile(r"Rückgabe:\s*4"))
+            # Use the whole server-local day so a shift change cannot hide the replay.
+            # Tally contacts appear in hour groups (#2661); follow their list link
+            # to verify both submitted values on the actual contact detail page.
+            number_contacts = _open_number_contacts_from_group(page, base_url, number_id)
+            _expect_number_contact_values(page, number_contacts.first)
         finally:
             _cleanup_offline_state(page)
             context.close()
@@ -530,24 +549,14 @@ class TestOfflineTallyReconciliation:
             )
             page.remove_listener("request", replay_listener)
 
-            query = urlencode({"date": timezone.localdate().isoformat(), "time_filter": "all"})
-            page.goto(f"{base_url}/?{query}", wait_until="domcontentloaded")
-            number_cards = page.locator("#feed-list div[x-data='expandableCard']").filter(
-                has_text=re.compile(r"\bSpritzentausch\b")
-            )
+            number_cards = _open_number_contacts_from_group(page, base_url, number_id)
             expect(number_cards.first).to_be_visible(timeout=15000)
             assert number_cards.count() >= 2
             detail_ids = []
             for index in range(2):
-                card = number_cards.nth(index)
-                header = card.locator("button[aria-controls^='event-detail-']")
-                detail_id = header.get_attribute("aria-controls")
-                detail_ids.append(detail_id)
-                header.click()
-                details = card.locator(f"#{detail_id}")
-                expect(details).to_be_visible(timeout=5000)
-                expect(details).to_contain_text(re.compile(r"Ausgabe:\s*10"))
-                expect(details).to_contain_text(re.compile(r"Rückgabe:\s*4"))
+                expect(number_cards.nth(index)).to_be_visible()
+                detail_ids.append(_expect_number_contact_values(page, number_cards.nth(index)))
+                page.go_back(wait_until="domcontentloaded")
             assert len(set(detail_ids)) == 2
         finally:
             _cleanup_offline_state(page)
