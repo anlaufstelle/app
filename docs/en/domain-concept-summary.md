@@ -215,7 +215,7 @@ Release v0.10.0 sharpens the low-threshold fit and strengthens the privacy archi
 
 ### v0.16.0 (2026-06-25)
 
-- **Public demo instance** (`demo.anlaufstelle.app`): a `DEMO_MODE` banner and login panel showing the demo credentials and the next reset time, a `DemoGuardMiddleware` that blocks damaging actions (maintenance toggle, 2FA setup, password change, user management in the admin; it now also blocks every other change of a second factor or passkey: device change, passkey registration and removal, regenerating backup codes, disabling 2FA and the account-management reset of another account's second factor, as well as any change of the 2FA requirement for an account or the whole facility, the admin's password change and the admin settings pages), an hourly reset, and email routed to the console. Demo builds are versioned per tagged release (ADR-028).
+- **Public demo instance** (`demo.anlaufstelle.app`): a `DEMO_MODE` banner and login panel showing the demo credentials and the next reset time, a `DemoGuardMiddleware` that blocks damaging actions (maintenance toggle, 2FA setup, password change, user management in the admin; it now also blocks every other change of a second factor or passkey: device change, passkey registration and removal, regenerating backup codes, disabling 2FA and the account-management reset of another account's second factor, as well as any change of the 2FA requirement for an account or the whole facility, the admin's password change and the admin settings pages; account management also refuses changes to the active status, role and username of existing accounts, including the current account, leaving the entire submission unsaved while unchanged values allow editing other fields), an hourly reset, and email routed to the console. Demo builds are versioned per tagged release (ADR-028).
 - **Two-column task work view** and a rate-limited system audit-log export; `cryptography` upgraded to 49.
 
 ### v0.20.0 (2026-07-10)
@@ -373,4 +373,4 @@ The largest collective pre-release to date — the configurability milestones M0
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.99.10 -->
 <!-- source-hash: e6b01e8c18ce39fbb629831cce6817c0ba6a0c7d -->
-<!-- translation-date: 2026-11-11 -->
+<!-- translation-date: 2026-11-12 -->
