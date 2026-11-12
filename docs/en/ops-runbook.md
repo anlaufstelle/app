@@ -3108,6 +3108,8 @@ sudo systemctl daemon-reload
 
 For the Barbara installation use the prefix `anlaufstelle-barbara-mv-refresh` instead. The timer installers no longer create these units. Historical audit entries remain readable and are included in chain verification; the retired job has no card in compliance or health diagnostics.
 
+Run the restore drill with `--dev` only after the first backup following the update, since older backups may still contain a materialized view refresh under forced RLS that causes the drill to fail.
+
 ### 11.2 Monthly snapshots
 
 `create_statistics_snapshots` still runs monthly through the cron sidecar. Retention carries deleted events into their monthly aggregates in the same transaction. This preserves event counts for snapshot-backed output; live reports and person counts can decrease after retention. See [Admin Guide § 8](admin-guide.md#8-statistics-snapshots).
@@ -3397,4 +3399,4 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.10 -->
 <!-- translation-date: 2026-11-12 -->
-<!-- source-hash: 253868f2268ae13adda40bb554e9c4434fceb1ac -->
+<!-- source-hash: c2dfc97979b558ecc50223a31ae23d9cf443bce8 -->

@@ -3141,6 +3141,8 @@ sudo systemctl daemon-reload
 
 Für die Barbara-Installation stattdessen den Präfix `anlaufstelle-barbara-mv-refresh` verwenden. Die Timer-Installer legen diese Units nicht mehr an. Historische Audit-Einträge bleiben lesbar und werden bei der Kettenprüfung berücksichtigt; der entfallene Job hat keine Karte mehr in Compliance und Health-Diagnostik.
 
+Den Restore-Drill mit `--dev` erst nach dem ersten Backup nach dem Update ausführen, da ältere Backups noch einen Materialized-View-Refresh unter erzwungener RLS enthalten können, der den Drill fehlschlagen lässt.
+
 ### 11.2 Monatliche Snapshots
 
 `create_statistics_snapshots` läuft weiterhin monatlich über den cron-Sidecar. Der Aufbewahrungslauf überträgt gelöschte Ereignisse in derselben Transaktion in ihre Monatsaggregate. Damit bleiben Ereigniszahlen in Snapshot-Ausgaben erhalten; Live-Berichte und Personenzahlen können nach der Bereinigung niedriger ausfallen. Siehe [Admin-Handbuch § 8](admin-guide.md#8-statistik-snapshots).
