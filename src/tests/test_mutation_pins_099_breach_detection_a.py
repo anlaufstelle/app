@@ -620,7 +620,7 @@ class TestRunSystemDetectionsGucValueCase:
         assert connection.vendor == "postgresql", "Suite laeuft ausschliesslich auf PostgreSQL"
         captured = {}
 
-        def _fake_run_system_detections():
+        def _fake_run_system_detections(*, run_id=None):
             with connection.cursor() as cur:
                 cur.execute("SELECT current_setting('app.is_super_admin', true)")
                 captured["value"] = cur.fetchone()[0]
