@@ -21,7 +21,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import AuditLog
-from core.services.audit.chain import compute_entry_hash
+from core.services.audit.chain import compute_entry_hash, verify_chain
 from core.services.dashboard.release_log import (
     EXTERNAL_REPORT_TARGET,
     RELEASE_FIELD_MAX_LENGTH,
@@ -533,16 +533,24 @@ class TestExportUeberlebtDieAuditRetention:
         old = now - timedelta(days=24 * 31)
         with connection.cursor() as cur:
             cur.execute("ALTER TABLE core_auditlog DISABLE TRIGGER auditlog_immutable")
-            # Reseal each row for its new timestamp in the same UPDATE: the
-            # prune only deletes rows that authenticate (Refs #2717, finding
-            # no. 9).
-            for entry in entries:
-                entry.timestamp = old
+            # Backdate in creation order and relink the whole chain in one
+            # UPDATE per row: the prune only deletes rows that authenticate and
+            # link to their predecessor (Refs #2717, finding no. 9), so the
+            # aged chain must be intact before the retention is checked.
+            aged = {entry.pk: old + timedelta(microseconds=index) for index, entry in enumerate(entries)}
+            rows = list(AuditLog.objects.filter(facility_id=entries[0].facility_id))
+            for row in rows:
+                row.timestamp = aged.get(row.pk, row.timestamp)
+            previous = ""
+            for row in sorted(rows, key=lambda row: (row.timestamp, row.pk)):
+                entry_hash = compute_entry_hash(row, previous)
                 cur.execute(
-                    "UPDATE core_auditlog SET timestamp = %s, entry_hash = %s WHERE id = %s",
-                    [old, compute_entry_hash(entry, entry.prev_hash or ""), str(entry.pk)],
+                    "UPDATE core_auditlog SET timestamp = %s, prev_hash = %s, entry_hash = %s WHERE id = %s",
+                    [row.timestamp, previous, entry_hash, str(row.pk)],
                 )
+                previous = entry_hash
             cur.execute("ALTER TABLE core_auditlog ENABLE ALWAYS TRIGGER auditlog_immutable")
+        assert verify_chain(entries[0].facility_id).ok, "aged chain must be intact"
 
     @pytest.mark.postgres
     def test_nur_berichts_freigaben_sind_prune_exempt(self, facility, settings_obj, lead_user):

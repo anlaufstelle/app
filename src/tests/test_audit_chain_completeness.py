@@ -15,6 +15,13 @@ rows:
   removed in between still legitimised the missing anchor of a chain that
   had meanwhile been emptied. Every checkpoint used as evidence must now be
   part of the streamed, fully checked rows.
+- **Pruning the successor of a row that is already missing.** Each deleted
+  row authenticated on its own, but nothing checked that its predecessor was
+  still there. A protected row deleted past the trigger left a dangling
+  ``prev_hash``; the prune then removed the row carrying it, signed it as a
+  boundary and the break was gone. The prune now walks the expired part of
+  the chain and aborts unless every row links to the row before it or to a
+  boundary of an existing checkpoint.
 """
 
 from __future__ import annotations
@@ -213,3 +220,136 @@ class TestCheckpointsBelongToTheCheckedRows:
         _, store = _anchored_row(facility, tmp_path, AuditLog.Action.LOGIN, age_days=1)
 
         assert verify_chain(facility, hwm=store).ok
+
+
+def _expired_chain(facility, tmp_path, actions):
+    """Old rows in chain order, the newest one externally anchored."""
+    old = timezone.now() - timedelta(days=1200)
+    rows = [
+        AuditLog.objects.create(facility=facility, action=action, timestamp=old + timedelta(seconds=index))
+        for index, action in enumerate(actions)
+    ]
+    result = verify_chain(facility)
+    assert result.ok, result
+    store = HighWaterMarkStore(path=str(tmp_path / "anchor.json"))
+    store.record(facility.pk, result.rows_checked, result.last_entry_hash, result.last_entry_at)
+    store.save()
+    return rows, HighWaterMarkStore.load(store.path)
+
+
+def _delete_past_trigger(row_pk):
+    with transaction.atomic(), bypass_replication_triggers():
+        AuditLog.objects.filter(pk=row_pk).delete()
+
+
+LOGIN_VIOLATION_LOGOUT = (AuditLog.Action.LOGIN, AuditLog.Action.SECURITY_VIOLATION, AuditLog.Action.LOGOUT)
+
+
+class TestPruneKeepsEvidenceOfMissingRows:
+    def test_a_deleted_protected_row_is_not_pruned_away(self, facility, tmp_path, caplog):
+        rows, store = _expired_chain(facility, tmp_path, LOGIN_VIOLATION_LOGOUT)
+        anchor_before = (tmp_path / "anchor.json").read_bytes()
+        _delete_past_trigger(rows[1].pk)
+        assert verify_chain(facility, hwm=store).reason == "prev_hash linkage break (row deleted/inserted)"
+
+        with caplog.at_level(logging.ERROR, logger="core.retention.audit_pruning"):
+            result = prune_auditlog(facility, PERIOD)
+
+        assert result == {"count": 0, "integrity_break": str(rows[2].pk)}
+        assert AuditLog.objects.filter(pk__in=[rows[0].pk, rows[2].pk]).count() == 2
+        assert not _checkpoints(facility).exists()
+        assert (tmp_path / "anchor.json").read_bytes() == anchor_before
+        after = verify_chain(facility, hwm=HighWaterMarkStore.load(store.path))
+        assert not after.ok, f"Missing row was concealed by pruning: {after!r}"
+        messages = [r.getMessage() for r in caplog.records if r.levelno >= logging.ERROR]
+        assert any(str(rows[2].pk) in m and "prev_hash linkage break" in m for m in messages), messages
+
+    def test_a_deleted_middle_row_stays_a_break_for_a_surviving_successor(self, facility, tmp_path):
+        rows, _ = _expired_chain(facility, tmp_path, LOGIN_VIOLATION_LOGOUT)
+        survivor = AuditLog.objects.create(facility=facility, action=AuditLog.Action.LOGIN)
+        _delete_past_trigger(rows[1].pk)
+
+        assert prune_auditlog(facility, PERIOD)["count"] == 0
+
+        assert AuditLog.objects.filter(facility=facility).count() == 3
+        assert not _checkpoints(facility).exists()
+        assert AuditLog.objects.filter(pk=survivor.pk).exists()
+        assert not verify_chain(facility).ok
+
+    def test_a_deleted_chain_head_stays_a_break(self, facility, tmp_path):
+        rows, store = _expired_chain(facility, tmp_path, LOGIN_VIOLATION_LOGOUT)
+        _delete_past_trigger(rows[0].pk)
+
+        assert prune_auditlog(facility, PERIOD) == {"count": 0, "integrity_break": str(rows[1].pk)}
+
+        assert AuditLog.objects.filter(pk__in=[rows[1].pk, rows[2].pk]).count() == 2
+        assert not _checkpoints(facility).exists()
+        assert not verify_chain(facility, hwm=store).ok
+
+    def test_a_gap_covered_by_an_earlier_checkpoint_is_pruned(self, facility, tmp_path):
+        now = timezone.now()
+        first = AuditLog.objects.create(
+            facility=facility, action=AuditLog.Action.LOGIN, timestamp=now - timedelta(days=1200)
+        )
+        second = AuditLog.objects.create(
+            facility=facility, action=AuditLog.Action.LOGOUT, timestamp=now - timedelta(days=500)
+        )
+        survivor = AuditLog.objects.create(facility=facility, action=AuditLog.Action.LOGIN)
+        assert prune_auditlog(facility, PERIOD) == {"count": 1}
+        assert verify_chain(facility).ok
+
+        # The second row now starts the chain at the boundary of the first
+        # checkpoint; a shorter period lets it expire as well.
+        assert prune_auditlog(facility, SimpleNamespace(auditlog_retention_months=12)) == {"count": 1}
+
+        assert not AuditLog.objects.filter(pk__in=[first.pk, second.pk]).exists()
+        assert AuditLog.objects.filter(pk=survivor.pk).exists()
+        assert _checkpoints(facility).count() == 2
+        assert verify_chain(facility).ok
+
+    def test_an_intact_chain_around_a_protected_row_is_pruned(self, facility, tmp_path):
+        rows, store = _expired_chain(facility, tmp_path, LOGIN_VIOLATION_LOGOUT)
+
+        assert prune_auditlog(facility, PERIOD) == {"count": 2}
+
+        assert list(AuditLog.objects.filter(pk__in=[row.pk for row in rows]).values_list("pk", flat=True)) == [
+            rows[1].pk
+        ]
+        assert verify_chain(facility, hwm=store).ok
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_protected_row_stays_locked_until_the_prune_commits(facility, tmp_path, monkeypatch):
+    """The link check and the deletion cover the same locked rows.
+
+    A protected row is no deletion candidate; were it only read, a concurrent
+    owner-level delete could still remove it between the check and the
+    commit. A second connection must find it locked.
+    """
+    from django.db import OperationalError, connections
+
+    from core.retention import audit_pruning
+
+    rows, _ = _expired_chain(facility, tmp_path, LOGIN_VIOLATION_LOGOUT)
+    protected = rows[1]
+    original = audit_pruning._authenticate_candidates
+    outcomes = []
+
+    def probe_lock_then_authenticate(qs, boundaries):
+        other = connections.create_connection("default")
+        try:
+            with other.cursor() as cursor:
+                try:
+                    cursor.execute("SELECT id FROM core_auditlog WHERE id = %s FOR UPDATE NOWAIT", [str(protected.pk)])
+                    outcomes.append(("unlocked", cursor.fetchall()))
+                except OperationalError as exc:
+                    outcomes.append(("locked", type(exc.__cause__).__name__))
+        finally:
+            other.close()
+        return original(qs, boundaries)
+
+    monkeypatch.setattr(audit_pruning, "_authenticate_candidates", probe_lock_then_authenticate)
+
+    assert prune_auditlog(facility, PERIOD) == {"count": 2}
+    assert outcomes == [("locked", "LockNotAvailable")]
+    assert AuditLog.objects.filter(pk=protected.pk).exists()

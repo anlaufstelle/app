@@ -15,7 +15,7 @@ from django.db import DatabaseError, connection, transaction
 from django.utils import timezone
 
 from core.models import AuditLog, Settings
-from core.services.audit.chain import compute_entry_hash
+from core.services.audit.chain import compute_entry_hash, verify_chain
 from core.services.retention import prune_auditlog
 
 
@@ -33,18 +33,28 @@ class TestPruneAuditlog:
         with transaction.atomic(), connection.cursor() as cur:
             cur.execute("ALTER TABLE core_auditlog DISABLE TRIGGER auditlog_immutable")
             try:
-                # Reseal the row for its new timestamp in the same UPDATE: the
-                # prune only deletes rows that authenticate (Refs #2717,
+                # Backdate the row and relink the whole chain in its new order,
+                # one UPDATE per row: the prune only deletes rows that
+                # authenticate and link to their predecessor (Refs #2717,
                 # finding no. 9).
-                log.timestamp = ts
-                cur.execute(
-                    "UPDATE core_auditlog SET timestamp = %s, entry_hash = %s WHERE id = %s",
-                    [ts, compute_entry_hash(log, log.prev_hash or ""), str(log.pk)],
-                )
+                rows = list(AuditLog.objects.filter(facility_id=log.facility_id))
+                for row in rows:
+                    if row.pk == log.pk:
+                        row.timestamp = ts
+                previous = ""
+                for row in sorted(rows, key=lambda row: (row.timestamp, row.pk)):
+                    entry_hash = compute_entry_hash(row, previous)
+                    cur.execute(
+                        "UPDATE core_auditlog SET timestamp = %s, prev_hash = %s, entry_hash = %s WHERE id = %s",
+                        [row.timestamp, previous, entry_hash, str(row.pk)],
+                    )
+                    previous = entry_hash
+                log.refresh_from_db()
             finally:
                 # ENABLE ALWAYS: gehaerteter Ruhezustand aus Migration 0107 (A1.4,
                 # Refs #1026); ein einfaches ENABLE wuerde auf 'O' zurueckstufen.
                 cur.execute("ALTER TABLE core_auditlog ENABLE ALWAYS TRIGGER auditlog_immutable")
+        assert verify_chain(log.facility_id).ok, "backdated chain must be intact"
         return log
 
     def test_prune_deletes_entries_older_than_cutoff(self, facility, settings_obj):

@@ -23,7 +23,7 @@ from core.retention.legal_holds import (
     get_active_hold_target_ids,
 )
 from core.services.audit import audit_event
-from core.services.audit.chain import advisory_lock_name, compute_entry_hash
+from core.services.audit.chain import _checkpoint_boundaries, advisory_lock_name, compute_entry_hash
 from core.services.dashboard.release_log import RELEASE_EXPORT_Q
 from core.services.dynamic_records import DYNAMIC_DATA_MODELS, dynamic_case_lookup, dynamic_client_lookup
 from core.services.system import bypass_replication_triggers
@@ -205,6 +205,42 @@ class AuditPruneIntegrityError(Exception):
 _AUTHENTICATE_CHUNK_SIZE = 2000
 
 
+def _check_expired_links(facility, cutoff) -> None:
+    """Lock the expired part of the chain and check that nothing is missing.
+
+    Refs #2717 (finding no. 9): a row authenticates on its own stored
+    ``prev_hash``; that alone does not show that its predecessor still
+    exists. If a row (even a protected one) was deleted past the trigger,
+    its successor keeps a dangling ``prev_hash`` -- the only trace of the
+    deletion. Pruning that successor would remove the trace and sign it as a
+    boundary. Every row before the cutoff -- a prefix of the chain order --
+    must therefore authenticate and link to the row before it (chain start:
+    ``""``) or to a boundary of an authenticated checkpoint, the same rule
+    ``verify_chain`` applies.
+
+    ``FOR UPDATE`` covers the checkpoints and every expired row, not only the
+    candidates: a protected row deleted concurrently cannot vanish between
+    this check and the deletion.
+
+    Raises :class:`AuditPruneIntegrityError` at the first row that fails.
+    """
+    chain = AuditLog.objects.filter(facility=facility)
+    checkpoints = chain.filter(action=AuditLog.Action.AUDIT_PRUNE_CHECKPOINT).select_for_update(of=("self",))
+    covered = _checkpoint_boundaries(checkpoints.order_by("timestamp", "id"))
+    rows = chain.filter(timestamp__lt=cutoff).select_for_update(of=("self",)).order_by("timestamp", "id")
+    previous = None
+    for row in rows.iterator(chunk_size=_AUTHENTICATE_CHUNK_SIZE):
+        if not row.entry_hash:
+            raise AuditPruneIntegrityError(row.pk, "row without entry_hash")
+        if not hmac.compare_digest(compute_entry_hash(row, row.prev_hash or ""), row.entry_hash):
+            raise AuditPruneIntegrityError(row.pk, "entry_hash mismatch")
+        link = row.prev_hash or ""
+        linked = link == previous if previous is not None else link == ""
+        if not linked and link not in covered:
+            raise AuditPruneIntegrityError(row.pk, "prev_hash linkage break")
+        previous = row.entry_hash
+
+
 def _authenticate_candidates(qs, boundary_hashes):
     """Lock and authenticate every row the prune is about to delete.
 
@@ -246,7 +282,9 @@ def prune_auditlog(facility, settings_obj, now=None, dry_run=False):
     Only rows that authenticate are deleted (Refs #2717, finding no. 9). The
     first row that does not aborts the facility's prune as a whole: nothing is
     deleted, no checkpoint is written and the break is logged with the row id
-    only, so the chain check keeps reporting it.
+    only, so the chain check keeps reporting it. The same holds for a row that
+    does not link to its predecessor: a row missing from the expired part of
+    the chain is never pruned away together with its successor.
     """
     try:
         return _prune_auditlog(facility, settings_obj, now=now, dry_run=dry_run)
@@ -290,6 +328,7 @@ def _prune_auditlog(facility, settings_obj, now=None, dry_run=False):
             .values_list("prev_hash", flat=True)
         )
     )
+    _check_expired_links(facility, cutoff)
     count, newest_boundary = _authenticate_candidates(qs, boundary_hashes)
     if count == 0:
         return {"count": 0}
