@@ -321,7 +321,10 @@ def _capture_task_offline(page, base_url, title: str) -> None:
     expect(page.locator("[data-testid='offline-navigation-notice']")).to_contain_text("lokal verschlüsselt")
     expect(page.locator("[data-testid='offline-nav']")).to_be_visible()
     assert _raw_queue_count(page) == 1, "the offline task must be queued locally"
-    # Network is back, but no reconnect event: the replay has not run yet.
+    # The full page would replay on the browser's 'online' event. Leave it for a same-origin
+    # document without app scripts while still offline, so the replay has not run yet when the
+    # network is back.
+    page.goto(f"{base_url}/manifest.json", wait_until="domcontentloaded")
     page.context.set_offline(False)
 
 

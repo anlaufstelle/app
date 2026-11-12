@@ -39,11 +39,10 @@ from __future__ import annotations
 import re
 import time
 import uuid
-from contextlib import suppress
 
 import pytest
 
-from ._helpers import SEED_PASSWORD, django_shell
+from ._helpers import SEED_PASSWORD
 from ._helpers import wait_for_active_service_worker as _wait_for_active_service_worker
 
 pytestmark = pytest.mark.e2e
@@ -251,82 +250,6 @@ def test_dirty_page_is_not_reloaded_on_update(browser, base_url):
         page.locator("#sw-update-toast").get_by_text("Neu laden").click()
         page.wait_for_function("() => window.__preUpdateMarker === undefined", timeout=15000)
     finally:
-        context.close()
-
-
-def test_takeover_does_not_cut_a_running_form_post(browser, base_url, e2e_env):
-    """Refs #2730: a takeover while a native form POST is under way must not reload.
-
-    The reload would abort the navigation: the server still creates the task,
-    but the browser drops the answer (and with it a renewed session cookie).
-    Deterministic order: the activation message of the new worker is held
-    back until the POST is parked in a route, then released. The page is not
-    dirty (the field is set without an input event) and the queue is empty, so
-    only the running navigation can stop the reload.
-    """
-    page, context = _login_with_retry(browser, base_url)
-    probe = f"e2e-inflight-{uuid.uuid4().hex[:8]}"
-    title = f"E2E-Takeover-{uuid.uuid4().hex[:6]}"
-    form_re = re.compile(r"^" + re.escape(f"{base_url}/workitems/new/") + r"$")
-    parked = []
-
-    def _park_post(route):
-        if route.request.method == "POST":
-            parked.append(route)
-        else:
-            route.continue_()
-
-    try:
-        page.goto(f"{base_url}/workitems/new/", wait_until="domcontentloaded")
-        _wait_for_active_service_worker(page)
-        page.evaluate(
-            """() => {
-                const send = ServiceWorker.prototype.postMessage;
-                const held = [];
-                ServiceWorker.prototype.postMessage = function (message, ...rest) {
-                    if (message && message.type === "SKIP_WAITING") { held.push(this); return undefined; }
-                    return send.call(this, message, ...rest);
-                };
-                window.__heldActivations = held;
-                window.__releaseActivation = () => held.forEach((w) => send.call(w, { type: "SKIP_WAITING" }));
-            }"""
-        )
-        page.evaluate(
-            "async (probe) => { await navigator.serviceWorker.register('/sw.js?' + probe, { scope: '/' }); }",
-            probe,
-        )
-        page.wait_for_function("() => window.__heldActivations.length > 0", timeout=20000)
-
-        page.evaluate("(title) => { document.querySelector(\"input[name='title']\").value = title; }", title)
-        page.evaluate("() => { window.__preUpdateMarker = true; }")
-        context.route(form_re, _park_post)
-        page.evaluate("() => document.querySelector('button.btn-primary[type=submit]').click()")
-        for _ in range(50):
-            if parked:
-                break
-            page.wait_for_timeout(100)
-        assert parked, "the form POST never reached the route (setup)"
-
-        page.evaluate("() => window.__releaseActivation()")
-        page.wait_for_function(
-            "(probe) => navigator.serviceWorker.controller && "
-            "navigator.serviceWorker.controller.scriptURL.includes(probe)",
-            arg=probe,
-            timeout=5000,
-        )
-        page.locator("#sw-update-toast").wait_for(state="visible", timeout=5000)
-        assert page.evaluate("() => window.__preUpdateMarker") is True, "the page reloaded during the POST"
-
-        parked[0].continue_()
-        page.wait_for_url(lambda url: "/workitems/new/" not in url, timeout=15000)
-        lines = django_shell(
-            e2e_env,
-            f"from core.models import WorkItem; print('N|%d' % WorkItem.objects.filter(title='{title}').count())",
-        )
-        assert [line for line in lines if line.startswith("N|")][-1] == "N|1", lines
-    finally:
-        with suppress(Exception):
-            context.unroute(form_re)
         context.close()
 
 

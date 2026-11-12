@@ -9,7 +9,7 @@ from playwright.sync_api import expect
 
 from tests.e2e._selectors import find_first_client_link, open_desktop_overflow
 
-from ._helpers import SEED_PASSWORD
+from ._helpers import SEED_PASSWORD, wait_until
 from ._helpers import wait_for_active_service_worker as _wait_for_active_service_worker
 from .test_mfa_session_revocation import _raw_queue_count
 
@@ -162,6 +162,27 @@ def test_offline_native_form_post_lands_on_a_full_page(browser, base_url):
         page.locator('[data-testid="offline-nav-zeitstrom"]').click()
         page.wait_for_url(f"{base_url}/")
         expect(page.locator('[data-testid="offline-nav"]')).to_be_visible()
+
+        # The offline page loads sw-register.js: back online, a waiting worker is activated on it
+        # without a navigation (a bare fragment never activated it).
+        page.context.set_offline(False)
+        probe = f"e2e-shell-update-{uuid.uuid4().hex[:8]}"
+        page.evaluate(
+            "async (probe) => { await navigator.serviceWorker.register('/sw.js?' + probe, { scope: '/' }); }",
+            probe,
+        )
+
+        def _controlled_by_probe() -> bool:
+            try:
+                return page.evaluate(
+                    "(probe) => !!navigator.serviceWorker.controller && "
+                    "navigator.serviceWorker.controller.scriptURL.includes(probe)",
+                    probe,
+                )
+            except Exception:  # the page may reload once the new worker took over
+                return False
+
+        assert wait_until(page, _controlled_by_probe, timeout_ms=20000), "the offline page did not activate the update"
     finally:
         with suppress(Exception):
             page.context.set_offline(False)
