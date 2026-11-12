@@ -9,6 +9,7 @@ Drei Pfade jenseits CLI/Admin-Action:
 from __future__ import annotations
 
 import logging
+import re
 import threading
 from smtplib import SMTPException
 from unittest import mock
@@ -488,3 +489,39 @@ class TestRecoveryMailForSharedAddressUnderAppRole:
             action=AuditLog.Action.PASSWORD_RESET_REQUESTED, detail__flow="lockout_recovery_token"
         )
         assert list(requested.values_list("user_id", "facility_id")) == [(locked.pk, locked.facility_id)]
+
+
+@pytest.mark.django_db
+@pytest.mark.postgres
+class TestRecoveryLinkAfterEarlierUnlockUnderAppRole:
+    """A fresh link must unlock an account that was already unlocked once before."""
+
+    def test_fresh_link_unlocks_a_relocked_account(
+        self,
+        client,
+        staff_user,
+        rls_test_role,  # noqa: F811
+    ):
+        from core.services.security.login_lockout import unlock
+
+        staff_user.email = "relocked@example.org"
+        staff_user.save(update_fields=["email"])
+        _lock_account(staff_user)
+        unlock(staff_user, unlocked_by=None, trigger="admin")
+        assert not is_locked(staff_user)
+        _lock_account(staff_user)
+        assert is_locked(staff_user)
+
+        with as_rls_role(rls_test_role, facility_id=""):
+            requested = client.post(reverse("core:lockout_recovery_request"), {"email": "relocked@example.org"})
+        assert requested.status_code == 302
+        assert len(mail.outbox) == 1
+        token = re.search(r"/account/recovery/confirm/([^/\s]+)/", mail.outbox[0].body).group(1)
+
+        with as_rls_role(rls_test_role, facility_id=""):
+            confirmed = DjangoTestClient().post(reverse("core:lockout_recovery_confirm", kwargs={"token": token}))
+
+        assert confirmed.status_code == 302
+        assert not is_locked(staff_user)
+        unlocks = AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.LOGIN_UNLOCK)
+        assert sorted(unlocks.values_list("detail__trigger", flat=True)) == ["admin", "recovery_token"]
