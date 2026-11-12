@@ -225,7 +225,7 @@ Die beiden Stunden sind für die Anwendung wirklich verschiedene Zeitpunkte, die
 
 In der Nacht zur Sommerzeit gibt es die Stunde von 02:00 bis 03:00 dagegen **gar nicht** — dort weist das Formular eine Uhrzeit aus diesem Fenster weiterhin zurück und nennt den Grund. Eine Auswahl gibt es hier nicht: eine Uhrzeit, die es nicht gibt, wird durch keine Angabe real.
 
-Zeigt die Auswahl nicht den laufenden Dienst (anderer Tag oder andere Schicht), steht unter der Kopfzeile ein Hinweis „Du siehst …“ mit dem Link **zum laufenden Dienst**; bei laufendem Dienst erscheint er nicht. Die frühere Box **Aktueller Dienst** wird im Feed durch die Kennzahlenzeile ersetzt; die Übergabe enthält weiterhin die vollständige Schichtzusammenfassung.
+Zeigt die Auswahl nicht den laufenden Dienst (anderer Tag oder andere Schicht), steht unter der Kopfzeile ein Hinweis „Du siehst …“ mit dem Link **zum laufenden Dienst**; bei laufendem Dienst erscheint er nicht. Im Feed steht statt einer eigenen Box die Kennzahlenzeile; die vollständige Schichtzusammenfassung enthält die Übergabe.
 
 #### Übergabenotiz
 

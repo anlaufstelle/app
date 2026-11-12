@@ -227,7 +227,7 @@ For the application the two hours really are different points in time, one hour 
 
 On the night the clocks spring forward, by contrast, the hour from 02:00 to 03:00 **does not exist at all** -- there the form still rejects a time from that window and says why. There is nothing to choose: a time that does not exist is not made real by any selection.
 
-If the selection is not the running shift (another day or another shift), a hint "You are viewing …" with the link **to the running shift** appears below the header row; while the running shift is selected it does not appear. The former **Current shift** box is replaced by the figures row in the feed; the handover still contains the full shift summary.
+If the selection is not the running shift (another day or another shift), a hint "You are viewing …" with the link **to the running shift** appears below the header row; while the running shift is selected it does not appear. The feed shows the figures row instead of a separate box; the handover contains the full shift summary.
 
 #### Handover note
 
@@ -1203,5 +1203,5 @@ Phone, email, date and address patterns are detected heuristically and locally o
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: c5415b44986e9ccedea7615ef5a35eb8e162ffb6 -->
+<!-- source-hash: f64b40cb3d0e394cc08697960d26075a69428c95 -->
 <!-- translation-date: 2026-11-12 -->
