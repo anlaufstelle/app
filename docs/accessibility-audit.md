@@ -207,6 +207,27 @@ Die beiden mit „— (Nachtrag)" markierten Zeilen sind keine der 47 Befunde au
 
 Zusätzlich bestätige (bewusst akzeptierte) Ausgangswerte ohne Korrekturbedarf: gedämpfter Fließtext 5,07:1 (Kartenweiß) bzw. 4,57:1 (Seitenhintergrund), Akzentgrün auf Weiß 7,13:1, Orange auf Weiß bei ≥ 20 px fett 3,56:1 (große Schrift, Schwelle 3:1), Statusabzeichen 4,57–8,75:1 — Einzelheiten in § 4 (A-09, A-10).
 
+
+#### Zweistufige Rahmen im Zeitstrom (#2657)
+
+`--border-soft: oklch(0.87 0.01 75)` ist ausschließlich dekorativ und nicht für WCAG 1.4.11 relevante Bedienelement-Begrenzungen bestimmt. `.card`, Strichlisten-Inhalt, Hausverbot-Hülle und Filterpanel/-Chips nutzen den weichen Rahmen explizit; die globale Default-Regel bleibt `var(--border)`. Der Strichlisten-Titel steht als 12-px-Versallabel vor dem Inhalt; die Fokusbox verwendet bereits ein freistehendes 12-px-Label.
+
+Rechenweg: OKLCH → OKLab (`a=C·cos(h)`, `b=C·sin(h)`) → lineares sRGB; `Y=0,2126·R+0,7152·G+0,0722·B`, Kontrast `(Yhell+0,05)/(Ydunkel+0,05)`. Leuchtdichten: Weiß `1`, Canvas `0,898026`, harter Rahmen `0,261810`, weicher Rahmen `0,658007`, Akzent `0,097304`, gedämpfter Text `0,157266`. Beispiel Rahmen/Canvas: `(0,898026+0,05)/(0,261810+0,05)=3,040:1`.
+
+| Element | Begrenzung/Indikator | Auf Weiß | Auf Canvas | Ergebnis |
+|---|---|---|---|---|
+| Texteingabe, Textarea | `--border` (Default bzw. `border-subtle`) | 3,367:1 | 3,040:1 | ≥ 3:1 |
+| Select (Schicht, Dokumentationstyp, Kontaktfilter) | `border-subtle` | 3,367:1 | 3,040:1 | ≥ 3:1 |
+| Checkbox (ungewählt, Standardrahmen), Radiobutton | `--border` / vorhandene native Darstellung | 3,367:1* | 3,040:1* | CSS-Rahmen unverändert |
+| Sekundärbutton, Filteröffner | `.btn-secondary`, `--border` | 3,367:1 | 3,040:1 | ≥ 3:1 |
+| Strichlisten-Kachel, Datumsauslöser, Tagespfeile, inaktives Segment | `border-subtle` | 3,367:1 | 3,040:1 | ≥ 3:1 |
+| Primärbutton, aktives Segment, gewählte Checkbox | Akzentfüllung/-rahmen | 7,128:1 | 6,436:1 | ≥ 3:1 |
+| Tastatur-Fokusrahmen (Links, Buttons, Inputs, Selects, Textareas) | `ring-accent`, 2 px Abstand | 7,128:1 | 6,436:1 | ≥ 3:1 |
+| Karten-/Listenrahmen, Zeilentrenner | `--border-soft` | 1,483:1 | 1,339:1 | rein dekorativ |
+| Spaltentexte, Uhrzeit, Versallabel | `text-ink-muted` | 5,066:1 | 4,574:1 | ≥ 4,5:1 |
+
+\* Die Zahlen gelten für den CSS-Token, nicht als Vermessung der betriebssystemabhängigen nativen Kontrollgrafik. Native Checkbox-/Radiobutton-Darstellung wird durch diese Änderung nicht verändert. Kein Button, Eingabefeld oder Fokusrahmen erhält den weichen Token; deckungsgleiche Kontrollfarben und berechnete Schwellen werden durch automatisierte Tests abgesichert. Die Browserprüfung bei 200 % Zoom und die erneute axe-Abnahme stehen gesondert aus.
+
 ### 2.4 Korrektur-Wellen
 
 Zählweise: je Welle alle Commits auf dem Hauptzweig (main), einschließlich der jeweiligen ersten Korrekturrunde und der unmittelbar dadurch nötigen Folge-Commits (Integrationsnachträge) — belegt per `git log --oneline`.

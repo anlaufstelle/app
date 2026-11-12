@@ -1,0 +1,28 @@
+# Accessibility audit — contrast addendum
+
+This partial translation mirrors the two-level border addendum in § 2.3 of the German audit; the historical findings remain in the German source.
+
+## Two-level borders (#2657)
+
+`--border-soft: oklch(0.87 0.01 75)` is decorative only and must not define control boundaries relevant to WCAG 1.4.11. Cards, the tally content, ban notice containers and filter panels/chips opt into it explicitly. The global default remains `var(--border)`. The tally title is a separate 12 px uppercase label above the content; the focus box already has a separate 12 px label.
+
+Calculation: OKLCH → OKLab (`a=C·cos(h)`, `b=C·sin(h)`) → linear sRGB; `Y=0.2126·R+0.7152·G+0.0722·B`, contrast `(Ylight+0.05)/(Ydark+0.05)`. Luminance: white `1`, canvas `0.898026`, hard border `0.261810`, soft border `0.658007`, accent `0.097304`, muted text `0.157266`. Example, border/canvas: `(0.898026+0.05)/(0.261810+0.05)=3.040:1`.
+
+| Element | Boundary/indicator | On white | On canvas | Result |
+|---|---|---|---|---|
+| Text input, textarea | `--border` (default or `border-subtle`) | 3.367:1 | 3.040:1 | ≥ 3:1 |
+| Select (shift, document type, contact filters) | `border-subtle` | 3.367:1 | 3.040:1 | ≥ 3:1 |
+| Unchecked checkbox, radio button | `--border` / existing native appearance | 3.367:1* | 3.040:1* | CSS boundary unchanged |
+| Secondary button, filter toggle | `.btn-secondary`, `--border` | 3.367:1 | 3.040:1 | ≥ 3:1 |
+| Tally tile, date trigger, day arrows, inactive segment | `border-subtle` | 3.367:1 | 3.040:1 | ≥ 3:1 |
+| Primary button, active segment, checked checkbox | Accent fill/border | 7.128:1 | 6.436:1 | ≥ 3:1 |
+| Keyboard focus (links, buttons, inputs, selects, textareas) | `ring-accent`, 2 px offset | 7.128:1 | 6.436:1 | ≥ 3:1 |
+| Card/list borders, row separators | `--border-soft` | 1.483:1 | 1.339:1 | Decorative only |
+| Column text, time, uppercase labels | `text-ink-muted` | 5.066:1 | 4.574:1 | ≥ 4.5:1 |
+
+*These numbers describe the CSS token rather than measuring operating-system-specific native controls. This change does not alter native checkbox/radio rendering. Buttons, fields and focus indicators do not receive the soft token; automated tests pin the control colours and calculated thresholds. Browser checks at 200% zoom and the renewed axe audit remain separate pending checks.
+
+<!-- translation-source: docs/accessibility-audit.md (section 2.3 addendum) -->
+<!-- translation-version: v0.99.10 -->
+<!-- translation-date: 2026-11-12 -->
+<!-- source-hash: d6b25ba400b84ff2dda47bf9ade104db250ea2cf -->

@@ -38,6 +38,7 @@ module.exports = {
           muted: 'var(--text-muted)',
         },
         subtle: 'var(--border)',
+        'subtle-soft': 'var(--border-soft)',
         // Eintragstypen (Feed-Cards)
         event: {
           DEFAULT: 'var(--kind-event)',

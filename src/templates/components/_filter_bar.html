@@ -14,7 +14,7 @@ without JavaScript. Context: ``active_filters`` (dicts with key, text, remove_ur
                 {% translate "Filter" %}{% if active_filter_count %} ({{ active_filter_count }}){% endif %}
             </summary>
             <div data-filter-panel-body="" role="group" aria-label="{% translate 'Filter' %}"
-                 class="fixed inset-x-0 bottom-0 z-40 max-h-[80vh] overflow-y-auto rounded-t-[16px] border border-subtle bg-surface p-4 shadow-lg md:absolute md:inset-x-auto md:bottom-auto md:right-0 md:top-full md:mt-2 md:w-[28rem] md:max-w-[90vw] md:rounded-[10px]">
+                 class="fixed inset-x-0 bottom-0 z-40 max-h-[80vh] overflow-y-auto rounded-t-[16px] border border-subtle-soft bg-surface p-4 shadow-lg md:absolute md:inset-x-auto md:bottom-auto md:right-0 md:top-full md:mt-2 md:w-[28rem] md:max-w-[90vw] md:rounded-[10px]">
                 {% block filter_panel %}{% endblock %}
                 <div class="mt-4">
                     <button id="event-submit" type="submit" data-filter-submit-fallback="" class="btn-primary px-4 py-2 min-h-[44px]">{% translate "Filtern" %}</button>
@@ -25,7 +25,7 @@ without JavaScript. Context: ``active_filters`` (dicts with key, text, remove_ur
     {% if active_filters %}
     <ul class="flex flex-wrap items-center min-w-0 gap-2 mt-3" aria-label="{% translate 'Aktive Filter' %}">
         {% for chip in active_filters %}
-        <li data-filter-chip="{{ chip.key }}" class="inline-flex items-center gap-1 rounded-full border border-subtle bg-surface pl-3 text-[13px] text-ink-soft">
+        <li data-filter-chip="{{ chip.key }}" class="inline-flex items-center gap-1 rounded-full border border-subtle-soft bg-surface pl-3 text-[13px] text-ink-soft">
             <span>{{ chip.text }}</span>
             <a data-chip-remove="" data-filter-key="{{ chip.key }}" href="{{ chip.remove_url }}"
                hx-get="{{ chip.remove_url }}" hx-target="#event-table" hx-push-url="true" hx-indicator="#event-filters-spinner"

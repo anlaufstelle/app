@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Befehl `backfill_audit_chain` entfernt, Audit-Zeilen ohne Hash gelten als Bruch** (#2716) — Der Befehl konnte nach einer Bereinigung die ganze Audit-Kette neu versiegeln und so eine manipulierte Zeile beglaubigen; er entfällt ersatzlos. `verify_audit_chain` meldet jetzt auch eine Zeile ohne Hash vor dem Kettenanfang als Bruch.
 
 ### Changed
-
+- **Dezente Rahmen bei klaren Bedienelementen** (#2657) — Dekorative Karten- und Sektionsrahmen sind heller; Strichliste und Handlungsbedarf haben freistehende Sektionslabels. Eingabefelder, Schaltflächen und Fokusmarkierungen behalten ihre kontraststarken Grenzen.
 - **Zeitstrom: Kennzahlenzeile statt Cockpit, Dienst-Karte und Kontakte-Link** (#2655) — Eine Zeile zeigt Kontakte im Dienst, gezählte Striche, eigene und überfällige Aufgaben und aktive Hausverbote; Links öffnen die zugehörigen gefilterten Listen. Sie ersetzt Cockpit, Dienst-Karte und Kontakte-Link, gilt für alle Rollen und aktualisiert sich live.
 - **Zeitstrom: eine Kopfzeile für Datum, Schicht und Ansicht** (#2654) — Datum, Schicht-Auswahl und Feed/Übergabe-Wahl stehen in einer Kopfzeile, die Schicht wird nur dort genannt. Weicht die Auswahl vom laufenden Dienst ab, führt ein Hinweis zurück; mobil öffnen Datum und Schicht gemeinsam ein Auswahlblatt.
 - **Demo-Hinweis mobil einzeilig und aufklappbar** (#2663) — Auf dem Handy zeigt die Zeile „Demo · synthetisch · Reset 18:00“, Bereich und Wechsel-Link klappen per Tipp auf (je Sitzung gemerkt). Die Zeile bleibt immer sichtbar; ohne JavaScript steht der volle Hinweis da.

@@ -89,6 +89,9 @@
     --bg: oklch(0.965 0.01 75);
     --surface: #fff;
     --border: oklch(0.64 0.012 75);
+    /* Decorative borders only (#2657); controls retain --border at >= 3:1
+       to preserve A11Y-014. Never use --border-soft for control or focus edges. */
+    --border-soft: oklch(0.87 0.01 75);
     --text-primary: oklch(0.18 0.01 75);
     --text-secondary: oklch(0.36 0.01 75);
     --text-muted: oklch(0.54 0.01 75);
@@ -168,7 +171,7 @@
         @apply bg-surface border border-subtle text-[13px] text-ink-soft rounded-md hover:bg-canvas;
     }
     .card {
-        @apply bg-surface border border-subtle rounded-[10px];
+        @apply bg-surface border border-subtle-soft rounded-[10px];
     }
     /* Tally tile; the colour pulse (bg-accent-light/border-accent) is added as
        utilities by tally-undo.js and overrides these resting colours. */

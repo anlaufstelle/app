@@ -4,18 +4,19 @@ Pflichtwerte bleiben direkte „+1"-POSTs. Typen mit ausschließlich erforderlic
 Zahlenfeldern öffnen zuerst das kompakte HTMX-Formular; dessen POST läuft danach
 durch denselben create_event-Pfad.{% endcomment %}
 {% if tally_summary.rows %}
-<section id="tally-panel" class="relative mb-5 bg-surface border border-subtle rounded-[10px]"
-         data-testid="tally-panel" aria-labelledby="tally-heading">
-    <div class="px-4 py-3 flex items-center gap-3 flex-wrap border-b border-subtle">
+<div class="relative mb-5">
+    <div class="pb-2.5 flex items-center gap-3 flex-wrap">
         <svg aria-hidden="true" class="w-4 h-4 text-ink-muted flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9l2 2 4-4"/></svg>
         <div>
-            <h2 id="tally-heading" class="text-[11px] font-bold text-ink-muted uppercase tracking-wider leading-none">{% trans "Strichliste" %}</h2>
+            <h2 id="tally-heading" class="text-[12px] font-bold text-ink-muted uppercase tracking-wider leading-none">{% trans "Strichliste" %}</h2>
             <span class="text-[13px] font-semibold text-ink-soft" data-testid="tally-live-context">
                 {{ tally_summary.window_text }}
             </span>
         </div>
         <p class="text-[12px] text-ink-muted md:ml-auto" data-testid="tally-hint">{% trans "tippen zählt +1 · anonym" %}</p>
     </div>
+    <section id="tally-panel" class="bg-surface border border-subtle-soft rounded-[10px]"
+             data-testid="tally-panel" aria-labelledby="tally-heading">
     <div class="px-4 py-3 grid grid-cols-2 md:grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2.5">
         {% for row in tally_summary.rows %}
         {% include "core/zeitstrom/partials/tally_row.html" %}
@@ -24,7 +25,8 @@ durch denselben create_event-Pfad.{% endcomment %}
     {# Target of the number form (popover/bottom sheet); outside the tile grid so no tile moves. #}
     <div id="tally-number-form-slot" data-hx-no-focus data-testid="tally-number-form-slot"></div>
     {# Reserved place of the undo bar (out-of-band target); outside the tile grid. #}
-    <div id="tally-undo-slot" class="md:min-h-[44px] md:px-4 md:py-2 md:border-t md:border-subtle" aria-live="polite"
+    <div id="tally-undo-slot" class="md:min-h-[44px] md:px-4 md:py-2 md:border-t md:border-subtle-soft" aria-live="polite"
          data-testid="tally-undo-slot"></div>
-</section>
+    </section>
+</div>
 {% endif %}
