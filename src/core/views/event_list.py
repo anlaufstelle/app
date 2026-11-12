@@ -2,12 +2,16 @@
 
 from urllib.parse import urlencode
 
+from django.urls import reverse
 from django.views import View
 
 from core.services.events.list_filters import (
+    event_list_active_filters,
     event_list_options,
     event_list_page_contents,
+    event_list_period_segments,
     event_list_queryset,
+    event_list_url_params,
     resolve_event_list_filters,
 )
 from core.views.mixins import AssistantOrAboveRequiredMixin, HTMXPartialMixin, PaginatedListMixin
@@ -29,13 +33,21 @@ class EventListView(AssistantOrAboveRequiredMixin, PaginatedListMixin, HTMXParti
         filters = resolve_event_list_filters(request.GET, facility, request.user, options=options)
         events = self.paginate(event_list_queryset(facility, request.user, filters, options=options), request)
         events.object_list = event_list_page_contents(facility, request.user, events.object_list)
+        base_url = reverse("core:event_list")
+        active_filters = event_list_active_filters(filters, options, base_url=base_url)
+        period_segments, period_extra = event_list_period_segments(filters, base_url=base_url)
         return self.render_htmx_or_full(
             {
                 **options,
                 "events": events,
                 "filters": filters,
                 "show_cases": request.user.is_staff_or_above,
-                "pagination_params": urlencode(filters),
+                "pagination_params": urlencode(event_list_url_params(filters)),
+                "active_filters": active_filters,
+                "active_filter_count": len(active_filters),
+                "clear_filters_url": base_url,
+                "period_segments": period_segments,
+                "period_extra": period_extra,
                 "filter_form_oob": self.is_htmx(),
             }
         )

@@ -249,21 +249,22 @@ Die **Kontakte-Liste** (`/events/`) ist die Arbeitsliste für Kontakte über meh
 
 **Öffnen:** Wählen Sie **Kontakte** direkt unter **Zeitstrom** in der Seitenleiste, mobil **Mehr → Kontakte**. Nur auf `/events/` ist dieser Eintrag aktiv; Kontakt-Detailseiten bleiben dem Zeitstrom zugeordnet. Auch auf der Zeitstrom-Seite führt ein lokaler Link **Kontakte** zur Liste: Er übernimmt den ausgewählten Tag, Dokumentationstyp und die Schicht.
 
-**Filter kombinieren:** Wählen Sie die gewünschten Angaben und anschließend **Filtern**. Unter **Weitere Filter** finden Sie Fall, Erfasst von, Schicht und Anonym. Ist einer davon gesetzt, bleibt der Bereich offen und nennt die aktiven Filter. Das Formular funktioniert auch ohne JavaScript.
+**Filter kombinieren:** Die Kopfzeile zeigt das Suchfeld, die Zeitraum-Schnellwahl **Heute | Woche | Monat | Zeitraum** und den Knopf **Filter**. Der Knopf öffnet das Filter-Panel (bei breitem Fenster unter dem Knopf, sonst als Blatt am unteren Rand) und nennt in Klammern die Zahl der aktiven Filter. Jeder aktive Filter steht darunter als Chip; **×** am Chip entfernt genau diesen Filter, **Alle zurücksetzen** öffnet die ungefilterte Liste. Änderungen wirken sofort, das Suchfeld nach einer kurzen Pause. Beim Öffnen springt der Fokus auf das erste Feld, **Esc** schließt das Panel und gibt den Fokus an den Knopf zurück. Ohne JavaScript bleibt das Panel aufklappbar und **Filtern** ersetzt das sofortige Filtern.
 
 | Filter | Verwendung |
 |---|---|
-| **Von / Bis** | Zeitraum des Kontaktzeitpunkts; ohne Grenzen alle noch vorhandenen Kontakte |
-| **Schnellwahl** | **Diese Woche** oder **Letzter Monat** setzt den Zeitraum; für eigene Datumsgrenzen wieder **Alle** wählen |
+| **Heute / Woche / Monat** | Schnellwahl für den heutigen Tag, die laufende Woche (Montag bis Sonntag) oder den laufenden Monat; ein zweiter Klick auf die gewählte Schnellwahl hebt sie auf. **Letzter Monat** steht im Panel |
+| **Zeitraum, Von / Bis** | Eigene Datumsgrenzen des Kontaktzeitpunkts; ohne Grenzen alle noch vorhandenen Kontakte. Eine Schnellwahl und eigene Grenzen schließen sich aus: Wählen Sie **Zeitraum**, übernehmen Von und Bis die Tage der bisherigen Schnellwahl. Nennt ein älterer Link beides mit abweichenden Daten, gelten die Daten; die Schnellwahl entfällt und der Chip zeigt den Zeitraum |
 | **Typ** | Dokumentationstyp, soweit Ihre Rolle ihn sehen darf |
 | **Person** | Auswahl einer aktiven Person nach Pseudonym; keine Autocomplete-Suche |
 | **Fall** | Auswahl eines Falls; Filter und Fallanzeige erst ab Fachkraft |
 | **Erfasst von / Nur meine** | Kontakte anderer Mitarbeitender oder die eigenen; beide Filter wirken gemeinsam |
 | **Schicht** | Das eingerichtete Zeitfenster an jedem Tag des Zeitraums; eine Nachtschicht zählt zum Tag ihres Beginns |
 | **Anonym** | Alle, nur anonyme oder nur nicht anonyme Kontakte |
-| **Suchbegriff** | Ab zwei Zeichen in Pseudonym und Ereignis-Suchtext suchen |
+| **Erfassungsweg** | **Ohne Strichliste** zeigt Kontakte, die nicht über die Strichliste entstanden sind, **Nur Strichliste** die darüber gezählten |
+| **Suchbegriff** | Ab zwei Zeichen in Pseudonym und Ereignis-Suchtext suchen; erscheint nicht als Chip, sondern bleibt im Suchfeld sichtbar |
 
-Der Suchraum entspricht der globalen Suche (#1862, [ADR-043](adr/043-suchraum-volltextsuche.md)): Der Ereignis-Suchtext enthält nur unverschlüsselte Felder mit wirksamer Sensibilität **Normal**. Verschlüsselte, erhöht oder hoch eingestufte Feldwerte, Falltitel und Dateiinhalte werden nicht durchsucht. Es gibt keine Suchvorschläge. Kontakte von Personen im Papierkorb sind bei einer Suchbegriffsabfrage ausgeschlossen. **Filter zurücksetzen** öffnet wieder die ungefilterte Liste.
+Der Suchraum entspricht der globalen Suche (#1862, [ADR-043](adr/043-suchraum-volltextsuche.md)): Der Ereignis-Suchtext enthält nur unverschlüsselte Felder mit wirksamer Sensibilität **Normal**. Verschlüsselte, erhöht oder hoch eingestufte Feldwerte, Falltitel und Dateiinhalte werden nicht durchsucht. Es gibt keine Suchvorschläge. Kontakte von Personen im Papierkorb sind bei einer Suchbegriffsabfrage ausgeschlossen. **Alle zurücksetzen** öffnet wieder die ungefilterte Liste und leert auch den Suchbegriff.
 
 **Sichtbarkeit:** Assistenz, Fachkraft, Leitung und Anwendungsbetreuung sehen Kontakte der eigenen Einrichtung, auch Erfassungen anderer Mitarbeitender, mit derselben Sensibilitätsgrenze wie im Zeitstrom: Assistenz nur **Normal**, Fachkraft bis **Erhöht**, Leitung und Anwendungsbetreuung auch **Hoch**. Gelöschte Kontakte und Kontakte im Papierkorb fehlen. Die Systemadministration hat keinen Zugang zu dieser Arbeitsliste.
 

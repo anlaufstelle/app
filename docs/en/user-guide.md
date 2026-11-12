@@ -251,21 +251,22 @@ The **Contacts list** (`/events/`) is a working list spanning multiple days, for
 
 **Open it:** Select **Contacts** directly below **Timeline** in the sidebar, or **More → Contacts** on mobile. This entry is active only on `/events/`; contact detail pages remain assigned to the Timeline. A local **Contacts** link on the Timeline page also opens the list, carrying over the selected day, documentation type and shift.
 
-**Combine filters:** Choose the criteria, then select **Filter**. **More filters** contains case, recorded by, shift and anonymous. When one is set, this section stays open and names the active filters. The form also works without JavaScript.
+**Combine filters:** The top row shows the search field, the period quick selection **Today | Week | Month | Period** and the **Filter** button. The button opens the filter panel (below the button in a wide window, otherwise as a sheet at the bottom edge) and shows the number of active filters in brackets. Every active filter appears below as a chip; **×** on a chip removes exactly that filter, and **Reset all** opens the unfiltered list. Changes apply immediately, the search field after a short pause. When the panel opens, focus moves to its first field; **Esc** closes it and returns focus to the button. Without JavaScript the panel can still be expanded and **Filter** replaces immediate filtering.
 
 | Filter | Use |
 |---|---|
-| **From / To** | Period based on the contact timestamp; no bounds means all remaining contacts |
-| **Quick selection** | **This week** or **Last month** sets the period; select **All** again to use your own dates |
+| **Today / Week / Month** | Quick selection for today, the current week (Monday to Sunday) or the current month; selecting the chosen quick selection again clears it. **Last month** is in the panel |
+| **Period, From / To** | Your own date bounds on the contact timestamp; no bounds means all remaining contacts. A quick selection and your own bounds exclude each other: when you select **Period**, From and To take over the days of the previous quick selection. If an older link names both with differing dates, the dates apply; the quick selection is dropped and the chip shows the period |
 | **Type** | Documentation type within your role's visibility |
 | **Person** | Select an active person by pseudonym; no autocomplete search |
 | **Case** | Select a case; the filter and case display are available from Social worker upwards |
 | **Created by / Only mine** | Other team members' contacts or your own; both filters apply together |
 | **Shift** | The configured time window on every day of the period; an overnight shift belongs to its start day |
 | **Anonymous** | All, only anonymous or only non-anonymous contacts |
-| **Search term** | Search pseudonym and event search text from two characters onwards |
+| **Recording method** | **Without tally sheet** shows contacts not created through the tally sheet, **Tally sheet only** those counted through it |
+| **Search term** | Search pseudonym and event search text from two characters onwards; it does not appear as a chip but stays visible in the search field |
 
-The search scope matches global search (#1862, [ADR-043](../adr/043-suchraum-volltextsuche.md)): event search text contains only unencrypted fields with effective **Normal** sensitivity. Encrypted, elevated or high field values, case titles and file contents are excluded. There are no search suggestions. Contacts belonging to people in the trash are excluded when a search term is used. **Reset filters** opens the unfiltered list again.
+The search scope matches global search (#1862, [ADR-043](../adr/043-suchraum-volltextsuche.md)): event search text contains only unencrypted fields with effective **Normal** sensitivity. Encrypted, elevated or high field values, case titles and file contents are excluded. There are no search suggestions. Contacts belonging to people in the trash are excluded when a search term is used. **Reset all** opens the unfiltered list again and also clears the search term.
 
 **Visibility:** Assistant, Social worker, Manager and Application support see contacts within their own facility, including entries by other team members, with the same sensitivity limit as the Timeline: Assistant sees **Normal**, Social worker up to **Elevated**, Manager and Application support also **High**. Deleted contacts and contacts in the trash are absent. System administration has no access to this working list.
 
@@ -1185,5 +1186,5 @@ Phone, email, date and address patterns are detected heuristically and locally o
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: be08b103870ab77b2986225edd86125978365831 -->
-<!-- translation-date: 2026-10-30 -->
+<!-- source-hash: e4469f55b6e92910c7ab8d277dbcc69db0f9870f -->
+<!-- translation-date: 2026-11-12 -->

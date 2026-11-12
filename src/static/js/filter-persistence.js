@@ -248,22 +248,132 @@
   }
 
   /**
-   * Attach change listeners to filter elements.
+   * Persist on change/input. Delegated on the document: forms that are replaced
+   * out of band (contacts list) keep saving without re-attaching listeners.
    */
+  var inputTimer;
+  function inFilterContainer(event) {
+    var target = event.target;
+    return !!(target && target.closest && target.closest("[data-filter-persist]"));
+  }
+
   function attachListeners() {
-    var elements = getFilterElements();
-    elements.forEach(function (el) {
-      el.addEventListener("change", saveFilters);
-      // For text inputs, also listen to input event (debounced save)
-      if (el.tagName === "INPUT") {
-        var timer;
-        el.addEventListener("input", function () {
-          clearTimeout(timer);
-          timer = setTimeout(saveFilters, 300);
-        });
-      }
+    if (attachListeners.done) return;
+    attachListeners.done = true;
+    document.addEventListener("change", function (event) {
+      if (inFilterContainer(event)) saveFilters();
+    });
+    // For text inputs, also listen to input event (debounced save)
+    document.addEventListener("input", function (event) {
+      if (!inFilterContainer(event) || event.target.tagName !== "INPUT") return;
+      clearTimeout(inputTimer);
+      inputTimer = setTimeout(saveFilters, 300);
     });
   }
+
+  // ---- Filter panel of the contacts list (details[data-filter-panel]) ----
+
+  var PANEL = "details[data-filter-panel]";
+  var PANEL_BODY = "[data-filter-panel-body]";
+
+  function panelToggle(panel) {
+    return panel.querySelector("summary");
+  }
+
+  function firstPanelField(panel) {
+    var body = panel.querySelector(PANEL_BODY);
+    if (!body) return null;
+    return (
+      body.querySelector('input:not([type="hidden"]):not([disabled]), select:not([disabled])') ||
+      body.querySelector("a[href], button:not([disabled])")
+    );
+  }
+
+  function closePanel(panel, returnFocus) {
+    panel.open = false;
+    if (returnFocus) {
+      var toggle = panelToggle(panel);
+      if (toggle) toggle.focus();
+    }
+  }
+
+  // Focus the first field on open, unless focus is already inside (e.g. after
+  // an out-of-band swap re-created the open panel around the active control).
+  document.addEventListener(
+    "toggle",
+    function (event) {
+      var panel = event.target;
+      if (!panel || !panel.matches || !panel.matches(PANEL) || !panel.open) return;
+      var body = panel.querySelector(PANEL_BODY);
+      if (body && body.contains(document.activeElement)) return;
+      var field = firstPanelField(panel);
+      if (field) field.focus();
+    },
+    true
+  );
+
+  document.addEventListener("keydown", function (event) {
+    if (event.key !== "Escape") return;
+    var target = event.target;
+    var panel = target && target.closest ? target.closest(PANEL) : null;
+    if (!panel || !panel.open) return;
+    event.preventDefault();
+    closePanel(panel, true);
+  });
+
+  document.addEventListener("click", function (event) {
+    var target = event.target;
+    if (!target || !target.closest) return;
+    // "Zeitraum" without a preset has no request: it opens the date fields.
+    var custom = target.closest('a[data-period-segment][data-period="custom"]');
+    if (custom && !custom.hasAttribute("hx-get")) {
+      var owner = custom.closest("form") || document;
+      var own = owner.querySelector(PANEL);
+      if (own) {
+        event.preventDefault();
+        own.open = true;
+        var field = firstPanelField(own);
+        if (field) field.focus();
+        return;
+      }
+    }
+    document.querySelectorAll(PANEL + "[open]").forEach(function (panel) {
+      if (!panel.contains(target)) closePanel(panel, false);
+    });
+  });
+
+  // JavaScript-only: the "Filtern" fallback is superfluous once htmx filters
+  // immediately. Without htmx it stays, so the form remains usable.
+  function hideSubmitFallbacks(root) {
+    if (typeof htmx === "undefined" || !htmx) return;
+    root.querySelectorAll("[data-filter-submit-fallback]").forEach(function (button) {
+      button.hidden = true;
+    });
+  }
+
+  // The form is re-rendered out of band after every response. Carry over what
+  // the user is doing in the old form: the open panel and the text being typed.
+  document.addEventListener("htmx:oobBeforeSwap", function (event) {
+    var detail = event.detail || {};
+    var old = detail.target;
+    var fragment = detail.fragment;
+    if (!old || !fragment || !old.matches || !old.matches("form[data-filter-persist]")) return;
+    hideSubmitFallbacks(fragment);
+    var oldPanel = old.querySelector(PANEL);
+    var newPanel = fragment.querySelector(PANEL);
+    if (oldPanel && oldPanel.open && newPanel) newPanel.open = true;
+    var active = document.activeElement;
+    if (active && active.id && active.tagName === "INPUT" && old.contains(active)) {
+      var incoming = fragment.querySelector("#" + CSS.escape(active.id));
+      if (incoming && incoming.type !== "hidden") incoming.value = active.value;
+    }
+  });
+
+  // A swap changes the state (preset, chips) without a change event: store it.
+  document.addEventListener("htmx:oobAfterSwap", function (event) {
+    var target = event.target;
+    if (target && target.matches && target.matches("form[data-filter-persist]")) saveFilters();
+  });
 
   // Reset-Link-Delegation global registrieren (Refs #1611) — greift auch,
   // wenn der Link erst per HTMX-Swap in den DOM kommt.
@@ -275,6 +385,7 @@
     if (document.querySelectorAll("[data-filter-persist]").length === 0) return;
 
     attachListeners();
+    hideSubmitFallbacks(document);
     restoreFilters();
   });
 })();

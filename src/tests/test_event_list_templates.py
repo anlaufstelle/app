@@ -49,6 +49,7 @@ def test_get_form_has_labels_and_all_filters(client, staff_user, sample_event):
         "date_from",
         "date_to",
         "range",
+        "created_via",
         "doc_type",
         "client",
         "case",
@@ -61,7 +62,8 @@ def test_get_form_has_labels_and_all_filters(client, staff_user, sample_event):
     controls = [a for t, a in html.filter_tags if t in {"input", "select"} and a.get("name") in expected]
     assert {a["name"] for a in controls} == expected
     labels = {a.get("for") for t, a in html.filter_tags if t == "label"}
-    assert all(a.get("id") in labels for a in controls)
+    # The hidden preset carrier has no visible control and therefore no label.
+    assert all(a.get("id") in labels for a in controls if a.get("type") != "hidden")
     assert html.find("button", type="submit")
 
 
@@ -271,7 +273,7 @@ def test_compact_filter_bar_and_safe_url_persistence(client, staff_user, sample_
     response = list_response(client, staff_user)
     html = Elements(response.content)
     form = html.find("form", id="event-filters")[0]
-    assert {"no-print", "rounded-[10px]", "flex-wrap", "min-w-0"} <= set(form["class"].split())
+    assert {"no-print", "min-w-0"} <= set(form["class"].split())
     assert "data-filter-persist" in form and "data-filter-persist-url" in form
     assert form["hx-indicator"] == "#event-filters-spinner"
     search = html.find("input", name="q")[0]
@@ -283,7 +285,7 @@ def test_compact_filter_bar_and_safe_url_persistence(client, staff_user, sample_
     assert {a["name"] for a in controls if "data-filter-persist-exclude" not in a} == persisted
     assert html.find("input", name="mine")[0]["type"] == "checkbox"
     for control in controls:
-        if control["name"] != "mine":
+        if control["name"] != "mine" and control.get("type") != "hidden":
             assert "rounded-[10px]" in control["class"]
             assert "text-[13px]" in control["class"]
     for text in [
@@ -292,7 +294,6 @@ def test_compact_filter_bar_and_safe_url_persistence(client, staff_user, sample_
         "Alle Fälle",
         "Alle Erfassenden",
         "Alle Schichten",
-        "Alle Zeiträume",
         "Alle Kontakte",
     ]:
         assert text in response.content.decode()
@@ -301,7 +302,9 @@ def test_compact_filter_bar_and_safe_url_persistence(client, staff_user, sample_
 
 
 @pytest.mark.parametrize("key", ["case", "created_by", "time_filter", "anonymous"])
-def test_active_secondary_filter_is_open_and_named(client, staff_user, sample_event, facility, key):
+def test_active_secondary_filter_is_a_named_chip_and_the_panel_stays_closed(
+    client, staff_user, sample_event, facility, key
+):
     from datetime import time
 
     from core.models import Case
@@ -313,7 +316,6 @@ def test_active_secondary_filter_is_open_and_named(client, staff_user, sample_ev
     ]
     response = list_response(client, staff_user, {key: value}, HTTP_HX_REQUEST="true")
     html = Elements(response.content)
-    assert "open" in html.find("details")[0]
-    assert html.find("span", **{"data-active-filter": key})
-    assert "Weitere Filter" in response.content.decode()
+    assert "open" not in html.find("details")[0]
+    assert html.find("li", **{"data-filter-chip": key})
     assert html.find("form", id="event-filters")[0]["hx-swap-oob"] == "outerHTML"
