@@ -122,7 +122,7 @@ class TestZeitstromWatchHttpContract:
         assert "Cookie" in response["Vary"]
         assert AuditLog.objects.count() == audit_count
 
-    def test_component_validators_report_only_changed_components(self, client, staff_user, facility, doc_type_contact):
+    def test_anonymous_event_moves_tally_and_kpi_validators(self, client, staff_user, facility, doc_type_contact):
         client.force_login(staff_user)
         params = {"type": "workitems"}
         first = _watch(client, params=params)

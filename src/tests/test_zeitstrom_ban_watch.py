@@ -677,7 +677,7 @@ class TestZeitstromWatchBans:
         assert response.status_code == 304
         assert response["ETag"] == first["ETag"]
 
-    def test_hidden_grund_change_reaches_lead_as_bans_only(
+    def test_hidden_reason_change_reaches_lead_as_bans_and_kpi(
         self, client, lead_user, facility, client_identified, high_ban_doc_type
     ):
         event = create_event(

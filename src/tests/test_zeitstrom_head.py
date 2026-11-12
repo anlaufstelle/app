@@ -270,3 +270,14 @@ class TestTallyWindowText:
 
         context = re.search(r'data-testid="tally-live-context"[^>]*>(.*?)</span>', html, re.DOTALL).group(1).strip()
         assert context == "14:00–22:00"
+
+
+@pytest.mark.django_db
+def test_mobile_shift_links_work_without_javascript(client, staff_user, shifts):
+    html = _get(client, staff_user)
+    fallback = re.search(r"<noscript>(.*?)</noscript>", html, re.DOTALL)
+    assert fallback is not None
+    for shift in shifts:
+        assert f"time_filter={shift.pk}" in fallback.group(1)
+    assert "time_filter=all" in fallback.group(1)
+    assert "min-h-[44px]" in fallback.group(1)

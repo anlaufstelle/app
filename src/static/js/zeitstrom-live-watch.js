@@ -676,6 +676,7 @@
             abortCycle(true);
             const name = detail ? detail.name : "";
             delete validators.feed;
+            delete validators.kpi;
             if (!name || name === "date" || name === "time_filter" || name === "view") {
                 delete validators.tally_counts;
                 delete validators.tally_topology;
@@ -699,6 +700,7 @@
                 ? baseline.previousTopology
                 : validators.tally_topology;
             delete validators.feed;
+            delete validators.kpi;
             delete validators.tally_counts;
             pageEtag = "";
             failures = 0;

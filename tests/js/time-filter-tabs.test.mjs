@@ -97,6 +97,7 @@ describe("mobile sheet", () => {
         expect(sheet().classList.contains("hidden")).toBe(false);
         expect(backdrop().classList.contains("hidden")).toBe(false);
         expect(sheet().getAttribute("role")).toBe("dialog");
+        expect(sheet().getAttribute("aria-modal")).toBe("true");
     });
 
     it("moves focus into the sheet", () => {
@@ -158,5 +159,33 @@ describe("mobile sheet", () => {
         trigger().addEventListener("focus", spy);
         document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
         expect(spy).not.toHaveBeenCalled();
+    });
+});
+
+
+describe("selection focus contract", () => {
+    it("wraps Tab and Shift-Tab inside the open sheet", () => {
+        document.getElementById("zeitstrom-selection-trigger").click();
+        const first = document.querySelector("[data-sheet-close]");
+        const last = document.getElementById("zeitstrom-shift-select");
+        last.focus();
+        last.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
+        expect(document.activeElement).toBe(first);
+        first.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }));
+        expect(document.activeElement).toBe(last);
+    });
+
+    it("keeps desktop shift focus after the feed swap", () => {
+        const template = readFileSync("src/templates/core/zeitstrom/index.html", "utf8");
+        const control = template.match(/<select[^>]*id="zeitstrom-shift-select"[\s\S]*?<\/select>/)[0];
+        document.getElementById("zeitstrom-shift-select").outerHTML = control;
+        const select = document.getElementById("zeitstrom-shift-select");
+        select.focus();
+        choose("all");
+        const feed = document.createElement("div");
+        feed.id = "feed-list";
+        document.body.appendChild(feed);
+        feed.dispatchEvent(new CustomEvent("htmx:afterSwap", { bubbles: true, detail: { target: feed } }));
+        expect(document.activeElement).toBe(select);
     });
 });

@@ -35,6 +35,14 @@
         </span>
         <span class="block text-[12px] text-ink-muted" data-sheet-range>{% if selected_filter %}{{ selected_filter.start_time|time:"H:i" }}–{{ selected_filter.end_time|time:"H:i" }}{% if selected_filter.start_time > selected_filter.end_time %} (+1){% endif %}{% if selection_is_live %} · {% trans "läuft" %}{% endif %}{% endif %}</span>
     </button>
+    <noscript>
+        <nav aria-label="{% trans 'Schicht' %}" class="md:hidden flex flex-wrap gap-2">
+            <a class="inline-flex items-center min-h-[44px] px-3 text-accent" href="{{ shift_urls.all }}">{% trans "Ganzer Tag" %}</a>
+            {% for tf in time_filters %}
+            <a class="inline-flex items-center min-h-[44px] px-3 text-accent" href="{{ shift_urls|get_item:tf.pk }}">{{ tf.label }}</a>
+            {% endfor %}
+        </nav>
+    </noscript>
     <div id="zeitstrom-selection-backdrop" data-sheet-backdrop aria-hidden="true" class="hidden fixed inset-0 z-40 bg-black/40"></div>
     <div id="zeitstrom-selection" data-testid="zeitstrom-selection" data-sheet
          class="hidden md:flex md:flex-wrap md:items-center gap-3">
@@ -58,7 +66,7 @@
         {% if time_filters %}
         <div class="flex items-center gap-2">
             <label for="zeitstrom-shift-select" class="text-[12px] text-ink-muted">{% trans "Schicht" %}</label>
-            <select id="zeitstrom-shift-select" data-testid="zeitstrom-shift-select"
+            <select id="zeitstrom-shift-select" data-testid="zeitstrom-shift-select" data-hx-no-focus
                     class="time-filter-tab rounded-md border border-subtle bg-surface text-[13px] text-ink-soft px-2.5 py-1.5 min-h-[44px] md:min-h-0"
                     data-zeitstrom-time-filter="{{ selected_filter_id }}"
                     {% if uebergabe_mode %}data-navigate="1"{% else %}

@@ -1089,10 +1089,37 @@ describe("Zeitstrom live watch", () => {
         ]);
         expect(JSON.parse(fetchMock.mock.calls[4][1].headers["X-Zeitstrom-Validators"])).toEqual({
             tally_counts: '"count-v1"',
-            kpi: '"shift-v1"',
             focus_box: '"focus-v1"',
             tally_topology: '"topology-v1"',
         });
+        watcher.stop();
+    });
+
+    it.each(["doc_type", "date", "transition"])("discards the KPI validator on %s selection", async (name) => {
+        const fetchMock = vi.fn()
+            .mockResolvedValueOnce(watchResponse(["kpi"], { kpi: '"old-kpi"' }))
+            .mockResolvedValueOnce(response({
+                text: '<section id="zeitstrom-kpi-slot">old</section>',
+                headers: { "Content-Type": "text/html", ETag: '"old-kpi"' },
+            }))
+            .mockResolvedValue(watchResponse());
+        const watcher = window.createZeitstromLiveWatch(document.getElementById("zeitstrom-live-watch"), { fetch: fetchMock });
+        watcher.start();
+        await watcher.checkNow();
+        if (name === "transition") {
+            const transition = configureTimeFilter("night");
+            finishTimeFilterRequest(transition, {
+                etag: '"new-feed"',
+                validators: { feed: '"new-feed"', tally_topology: '"new-topology"' },
+            });
+        } else {
+            document.querySelector(`[name="${name}"]`).value = "new";
+            window.dispatchEvent(new CustomEvent("zeitstrom:filter-changed", { detail: { name } }));
+        }
+        await flush();
+        await watcher.checkNow();
+        const headers = fetchMock.mock.calls.at(-1)[1].headers;
+        expect(JSON.parse(headers["X-Zeitstrom-Validators"] || "{}")).not.toHaveProperty("kpi");
         watcher.stop();
     });
 

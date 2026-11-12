@@ -102,6 +102,7 @@
             el.classList.add(cls);
         });
         el.setAttribute("role", "dialog");
+        el.setAttribute("aria-modal", "true");
         el.setAttribute("aria-label", trigger.textContent.replace(/\s+/g, " ").trim());
         if (backdrop) backdrop.classList.remove("hidden");
         trigger.setAttribute("aria-expanded", "true");
@@ -119,6 +120,7 @@
         });
         el.classList.add("hidden");
         el.removeAttribute("role");
+        el.removeAttribute("aria-modal");
         el.removeAttribute("aria-label");
         if (backdrop) backdrop.classList.add("hidden");
         trigger.setAttribute("aria-expanded", "false");
@@ -162,6 +164,22 @@
     });
 
     document.addEventListener("keydown", function (event) {
+        if (event.key === "Tab" && isOpen()) {
+            var controls = Array.from(sheet().querySelectorAll(
+                'a[href], select:not([disabled]), button:not([disabled]), [tabindex="0"]',
+            )).filter(function (el) {
+                return !el.hidden && el.getAttribute("aria-hidden") !== "true";
+            });
+            var first = controls[0];
+            var last = controls[controls.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                if (last) last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                if (first) first.focus();
+            }
+        }
         if (event.key === "Escape" && isOpen()) {
             event.preventDefault();
             closeSheet();
