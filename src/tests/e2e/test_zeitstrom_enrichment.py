@@ -501,11 +501,17 @@ class TestFeedRowsAndGroups:
         try:
             page = context.new_page()
             page.goto(f"{base_url}/?time_filter=all", wait_until="domcontentloaded")
+            expect(page.get_by_test_id("zeitstrom-selection-trigger")).to_be_hidden()
             links = page.locator("noscript nav a")
             assert links.count() >= 2
-            expect(links.nth(1)).to_be_visible()
-            href = links.nth(1).get_attribute("href")
-            links.nth(1).click()
+            shift_link = next(
+                link
+                for link in links.all()
+                if parse_qs(urlparse(link.get_attribute("href")).query).get("time_filter") != ["all"]
+            )
+            expect(shift_link).to_be_visible()
+            href = shift_link.get_attribute("href")
+            shift_link.click()
             assert page.url.endswith(href)
         finally:
             context.close()

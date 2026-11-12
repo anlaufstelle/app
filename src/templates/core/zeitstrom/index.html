@@ -26,7 +26,7 @@
 
     {# Mobile: date and shift are one tap target that opens the sheet below. #}
     {# Keep the returned sheet focus through the feed swap (#2655). #}
-    <button type="button" id="zeitstrom-selection-trigger" data-testid="zeitstrom-selection-trigger" data-hx-no-focus
+    <button type="button" id="zeitstrom-selection-trigger" data-testid="zeitstrom-selection-trigger" data-hx-no-focus x-data x-cloak
             aria-expanded="false" aria-controls="zeitstrom-selection" aria-haspopup="dialog" data-live-label="{% trans 'läuft' %}"
             class="md:hidden order-last w-full text-left min-h-[44px] px-3 py-1.5 bg-surface border border-subtle rounded-[10px]">
         <span class="block text-[13px] font-semibold text-ink">

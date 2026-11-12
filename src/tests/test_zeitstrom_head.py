@@ -281,3 +281,11 @@ def test_mobile_shift_links_work_without_javascript(client, staff_user, shifts):
         assert f"time_filter={shift.pk}" in fallback.group(1)
     assert "time_filter=all" in fallback.group(1)
     assert "min-h-[44px]" in fallback.group(1)
+
+
+@pytest.mark.django_db
+def test_mobile_selection_trigger_requires_javascript(client, staff_user, shifts):
+    html = _get(client, staff_user)
+    trigger = re.search(r'<button[^>]*data-testid="zeitstrom-selection-trigger"[^>]*>', html).group(0)
+    assert "x-cloak" in trigger
+    assert "x-data" in trigger
