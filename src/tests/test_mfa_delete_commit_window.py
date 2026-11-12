@@ -6,12 +6,17 @@ from importlib import import_module
 import pytest
 from django.contrib.auth import HASH_SESSION_KEY
 from django.contrib.auth.middleware import AuthenticationMiddleware
+from django.contrib.auth.tokens import default_token_generator
 from django.db import connections
 from django.http import HttpResponse
 from django.test import Client, RequestFactory
+from django.urls import reverse
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 
 from core.middleware.demo_session import DemoSessionMiddleware
 from core.models import EncryptedTOTPDevice, User
+from core.services.security import invite_token_generator
 from tests.test_mfa_passkey_session_revocation import _passkey
 from tests.test_mfa_session_revocation import _browser, _prepare
 
@@ -294,3 +299,51 @@ def test_response_completed_before_rotation_can_only_lose_browser_authentication
     assert other_browser.session.session_key == other_key
     assert other_browser.session[HASH_SESSION_KEY] == other_hash
     assert other_browser.get("/mfa/settings/").wsgi_request.user.pk == lead_user.pk
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("backend", ["db", "cache", "cached_db"])
+@pytest.mark.parametrize("with_revoked_cookie", [True, False], ids=["revoked-cookie", "no-cookie"])
+@pytest.mark.parametrize(
+    ("url_name", "generator"),
+    [("password_reset_confirm", default_token_generator), ("invite_confirm", invite_token_generator)],
+    ids=["password-reset", "invitation"],
+)
+def test_valid_token_link_publishes_new_anonymous_session(
+    backend, with_revoked_cookie, url_name, generator, settings, staff_user
+):
+    settings.SESSION_ENGINE = f"django.contrib.sessions.backends.{backend}"
+    browser = _browser(staff_user)
+    old_key = browser.session.session_key
+    staff_user.refresh_from_db()
+    staff_user.revoke_sessions()
+    staff_user.save(update_fields=["password"])
+    token = generator.make_token(staff_user)
+    url = reverse(url_name, kwargs={"uidb64": urlsafe_base64_encode(force_bytes(staff_user.pk)), "token": token})
+    if not with_revoked_cookie:
+        browser.cookies.clear()
+
+    handover = browser.get(url)
+    assert handover.status_code == 302
+    assert handover.url.endswith("/set-password/")
+    form = browser.get(handover.url)
+    assert form.status_code == 200
+    assert form.context["validlink"] is True, "a valid token must reach the password form"
+    new_key = handover.cookies[settings.SESSION_COOKIE_NAME].value
+    assert new_key != old_key
+    assert form.wsgi_request.user.is_anonymous
+    assert HASH_SESSION_KEY not in browser.session
+    session_store = import_module(settings.SESSION_ENGINE).SessionStore
+    if with_revoked_cookie:
+        assert not session_store().exists(old_key)
+    stolen = Client()
+    stolen.cookies[settings.SESSION_COOKIE_NAME] = old_key
+    denied = stolen.get(handover.url)
+    assert denied.context["validlink"] is False
+    assert denied.wsgi_request.user.is_anonymous
+    assert HASH_SESSION_KEY not in denied.wsgi_request.session
+    password = "New-reset-password-2736!"
+    completed = browser.post(handover.url, {"new_password1": password, "new_password2": password})
+    assert completed.status_code == 302
+    staff_user.refresh_from_db()
+    assert staff_user.check_password(password)

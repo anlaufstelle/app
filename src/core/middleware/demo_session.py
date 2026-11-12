@@ -3,8 +3,9 @@
 Unknown, unmodified empty sessions leave the cookie untouched (Refs #2531).
 Django also flushes still-stored sessions when their auth hash is rejected.
 Resolve its cached user before downstream writes so that these responses
-neither clear the cookie nor publish an anonymous successor (Refs #2736).
-An explicit successful login may publish its authenticated session.
+neither clear the cookie nor save an unkeyed anonymous replacement (Refs #2736).
+An explicit login or a newly keyed anonymous session (such as a validated
+reset/invitation token handover) may publish its own cookie.
 
 Before and after saving an unchanged authenticated key, recheck its existence
 and auth revision: revocation can overlap the save. A response completed before
@@ -41,7 +42,7 @@ class DemoSessionMiddleware(SessionMiddleware):
         rejected = getattr(request, "_session_auth_rejected", False)
         authenticated = getattr(getattr(request, "user", None), "is_authenticated", False)
         if (
-            (rejected and not authenticated)
+            (rejected and not authenticated and request.session.session_key is None)
             or self._is_unknown_key_request(request)
             or self._is_revoked_key_response(request)
         ):
