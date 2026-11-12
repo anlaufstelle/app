@@ -73,6 +73,7 @@ class TestMobileZeitstromTouchTargets:
         page.wait_for_load_state("domcontentloaded")
 
         self._assert_44px(page.locator('[data-testid^="tally-increment-"]').first, "Strichlisten-Button", width=True)
+        self._assert_44px(page.locator('[data-testid^="tally-row-"]').first, "Strichlisten-Kachel", width=True)
         self._assert_44px(page.locator('[data-testid="zeitstrom-tab-feed"]'), "Feed-Reiter")
         self._assert_44px(page.locator('[data-testid="zeitstrom-tab-uebergabe"]'), "Übergabe-Reiter")
         self._assert_44px(page.locator('[data-testid="zeitstrom-filter-chip"]').first, "Inhaltsfilter")

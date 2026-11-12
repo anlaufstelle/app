@@ -102,11 +102,15 @@ class TestOfflineZeitstromShellMarkup:
         assert "ausstehend" in body
         assert "Nicht übertragbar" in body
 
-    def test_online_tally_row_has_compact_no_wrap_contract_at_390px(self):
+    def test_online_tally_tile_has_compact_no_overflow_contract_at_390px(self):
         source = (Path(settings.BASE_DIR) / "templates/core/zeitstrom/partials/tally_row.html").read_text()
-        assert 'class="flex flex-wrap items-center gap-2 min-w-0"' in source
-        assert "min-w-0 flex-1" in source
-        assert "flex-none" in source
+        # Two tile columns at 390 px: the tile may shrink and the name truncates instead of overflowing.
+        assert (
+            "grid-cols-2"
+            in (Path(settings.BASE_DIR) / "templates/core/zeitstrom/partials/tally_panel.html").read_text()
+        )
+        assert " min-w-0 " in source
+        assert "truncate min-w-0" in source
 
     def test_cold_tally_status_live_region_contains_type_and_both_values(self, body):
         assert 'data-testid="offline-tally-server-status"' in body

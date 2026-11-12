@@ -1,8 +1,14 @@
 {% load i18n %}
-<div id="tally-row-{{ row.document_type.pk }}" class="flex flex-wrap items-center gap-2 min-w-0"
-     data-testid="tally-row-{{ row.document_type.pk }}">
-    <span class="text-[13px] text-ink truncate min-w-0 flex-1">{{ row.document_type.name }}</span>
-    <span class="text-[15px] font-bold text-ink tabular-nums min-w-[2ch] text-right flex-none"
+{% comment %}Strichlisten-Kachel: die ganze Kachel ist das Tap-Ziel. Der Knopf der
+Aktion spannt per ::after die Kachel auf (Stretched-Target); Zähler, Aktions-Badge
+und Typname liegen innerhalb. data-tally-pulse markiert den frischen Strich für
+den Farbpuls in tally-undo.js.{% endcomment %}
+<div id="tally-row-{{ row.document_type.pk }}"
+     class="tally-tile relative flex flex-col justify-between gap-1 min-w-0 min-h-[72px] md:min-h-[64px] p-2.5 transition-colors duration-[450ms] active:scale-[0.98] motion-reduce:active:scale-100 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent"
+     data-testid="tally-row-{{ row.document_type.pk }}"{% if tally_undo_token %}
+     data-tally-pulse{% endif %}>
+    <div class="flex flex-wrap items-start justify-between gap-2">
+    <span class="text-[30px] leading-none font-bold text-ink tabular-nums min-w-[2ch]"
           id="tally-count-{{ row.document_type.pk }}"
           data-testid="tally-count-{{ row.document_type.pk }}"
           data-confirmed-count="{{ row.count }}"
@@ -12,8 +18,10 @@
           data-pending-aria-plural="{% blocktrans with name=row.document_type.name %}+__count__ werden für {{ name }} gesendet{% endblocktrans %}"
           aria-label="{% blocktrans with name=row.document_type.name count counter=row.count %}{{ counter }} Kontakt für {{ name }}{% plural %}{{ counter }} Kontakte für {{ name }}{% endblocktrans %}">{{ row.count }}</span>
     {% include "core/zeitstrom/partials/tally_action.html" %}
+    </div>
+    <span class="text-[13px] text-ink-soft truncate min-w-0" data-testid="tally-name-{{ row.document_type.pk }}">{{ row.document_type.name }}</span>
     {% if tally_undo_token %}
-    <form method="post" action="{% url 'core:tally_undo' %}"
+    <form method="post" action="{% url 'core:tally_undo' %}" class="relative z-10"
           hx-post="{% url 'core:tally_undo' %}"
           hx-target="#tally-row-{{ row.document_type.pk }}"
           hx-swap="outerHTML"

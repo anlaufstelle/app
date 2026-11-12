@@ -237,8 +237,15 @@
             status.setAttribute("role", "status");
             status.setAttribute("aria-live", "polite");
             status.setAttribute("aria-atomic", "true");
-            status.className = "text-[12px] text-ink-muted whitespace-nowrap flex-none";
-            confirmedElement.insertAdjacentElement("afterend", status);
+            status.className = "text-[12px] text-ink-muted leading-tight";
+            // On the tile itself, below the type name (not next to the count);
+            // a blocked link created earlier stays behind the status.
+            const blocked = row.querySelector("[data-offline-tally-blocked]");
+            if (blocked && blocked.parentElement === row) {
+                blocked.insertAdjacentElement("beforebegin", status);
+            } else {
+                row.appendChild(status);
+            }
         }
         return status;
     }
@@ -286,8 +293,13 @@
             link = document.createElement("a");
             link.setAttribute("data-offline-tally-blocked", "");
             link.href = CONFLICT_URL;
-            link.className = "text-[12px] font-semibold text-red-700 underline";
-            status.insertAdjacentElement("afterend", link);
+            // relative + z-10 keeps the link tappable above the stretched tile target.
+            link.className = "relative z-10 text-[12px] font-semibold text-red-700 underline";
+            if (status && status.parentElement === row) {
+                status.insertAdjacentElement("afterend", link);
+            } else {
+                row.appendChild(link);
+            }
         }
         return link;
     }

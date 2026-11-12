@@ -3,14 +3,14 @@
      data-testid="tally-action-{{ row.document_type.pk }}">
     {% if row.requires_number_input %}
     <a href="{{ row.tally_increment_url }}"
-       class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] md:min-h-[36px] md:min-w-[36px] px-3 rounded-[10px] btn-secondary font-bold"
+       class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] px-3 rounded-[10px] bg-accent-light text-accent text-[15px] font-bold after:content-[''] after:absolute after:inset-0 after:rounded-[10px]"
        data-testid="tally-increment-{{ row.document_type.pk }}"
        {% if tally_summary %}data-tally-window-start="{{ tally_summary.window_start|date:'c' }}"
        data-tally-window-end="{{ tally_summary.window_end|date:'c' }}"{% endif %}
        hx-get="{{ row.tally_increment_url }}"
        hx-target="#tally-action-{{ row.document_type.pk }}"
        hx-swap="outerHTML"
-       aria-label="{% blocktrans with name=row.document_type.name %}Werte für {{ name }} eingeben{% endblocktrans %}">+1</a>
+       aria-label="{% blocktrans with name=row.document_type.name %}Werte für {{ name }} eingeben{% endblocktrans %}">+ …</a>
     {% else %}
     <form method="post" action="{% url 'core:tally_increment' %}"
           data-offline-tally-form
@@ -31,7 +31,7 @@
         <input type="hidden" name="tally_window_end" value="{{ tally_summary.window_end|date:'c' }}">
         {% endif %}
     <button
-            class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] md:min-h-[36px] md:min-w-[36px] px-3 rounded-[10px] btn-secondary font-bold"
+            class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] px-3 rounded-[10px] bg-accent-light text-accent text-[15px] font-bold after:content-[''] after:absolute after:inset-0 after:rounded-[10px]"
             data-testid="tally-increment-{{ row.document_type.pk }}"
             {% if tally_summary %}data-tally-window-start="{{ tally_summary.window_start|date:'c' }}"
             data-tally-window-end="{{ tally_summary.window_end|date:'c' }}"{% endif %}

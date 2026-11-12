@@ -14,8 +14,9 @@ durch denselben create_event-Pfad.{% endcomment %}
                 {% if tally_summary.time_filter %}{{ tally_summary.time_filter.label }} · {% endif %}{{ tally_summary.window_start|date:"d.m.Y H:i" }}–{{ tally_summary.window_end|date:"d.m.Y H:i" }}
             </span>
         </div>
+        <p class="text-[12px] text-ink-muted md:ml-auto" data-testid="tally-hint">{% trans "tippen zählt +1 · anonym" %}</p>
     </div>
-    <div class="px-4 py-3 flex flex-col gap-2">
+    <div class="px-4 py-3 grid grid-cols-2 md:grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2.5">
         {% for row in tally_summary.rows %}
         {% include "core/zeitstrom/partials/tally_row.html" %}
         {% endfor %}

@@ -898,3 +898,64 @@ describe("cold tally acknowledgement boundaries", () => {
         expect(component.rows[0].pendingLabel).toBe("ausstehend: 0");
     });
 });
+
+// Tap tiles: the offline status and the blocked link live on the tile itself,
+// below the type name, and stay clickable above the stretched tap overlay.
+describe("tally tile status placement", () => {
+    function onlineTile(confirmed = "12") {
+        document.body.innerHTML = `<section id="tally-panel"><div data-testid="tally-row-${TYPE_A}" class="relative flex flex-col"><div class="header flex justify-between"><span data-testid="tally-count-${TYPE_A}" data-count-label-singular="1 Kontakt für Kontakt" data-count-label-plural="__count__ Kontakte für Kontakt" data-pending-aria-singular="+1 wird für Kontakt gesendet" data-pending-aria-plural="+__count__ werden für Kontakt gesendet" aria-label="${confirmed} Kontakte für Kontakt">${confirmed}</span><div data-testid="tally-action-${TYPE_A}"><button data-testid="tally-increment-${TYPE_A}">+1</button></div></div><span data-testid="tally-name-${TYPE_A}">Kontakt</span></div></section>`;
+        return document.querySelector(`[data-testid="tally-row-${TYPE_A}"]`);
+    }
+
+    it("renders the pending status as a direct child of the tile, after the type name", async () => {
+        await queueRow(TYPE_A, null);
+        const tile = onlineTile();
+
+        await tallyUi.refreshOnlinePanel();
+
+        const status = tile.querySelector("[data-offline-tally-status]");
+        expect(status.parentElement).toBe(tile);
+        expect(status.previousElementSibling.getAttribute("data-testid")).toBe(`tally-name-${TYPE_A}`);
+        expect(status.textContent).toBe("+1 wird gesendet");
+        expect(status.getAttribute("role")).toBe("status");
+        expect(status.getAttribute("aria-live")).toBe("polite");
+    });
+
+    it("does not duplicate the status on repeated renders and removes it when nothing is pending", async () => {
+        await queueRow(TYPE_A, null);
+        const tile = onlineTile();
+
+        await tallyUi.refreshOnlinePanel();
+        await tallyUi.refreshOnlinePanel();
+        expect(tile.querySelectorAll("[data-offline-tally-status]")).toHaveLength(1);
+
+        await store.purgeAll();
+        await tallyUi.refreshOnlinePanel();
+        expect(tile.querySelector("[data-offline-tally-status]")).toBeNull();
+    });
+
+    it("renders the blocked link on the tile, raised above the tap overlay", async () => {
+        await queueRow(TYPE_A, "dead");
+        const tile = onlineTile();
+
+        await tallyUi.refreshOnlinePanel();
+
+        const link = tile.querySelector("[data-offline-tally-blocked]");
+        expect(link.parentElement).toBe(tile);
+        expect(link.hidden).toBe(false);
+        expect(link.textContent).toContain("1 nicht übertragbar");
+        expect(link.classList.contains("relative")).toBe(true);
+        expect(link.classList.contains("z-10")).toBe(true);
+    });
+
+    it("places the blocked link after the pending status when both exist", async () => {
+        await queueRow(TYPE_A, null);
+        await queueRow(TYPE_A, "dead");
+        const tile = onlineTile();
+
+        await tallyUi.refreshOnlinePanel();
+
+        const status = tile.querySelector("[data-offline-tally-status]");
+        expect(status.nextElementSibling).toBe(tile.querySelector("[data-offline-tally-blocked]"));
+    });
+});

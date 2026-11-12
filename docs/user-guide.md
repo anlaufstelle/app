@@ -183,8 +183,10 @@ In der rechten Seitenspalte steht die Team-Fokusbox **„Team-Aufgaben mit Handl
 
 Wenn die Verwaltung geeignete Dokumentationstypen freigegeben hat, steht im Zeitstrom die **Strichliste**. Sie zählt anonyme Kontakte je Typ im aktuellen Zeitfenster. Läuft gerade eine Schicht, gilt deren Zeitfenster; sonst der heutige Kalendertag.
 
-- **Ohne Pflichtfelder:** `+1` legt sofort einen anonymen Kontakt an.
-- **Mit Zahlen-Pflichtfeldern:** `+1` öffnet eine kompakte Werteingabe. Tragen Sie alle Pflichtwerte ein und wählen Sie **Kontakt zählen**. Das erzeugt genau einen anonymen Kontakt. Bei einem Spritzentausch gehören zum Beispiel Ausgabe und Rückgabe zu demselben Kontakt, statt mehrere Kontakte zu zählen.
+Jeder Typ erscheint als **Kachel** mit großem Zähler, Aktionsmarke (`+1` oder `+ …`) und Typname. Die ganze Kachel ist die Tippfläche; sie leuchtet nach einem Strich kurz auf. Ist ein Strich noch nicht an den Server übertragen, steht dessen Status auf der Kachel.
+
+- **Ohne Pflichtfelder:** Ein Tipp auf die Kachel (`+1`) legt sofort einen anonymen Kontakt an.
+- **Mit Zahlen-Pflichtfeldern:** Die Kachel trägt die Marke `+ …`; ein Tipp öffnet eine kompakte Werteingabe. Tragen Sie alle Pflichtwerte ein und wählen Sie **Kontakt zählen**. Das erzeugt genau einen anonymen Kontakt. Bei einem Spritzentausch gehören zum Beispiel Ausgabe und Rückgabe zu demselben Kontakt, statt mehrere Kontakte zu zählen.
 - Ein Typ ist nur sichtbar, wenn er für die Strichliste freigegeben ist und Ihre Rolle ihn sowie alle erforderlichen Felder sehen darf. Typen mit anderen Pflichtfeldarten erscheinen nicht in der Strichliste.
 
 ### Datum wechseln
