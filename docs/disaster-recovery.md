@@ -200,6 +200,10 @@ cp .env.example .env && chmod 600 .env
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 # Zunächst nur die DB starten. Das Init-Script 01-app-role.sh legt im frischen Cluster
 # die App-Rolle (NOSUPERUSER NOBYPASSRLS) + Admin-Rolle (NOSUPERUSER BYPASSRLS)
 # an — KRITISCH: Rollen müssen existieren, BEVOR der Dump Ownership/Grants
@@ -228,6 +232,10 @@ set -o pipefail
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 docker compose "${compose_files[@]}" stop web cron && \
 sudo ./scripts/ops/restore.sh --yes "$RESTORE_SET_DIR/anlaufstelle_${RESTORE_TIMESTAMP}.sql.gz.enc" \
                                "$RESTORE_SET_DIR/anlaufstelle_${RESTORE_TIMESTAMP}_media.tar.gz.enc" \
@@ -264,6 +272,10 @@ source ./scripts/ops/_backup_common.sh
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 backup_verify_hmac "$MEDIA_ARCHIVE" && \
 openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$MEDIA_ARCHIVE" \
   | gunzip \
@@ -293,6 +305,10 @@ Unmittelbar nach dem Restore und **vor** Audit-Kettenprüfung, Migrationen, Jobs
   compose_files=(-f docker-compose.prod.yml)
   [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
   [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+  # Let Compose read the complete opt-in list from the environment or .env.
+  if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+      compose_files=()
+  fi
 for table in core_facility core_client core_event core_workitem core_auditlog core_attachment; do
   docker compose "${compose_files[@]}" exec -T db \
     psql -U "${POSTGRES_SUPERUSER:-postgres}" -d "$POSTGRES_DB" -t -A \
@@ -312,6 +328,10 @@ HWM_SOURCE="$RESTORE_SET_DIR/audit_hwm-${RESTORE_TIMESTAMP}.json"
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 test -s "$HWM_SOURCE" && \
 docker compose "${compose_files[@]}" stop cron && \
 SOURCE_HWM_SIZE="$(wc -c < "$HWM_SOURCE" | tr -d '[:space:]')" && \
@@ -348,6 +368,10 @@ Jeder Fehler in dieser Kette ist ein Abbruch. Nur ein vollständig grüner Lauf 
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 docker compose "${compose_files[@]}" run --rm -T maintenance \
   verify_audit_chain --retire-chain <Kennnummer> --retire-reason "Endgültige Schließung, Bestand übergeben"
 ```
@@ -361,6 +385,10 @@ Der Nachweis nennt Zeitpunkt und Begründung und wird mit demselben `DJANGO_AUDI
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 docker compose "${compose_files[@]}" run --rm -T maintenance \
   verify_audit_chain --reactivate-chain <Kennnummer> --reactivate-reason "Träger übernimmt den Bestand erneut"
 ```
@@ -374,6 +402,10 @@ Der Lauf nennt den zurückgenommenen Nachweis mit Zeitpunkt und Begründung im P
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 # Migrate als One-Shot. docker-migrate.sh verifiziert vorab via check_db_roles,
 # dass App-Rolle = NOSUPERUSER/NOBYPASSRLS und Admin = BYPASSRLS (Refs #1002).
 docker compose "${compose_files[@]}" run --rm --entrypoint=/app/docker-migrate.sh maintenance
@@ -401,6 +433,10 @@ set +a
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 
 # 1) DB-Rollen-Gate — App-Rolle ohne Superuser/BYPASSRLS, Admin mit BYPASSRLS.
 docker compose "${compose_files[@]}" run --rm maintenance check_db_roles   # Exit 0
@@ -437,6 +473,10 @@ Für jede benötigte Generation in `ENCRYPTION_KEYS` mindestens einen bereits vo
 compose_files=(-f docker-compose.prod.yml)
 [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
 [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+# Let Compose read the complete opt-in list from the environment or .env.
+if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+    compose_files=()
+fi
 docker compose "${compose_files[@]}" exec web \
   python manage.py mark_restore_verified --note "Disaster-Recovery auf frischem Host $(date -u +%Y-%m-%d)"
 ```
@@ -507,6 +547,10 @@ Testdatenbank benutzt.
   compose_files=(-f docker-compose.prod.yml)
   [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
   [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+  # Let Compose read the complete opt-in list from the environment or .env.
+  if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+      compose_files=()
+  fi
   docker compose "${compose_files[@]}" exec -T db \
     psql -U "$POSTGRES_ADMIN_USER" -d "$POSTGRES_DB" -tAc \
     "SELECT count(*) FROM core_attachment;"
@@ -752,6 +796,10 @@ Der Fresh-Host-Drill ist nur **GRÜN**, wenn alle folgenden Aussagen belegt sind
    compose_files=(-f docker-compose.prod.yml)
    [[ ! -f compose.legal.yml ]] || compose_files+=(-f compose.legal.yml)
    [[ ! -f compose.override.yml ]] || compose_files+=(-f compose.override.yml)
+   # Let Compose read the complete opt-in list from the environment or .env.
+   if [[ -n "${COMPOSE_FILE:-}" ]] || grep -qE '^[[:space:]]*(export[[:space:]]+)?COMPOSE_FILE[[:space:]]*=' .env; then
+       compose_files=()
+   fi
    docker compose "${compose_files[@]}" down
    ```
 

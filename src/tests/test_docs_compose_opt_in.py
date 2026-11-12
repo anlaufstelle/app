@@ -17,13 +17,15 @@ DOCS = (
     "docs/en/ops-runbook.md",
     "docs/admin-guide.md",
     "docs/en/admin-guide.md",
+    "docs/disaster-recovery.md",
 )
 # Extract only the file-selection prelude, never execute maintenance commands.
+# Blocks nested in numbered steps keep their indentation.
 _SELECTION = re.compile(
-    r"^compose_files=\(-f docker-compose.prod.yml\)\n"
-    r"(?:\[\[ [^\n]+\n){2}"
-    r"(?:#[^\n]*\n)*"
-    r"(?:if [^\n]+\n(?:[^\n]*\n)*?fi\n)?",
+    r"^(?P<indent>[ \t]*)compose_files=\(-f docker-compose.prod.yml\)\n"
+    r"(?:(?P=indent)\[\[ [^\n]+\n){2}"
+    r"(?:(?P=indent)#[^\n]*\n)*"
+    r"(?:(?P=indent)if [^\n]+\n(?:[^\n]*\n)*?(?P=indent)fi\n)?",
     re.MULTILINE,
 )
 _OPT_IN = "docker-compose.prod.yml:compose.legal.yml:compose.override.yml:docker-compose.breach-webhook.yml"

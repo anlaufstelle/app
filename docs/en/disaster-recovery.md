@@ -32,5 +32,5 @@ If anchor installation or media activation fails after the database switch, the 
 
 <!-- translation-source: docs/disaster-recovery.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- translation-date: 2026-10-24 -->
-<!-- source-hash: 7da4ab9612ba01b75d37f090ee75f9b68d557f6d -->
+<!-- translation-date: 2026-11-12 -->
+<!-- source-hash: 0a939416a4306fa370ead83ab09ea85221707ad0 -->
