@@ -61,6 +61,9 @@ def _run_setup(
     backup_dir: Path | None = None,
     id_stub: str | None = None,
     stat_stub: str | None = None,
+    compose_selection: str | None = None,
+    dotenv_extra: str = "",
+    compose_separator: str = ":",
 ):
     bindir = tmp_path / "bin"
     bindir.mkdir()
@@ -131,7 +134,7 @@ esac
 
     env_file = tmp_path / ".env.probe"
     env_file.write_text(
-        f"BACKUP_HOST_DIR='{backup_dir}'\nDJANGO_HEALTH_DETAIL_TOKEN='{health_token}'\n",
+        f"BACKUP_HOST_DIR='{backup_dir}'\nDJANGO_HEALTH_DETAIL_TOKEN='{health_token}'\n" + dotenv_extra,
         encoding="utf-8",
     )
     compose = yaml.safe_load(compose_path.read_text(encoding="utf-8"))
@@ -142,7 +145,8 @@ esac
         text=True,
         env={
             "PATH": f"{bindir}:/usr/bin:/bin",
-            "COMPOSE_FILE": str(compose_path),
+            "COMPOSE_FILE": str(compose_path) if compose_selection is None else compose_selection,
+            "COMPOSE_PATH_SEPARATOR": compose_separator,
             "ENV_FILE": str(env_file),
             "SKIP_SUPER_ADMIN": "1",
             "WAIT_TIMEOUT": "0",
@@ -358,7 +362,7 @@ def test_operator_hints_print_repo_paths_without_dot_prefix() -> None:
     hints = [
         line.strip()
         for line in body.splitlines()
-        if line.strip().startswith(("Andere Datei waehlen:", "Laengere Wartezeit:"))
+        if line.strip().startswith(("Andere Datei waehlen:", "Choose another file:", "Laengere Wartezeit:"))
     ]
 
     assert len(hints) == 3
@@ -432,3 +436,46 @@ def test_foreign_pgdata_volume_prints_upgrade_warning(tmp_path: Path) -> None:
 def test_setup_fixture_uses_the_real_production_compose() -> None:
     assert PROD_COMPOSE.is_file()
     assert PROD_COMPOSE != REPO_ROOT / "services-empty.yml"
+
+
+@pytest.mark.parametrize("source", ["dotenv", "environment"])
+@pytest.mark.parametrize("separator", [":", ";"])
+def test_explicit_compose_list_survives_every_setup_call(tmp_path: Path, source: str, separator: str):
+    base = _install_dir_with_compose(
+        tmp_path, extra_files=("compose.legal.yml", "compose.override.yml", "docker-compose.breach-webhook.yml")
+    )
+    files = [base, base.parent / "docker-compose.breach-webhook.yml", base.parent / "compose.legal.yml"]
+    selected = separator.join(map(str, files))
+    result, commands, _ = _run_setup(
+        tmp_path,
+        compose_path=base,
+        compose_selection=selected if source == "environment" else "",
+        dotenv_extra=f"  export COMPOSE_FILE = '{selected}'\n" if source == "dotenv" else "COMPOSE_FILE=missing.yml\n",
+        compose_separator=separator,
+    )
+    assert result.returncode == 0, result.stderr
+    calls = [
+        line
+        for line in commands.splitlines()
+        if line.startswith("docker compose ") and line != "docker compose version"
+    ]
+    assert calls
+    assert any(" up -d" in line for line in calls)
+    for call in calls:
+        assert " ".join(f"-f {path}" for path in files) + " --env-file " in call
+        assert "compose.override.yml" not in call
+
+
+def test_present_webhook_overlay_is_not_selected_by_setup_without_opt_in(tmp_path: Path):
+    base = _install_dir_with_compose(tmp_path, extra_files=("docker-compose.breach-webhook.yml",))
+    result, commands, _ = _run_setup(tmp_path, compose_path=base)
+    assert result.returncode == 0, result.stderr
+    assert "docker-compose.breach-webhook.yml" not in commands
+
+
+@pytest.mark.parametrize("value", ["", '""', "''"])
+def test_empty_dotenv_compose_list_keeps_setup_defaults(tmp_path: Path, value: str):
+    result, commands, _ = _run_setup(tmp_path, compose_selection="", dotenv_extra=f"COMPOSE_FILE={value}\n")
+    assert result.returncode == 0, result.stderr
+    assert f"-f {PROD_COMPOSE} --env-file " in commands
+    assert "docker-compose.breach-webhook.yml" not in commands

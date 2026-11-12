@@ -53,8 +53,10 @@ set -euo pipefail
 #
 # Env-Variablen (alle optional):
 #
-#   COMPOSE_FILE        Compose-Datei, relativ zum Repo-Root oder absolut
-#                       (Default: docker-compose.prod.yml)
+#   COMPOSE_FILE        Compose file list from the environment or ENV_FILE,
+#                       relative to the repo root or absolute (default:
+#                       docker-compose.prod.yml; separator: COMPOSE_PATH_SEPARATOR
+#                       or ":"). A single file also loads legal/override files.
 #   ENV_FILE            Env-Datei, relativ zum Repo-Root oder absolut
 #                       (Default: .env). Wird IMMER als `--env-file` an
 #                       `docker compose` durchgereicht — fuer `.env` ist das
@@ -79,25 +81,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # ins Leere zeigenden COMPOSE_FILE, Refs #1336).
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
-if [[ "$COMPOSE_FILE" != /* ]]; then
-    COMPOSE_FILE="${PROJECT_DIR}/${COMPOSE_FILE}"
-fi
-# Refs #2309: docs/admin-guide.md fuehrt `compose.legal.yml` (Pflichtangaben)
-# und `compose.override.yml` (weitere lokale Anpassungen) als vorgesehenen
-# Erweiterungsweg ein und baut in JEDEM Recreate-Beispiel die volle
-# Dateiliste `-f docker-compose.prod.yml -f compose.legal.yml -f
-# compose.override.yml` auf. Eine vor der Erstinbetriebnahme angelegte
-# Zusatzdatei blieb beim Erststart bislang wirkungslos, weil dieses Skript
-# nur COMPOSE_FILE einsetzte. Deshalb: beide Dateien automatisch im selben
-# Verzeichnis wie COMPOSE_FILE erkennen und in fester Reihenfolge anhaengen.
-COMPOSE_FILES=("$COMPOSE_FILE")
-compose_extra_dir="$(dirname "$COMPOSE_FILE")"
-for compose_extra_file in "${compose_extra_dir}/compose.legal.yml" "${compose_extra_dir}/compose.override.yml"; do
-    if [[ -f "$compose_extra_file" ]]; then
-        COMPOSE_FILES+=("$compose_extra_file")
-    fi
-done
 ENV_FILE="${ENV_FILE:-.env}"
 if [[ "$ENV_FILE" != /* ]]; then
     ENV_FILE="${PROJECT_DIR}/${ENV_FILE}"
@@ -148,16 +131,52 @@ command -v docker >/dev/null 2>&1 ||
     fail "'docker' nicht gefunden — Docker Engine installieren (docs/admin-guide.md § 1)."
 docker compose version >/dev/null 2>&1 ||
     fail "'docker compose' (Compose v2) nicht verfuegbar — das Compose-Plugin fehlt."
-[[ -f "$COMPOSE_FILE" ]] ||
-    fail "Compose-Datei nicht gefunden: ${COMPOSE_FILE}
-  Erwartet im Repo-Root — liegt initial-setup.sh unter <repo>/scripts/?
-  Andere Datei waehlen: COMPOSE_FILE=<compose-file> ENV_FILE=<env-file> scripts/initial-setup.sh"
 [[ -f "$ENV_FILE" ]] ||
     fail "Env-Datei nicht gefunden: ${ENV_FILE}
   Zuerst die Vorlage .env.example kopieren und ausfuellen — insbesondere DJANGO_SECRET_KEY,
   ENCRYPTION_KEYS (key ring) sowie das Drei-Rollen-Modell (POSTGRES_BOOTSTRAP_PASSWORD,
   POSTGRES_ADMIN_USER, POSTGRES_ADMIN_PASSWORD). Siehe docs/admin-guide.md § 1.
   Andere Datei waehlen: ENV_FILE=<env-file> scripts/initial-setup.sh"
+
+# Preserve an explicitly selected file list across every setup operation
+# (Refs #2719). Read only Compose settings; never execute dotenv contents.
+# shellcheck source=scripts/ops/lib/env-file.sh
+source "${SCRIPT_DIR}/ops/lib/env-file.sh"
+compose_setting() {
+    local name="$1" line raw=""
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        env_file_match_assignment "$line" || continue
+        [[ "$ENV_FILE_ASSIGN_KEY" == "$name" ]] || continue
+        raw="$ENV_FILE_ASSIGN_RAW"
+    done < "$ENV_FILE"
+    env_file_parse_value "$raw"
+}
+
+COMPOSE_FILE="${COMPOSE_FILE:-$(compose_setting COMPOSE_FILE)}"
+COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
+compose_separator="${COMPOSE_PATH_SEPARATOR:-$(compose_setting COMPOSE_PATH_SEPARATOR)}"
+compose_separator="${compose_separator:-:}"
+[[ ${#compose_separator} -eq 1 && "$COMPOSE_FILE" != *$'\n'* ]] ||
+    fail "Compose file list requires a single-character separator and one line."
+[[ "$COMPOSE_FILE" != "$compose_separator"* && "$COMPOSE_FILE" != *"$compose_separator" &&
+   "$COMPOSE_FILE" != *"$compose_separator$compose_separator"* ]] ||
+    fail "Compose file list contains an empty entry."
+IFS="$compose_separator" read -r -a COMPOSE_FILES <<< "$COMPOSE_FILE"
+for index in "${!COMPOSE_FILES[@]}"; do
+    [[ "${COMPOSE_FILES[index]}" = /* ]] || COMPOSE_FILES[index]="${PROJECT_DIR}/${COMPOSE_FILES[index]}"
+    [[ -f "${COMPOSE_FILES[index]}" ]] ||
+        fail "Compose file is missing: ${COMPOSE_FILES[index]}
+  Expected relative to the repository root or as an absolute path.
+  Choose another file: COMPOSE_FILE=<compose-file-list> ENV_FILE=<env-file> scripts/initial-setup.sh"
+done
+# Keep the base path for existing project-name and diagnostic helpers.
+COMPOSE_FILE="${COMPOSE_FILES[0]}"
+if [[ ${#COMPOSE_FILES[@]} -eq 1 ]]; then
+    compose_extra_dir="$(dirname "$COMPOSE_FILE")"
+    for compose_extra_file in "${compose_extra_dir}/compose.legal.yml" "${compose_extra_dir}/compose.override.yml"; do
+        [[ ! -f "$compose_extra_file" ]] || COMPOSE_FILES+=("$compose_extra_file")
+    done
+fi
 
 # Refs #2086: Stacks, die den Health-Token an caddy durchreichen (heute:
 # staging), brauchen ihn NICHT-LEER. Caddy ersetzt `{$DJANGO_HEALTH_DETAIL_TOKEN}`
