@@ -253,3 +253,16 @@ def lock_settings_protection(settings_obj, default_document_type=None):
     if default_document_type is not None:
         facility_ids.add(default_document_type.facility_id)
     lock_dynamic_protection_many(facility_ids)
+
+
+def lock_current_settings(facility):
+    """Return the facility's Settings freshly read and row-locked, or ``None``.
+
+    For decisions that must not act on a period changed after they started
+    (Refs #2714): until the caller's transaction ends, no settings writer can
+    commit a change. Lock order is the one of :func:`update_settings` and the
+    admin save: the shared protection gate first, then the Settings row. Callers
+    take this before any target row, so the order is gate, Settings, target.
+    """
+    lock_settings_protection(Settings(facility=facility))
+    return Settings.objects.select_for_update().filter(facility=facility).first()

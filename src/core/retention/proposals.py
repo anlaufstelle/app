@@ -24,6 +24,7 @@ from core.models import AuditLog, Case, Client, Event, LegalHold, RetentionPropo
 from core.retention.legal_holds import get_active_hold_target_ids, has_active_hold
 from core.retention.strategies import iter_strategies
 from core.services.audit import audit_retention_decision
+from core.services.system.settings import lock_current_settings
 
 logger = logging.getLogger(__name__)
 
@@ -709,8 +710,11 @@ def reset_approvals_with_moved_deadline(facility, settings_obj, now):
     read without locks, so an event whose case gained activity while the run
     was underway drops out of it and is never locked there; this sweep decides
     it all the same. There is no unlocked filter on the deadline: each
-    candidate is decided at its locked rows. Locks follow the approval order:
-    target rows first, then the proposal. Returns the number of proposals reset.
+    candidate is decided at its locked rows, on the period in force at that
+    moment: ``settings_obj`` is only the fallback when the facility has no
+    Settings row. Lock order: Settings (:func:`lock_current_settings`), then
+    the approval order of target rows and proposal. Returns the number of
+    proposals reset.
     """
     with_approval = Q(status=RetentionProposal.Status.APPROVED) | Q(
         Q(first_approved_by__isnull=False) | Q(first_approved_at__isnull=False),
@@ -725,6 +729,8 @@ def reset_approvals_with_moved_deadline(facility, settings_obj, now):
     for pk, target_id in candidates:
         try:
             with transaction.atomic():
+                # Same lock order as the deletion loop: Settings, then targets.
+                current_settings = lock_current_settings(facility) or settings_obj
                 _lock_target_rows_for_approval(
                     RetentionProposal(facility=facility, target_type="Event", target_id=target_id)
                 )
@@ -737,7 +743,7 @@ def reset_approvals_with_moved_deadline(facility, settings_obj, now):
                 # Historical decisions are never made active (Refs #2590).
                 if latest is None or latest.pk != pk:
                     continue
-                reset += int(reset_approval_if_deadline_moved(latest, settings_obj, now))
+                reset += int(reset_approval_if_deadline_moved(latest, current_settings, now))
         except ValidationError:
             # A concurrent merge moved the event to another person. Skip this
             # proposal; the next run decides it again. The deletion loop takes

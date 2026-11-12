@@ -14,7 +14,7 @@ import pytest
 from django.core.management import call_command
 from django.utils import timezone
 
-from core.models import AuditLog, Case, Event, RetentionProposal
+from core.models import AuditLog, Case, Event, RetentionProposal, Settings
 from core.retention.enforcement import _soft_delete_events
 from core.services.compliance import detect_mass_delete
 from core.services.retention import approve_proposal, create_proposal
@@ -454,3 +454,58 @@ def test_binding_change_in_the_reset_sweep_skips_only_that_proposal(
     _run(facility)
     _assert_reset(blocked)
     assert not any(Event.objects.get(pk=event.pk).is_deleted for event in events)
+
+
+def _change_period_before_the_locked_decision(monkeypatch, facility, user, days):
+    """Change the period through the settings service after the run selected its events.
+
+    The selection and the ``settings_obj`` handed to the deletion loop still
+    carry the old period; the change is committed before the per-event
+    transaction takes its locks.
+    """
+    from core.retention import enforcement
+    from core.services.system.settings import update_settings
+
+    original = enforcement._soft_delete_events
+    changed = []
+
+    def change_then_delete(*args, **kwargs):
+        if not changed:
+            current = Settings.objects.get(facility=facility)
+            update_settings(current, user, retention_qualified_days=days)
+            changed.append(days)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(enforcement, "_soft_delete_events", change_then_delete)
+    return changed
+
+
+def test_period_extended_during_the_run_governs_the_locked_decision(approved, facility, admin_user, monkeypatch):
+    event, proposal = approved
+    changed = _change_period_before_the_locked_decision(monkeypatch, facility, admin_user, 90)
+    _run(facility)
+    assert changed == [90]
+    assert not Event.objects.get(pk=event.pk).is_deleted
+    _assert_reset(proposal)
+    # The new date follows the same, current period: anchor 45 days ago + 90 days.
+    assert proposal.deletion_due_at == timezone.localdate(_old() + timedelta(days=90))
+
+
+def test_period_shortened_during_the_run_deletes_only_what_it_covers(approved, facility, admin_user, monkeypatch):
+    event, proposal = approved
+    changed = _change_period_before_the_locked_decision(monkeypatch, facility, admin_user, 20)
+    _run(facility)
+    assert changed == [20]
+    assert Event.objects.get(pk=event.pk).is_deleted
+    assert not _reset_rows(proposal).exists()
+
+
+def test_reset_sweep_reads_the_current_period(approved, facility, qualified_period):
+    from core.retention.proposals import reset_approvals_with_moved_deadline
+
+    event, proposal = approved
+    Settings.objects.filter(pk=qualified_period.pk).update(retention_qualified_days=90)
+    stale = qualified_period  # still holds 30 days in memory
+    assert reset_approvals_with_moved_deadline(facility, stale, timezone.now()) == 1
+    assert not Event.objects.get(pk=event.pk).is_deleted
+    _assert_reset(proposal)

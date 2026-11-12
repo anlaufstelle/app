@@ -29,6 +29,7 @@ from core.models import (
     Event,
     EventHistory,
     RetentionProposal,
+    Settings,
     ShiftHandoverNote,
 )
 from core.retention.legal_holds import get_active_hold_target_ids, has_active_hold, resolve_activity_client_id
@@ -38,6 +39,7 @@ from core.services.dashboard.snapshot import SnapshotCarryError, carry_deleted_e
 from core.services.events import _snapshot_field_metadata, build_redacted_delete_history
 from core.services.file_vault import delete_attachments_for
 from core.services.file_vault.storage import AttachmentFileDeletionError
+from core.services.system.settings import lock_current_settings
 
 logger = logging.getLogger(__name__)
 
@@ -242,6 +244,14 @@ def _soft_delete_events(
     inside the same transaction (:func:`carry_deleted_event`). If that fails,
     the deletion is rolled back and logged as an error; the event stays live,
     does not count in ``count`` and the next run tries again.
+
+    Refs #2714: the expiry recheck and the approval check read the facility's
+    Settings afresh in the event's transaction and keep the row locked until
+    the mutation commits, so a period changed while the run is underway
+    governs the deletion; ``settings_obj`` and the preselected ``qs`` only
+    reflect the period the run started with. Lock order per event: protection
+    gate, Settings, person, event, proposal, the same prefix as
+    :func:`core.services.system.settings.update_settings`.
     """
 
     # Refs #1344: DSGVO-Nachweiskette — jedes Event MUSS atomar mit seiner
@@ -259,6 +269,10 @@ def _soft_delete_events(
     for pk in event_pks:
         carry = _CarryFailure(pk)
         with carry, transaction.atomic():
+            # The deadline is decided on the period in force now, not on the one
+            # the run started with (Refs #2714); the Settings lock comes before
+            # the target rows, see :func:`lock_current_settings`.
+            locked_settings = lock_current_settings(facility)
             # Refs #2107: Sperre und Hold-Lesung liegen INNERHALB derselben
             # Transaktion wie die Mutation — eine Pruefung davor waere wieder
             # nur eine Momentaufnahme.
@@ -292,13 +306,9 @@ def _soft_delete_events(
             # Strategy callers recheck expiry; direct callers supply a preselected set.
             if recheck_expiry or is_qualified:
                 # A concurrent edit can postpone expiry for any contact stage (Refs #2524).
-                current_settings = settings_obj
-                if current_settings is None:
-                    try:
-                        current_settings = facility.settings
-                    except facility._meta.model.settings.RelatedObjectDoesNotExist:
-                        if is_qualified:
-                            raise
+                current_settings = locked_settings or settings_obj
+                if current_settings is None and is_qualified:
+                    raise Settings.DoesNotExist(f"Facility {facility.pk} has no settings")
                 if current_settings is not None:
                     if is_qualified:
                         # The approval covers only the deadline it was given for (Refs #2714).
