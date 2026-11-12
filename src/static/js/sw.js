@@ -184,7 +184,12 @@ importScripts("/static/js/url-patterns.js");
 // Refs #1493: v62 -> v63 -- the precached crypto.js no longer lets a lock
 // holder wait for the boot idle gate queued behind it; the bump brings the
 // changed module to installed devices.
-const CACHE_NAME = "anlaufstelle-v67";
+// 2026-11-12, Refs #2730: v67 -> v68 -- the worker answers offline native
+// form posts with a redirect to a full page, and sw-register.js no longer
+// reloads after a takeover while a navigation or an HTMX write runs. The
+// shells load sw-register.js from the runtime cache; the new generation drops
+// that copy, so the changed module reaches installed devices offline too.
+const CACHE_NAME = "anlaufstelle-v68";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate

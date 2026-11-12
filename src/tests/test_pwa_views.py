@@ -157,7 +157,7 @@ class TestServiceWorkerCachesOfflineFallback:
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
         # Refs #1904: v55 drops runtime entries stored with the earlier policy.
-        assert 'CACHE_NAME = "anlaufstelle-v67"' in body, (
+        assert 'CACHE_NAME = "anlaufstelle-v68"' in body, (
             "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein "
             "(#2043: die Kontexthilfe in der precachten Offline-Personenliste "
             "muss Bestandsgeraete per Re-Install + Re-Precache erreichen; "
@@ -754,7 +754,10 @@ class TestPrecachedShellBumpGuard:
     # Refs #2612 #2625 #2626 #2630: v66 -> v67 -- the service worker binds static
     # cache refreshes to its lifetime, the offline shells show read errors of the
     # counters and withdraw the offline promise after a failed registration.
-    _PINNED_CACHE_NAME = "anlaufstelle-v67"
+    # Refs #2730: v67 -> v68 -- the write path of the worker and sw-register.js
+    # (runtime cache of the shells) change; no shell template and no APP_SHELL
+    # entry, so the hash stays unchanged.
+    _PINNED_CACHE_NAME = "anlaufstelle-v68"
     # Nachtrag (Slot-Haertung, Integrationsfenster-Review #1838): nur der
     # Ketten-{# #}-Kommentar in offline_base.html wurde nachgezogen — Django-
     # Kommentare erreichen den Draht nie (Praezedenz #1900), daher NUR Hash,
