@@ -175,6 +175,13 @@
     "source": "e2e-durations-1.xml, e2e-durations-2.xml, e2e-durations-3.xml, e2e-durations-4.xml, e2e-durations-5.xml, e2e-durations-6.xml, e2e-durations-7.xml, e2e-durations-8.xml",
     "measured_at": "2026-11-11",
     "head": "c207af55d79d77fe5cdd95796edac79d2722e516",
-    "scale": 1.0
+    "scale": 1.0,
+    "fallback": {
+      "seconds_per_test": 2.9885,
+      "test_counts": {
+        "test_passkey_removal_takeover.py": 4,
+        "test_quick_exit_geometry.py": 171
+      }
+    }
   }
 }

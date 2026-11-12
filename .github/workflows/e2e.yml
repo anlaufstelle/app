@@ -30,8 +30,9 @@ jobs:
       # liefe die CI gruen, ohne den Rest der Suite je auszufuehren.
       E2E_SLICES: 8
     # Each slice runs serially (no -n, see the pytest step below). Sizing
-    # (Refs #2646): specs are cut by versioned runtime weights; provisional
-    # weights include test-count proxies until complete measurements arrive.
+    # (Refs #2646): specs use versioned Stage runtime weights (2026-11-11).
+    # For unmeasured specs the converter records collected test counts;
+    # estimates are those counts times the median JUnit seconds per test.
     # Measured on Stage with four slices: ~6 min setup per job (checkout,
     # deps, browser, Tailwind, collectstatic) and ~104 min pytest in total;
     # three of four slices were cancelled at the 30 min limit (slowest slice

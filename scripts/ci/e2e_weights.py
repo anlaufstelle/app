@@ -27,10 +27,16 @@ def load_weights(path: Path, base: Path = BASE, *, require_existing: bool = True
     data = json.loads(path.read_text())
     if not isinstance(data, dict) or not isinstance(data.get("_meta"), dict):
         raise ValueError("Weights must be an object with _meta metadata")
+    weights = _validate_weights(
+        {name: value for name, value in data.items() if name != "_meta"}, base, require_existing
+    )
+    _fallback_weights(data["_meta"], base, require_existing)
+    return weights
+
+
+def _validate_weights(data: dict, base: Path, require_existing: bool) -> dict[str, float]:
     weights = {}
     for name, value in data.items():
-        if name == "_meta":
-            continue
         spec = Path(name)
         if spec.is_absolute() or ".." in spec.parts or (require_existing and not (base / spec).is_file()):
             raise ValueError(f"Unknown spec path: {name}")
@@ -40,6 +46,26 @@ def load_weights(path: Path, base: Path = BASE, *, require_existing: bool = True
             raise ValueError(f"Weight must be a finite positive duration: {name}")
         weights[name] = float(value)
     return weights
+
+
+def _fallback_weights(meta: dict, base: Path, require_existing: bool) -> dict[str, float] | None:
+    fallback = meta.get("fallback")
+    if fallback is None:
+        return None
+    if not isinstance(fallback, dict) or not isinstance(fallback.get("test_counts"), dict):
+        raise ValueError("Fallback must contain collected test_counts")
+    rate = fallback.get("seconds_per_test")
+    if isinstance(rate, bool) or not isinstance(rate, int | float) or not math.isfinite(rate) or rate <= 0:
+        raise ValueError("Fallback seconds_per_test must be finite and positive")
+    counts = fallback["test_counts"]
+    if any(isinstance(count, bool) or not isinstance(count, int) or count < 1 for count in counts.values()):
+        raise ValueError("Fallback test counts must be positive integers")
+    return _validate_weights({name: rate * count for name, count in counts.items()}, base, require_existing)
+
+
+def load_fallback_weights(path: Path, base: Path = BASE) -> dict[str, float] | None:
+    """Read converter-generated estimates separately from measured file durations."""
+    return _fallback_weights(json.loads(path.read_text())["_meta"], base, require_existing=False)
 
 
 def spec_path(value: str) -> str:
@@ -119,15 +145,21 @@ def convert(
     scale: float = 1.0,
     measured_at: str | None = None,
     head: str | None = None,
+    collection: Path | None = None,
 ) -> None:
     csv_files = csv_files or []
+    if collection is not None and (not junit or durations or csv_files):
+        raise ValueError("--collection requires JUnit-only measurements with per-test durations")
     weights: Counter[str] = Counter()
+    test_durations: list[float] = []
     for source in csv_files:
         weights.update(read_csv_durations(source))
     for source in junit:
         for case in ElementTree.parse(source).getroot().iter("testcase"):
             name = spec_path(case.get("file") or case.get("classname", ""))
-            weights[name] += duration(case.attrib["time"])
+            seconds = duration(case.attrib["time"])
+            weights[name] += seconds
+            test_durations.append(seconds)
     pattern = re.compile(r"^\s*([\d.]+)s\s+(?:setup|call|teardown)\s+(.+?\.py)::")
     for source in durations:
         for line in source.read_text().splitlines():
@@ -148,6 +180,20 @@ def convert(
         "head": head,
         "scale": scale,
     }
+    if collection is not None:
+        nodes = [
+            line
+            for line in collection.read_text().splitlines()
+            if line.startswith("src/tests/e2e/") and ".py::" in line
+        ]
+        if not nodes or len(nodes) != len(set(nodes)):
+            raise ValueError("Collection must contain unique E2E test IDs")
+        counts = Counter(spec_path(node) for node in nodes)
+        rate = max(round(median(test_durations) * scale, 6), 0.000001)
+        data["_meta"]["fallback"] = {
+            "seconds_per_test": rate,
+            "test_counts": {name: counts[name] for name in sorted(counts) if name not in weights},
+        }
     output.write_text(json.dumps(data, indent=2) + "\n")
 
 
@@ -162,6 +208,9 @@ def main() -> int:
     parser.add_argument("--measured-at", help="ISO date or time of the measurement (default: now)")
     parser.add_argument("--head", help="Measured commit (default: current HEAD)")
     parser.add_argument("--output", type=Path, default=DEFAULT_WEIGHTS)
+    parser.add_argument(
+        "--collection", type=Path, help="pytest --collect-only -q output for test-count fallback estimates (JUnit only)"
+    )
     parser.add_argument("--validate", type=Path)
     args = parser.parse_args()
     try:
@@ -180,6 +229,7 @@ def main() -> int:
                 scale=scale_factor(args.scale),
                 measured_at=args.measured_at,
                 head=args.head,
+                collection=args.collection,
             )
         return 0
     except (ValueError, OSError, TypeError, KeyError, ParseError, DefusedXmlException) as error:

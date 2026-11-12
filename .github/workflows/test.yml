@@ -16,6 +16,7 @@ jobs:
     # Three file-based slices use Stage duration weights refreshed on 2026-11-11 (Refs #2646).
     # Each slice runs two workers (Makefile UNIT_WORKERS); file weights sum all duration phases.
     # Budget estimate: weighted seconds / 2 + six minutes for setup and runner variation.
+    # The six-minute reserve is unmeasured; measure setup in the next Stage run.
     # Stage acceptance requires EACH job in EACH run <=24.5 minutes (70% of 35), including setup.
     timeout-minutes: 35
     strategy:

@@ -3,7 +3,8 @@
 
 Files remain atomic because browser fixtures are module scoped. LPT assigns
 heavier files first, breaking ties by path and then bucket load/count/index.
-Missing measurements use the positive median of known weights (1s if empty).
+Missing measurements use converter-generated test-count estimates. Legacy
+weight files without calibration use the positive file median (1s if empty).
 On any selection error stdout stays empty to prevent accidental full runs.
 """
 
@@ -18,9 +19,9 @@ from pathlib import Path
 from statistics import median
 
 try:
-    from scripts.ci.e2e_weights import DEFAULT_WEIGHTS, load_weights
+    from scripts.ci.e2e_weights import DEFAULT_WEIGHTS, load_fallback_weights, load_weights
 except ModuleNotFoundError:
-    from ci.e2e_weights import DEFAULT_WEIGHTS, load_weights
+    from ci.e2e_weights import DEFAULT_WEIGHTS, load_fallback_weights, load_weights
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_BASE_DIR = ROOT / "src" / "tests" / "e2e"
@@ -81,14 +82,22 @@ def file_weights(
     if not base_dir.is_dir():
         raise ValueError(f"Not a directory: {base_dir}")
     known = load_weights(weights_file, base_dir, require_existing=False)
-    stale = sorted(name for name in known if not (base_dir / name).is_file())
+    estimates = load_fallback_weights(weights_file, base_dir)
+    stale = sorted(name for name in known.keys() | (estimates or {}).keys() if not (base_dir / name).is_file())
     known = {name: value for name, value in known.items() if name not in stale}
     fallback = median(known.values()) if known else 1.0
     files = discover(base_dir)
     missing = [
         path.relative_to(base_dir).as_posix() for path in files if path.relative_to(base_dir).as_posix() not in known
     ]
-    return {path: known.get(path.relative_to(base_dir).as_posix(), fallback) for path in files}, missing, stale
+    if estimates is not None:
+        uncollected = sorted(set(missing) - estimates.keys())
+        if uncollected:
+            raise ValueError(f"Missing collected test counts; regenerate weights with --collection: {uncollected}")
+    else:
+        estimates = dict.fromkeys(missing, fallback)
+    combined = estimates | known
+    return {path: combined[path.relative_to(base_dir).as_posix()] for path in files}, missing, stale
 
 
 def build_slices(base_dir: Path, slices: int, weights_file: Path = DEFAULT_WEIGHTS) -> list[list[Path]]:

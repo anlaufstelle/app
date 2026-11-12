@@ -290,11 +290,19 @@ def _slice_summary(count):
 
 
 def test_committed_weights_balance_slices_within_limits():
-    """Measured and median-fallback loads stay balanced within the estimated job budget."""
+    """Measured and test-count fallback loads stay balanced within the estimated job budget."""
     job = yaml.safe_load((ROOT / ".github/workflows/e2e.yml").read_text())["jobs"]["test-e2e"]
     count = job["env"]["E2E_SLICES"]
-    loads, ratio, _ = _slice_summary(count)
+    loads, ratio, unmeasured = _slice_summary(count)
     assert ratio <= 1.15
+    data = json.loads(WEIGHTS.read_text())
+    calibration = data["_meta"]["fallback"]
+    counts = calibration["test_counts"]
+    assert len(counts) == unmeasured
+    # At most 2% of specs may lack measurements; their estimates may account for at most
+    # 10% of total test seconds (Stage 2026-11-11 baseline: 2/174 specs and about 8.6%).
+    assert unmeasured / (len(data) - 1 + unmeasured) <= 0.02
+    assert sum(counts.values()) * calibration["seconds_per_test"] / sum(loads) <= 0.10
     # Weights estimate test time on the runner; each job also spends setup time (checkout,
     # dependencies, browser, assets), measured at about six minutes in the workflow comment.
     setup_seconds = 6 * 60
@@ -357,7 +365,100 @@ def test_workflow_slices_cover_collected_e2e_nodes_exactly_once(tmp_path):
         buckets.append(bucket)
         selected.extend(node for node in nodes if node.split("::", 1)[0] in bucket)
     assert Counter(selected) == Counter(nodes)
+    data = json.loads(WEIGHTS.read_text())
+    counts = Counter(Path(node.split("::", 1)[0]).relative_to("src/tests/e2e").as_posix() for node in nodes)
+    assert data["_meta"]["fallback"]["test_counts"] == {
+        name: count for name, count in counts.items() if name not in data
+    }
     manifest = tmp_path / "manifest.json"
     manifest.write_text(json.dumps(buckets))
     validated = run("scripts/e2e_slice.py", "--slices", count, "--validate", manifest)
     assert validated.returncode == 0, validated.stderr
+
+
+@pytest.mark.parametrize("test_count", [4, 171])
+def test_unmeasured_file_weight_scales_with_collected_test_count(tmp_path, test_count):
+    measured = "test_a11y_followup_browser.py"
+    unmeasured = "test_quick_exit_geometry.py"
+    source = tmp_path / "durations.xml"
+    source.write_text(
+        "<testsuite>"
+        + "".join(
+            f'<testcase file="src/tests/e2e/{measured}" name="test_{index}" time="{seconds}"/>'
+            for index, seconds in enumerate((1, 3, 11))
+        )
+        + "</testsuite>"
+    )
+    collection = tmp_path / "collection.txt"
+    collection.write_text(
+        "\n".join(f"src/tests/e2e/{unmeasured}::test_geometry[case-{i}]" for i in range(test_count)) + "\n"
+    )
+    output = tmp_path / "weights.json"
+    converted = run(
+        "scripts/ci/e2e_weights.py",
+        "--from-junit",
+        source,
+        "--collection",
+        collection,
+        "--scale",
+        "0.5",
+        "--output",
+        output,
+    )
+    assert converted.returncode == 0, converted.stderr
+    data = json.loads(output.read_text())
+    assert data[measured] == 7.5
+    # Each collected parameter ID counts; the median test duration is 3s, scaled to 1.5s.
+    assert data["_meta"]["fallback"] == {
+        "seconds_per_test": 1.5,
+        "test_counts": {unmeasured: test_count},
+    }
+    assert unmeasured not in data  # Estimates must remain distinguishable from measurements.
+    base = tmp_path / "specs"
+    base.mkdir()
+    for name in (measured, unmeasured):
+        (base / name).write_text("def test_one(): pass\n")
+    summary = run("scripts/e2e_slice.py", "--base-dir", base, "--weights", output, "--slices", 1, "--summary")
+    assert summary.returncode == 0, summary.stderr
+    assert f"{7.5 + 1.5 * test_count:.2f}s" in summary.stdout
+    assert "unmeasured: 1" in summary.stdout
+    (base / "test_new.py").write_text("def test_one(): pass\n")
+    missing_count = run("scripts/e2e_slice.py", "--base-dir", base, "--weights", output, "--slices", 1, "--index", 1)
+    assert missing_count.returncode == 2 and missing_count.stdout == ""
+    assert "regenerate weights with --collection" in missing_count.stderr
+
+
+@pytest.mark.parametrize("nodes", [[], ["test_one", "test_one"], ["test_absent.py::test_one"]])
+def test_converter_rejects_invalid_fallback_collection(tmp_path, nodes):
+    measured = sorted(BASE.glob("test_*.py"))[0].name
+    source = tmp_path / "durations.xml"
+    source.write_text(f'<testsuite><testcase file="src/tests/e2e/{measured}" time="3"/></testsuite>')
+    collection = tmp_path / "collection.txt"
+    collection.write_text(
+        "\n".join(
+            f"src/tests/e2e/{measured}::{node}" if ".py::" not in node else f"src/tests/e2e/{node}" for node in nodes
+        )
+    )
+    output = tmp_path / "weights.json"
+    result = run("scripts/ci/e2e_weights.py", "--from-junit", source, "--collection", collection, "--output", output)
+    assert result.returncode == 2, result.stderr
+    assert not output.exists()
+
+
+@pytest.mark.parametrize(
+    "fallback",
+    [
+        {"seconds_per_test": 0, "test_counts": {}},
+        {"seconds_per_test": float("nan"), "test_counts": {}},
+        {"seconds_per_test": 3, "test_counts": {"test_quick_exit_geometry.py": True}},
+        {"seconds_per_test": 3, "test_counts": {"../test_escape.py": 2}},
+        {"seconds_per_test": 3},
+    ],
+)
+def test_invalid_fallback_calibration_fails_without_a_partial_file_list(tmp_path, fallback):
+    weights = tmp_path / "weights.json"
+    weights.write_text(json.dumps({"_meta": {"fallback": fallback}}))
+    validated = run("scripts/ci/e2e_weights.py", "--validate", weights)
+    assert validated.returncode == 2
+    selected = run("scripts/e2e_slice.py", "--weights", weights, "--slices", 1, "--index", 1)
+    assert selected.returncode == 2 and selected.stdout == ""
