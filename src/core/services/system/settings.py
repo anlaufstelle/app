@@ -264,5 +264,9 @@ def lock_current_settings(facility):
     admin save: the shared protection gate first, then the Settings row. Callers
     take this before any target row, so the order is gate, Settings, target.
     """
-    lock_settings_protection(Settings(facility=facility))
+    from core.services.dynamic_protection import lock_dynamic_protection_many
+
+    # Gate by id: an unsaved ``Settings(facility=...)`` would overwrite the
+    # cached ``facility.settings`` that later steps of the caller read.
+    lock_dynamic_protection_many({facility.pk})
     return Settings.objects.select_for_update().filter(facility=facility).first()

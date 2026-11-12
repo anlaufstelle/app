@@ -51,7 +51,9 @@ def test_enforcement_rechecks_a_type_deadline_changed_after_selection(
         prime_first_approval(proposal)
         approve_proposal(proposal, lead_user)
     results, errors = {}, {}
-    original_lock = enforcement._lock_event_and_recheck_hold
+    # The first lock of the per-event transaction is the gate and Settings
+    # lock; a configuration writer waits behind it, so the edit commits before.
+    original_lock = enforcement.lock_current_settings
 
     def postpone_before_lock(*args, **kwargs):
         def edit():
@@ -64,7 +66,7 @@ def test_enforcement_rechecks_a_type_deadline_changed_after_selection(
         return original_lock(*args, **kwargs)
 
     if postpone:
-        monkeypatch.setattr(enforcement, "_lock_event_and_recheck_hold", postpone_before_lock)
+        monkeypatch.setattr(enforcement, "lock_current_settings", postpone_before_lock)
     result = enforcement.enforce_document_type_retention(facility, now, dry_run=False)
 
     assert not errors, errors

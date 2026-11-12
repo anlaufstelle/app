@@ -550,3 +550,16 @@ def test_reset_without_any_deadline_removes_the_overdue_proposal(approved, facil
     assert not Event.objects.get(pk=event.pk).is_deleted
     row = _reset_rows(proposal).get()
     assert row.detail["reason"] == "no_deadline_applies"
+
+
+def test_locking_the_current_settings_keeps_the_cached_facility_settings(facility, qualified_period):
+    from django.db import transaction
+
+    from core.services.system.settings import lock_current_settings
+
+    cached = facility.settings
+    with transaction.atomic():
+        locked = lock_current_settings(facility)
+    assert locked.pk == qualified_period.pk
+    assert locked.retention_qualified_days == 30
+    assert facility.settings is cached
