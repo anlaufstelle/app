@@ -16,7 +16,10 @@ are dev-only and not subject to that policy, but still need full SHA pins.
 
 from __future__ import annotations
 
+import os
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -74,6 +77,8 @@ def violations(uses: str, *, shipped: bool) -> list[str]:
 
 
 def removed_from_release() -> set[str]:
+    if not RELEASE_BUILD.exists():
+        pytest.skip("dev-ops/release/build-release.sh is stripped from the public snapshot")
     return set(REMOVED_WORKFLOW_RE.findall(RELEASE_BUILD.read_text(encoding="utf-8")))
 
 
@@ -82,7 +87,8 @@ def workflow_files() -> list[Path]:
 
 
 def shipped_workflows() -> list[Path]:
-    removed = removed_from_release()
+    # Without the dev-only build script, every remaining workflow is shipped.
+    removed = removed_from_release() if RELEASE_BUILD.exists() else set()
     return [path for path in workflow_files() if path.name not in removed]
 
 
@@ -99,6 +105,8 @@ class TestShippedWorkflowsFollowTheActionsPolicy:
     def test_inventory_is_not_empty(self):
         shipped = {path.name for path in shipped_workflows()}
         assert "release.yml" in shipped
+
+    def test_release_exclusions_match_workflow_inventory(self):
         removed = removed_from_release()
         assert removed, "release build removes no workflow — pattern of the release build script changed?"
         assert removed <= {path.name for path in workflow_files()}, f"removed workflows not found: {removed}"
@@ -108,7 +116,8 @@ class TestShippedWorkflowsFollowTheActionsPolicy:
         assert not problems, "\n".join(problems)
 
     def test_every_dev_only_action_is_pinned(self):
-        dev_only = [path for path in workflow_files() if path not in shipped_workflows()]
+        removed = removed_from_release()
+        dev_only = [path for path in workflow_files() if path.name in removed]
         problems = _report(dev_only, shipped=False)
         assert not problems, "\n".join(problems)
 
@@ -181,3 +190,55 @@ class TestGuardRejects:
             "repository",
             "wf.yml: actions/checkout@v6 — not pinned to a full commit SHA",
         ]
+
+
+class TestPublicWorkflowPolicy:
+    @pytest.mark.parametrize(
+        ("extra_use", "exit_code", "message"),
+        [
+            (None, 0, "passed"),
+            ("other/unselected@" + "a" * 40, 1, "not allowed by the policy"),
+            ("actions/checkout@v6", 1, "not pinned to a full commit SHA"),
+        ],
+        ids=["allowed", "unselected", "unpinned"],
+    )
+    def test_policy_checks_shipped_workflows_without_release_sources(self, tmp_path, extra_use, exit_code, message):
+        """Run the shipped guard against a public tree, including policy violations."""
+        guard = tmp_path / "src/tests/test_actions_policy_guard.py"
+        guard.parent.mkdir(parents=True)
+        guard.write_text(Path(__file__).read_text(encoding="utf-8"), encoding="utf-8")
+        workflows = tmp_path / ".github/workflows"
+        workflows.mkdir(parents=True)
+        uses = [f"{action}@{'a' * 40}" for action in sorted(ALLOWED_THIRD_PARTY)]
+        if extra_use is not None:
+            uses.append(extra_use)
+        (workflows / "release.yml").write_text(
+            "jobs:\n  release:\n    runs-on: ubuntu-latest\n    steps:\n"
+            + "".join(f"      - uses: {use}\n" for use in uses),
+            encoding="utf-8",
+        )
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                "src/tests/test_actions_policy_guard.py::TestShippedWorkflowsFollowTheActionsPolicy",
+                "-x",
+                "-q",
+                "-rs",
+                "-p",
+                "no:cacheprovider",
+                "-o",
+                "markers=architecture: source file checks",
+            ],
+            cwd=tmp_path,
+            env={**os.environ, "PYTEST_ADDOPTS": "", "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1"},
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        assert result.returncode == exit_code, result.stdout + result.stderr
+        assert message in result.stdout, result.stdout
+        if exit_code == 0:
+            assert "3 passed, 2 skipped" in result.stdout, result.stdout
