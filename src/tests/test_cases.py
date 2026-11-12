@@ -544,3 +544,16 @@ class TestCasesForClientView:
         response = client.get(reverse("core:cases_for_client"))
         assert response.status_code == 200
         assert response.json() == []
+
+    @pytest.mark.parametrize("value", ["abc", "1", "not-a-uuid", "00000000-0000-0000-0000-00000000000g", " "])
+    def test_cases_for_client_malformed_id_answers_like_missing(self, client, staff_user, case_open, value):
+        client.force_login(staff_user)
+        response = client.get(reverse("core:cases_for_client"), {"client": value})
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_cases_for_client_unknown_uuid_is_empty(self, client, staff_user, case_open):
+        client.force_login(staff_user)
+        response = client.get(reverse("core:cases_for_client"), {"client": "00000000-0000-0000-0000-000000000001"})
+        assert response.status_code == 200
+        assert response.json() == []

@@ -5,6 +5,7 @@ Meilensteine in :file:`views/case_goals.py` (Refs #605).
 """
 
 import logging
+import uuid
 from contextlib import suppress
 
 from django.contrib import messages
@@ -1041,8 +1042,10 @@ class CasesForClientView(StaffRequiredMixin, View):
 
     @method_decorator(ratelimit(key="user", rate="30/m", method="GET", block=True))
     def get(self, request):
-        client_id = request.GET.get("client")
-        if not client_id:
+        try:
+            client_id = uuid.UUID(request.GET.get("client", ""))
+        except ValueError:
+            # Missing or malformed id: nothing to look up, same empty answer.
             return JsonResponse([], safe=False)
 
         facility = request.current_facility
