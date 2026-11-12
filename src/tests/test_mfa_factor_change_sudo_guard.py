@@ -42,6 +42,7 @@ BACKUP_CODES_URL = "/mfa/backup-codes/"
 SETTINGS_URL = "/mfa/settings/"
 VERIFY_URL = "/mfa/verify/"
 SUDO_URL = "/sudo/"
+CHANGE_URL = "/mfa/change-device/"
 SETUP_SESSION_KEYS = ("mfa_backup_codes", "mfa_setup_pending", "mfa_setup_device_pk")
 
 
@@ -53,6 +54,12 @@ def sudo_an(settings):
 @pytest.fixture
 def sudo_aus(settings):
     settings.SUDO_MODE_ENABLED = False
+
+
+def _pending_device(client, user) -> TOTPDevice:
+    """Start the replacement in this session; the pending secret is bound to it."""
+    assert client.get(CHANGE_URL).status_code == 200
+    return TOTPDevice.objects.get(user=user, confirmed=False)
 
 
 def _valid_token(device: TOTPDevice) -> str:
@@ -174,10 +181,10 @@ class TestFactorChangeWithSudo:
     """Mit Sudo laeuft der Wechsel wie bisher bis zur Quittung."""
 
     def test_post_with_valid_code_replaces_codes_and_ack_confirms_device(self, client, staff_user, bestandsfaktor):
-        neu = TOTPDevice.objects.create(user=staff_user, name="neu", confirmed=False)
         codes_vorher = _stored_backup_tokens(staff_user)
         _verified(client, staff_user)
         _in_sudo(client)
+        neu = _pending_device(client, staff_user)
 
         response = client.post(SETUP_URL, {"token": _valid_token(neu)})
 
@@ -275,8 +282,8 @@ class TestSudoToggleOff:
     """Ist Sudo per Setting abgeschaltet, gilt dasselbe wie beim Sudo-Mixin: kein Sudo-Schritt."""
 
     def test_factor_change_without_sudo_session_proceeds(self, client, staff_user, bestandsfaktor):
-        neu = TOTPDevice.objects.create(user=staff_user, name="neu", confirmed=False)
         _verified(client, staff_user)
+        neu = _pending_device(client, staff_user)
 
         response = client.post(SETUP_URL, {"token": _valid_token(neu)})
 
@@ -297,9 +304,9 @@ class TestFactorChangeUnderRlsRole:
     ):
         TOTPDevice.objects.create(user=staff_user, name="bestand", confirmed=True)
         generate_backup_codes(staff_user)
-        neu = TOTPDevice.objects.create(user=staff_user, name="neu", confirmed=False)
         _verified(client, staff_user)
         _in_sudo(client)
+        neu = _pending_device(client, staff_user)
 
         with as_rls_role(rls_test_role, facility_id=staff_user.facility_id):
             response = client.post(SETUP_URL, {"token": _valid_token(neu)})
@@ -317,9 +324,9 @@ class TestFactorChangeUnderRlsRole:
     ):
         TOTPDevice.objects.create(user=super_admin_user, name="bestand", confirmed=True)
         generate_backup_codes(super_admin_user)
-        neu = TOTPDevice.objects.create(user=super_admin_user, name="neu", confirmed=False)
         _verified(client, super_admin_user)
         _in_sudo(client)
+        neu = _pending_device(client, super_admin_user)
 
         with as_rls_role(rls_test_role, facility_id=""):
             response = client.post(SETUP_URL, {"token": _valid_token(neu)})

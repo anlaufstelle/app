@@ -71,6 +71,10 @@ _SESSION_BACKUP_CODES_KEY = "mfa_backup_codes"
 # Einrichtungsvorgang autorisiert wurde (Refs #2287). Der Setup-Abschluss
 # bestaetigt ausschliesslich dieses Geraet — nicht "irgendein" unbestaetigtes.
 _SESSION_SETUP_DEVICE_KEY = "mfa_setup_device_pk"
+# Session key with the primary key of the unconfirmed device whose secret this
+# session was shown. A pending secret belongs to exactly one session; another
+# session of the same account gets a fresh one.
+_SESSION_PENDING_DEVICE_KEY = "mfa_pending_device_pk"
 
 
 def _store_session_backup_codes(request, codes: list[str]) -> None:
@@ -117,15 +121,27 @@ def _totp_png_data_url(device: TOTPDevice) -> str:
     return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
 
 
-def _get_unconfirmed_device(user) -> TOTPDevice:
-    """Return the user's pending (unconfirmed) TOTP device, creating one if needed."""
-    device = TOTPDevice.objects.filter(user=user, confirmed=False).first()
-    if device is None:
-        device = TOTPDevice.objects.create(
-            user=user,
-            name=django_settings.OTP_TOTP_ISSUER,
-            confirmed=False,
-        )
+def _get_unconfirmed_device(request) -> TOTPDevice:
+    """Return the pending TOTP device bound to this session, creating one if needed.
+
+    Reloading in the same session keeps the secret, so a code already scanned
+    stays valid. An unconfirmed device that does not belong to this session is
+    discarded and replaced: its secret may have been shown elsewhere and must
+    never be activated from here. Confirmed devices are left untouched.
+    """
+    user = request.user
+    device_pk = request.session.get(_SESSION_PENDING_DEVICE_KEY)
+    if device_pk is not None:
+        device = TOTPDevice.objects.filter(user=user, pk=device_pk, confirmed=False).first()
+        if device is not None:
+            return device
+    TOTPDevice.objects.filter(user=user, confirmed=False).delete()
+    device = TOTPDevice.objects.create(
+        user=user,
+        name=django_settings.OTP_TOTP_ISSUER,
+        confirmed=False,
+    )
+    request.session[_SESSION_PENDING_DEVICE_KEY] = device.pk
     return device
 
 
@@ -194,7 +210,7 @@ class MFASetupView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        device = _get_unconfirmed_device(self.request.user)
+        device = _get_unconfirmed_device(self.request)
         context["qr_data_url"] = _totp_png_data_url(device)
         # Authenticator-Apps (FreeOTP+, Google Authenticator, …) erwarten Base32 (RFC 6238/3548).
         context["secret"] = base64.b32encode(device.bin_key).decode("ascii").rstrip("=")
@@ -203,7 +219,7 @@ class MFASetupView(LoginRequiredMixin, TemplateView):
 
     def post(self, request, *args, **kwargs):
         token = (request.POST.get("token") or "").strip().replace(" ", "")
-        device = _get_unconfirmed_device(request.user)
+        device = _get_unconfirmed_device(request)
         if token and device.verify_token(token):
             # 2FA wird hier bewusst NOCH NICHT scharf geschaltet (Refs #1118):
             # Das ``TOTPDevice`` bleibt unbestätigt, bis der Nutzer auf der
@@ -501,6 +517,7 @@ class MFABackupCodesView(LoginRequiredMixin, TemplateView):
                     result = confirm_totp_setup(request.user, device_pk, ip_address=get_client_ip(request))
                     request.session.pop("mfa_setup_pending", None)
                     request.session.pop(_SESSION_SETUP_DEVICE_KEY, None)
+                    request.session.pop(_SESSION_PENDING_DEVICE_KEY, None)
                     request.session.pop(_SESSION_BACKUP_CODES_KEY, None)
                     if result is None:
                         response = redirect("mfa_setup")
