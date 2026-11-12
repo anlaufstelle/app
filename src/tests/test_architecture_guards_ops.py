@@ -28,14 +28,12 @@ def _deployment_compose_paths() -> tuple[Path, ...]:
 
 
 class TestRunAsAdminPullPolicy:
-    """Refs #1047: ``run-as-admin.sh`` läuft via systemd als root — root hat
-    keine GHCR-Credentials (``/root/.docker/config.json`` fehlt).
-    ``docker-compose.dev.yml`` setzt für ``web`` ``pull_policy: always``,
-    daher versucht jedes ``docker compose run`` ohne ``--pull never`` einen
-    Registry-Pull und bricht mit ``unauthorized`` (Exit 1) ab —
-    Retention/Breach/MV-Refresh liefen dann nie. ``--pull never`` ist
-    sicher: das ``web``-Image liegt nach jedem Deploy lokal im
-    (userunabhängigen) Docker-Daemon.
+    """Refs #1047: systemd runs ``run-as-admin.sh`` as root without GHCR credentials.
+
+    The dev compose stack sets ``pull_policy: always`` for ``web``. Without
+    ``--pull never``, each maintenance run attempts a registry pull and fails
+    with ``unauthorized`` (exit 1), preventing retention and breach scans.
+    The web image is already available in the local Docker daemon after deploy.
     """
 
     _SCRIPT = Path("dev-ops/deploy/run-as-admin.sh")
