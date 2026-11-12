@@ -17,7 +17,9 @@ Covered here:
 - dormant chain, anchored tail pruned -> green, anchor moves to the checkpoint;
 - backdated tail -> the prune refuses to delete it, the chain stays broken;
 - checkpoint deleted after the prune -> still tail truncation;
-- anchor file without the anchored row's time -> still tail truncation.
+- anchor file without the anchored row's time -> still tail truncation;
+- anchored row's time at or after the checkpoint's cutoff -> still tail
+  truncation.
 """
 
 from __future__ import annotations
@@ -143,3 +145,34 @@ class TestPrunedAnchoredTail:
         ok, err = _verify()
         assert not ok
         assert TRUNCATION in err
+
+
+class TestAnchorTimeAgainstTheCutoff:
+    """``HighWaterMarkStore.check`` on its own, without a prune in front.
+
+    The regular prune no longer deletes a row whose stored time it cannot
+    authenticate, so this boundary is reachable only through the store.
+    """
+
+    FACILITY = "3f2c7c1e-0000-0000-0000-000000000001"
+    ANCHOR = "a" * 64
+
+    def _store(self, tmp_path, anchored_at):
+        store = HighWaterMarkStore(path=str(tmp_path / "anchor.json"), chains={})
+        store.record(self.FACILITY, 1, self.ANCHOR, anchored_at)
+        return store
+
+    @pytest.mark.parametrize("offset", [timedelta(0), timedelta(microseconds=1), timedelta(days=30)])
+    def test_an_anchor_not_older_than_the_cutoff_is_a_truncation(self, tmp_path, offset):
+        cutoff = timezone.now() - timedelta(days=730)
+        store = self._store(tmp_path, cutoff + offset)
+
+        reason = store.check(self.FACILITY, set(), pruned_before={self.ANCHOR: cutoff})
+
+        assert reason and reason.startswith(TRUNCATION), reason
+
+    def test_an_anchor_older_than_the_cutoff_counts_as_pruned(self, tmp_path):
+        cutoff = timezone.now() - timedelta(days=730)
+        store = self._store(tmp_path, cutoff - timedelta(microseconds=1))
+
+        assert store.check(self.FACILITY, set(), pruned_before={self.ANCHOR: cutoff}) is None
