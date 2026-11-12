@@ -154,6 +154,17 @@ class TestFullWidthNoticesKeepTheRightEdgeFree:
         page = _parse(client.get(reverse("core:zeitstrom")).content.decode())
         self._assert_reserve(_classes(page.by_id["offline-status"]))
 
+    def test_offline_shell_status_bar_and_navigation(self, client, settings_obj):
+        html = client.get(reverse("core:offline_client_shell")).content.decode()
+        page = _parse(html)
+        self._assert_reserve(_classes(page.by_id["offline-status"]))
+        nav_inner = re.search(r'<nav[^>]*data-testid="offline-nav".*?<div class="([^"]+)"', html, re.S)
+        assert nav_inner, "the offline shell must render its navigation"
+        self._assert_reserve(set(nav_inner.group(1).split()))
+        # The content below the navigation (>= 60 px high) starts beneath the button.
+        assert "min-h-[44px]" in html[nav_inner.start() : nav_inner.end() + 600]
+        assert "py-2" in nav_inner.group(1)
+
     def test_demo_notice(self, client, staff_user, settings_obj):
         client.force_login(staff_user)
         with override_settings(DEMO_MODE=True):

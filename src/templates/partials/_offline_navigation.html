@@ -21,7 +21,7 @@ Die Rollenschranke liegt wie bei allen precachten Shells im Client und beim
 Replay am Server (siehe EXEMPTIONS in src/tests/test_authz_template_links.py).
 {% endcomment %}
 <nav class="bg-surface border-b border-subtle" aria-label="{% trans 'Offline-Navigation' %}" data-testid="offline-nav">
-    <div class="max-w-[1140px] mx-auto px-4 md:px-8 py-2 flex flex-wrap items-center gap-1">
+    <div class="max-w-[1140px] mx-auto pl-4 pr-36 md:pl-8 md:pr-56 py-2 flex flex-wrap items-center gap-1">
         <span class="text-sm font-bold text-ink mr-2">Anlaufstelle</span>
         <a href="{% url 'core:zeitstrom' %}" class="inline-flex items-center min-h-[44px] px-3 py-1.5 rounded-md text-[13px] font-medium text-ink-muted hover:text-accent hover:bg-canvas" data-testid="offline-nav-zeitstrom">{% trans "Zeitstrom" %}</a>
         <a href="{% url 'core:client_list' %}" class="inline-flex items-center min-h-[44px] px-3 py-1.5 rounded-md text-[13px] font-medium text-ink-muted hover:text-accent hover:bg-canvas" data-testid="offline-nav-clients">{% trans "Personen" %}</a>

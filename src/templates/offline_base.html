@@ -78,33 +78,39 @@ WAS BEWUSST NICHT HIER STEHT — und warum es trotzdem funktioniert:
       data-i18n-sw-update="{% trans 'Neue Version verfügbar.' %}" data-i18n-sw-reload="{% trans 'Neu laden' %}" data-i18n-sw-dismiss="{% trans 'Schließen' %}"
       data-i18n-db-update-required="{% trans 'Die lokal gespeicherten Daten stammen aus einer neueren Programmversion. Bitte die Seite neu laden, um die Anwendung zu aktualisieren.' %}">
 
-    {# Refs #2136: focus:z-[80] statt focus:z-50 — der Quick-Exit-Knopf darunter #}
-    {# steht in einem sticky Wrapper auf z-50; bei gleichem z-index gewaenne er #}
-    {# als spaeteres Geschwister und verdeckte den fokussierten Skip-Link. Nur #}
-    {# hier und in base.html noetig — die eigenstaendigen Seiten tragen den #}
-    {# Knopf nicht. #}
+    {# Refs #2136: focus:z-[80] instead of focus:z-50 — the quick-exit button below #}
+    {# sits in a sticky wrapper on z-50; with equal z-index it would win as the later #}
+    {# sibling and cover the focused skip link. Only needed here and in base.html — the #}
+    {# standalone pages do not carry the button. #}
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[80] focus:bg-accent focus:text-white focus:px-4 focus:py-2 focus:rounded-md">
         {% trans "Zum Inhalt springen" %}
     </a>
 
-    {% comment %}Refs #2136 (N-2): Mitschauen-/Shoulder-Surfing-Schutz.
+    {% comment %}Refs #2136 (N-2): protection against onlookers / shoulder surfing.
 
-    Der Knopf steht direkt hinter dem Skip-Link und ist damit das erste
-    fokussierbare Element der Seite (WCAG 2.1.1) — wer die Anwendung in
-    Gegenwart einer gefaehrdenden Person bedient, erreicht ihn mit einem Tab.
-    Der Knopf klebt oben rechts (sticky, Refs #2660: 0 px hohe Leiste ohne
-    deckende Flaeche, mobil "Verlassen", ab md der Volltext) und ist auf JEDER
-    angemeldeten Seite sichtbar, auch mobil: die Bottom-Nav behaelt ihre fuenf
-    Slots, und im "Mehr"-Menue waere der Knopf hinter einem Tap versteckt. Anders als in
-    base.html ohne md:ml-60-Einrueckung: die Shell traegt keine fixierte
-    Sidebar, sondern die statische Leiste aus _offline_navigation.html.
+    The button sits directly behind the skip link and is therefore the first
+    focusable element of the page (WCAG 2.1.1) — whoever works in the presence
+    of a threatening person reaches it with one Tab. It sticks to the top right
+    (Refs #2660: 0 px high bar without an opaque surface, "Verlassen" on mobile,
+    the full text from md) and is visible on EVERY signed-in page, on mobile
+    too: the bottom nav keeps its five slots, and inside the "Mehr" menu the
+    button would hide behind a tap. Unlike base.html without the md:ml-60
+    indentation: the shell has no fixed sidebar but the static bar from
+    _offline_navigation.html.
 
-    Der Sticky-Wrapper umschliesst jetzt AUCH den Offline-Statusbalken (der
-    ihn vorher selbst trug, Refs #1495): zwei getrennte sticky-Elemente auf
-    top-0 laegen uebereinander statt untereinander. Das Markup ist hier
-    bewusst statisch und OHNE Sitzungsbezug — die Shell muss byte-gleich
-    bleiben (Refs #1966); Ziel-Adresse und Sichtschutz-Schalter liest
-    quick-exit.js offline aus dem localStorage-Spiegel der Online-Seiten.
+    Space for the button (Refs #2660): the offline navigation is at least 60 px
+    high, so the content below it starts under the button's 48 px. The
+    navigation row itself and the status bar start at y = 0 and keep
+    ``pr-36 md:pr-56`` (144/224 px) free on the right — the button needs 136 px
+    (mobile) and 208 px (from md) from the right edge, measured with a wide
+    fallback font.
+
+    The sticky wrapper also encloses the offline status bar (which carried the
+    stickiness itself before, Refs #1495): two separate sticky elements on top-0
+    would overlap instead of stacking. The markup here is deliberately static and
+    WITHOUT session context — the shell must stay byte-identical (Refs #1966);
+    target address and privacy-screen switch are read by quick-exit.js offline
+    from the localStorage mirror of the online pages.
     {% endcomment %}
     <div class="sticky top-0 z-50">
         <div id="quick-exit-bar" class="flex h-0 items-start justify-end px-4 md:px-8">
@@ -139,7 +145,7 @@ WAS BEWUSST NICHT HIER STEHT — und warum es trotzdem funktioniert:
              data-sync-complete-message="{% trans 'Übertragung beendet.' %}"
              data-queue-unknown-message="{% trans 'Stand der wartenden Änderungen unklar. Bitte erneut versuchen.' %}"
              data-conflict-message="{% trans 'Neuer Konflikt. Öffnen Sie die Seite „Konflikte“ über den Link im Konfliktbanner zur Auflösung.' %}"
-             id="offline-status" class="pr-32 md:pr-48">
+             id="offline-status" class="pr-36 md:pr-56">
             <span class="sr-only" role="status" aria-live="polite" aria-atomic="true"
                   data-testid="offline-status-announcer" x-text="announcement"></span>
             <div x-show="offline" x-cloak
@@ -183,7 +189,7 @@ WAS BEWUSST NICHT HIER STEHT — und warum es trotzdem funktioniert:
     {% include "partials/_offline_navigation.html" %}
 
     <main id="main-content" class="min-h-screen overflow-x-hidden">
-        <div class="max-w-[1140px] mx-auto px-4 py-5 md:px-8 md:py-7 [&>#flash-messages+*:has(>h1)]:max-md:pr-28">
+        <div class="max-w-[1140px] mx-auto px-4 py-5 md:px-8 md:py-7">
             {# Refs #811 (C-44): stabile Live-Region fuer clientseitige Meldungen. #}
             {# Bleibt LEER: serverseitige Flash-Messages sind Sitzungszustand und #}
             {# haetten in einem Cache-Eintrag nichts verloren. #}
