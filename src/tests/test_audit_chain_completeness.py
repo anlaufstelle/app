@@ -19,16 +19,19 @@ rows:
 
 from __future__ import annotations
 
+import io
 import logging
 from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
+from django.core.management import call_command
 from django.db import connection, transaction
 from django.utils import timezone
 
 from core.models import AuditLog
 from core.retention.audit_pruning import prune_auditlog
+from core.services.audit import chain as chain_module
 from core.services.audit.chain import verify_chain
 from core.services.audit.hwm import HighWaterMarkStore
 from core.services.system import bypass_replication_triggers
@@ -124,4 +127,89 @@ class TestPruneOnlyDeletesAuthenticRows:
 
         assert not AuditLog.objects.filter(pk=row.pk).exists()
         assert _checkpoints(facility).get().detail["boundary_hash"] == row.entry_hash
+        assert verify_chain(facility, hwm=store).ok
+
+
+def _pruned_anchored_chain(facility, tmp_path):
+    row, store = _anchored_row(facility, tmp_path, AuditLog.Action.LOGIN)
+    assert prune_auditlog(facility, PERIOD) == {"count": 1}
+    checkpoint = _checkpoints(facility).get()
+    assert checkpoint.detail["boundary_hash"] == row.entry_hash
+    assert verify_chain(facility, hwm=store).ok
+    return checkpoint, store
+
+
+def _delete_after_checkpoint_read(monkeypatch, checkpoint_pk):
+    """Delete the checkpoint right after ``verify_chain`` has read the checkpoints.
+
+    ``_checkpoint_boundaries`` runs on the checkpoints of the first SELECT and
+    before the rows are streamed, which makes the interleaving deterministic.
+    Only the call that read this checkpoint triggers the deletion (the command
+    verifies other chains as well).
+    """
+    original = chain_module._checkpoint_boundaries
+    calls = []
+
+    def boundaries_then_delete(rows):
+        rows = list(rows)
+        result = original(rows)
+        if not calls and any(row.pk == checkpoint_pk for row in rows):
+            calls.append(checkpoint_pk)
+            with transaction.atomic(), bypass_replication_triggers():
+                AuditLog.objects.filter(pk=checkpoint_pk).delete()
+        return result
+
+    monkeypatch.setattr(chain_module, "_checkpoint_boundaries", boundaries_then_delete)
+    return calls
+
+
+class TestCheckpointsBelongToTheCheckedRows:
+    def test_a_checkpoint_deleted_between_reads_does_not_authorise_an_empty_chain(
+        self, facility, tmp_path, monkeypatch
+    ):
+        checkpoint, store = _pruned_anchored_chain(facility, tmp_path)
+        calls = _delete_after_checkpoint_read(monkeypatch, checkpoint.pk)
+
+        result = verify_chain(facility, hwm=store)
+
+        assert calls == [checkpoint.pk]
+        assert not AuditLog.objects.filter(facility=facility).exists()
+        assert not result.ok, f"Deleted checkpoint authorised a whole-chain wipe: {result!r}"
+        assert result.first_break_id == str(checkpoint.pk)
+
+    def test_the_command_keeps_the_anchor_when_the_checkpoint_vanishes_mid_run(
+        self, facility, tmp_path, monkeypatch, settings
+    ):
+        # The anchor file still names the pruned row, as after the prune run.
+        settings.AUDIT_HWM_PATH = str(tmp_path / "anchor.json")
+        checkpoint, store = _pruned_anchored_chain(facility, tmp_path)
+        pruned_anchor = store.get(facility.pk)["last_entry_hash"]
+        anchor_before = (tmp_path / "anchor.json").read_bytes()
+        calls = _delete_after_checkpoint_read(monkeypatch, checkpoint.pk)
+
+        with pytest.raises(SystemExit):
+            call_command("verify_audit_chain", stdout=io.StringIO(), stderr=io.StringIO())
+
+        assert calls == [checkpoint.pk]
+        assert (tmp_path / "anchor.json").read_bytes() == anchor_before
+        assert HighWaterMarkStore.load(settings.AUDIT_HWM_PATH).get(facility.pk)["last_entry_hash"] == pruned_anchor
+
+    def test_a_checkpoint_deleted_between_reads_does_not_cover_a_gap(self, facility, tmp_path, monkeypatch):
+        old, _ = _anchored_row(facility, tmp_path, AuditLog.Action.LOGIN)
+        survivor = AuditLog.objects.create(facility=facility, action=AuditLog.Action.LOGOUT)
+        assert prune_auditlog(facility, PERIOD) == {"count": 1}
+        checkpoint = _checkpoints(facility).get()
+        assert old.entry_hash in checkpoint.detail["boundary_hashes"]
+        assert verify_chain(facility).ok
+        calls = _delete_after_checkpoint_read(monkeypatch, checkpoint.pk)
+
+        result = verify_chain(facility)
+
+        assert calls == [checkpoint.pk]
+        assert AuditLog.objects.filter(pk=survivor.pk).exists()
+        assert not result.ok, f"Deleted checkpoint covered the gap: {result!r}"
+
+    def test_a_chain_without_checkpoints_is_unaffected(self, facility, tmp_path):
+        _, store = _anchored_row(facility, tmp_path, AuditLog.Action.LOGIN, age_days=1)
+
         assert verify_chain(facility, hwm=store).ok

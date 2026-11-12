@@ -403,7 +403,10 @@ def verify_chain(facility, *, hwm=None) -> ChainResult:
     anchored row's time stored in the signed anchor file lies before that
     checkpoint's cutoff. The database timestamp alone would not do: a role
     that can bypass the trigger could backdate the tail and let the prune
-    remove it.
+    remove it. Every checkpoint used as evidence -- for a gap or for the
+    anchor -- must reappear unchanged among the streamed rows: a checkpoint
+    deleted between the checkpoint read and the stream is a break, so it can
+    never vouch for a chain emptied in the meantime.
     """
     from core.models import AuditLog, Facility
 
@@ -414,6 +417,11 @@ def verify_chain(facility, *, hwm=None) -> ChainResult:
     # earlier gap -- and they are few (one per prune run that deleted rows).
     checkpoints = list(chain.filter(action=AuditLog.Action.AUDIT_PRUNE_CHECKPOINT).order_by("timestamp", "id"))
     boundaries = _checkpoint_boundaries(checkpoints)
+    # Every checkpoint used as evidence (gap boundary or pruned anchor) must
+    # reappear unchanged in the streamed rows: a checkpoint deleted between
+    # the two reads would otherwise vouch for rows the stream no longer
+    # contains (Refs #2717, finding no. 9).
+    evidence = {row.pk: row.entry_hash for row in _authenticated_checkpoints(checkpoints)}
     # R16: der HWM-Anker muss physisch in der Kette liegen, sonst wurde der
     # Tail abgeschnitten / die Kette geleert. Only the anchor itself is looked
     # for instead of collecting every hash of the chain.
@@ -448,6 +456,18 @@ def verify_chain(facility, *, hwm=None) -> ChainResult:
         prev_at = row.timestamp
         if anchor and row.entry_hash == anchor:
             anchor_seen = True
+        if evidence.get(row.pk) == row.entry_hash:
+            del evidence[row.pk]
+
+    if evidence:
+        return ChainResult(
+            False,
+            checked,
+            str(next(iter(evidence))),
+            "prune checkpoint missing from the checked rows (deleted during verification)",
+            last_entry_hash=prev_entry,
+            last_entry_at=prev_at,
+        )
 
     if hwm is not None:
         present_hashes = {anchor} if anchor_seen and anchor else set()
