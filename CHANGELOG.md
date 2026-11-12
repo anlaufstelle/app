@@ -20,9 +20,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Basis-Images von PostgreSQL und Caddy aktualisiert, Ausnahmen neu befristet** (#2705) — Neue Index-Digests der Tags `18-alpine` und `2-alpine`; damit entfallen die Befunde in `brotli-libs`, `libcurl` und `go-jose` v4. Die übrigen 46 Ausnahmen (44 PostgreSQL, 2 Caddy) laufen bis 2027-01-15, ihre Begründungen nennen den Stand vom 2026-11-12 und die Erreichbarkeit je Stack.
 - **Changelog-Einträge folgen einer festen Form** (#2704) — Für Mitwirkende: Ein Eintrag hat höchstens zwei Sätze (Redaktionsregel) und 350 Zeichen (Betreiber-Aktionen 600), je Ticket und Abschnitt einen Eintrag, die Abschnitte stehen in fester Folge. `make changelog-check` prüft Länge, Ticket-Dopplung, Folge und Leerzeilen; Nachrunden ändern den Eintrag, sie hängen nichts an.
 - **CI: apt-Schritte erreichen bei einem Spiegelausfall den Ausweichspiegel** (#2707) — Lint-, Test- und E2E-Workflow installieren Systempakete über ein gemeinsames Hilfsskript: Sind sie vorhanden, entfällt apt; sonst wechselt apt von einem toten ersten Spiegel sofort zum nächsten, und ein Teilausfall lässt den Lauf fehlschlagen statt mit veralteten Listen weiterzulaufen.
-
-### Changed
-
 - **Zeitstrom berechnet die Schicht-Zusammenfassung nur noch einmal je Seitenaufruf** (#1997) — Zeigten Schichtfilter, Übergabe und Dienst-Übersicht dieselbe Schicht, wurde ihre Zusammenfassung bis zu dreimal berechnet; die Startseite braucht dadurch weniger Datenbankabfragen. Inhalt und Anzeige bleiben unverändert.
 
 ### Fixed
