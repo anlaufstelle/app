@@ -1754,6 +1754,15 @@ Operating the tracker instance (setup, backups, retention, upgrades) is operator
 
 The `detect_breaches` management command heuristically analyzes the audit log for anomalies (failed-login bursts, mass exports/deletions, distributed login attacks) and writes hits as audit events; optionally a webhook (`BREACH_NOTIFICATION_WEBHOOK_URL`) is notified. The windows/thresholds are controlled via the `BREACH_*` variables (see the [ENV reference in § 1](#full-environment-variable-reference) as well as [ops runbook § 6.5b](ops-runbook.md#65b-gdpr-art-3334--breach-notification-refs-685)).
 
+**Enable the optional webhook:** `cron` has no egress by default. After setting `BREACH_NOTIFICATION_WEBHOOK_URL` in `.env`, include `docker-compose.breach-webhook.yml` whenever creating or recreating `cron` (add any other overlays as described in ops runbook § 1.2):
+
+```bash
+docker compose -f docker-compose.prod.yml -f docker-compose.breach-webhook.yml up -d --force-recreate cron
+docker compose -f docker-compose.prod.yml -f docker-compose.breach-webhook.yml exec -T cron python manage.py detect_breaches
+```
+
+The dedicated `cron-egress` network gives only `cron` general egress, not an allowlist limited to the webhook address; the container receives the entire `.env` and the admin database role. A red run reporting `Breach webhook delivery failed` indicates failed delivery after findings have been recorded. Failed deliveries are retried on the next scan for up to 24 hours after the finding without a duplicate finding row; retries stop after success. The operations overview currently evaluates only successful run markers by age and does not immediately show the new failure as red. Check delivery rows, cron logs and receipt of a test finding as described in [ops runbook § 6.5b](ops-runbook.md#65b-gdpr-art-3334--breach-notification-refs-685); a green run without a delivery attempt is no proof of delivery. The overlay does not provide egress to `maintenance` in the host cron example below.
+
 > **Already automated (Refs #794):** The bundled `cron` sidecar in `docker-compose.prod.yml` runs this job out of the box. The crontab example below applies only if the `cron` service is not running; it starts the job through the `maintenance` service of the same compose file, the only service that receives the admin role (BYPASSRLS) (without Compose, reproduce it in your own orchestration: same image, entrypoint `python manage.py`, admin role). Setting up both makes the job run twice — details: [ops runbook § 3](ops-runbook.md#3-cron-jobs).
 
 **Recommended cron (hourly, at minute 30):**
@@ -2583,5 +2592,5 @@ Person anonymization clears these dynamic fields as well as related titles and g
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: 0830363f2014dc9f26e27568b747a576ceeee158 -->
+<!-- source-hash: 6403ad4aee7f8a9749df4e665126c5f17807e213 -->
 <!-- translation-date: 2026-11-12 -->

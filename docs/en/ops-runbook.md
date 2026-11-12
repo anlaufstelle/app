@@ -1389,6 +1389,24 @@ The reporting duty under Art. 33/34 GDPR lies with the **controller**, i.e. the 
 4. **Deduplication** — within 24h, the same finding is only reported once in the `AuditLog`: per kind and user, for the anonymous findings per kind and source IP.
 5. **Detection warns, it does not lock out** — every heuristic is monitor-only: a hit writes a `SECURITY_VIOLATION` entry and optionally fires the webhook; it revokes **no** access and changes no password. False positives are therefore planned for and tolerable: a user with a series of typos on the authenticator, or a passkey the browser keeps rejecting, can trigger `mfa_failure_burst` (the threshold of 10 is deliberately low) — the consequence is a reviewable entry, never a lockout. Hard lockout remains the job of the independent account lockout (10 failed **logins** in 15 min, `manage.py unlock <username>`) and of the rate limits. In practice this means during triage in § "Manual Process": first read the kind of the finding. For findings with a user (`failed_login_burst`, `mfa_failure_burst`, `mass_export`, `distributed_login_attack`), check whether the time series of failures per user looks human (a few minutes, one source IP, success afterwards) or automated (evenly spread over hours, no success, possibly several IPs). Facility-wide findings (`mass_delete`, `mass_client_destruction`) carry no user: break down the facility's `AuditLog` entries in the window by user and target objects. The anonymous findings (`anonymous_login_burst`, `anonymous_login_flood`) carry neither user nor facility, only the source IP or the total volume: they indicate credential stuffing or username guessing; as long as no login succeeds, no account is affected — block source IPs at the reverse proxy. Whoever permanently raises the threshold loses exactly the signal from scenario A7 (patient guessing of the second factor with a stolen password session) — so prefer tuning thresholds per instance over disabling the heuristic.
 
+#### Enable webhook egress and verify delivery
+
+The standard installation keeps `cron` exclusively on the `internal` network without egress. If you set `BREACH_NOTIFICATION_WEBHOOK_URL` in `.env`, also include `docker-compose.breach-webhook.yml`:
+
+```bash
+docker compose -f docker-compose.prod.yml -f docker-compose.breach-webhook.yml up -d --force-recreate cron
+docker compose -f docker-compose.prod.yml -f docker-compose.breach-webhook.yml exec -T cron python manage.py detect_breaches
+docker compose -f docker-compose.prod.yml -f docker-compose.breach-webhook.yml logs --tail=100 cron
+```
+
+Keep any other required overlays from § 1.2; include the webhook overlay whenever creating or recreating `cron`. It connects only `cron` to the additional `cron-egress` network. This network allows general egress, **not an allowlist limited to the webhook address**; `cron` receives the entire `.env` and uses the admin database role. The webhook itself accepts only HTTPS targets with a public IP, connects to the validated IP and does not follow redirects. The overlay gives no egress to `maintenance`; use the command above inside the `cron` container to verify delivery.
+
+A failed (red) `detect_breaches` run reporting `Breach webhook delivery failed` means at least one delivery failed, for example because egress is missing or the URL was rejected. All detected findings are recorded before the command exits with an error. A green run without a finding or pending delivery attempt proves no reachability: trigger a test finding in a test instance and match its `audit_id` at the receiver.
+
+Every delivery attempt appends its own audit row (`detail.category=breach_webhook_delivery`, `result=failed` or `delivered`, targeting the finding row). The next scan retries failed deliveries within 24 hours of the finding, even if the pattern has subsided. This creates no second finding row; retries stop after successful delivery. After that window expires the old finding is no longer delivered; an ongoing detected pattern can create a new finding. Without a webhook URL there is no delivery or retry.
+
+The full scan writes a failed run marker on delivery failure. However, the operations overview currently considers only successful markers and their age: it does **not immediately turn red** after a new failure. Until that display is updated, check the command error, cron logs and delivery rows.
+
 #### Manual Process on SECURITY_VIOLATION
 
 1. **T+0** — Check the `AuditLog` detail, identify affected users/data and pass the matter on to the operator's responsible body.
@@ -3364,4 +3382,4 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.10 -->
 <!-- translation-date: 2026-11-12 -->
-<!-- source-hash: 0a5d8629834e2bc0987402aa52b007bcf3c1e1ec -->
+<!-- source-hash: 0276776fdf8f553badbebef0917224f78f224331 -->

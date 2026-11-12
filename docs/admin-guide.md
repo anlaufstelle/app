@@ -1753,6 +1753,15 @@ Betrieb der Tracker-Instanz (Setup, Backups, Retention, Upgrades) ist Betreiber-
 
 Das Management-Kommando `detect_breaches` wertet das Audit-Log heuristisch auf Anomalien aus (fehlgeschlagene Login-Bursts, Massen-Exporte/-Löschungen, verteilte Login-Angriffe) und schreibt Treffer als Audit-Events; optional wird ein Webhook (`BREACH_NOTIFICATION_WEBHOOK_URL`) benachrichtigt. Die Fenster/Schwellen werden über die `BREACH_*`-Variablen gesteuert (siehe [ENV-Referenz in § 1](#vollständige-umgebungsvariablen-referenz) sowie [Ops-Runbook § 6.5b](ops-runbook.md)).
 
+**Optionalen Webhook aktivieren:** `cron` hat standardmäßig keinen Ausgang. Nach dem Setzen von `BREACH_NOTIFICATION_WEBHOOK_URL` in der `.env` die Zusatzdatei `docker-compose.breach-webhook.yml` bei jedem Erzeugen oder Neuerstellen von `cron` mitführen (weitere Zusatzdateien wie im Ops-Runbook § 1.2 ergänzen):
+
+```bash
+docker compose -f docker-compose.prod.yml -f docker-compose.breach-webhook.yml up -d --force-recreate cron
+docker compose -f docker-compose.prod.yml -f docker-compose.breach-webhook.yml exec -T cron python manage.py detect_breaches
+```
+
+Das eigene Netz `cron-egress` gibt ausschließlich `cron` allgemeinen Ausgang, keine Beschränkung auf die Webhook-Adresse; der Container erhält die gesamte `.env` und die Admin-Datenbankrolle. Ein roter Lauf mit `Breach webhook delivery failed` zeigt eine gescheiterte Zustellung an, nachdem die Funde protokolliert wurden. Fehlgeschlagene Zustellungen werden beim nächsten Scan bis 24 Stunden nach dem Fund ohne doppelte Fund-Zeile wiederholt; nach Erfolg endet die Wiederholung. Die Betriebsübersicht wertet derzeit nur erfolgreiche Laufmarker nach Alter aus und zeigt den neuen Fehler nicht sofort rot. Zustellzeilen, cron-Logs und den Empfang eines Test-Funds wie in [Ops-Runbook § 6.5b](ops-runbook.md#65b-dsgvo-art-3334--breach-notification-refs-685) prüfen; ein grüner Lauf ohne Zustellversuch ist kein Zustellnachweis. Die Zusatzdatei öffnet keinen Ausgang für `maintenance` im folgenden Host-Cron-Beispiel.
+
 > **Bereits automatisiert (Refs #794):** Der mitgelieferte `cron`-Sidecar aus `docker-compose.prod.yml` führt diesen Job ab Werk aus. Das folgende Crontab-Beispiel gilt nur, wenn der `cron`-Dienst nicht läuft; es startet den Job über den `maintenance`-Dienst derselben Compose-Datei, der als einziger die Admin-Rolle (BYPASSRLS) erhält (ohne Compose in der eigenen Orchestrierung nachbilden: gleiches Image, Entrypoint `python manage.py`, Admin-Rolle). Wer beides einrichtet, lässt den Job doppelt laufen — Details: [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs).
 
 **Empfohlener Cron (stündlich, jeweils zur 30. Minute):**

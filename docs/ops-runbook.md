@@ -1403,6 +1403,24 @@ Die Meldepflicht nach Art. 33/34 DSGVO trifft den **Verantwortlichen**, also den
 4. **Deduplikation** — innerhalb von 24h wird derselbe Tatbestand nur einmal in `AuditLog` gemeldet: je Art und Benutzer, bei den anonymen Findings je Art und Quell-IP.
 5. **Die Detection warnt, sie sperrt nicht** — jede Heuristik ist Monitor-only: ein Treffer schreibt eine `SECURITY_VIOLATION`-Zeile und feuert ggf. den Webhook, er entzieht **keinen** Zugang und aendert kein Passwort. Deshalb sind False Positives eingeplant und tolerierbar: Eine Nutzerin mit einer Tippfehler-Serie am Authenticator oder ein Passkey, den der Browser wiederholt ablehnt, kann `mfa_failure_burst` ausloesen (die 10er-Schwelle liegt bewusst niedrig) — die Folge ist ein pruefbarer Eintrag, nie ein Aussperr-Effekt. Das harte Aussperren bleibt dem davon unabhaengigen Account-Lockout (10 Fehl-**logins** in 15 min, `manage.py unlock <username>`) und den Ratelimits vorbehalten. Praktisch heisst das bei der Triage in § „Manueller Prozess": zuerst die Art des Findings lesen. Bei Findings mit Benutzer (`failed_login_burst`, `mfa_failure_burst`, `mass_export`, `distributed_login_attack`) pruefen, ob die Zeitreihe der Fehlversuche je Benutzer wie ein Mensch aussieht (wenige Minuten, eine Quell-IP, danach Erfolg) oder wie ein Automat (gleichmaessig ueber Stunden, kein Erfolg, ggf. mehrere IPs). Einrichtungsweite Findings (`mass_delete`, `mass_client_destruction`) tragen keinen Benutzer: dort die `AuditLog`-Eintraege der Einrichtung im Fenster nach Benutzer und Zielobjekten aufschluesseln. Die anonymen Findings (`anonymous_login_burst`, `anonymous_login_flood`) tragen weder Benutzer noch Einrichtung, nur die Quell-IP bzw. das Gesamtvolumen: Sie zeigen Credential-Stuffing oder Benutzernamen-Raten; solange kein Login gelingt, ist kein Konto betroffen — Quell-IPs am Reverse-Proxy sperren. Wer die Schwelle dauerhaft anhebt, verliert genau das Signal aus Szenario A7 (geduldiges Raten des zweiten Faktors mit gestohlener Passwort-Session) — Schwellen daher lieber pro Instanz nachjustieren als die Heuristik abschalten.
 
+#### Webhook-Ausgang einschalten und Zustellung prüfen
+
+Die Standardinstallation lässt `cron` ausschließlich im Netz `internal` ohne Ausgang. Wer `BREACH_NOTIFICATION_WEBHOOK_URL` in der `.env` setzt, bindet zusätzlich `docker-compose.breach-webhook.yml` ein:
+
+```bash
+docker compose -f docker-compose.prod.yml -f docker-compose.breach-webhook.yml up -d --force-recreate cron
+docker compose -f docker-compose.prod.yml -f docker-compose.breach-webhook.yml exec -T cron python manage.py detect_breaches
+docker compose -f docker-compose.prod.yml -f docker-compose.breach-webhook.yml logs --tail=100 cron
+```
+
+Weitere benötigte Zusatzdateien wie in § 1.2 mitführen; die Webhook-Zusatzdatei bei jedem Erzeugen oder Neuerstellen von `cron` mit angeben. Sie verbindet nur `cron` zusätzlich mit `cron-egress`. Dieses Netz erlaubt allgemeinen Ausgang, **keine Beschränkung auf die Webhook-Adresse**; `cron` erhält die gesamte `.env` und arbeitet mit der Admin-Datenbankrolle. Der Webhook selbst akzeptiert nur HTTPS-Ziele mit öffentlicher IP, verbindet zur geprüften IP und folgt keinen Weiterleitungen. Die Zusatzdatei gibt dem `maintenance`-Dienst keinen Ausgang; für den Zustellnachweis deshalb den obigen Aufruf im `cron`-Container verwenden.
+
+Ein mit `Breach webhook delivery failed` fehlgeschlagener (roter) `detect_breaches`-Lauf bedeutet: Mindestens eine Zustellung ist gescheitert, etwa wegen fehlenden Ausgangs oder einer abgelehnten URL. Zuerst werden alle erkannten Funde protokolliert, dann endet das Kommando mit Fehler. Ein grüner Lauf ohne Fund oder offenen Zustellversuch beweist keine Erreichbarkeit: Für den Nachweis in einer Testinstanz einen Test-Fund auslösen und dessen `audit_id` am Empfänger abgleichen.
+
+Jeder Zustellversuch ergänzt eine eigene Audit-Zeile (`detail.category=breach_webhook_delivery`, `result=failed` oder `delivered`, Ziel ist die Fund-Zeile). Der nächste Scan versucht fehlgeschlagene Zustellungen innerhalb von 24 Stunden seit dem Fund erneut, auch wenn das Muster inzwischen abgeklungen ist. Dabei entsteht keine zweite Fund-Zeile; nach erfolgreicher Zustellung endet die Wiederholung. Nach Ablauf dieses Fensters wird der alte Fund nicht mehr zugestellt; ein weiterhin erkanntes Muster kann einen neuen Fund erzeugen. Ohne Webhook-Adresse erfolgt kein Versand und keine Wiederholung.
+
+Der vollständige Scan schreibt bei Zustellfehlern einen fehlgeschlagenen Laufmarker. Die Betriebsübersicht berücksichtigt derzeit jedoch nur erfolgreiche Marker und deren Alter: Sie wird bei einem neuen Fehlschlag **nicht sofort rot**. Bis zur Anpassung dieser Anzeige den Kommando-Fehler, die cron-Logs und die Zustellzeilen prüfen.
+
 #### Manueller Prozess bei SECURITY_VIOLATION
 
 1. **T+0** — `AuditLog`-Detail pruefen, betroffene Benutzer/Daten identifizieren und den Vorgang an die verantwortliche Stelle des Traegers weitergeben.
