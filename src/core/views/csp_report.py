@@ -223,7 +223,9 @@ class CSPReportView(View):
 
         try:
             payload = json.loads(body.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
+        except (UnicodeDecodeError, json.JSONDecodeError, RecursionError):
+            # RecursionError: deeply nested input on interpreters whose JSON
+            # parser is bound by the recursion limit.
             return HttpResponseBadRequest("invalid json")
 
         # CSP Level 2: {"csp-report": {...}}; CSP Level 3 / Reporting API:

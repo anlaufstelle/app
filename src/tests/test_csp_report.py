@@ -502,3 +502,30 @@ class TestCSPReportRateLimit:
             content_type="application/csp-report",
             HTTP_X_FORWARDED_FOR=f"198.51.100.1, {ip}",
         )
+
+
+@pytest.mark.django_db
+class TestCSPReportRecursionGuard:
+    """Deeply nested JSON must be answered like any other invalid JSON."""
+
+    def test_json_recursion_error_answered_like_invalid_json(self, client, csp_url, monkeypatch):
+        """Interpreters whose JSON parser has a recursion limit raise RecursionError."""
+
+        def _too_deep(*args, **kwargs):
+            raise RecursionError("maximum recursion depth exceeded")
+
+        monkeypatch.setattr("core.views.csp_report.json.loads", _too_deep)
+
+        response = client.post(csp_url, data=b'{"csp-report": {}}', content_type="application/csp-report")
+
+        assert response.status_code == 400
+        assert response.content == b"invalid json"
+
+    def test_deeply_nested_payload_never_ends_as_server_error(self, client, csp_url):
+        depth = 16_000
+        body = ("[" * depth + "]" * depth).encode()
+        assert len(body) < 32 * 1024
+
+        response = client.post(csp_url, data=body, content_type="application/csp-report")
+
+        assert response.status_code in {204, 400}
