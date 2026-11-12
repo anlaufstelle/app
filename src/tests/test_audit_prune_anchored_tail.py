@@ -15,7 +15,7 @@ otherwise truncate the tail unnoticed.
 Covered here:
 
 - dormant chain, anchored tail pruned -> green, anchor moves to the checkpoint;
-- backdated tail removed by a regular prune -> still tail truncation;
+- backdated tail -> the prune refuses to delete it, the chain stays broken;
 - checkpoint deleted after the prune -> still tail truncation;
 - anchor file without the anchored row's time -> still tail truncation.
 """
@@ -97,9 +97,7 @@ class TestPrunedAnchoredTail:
         store = HighWaterMarkStore.load(settings.AUDIT_HWM_PATH)
         assert store.get(facility.pk)["last_entry_hash"] == checkpoint.entry_hash
 
-    def test_backdated_tail_removed_by_a_regular_prune_is_still_a_truncation(
-        self, settings, tmp_path, facility, settings_obj
-    ):
+    def test_backdated_tail_is_not_removed_by_a_regular_prune(self, settings, tmp_path, facility, settings_obj):
         tail = _dormant_chain(facility, settings_obj)
         _anchor(settings, tmp_path, facility, tail)
         # Owner-level role: backdate the anchored tail past the trigger so that
@@ -107,13 +105,15 @@ class TestPrunedAnchoredTail:
         with transaction.atomic(), bypass_replication_triggers():
             AuditLog.objects.filter(pk=tail.pk).update(timestamp=timezone.now() - timedelta(days=1200))
 
-        prune_auditlog(facility, settings_obj)
+        # The backdated row no longer authenticates, so the prune refuses to
+        # delete it and writes no checkpoint (Refs #2717, finding no. 9).
+        assert prune_auditlog(facility, settings_obj)["count"] == 0
 
-        assert not AuditLog.objects.filter(pk=tail.pk).exists()
-        assert _checkpoint(facility).detail["boundary_hash"] == tail.entry_hash
+        assert AuditLog.objects.filter(pk=tail.pk).exists()
+        assert not AuditLog.objects.filter(facility=facility, action=AuditLog.Action.AUDIT_PRUNE_CHECKPOINT).exists()
         ok, err = _verify()
         assert not ok
-        assert TRUNCATION in err
+        assert "entry_hash mismatch" in err
 
     def test_deleting_the_checkpoint_after_the_prune_is_still_a_truncation(
         self, settings, tmp_path, facility, settings_obj

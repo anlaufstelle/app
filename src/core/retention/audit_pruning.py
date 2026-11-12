@@ -5,6 +5,8 @@ Aus ``services/retention.py`` ausgekoppelt — semantisch eigenes Thema
 """
 
 import calendar
+import hmac
+import logging
 from datetime import datetime
 from types import SimpleNamespace
 from uuid import UUID
@@ -21,10 +23,12 @@ from core.retention.legal_holds import (
     get_active_hold_target_ids,
 )
 from core.services.audit import audit_event
-from core.services.audit.chain import advisory_lock_name
+from core.services.audit.chain import advisory_lock_name, compute_entry_hash
 from core.services.dashboard.release_log import RELEASE_EXPORT_Q
 from core.services.dynamic_records import DYNAMIC_DATA_MODELS, dynamic_case_lookup, dynamic_client_lookup
 from core.services.system import bypass_replication_triggers
+
+logger = logging.getLogger(__name__)
 
 # A6.3 (Refs #1024 / #1016): Aktionen, die NICHT der Routine-Retention
 # unterliegen. SECURITY_VIOLATION sind Breach-Detection-Forensiknachweise;
@@ -189,13 +193,75 @@ def _lock_audit_targets(qs, facility):
         list(model.objects.for_facility(facility).filter(condition).order_by("pk").select_for_update(of=("self",)))
 
 
-@transaction.atomic
+class AuditPruneIntegrityError(Exception):
+    """A row the prune would delete or certify does not authenticate."""
+
+    def __init__(self, row_id, reason: str):
+        super().__init__(reason)
+        self.row_id = row_id
+        self.reason = reason
+
+
+_AUTHENTICATE_CHUNK_SIZE = 2000
+
+
+def _authenticate_candidates(qs, boundary_hashes):
+    """Lock and authenticate every row the prune is about to delete.
+
+    Refs #2717 (finding no. 9): the deletion criteria (action, timestamp) are
+    hashed fields, but an owner-level role can rewrite them past the trigger.
+    Each candidate must therefore carry an ``entry_hash`` that its stored
+    fields reproduce; otherwise the prune would delete a row on forged
+    criteria and sign its invalid hash as a boundary. ``FOR UPDATE`` keeps the
+    authenticated rows unchanged until the deletion commits.
+
+    Every boundary hash must belong to one of these rows -- a boundary from a
+    row outside this set would legitimise a gap nobody authenticated.
+
+    Returns ``(count, newest_hash)``; raises :class:`AuditPruneIntegrityError`.
+    """
+    pending = set(boundary_hashes)
+    count = 0
+    newest = ""
+    rows = qs.select_for_update(of=("self",)).order_by("timestamp", "id")
+    for row in rows.iterator(chunk_size=_AUTHENTICATE_CHUNK_SIZE):
+        if not row.entry_hash:
+            raise AuditPruneIntegrityError(row.pk, "row without entry_hash")
+        if not hmac.compare_digest(compute_entry_hash(row, row.prev_hash or ""), row.entry_hash):
+            raise AuditPruneIntegrityError(row.pk, "entry_hash mismatch")
+        count += 1
+        newest = row.entry_hash
+        pending.discard(row.entry_hash)
+    if pending:
+        raise AuditPruneIntegrityError(None, "boundary outside the authenticated rows")
+    return count, newest
+
+
 def prune_auditlog(facility, settings_obj, now=None, dry_run=False):
     """Prune expired unheld rows, preserving authenticated chain boundaries.
 
     A zero period disables cleanup. The checkpoint and deletion commit together;
     every survivor, including held rows, contributes its predecessor boundary.
+
+    Only rows that authenticate are deleted (Refs #2717, finding no. 9). The
+    first row that does not aborts the facility's prune as a whole: nothing is
+    deleted, no checkpoint is written and the break is logged with the row id
+    only, so the chain check keeps reporting it.
     """
+    try:
+        return _prune_auditlog(facility, settings_obj, now=now, dry_run=dry_run)
+    except AuditPruneIntegrityError as exc:
+        logger.error(
+            "prune_auditlog: facility %s not pruned, row %s: %s",
+            getattr(facility, "pk", None) or "system",
+            exc.row_id,
+            exc.reason,
+        )
+        return {"count": 0, "integrity_break": str(exc.row_id) if exc.row_id else exc.reason}
+
+
+@transaction.atomic
+def _prune_auditlog(facility, settings_obj, now=None, dry_run=False):
     months = getattr(settings_obj, "auditlog_retention_months", 0) or 0
     if months <= 0:
         return {"count": 0}
@@ -214,7 +280,6 @@ def prune_auditlog(facility, settings_obj, now=None, dry_run=False):
     count = qs.count()
     if count == 0 or dry_run:
         return {"count": count}
-    newest_boundary = qs.order_by("-timestamp", "-id").values_list("entry_hash", flat=True).first() or ""
     # Refs #2717 (finding no. 17): the database intersects survivor
     # predecessors with deleted hashes; only the boundaries themselves reach
     # Python, not every hash of the chain.
@@ -225,11 +290,18 @@ def prune_auditlog(facility, settings_obj, now=None, dry_run=False):
             .values_list("prev_hash", flat=True)
         )
     )
+    count, newest_boundary = _authenticate_candidates(qs, boundary_hashes)
+    if count == 0:
+        return {"count": 0}
     if connection.vendor == "postgresql":
         with bypass_replication_triggers():
-            qs.delete()
+            deleted, _ = qs.delete()
     else:
-        qs.delete()
+        deleted, _ = qs.delete()
+    # The locked rows cannot leave the candidate set; any other count means
+    # rows joined it after the authentication (rolled back with the error).
+    if deleted != count:
+        raise AuditPruneIntegrityError(None, "candidate set changed during the prune")
     audit_event(
         AuditLog.Action.AUDIT_PRUNE_CHECKPOINT,
         user=None,

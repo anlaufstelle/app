@@ -21,6 +21,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import AuditLog
+from core.services.audit.chain import compute_entry_hash
 from core.services.dashboard.release_log import (
     EXTERNAL_REPORT_TARGET,
     RELEASE_FIELD_MAX_LENGTH,
@@ -529,13 +530,18 @@ class TestExportUeberlebtDieAuditRetention:
     def _veralten(self, now, *entries):
         from django.db import connection
 
-        ids = [str(entry.pk) for entry in entries]
+        old = now - timedelta(days=24 * 31)
         with connection.cursor() as cur:
             cur.execute("ALTER TABLE core_auditlog DISABLE TRIGGER auditlog_immutable")
-            cur.execute(
-                f"UPDATE core_auditlog SET timestamp = %s WHERE id IN ({', '.join(['%s'] * len(ids))})",
-                [now - timedelta(days=24 * 31), *ids],
-            )
+            # Reseal each row for its new timestamp in the same UPDATE: the
+            # prune only deletes rows that authenticate (Refs #2717, finding
+            # no. 9).
+            for entry in entries:
+                entry.timestamp = old
+                cur.execute(
+                    "UPDATE core_auditlog SET timestamp = %s, entry_hash = %s WHERE id = %s",
+                    [old, compute_entry_hash(entry, entry.prev_hash or ""), str(entry.pk)],
+                )
             cur.execute("ALTER TABLE core_auditlog ENABLE ALWAYS TRIGGER auditlog_immutable")
 
     @pytest.mark.postgres

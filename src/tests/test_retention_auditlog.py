@@ -15,6 +15,7 @@ from django.db import DatabaseError, connection, transaction
 from django.utils import timezone
 
 from core.models import AuditLog, Settings
+from core.services.audit.chain import compute_entry_hash
 from core.services.retention import prune_auditlog
 
 
@@ -32,9 +33,13 @@ class TestPruneAuditlog:
         with transaction.atomic(), connection.cursor() as cur:
             cur.execute("ALTER TABLE core_auditlog DISABLE TRIGGER auditlog_immutable")
             try:
+                # Reseal the row for its new timestamp in the same UPDATE: the
+                # prune only deletes rows that authenticate (Refs #2717,
+                # finding no. 9).
+                log.timestamp = ts
                 cur.execute(
-                    "UPDATE core_auditlog SET timestamp = %s WHERE id = %s",
-                    [ts, str(log.pk)],
+                    "UPDATE core_auditlog SET timestamp = %s, entry_hash = %s WHERE id = %s",
+                    [ts, compute_entry_hash(log, log.prev_hash or ""), str(log.pk)],
                 )
             finally:
                 # ENABLE ALWAYS: gehaerteter Ruhezustand aus Migration 0107 (A1.4,
