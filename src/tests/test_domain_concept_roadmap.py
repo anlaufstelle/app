@@ -4,8 +4,9 @@ The roadmap in section 8 lists targets without commitment and without a date.
 It must therefore carry no priority column and no ticket numbers, and every
 mention of KDS must disclaim commitment in its paragraph or table row
 without anticipating format or scope. Section 22 names the bodies of the
-German addiction-help statistics, and section 25 only points to roadmap steps
-that section 8 actually lists.
+German addiction-help statistics. Sections 7 and 22 retain matching KDS
+export descriptions, while section 8 excludes KDS. Section 25 only points to
+roadmap steps that section 8 actually lists.
 """
 
 import re
@@ -92,11 +93,26 @@ def _kds_violations(text: str) -> list[str]:
     blocks = re.split(r"\n\s*\n|\n(?=\s*(?:\||[-*+] |\#{1,6} ))", text)
     mentions = [block for block in blocks if KDS_MENTION_RE.search(block)]
     assert mentions, "document no longer mentions KDS"
-    return [
+    violations = [
         block
         for block in mentions
         if "ohne zusage" not in " ".join(block.casefold().split()) or KDS_SCOPE_RE.search(block)
     ]
+    wordings = set()
+    for heading in ("7. Modulstruktur", "22. Regulatorische Landschaft"):
+        body = _section(text, heading)
+        if not KDS_MENTION_RE.search(body):
+            violations.append(f"KDS statement missing in {heading}")
+        # Compare the shared export description, not either surrounding sentence.
+        matches = re.findall(r"\bKDS-Export\b[^(.\n]*\(([^)\n]+)\)", body)
+        if not matches:
+            violations.append(f"KDS export description missing in {heading}")
+        wordings.update(" ".join(match.split()) for match in matches)
+    if len(wordings) > 1:
+        violations.append("KDS export descriptions differ between sections 7 and 22")
+    if KDS_MENTION_RE.search(_section(text, "8. Aktueller Stand und Roadmap")):
+        violations.append("KDS must not appear in section 8")
+    return violations
 
 
 def test_kds_mentions_disclaim_commitment_without_format_or_scope(concept):
@@ -115,8 +131,42 @@ def test_kds_guard_requires_disclaimer_in_the_same_block(concept, block):
     assert _kds_violations(concept + f"\n\n{block}\n\nOhne Zusage.\n")
 
 
-def test_kds_guard_accepts_equivalent_wording():
-    assert not _kds_violations("Ein Zielbild ohne Zusage: KDS-Ausgabe für die Suchthilfestatistik.")
+def test_kds_guard_accepts_equivalent_wording(concept):
+    text = concept.replace(
+        "Export für die Deutsche Suchthilfestatistik; ohne Zusage zu Format und Umfang",
+        "Ein Zielbild ohne Zusage: KDS-Ausgabe für die Suchthilfestatistik.",
+    )
+    assert not _kds_violations(text)
+
+
+@pytest.mark.parametrize(
+    "heading",
+    ["7. Modulstruktur", "22. Regulatorische Landschaft", None],
+    ids=["section-7", "section-22", "history-only"],
+)
+def test_kds_guard_rejects_missing_section_claims(concept, heading):
+    if heading is None:
+        lines = concept.splitlines(keepends=True)
+        text = "".join(line for line in lines if not KDS_MENTION_RE.search(line) or line.startswith("| 1.11 |"))
+    else:
+        body = _section(concept, heading)
+        replacement = "\n".join(line for line in body.splitlines() if not KDS_MENTION_RE.search(line))
+        text = concept.replace(body, replacement + "\n\n")
+    assert _kds_violations(text)
+
+
+def test_kds_guard_rejects_export_restored_to_roadmap(concept):
+    text = concept.replace(
+        "| Thema | Beschreibung |",
+        "| Thema | Beschreibung |\n| KDS-Export | Zielbild ohne Zusage zu Format und Umfang |",
+    )
+    assert _kds_violations(text)
+
+
+def test_kds_guard_rejects_different_wording_between_sections(concept):
+    body = _section(concept, "22. Regulatorische Landschaft")
+    text = concept.replace(body, body.replace("Format und Umfang", "Umfang und Format"))
+    assert _kds_violations(text)
 
 
 def test_regulatory_section_names_current_bodies(concept):
