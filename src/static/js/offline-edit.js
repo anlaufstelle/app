@@ -581,8 +581,8 @@
     }
 
     /*
-     * Refs #2187/#2720: Nur Feldnamen + Fehlercodes ins Dead-Letter-Detail;
-     * serverseitige Meldungen koennen Eingabewerte enthalten.
+     * Refs #2187/#2720: Keep only field names and error codes for the
+     * dead-letter detail; server messages can contain input values.
      */
     function _errorCodesOnly(fieldErrors) {
         return Object.fromEntries(
@@ -657,14 +657,14 @@
             return { status: "ratelimited", statusCode: response.status };
         }
         if (response.status === 422) {
-            // Refs #2187: Beim pk-losen Create-Replay ist ein 422 PERMANENT,
-            // weil der Nutzer die Eingabe offline nicht mehr korrigieren kann
-            // (kein Server-Re-Render, keine Feld-UI im Create-Kontext). Der
-            // Record wird ins Dead-Letter geschoben; Feldfehler-Codes
-            // (PII-frei) gehen mit, damit die Dead-Letter-Liste den Grund
-            // anzeigen kann. Der Edit-Pfad (replayModifiedEvent) behandelt
-            // den unbeaufsichtigten Replay ebenso (Refs #2720); nur mit
-            // sichtbarem Formular bleibt der Edit "modified".
+            // Refs #2187: In the create replay without a primary key a 422 is
+            // PERMANENT, because the person can no longer correct the input
+            // offline (no server re-render, no field UI in the create context).
+            // The record is moved to the dead letter; field error codes
+            // (free of personal data) go along so the dead-letter list can show
+            // the reason. The edit path (replayModifiedEvent) treats the
+            // unattended replay the same way (Refs #2720); only with a visible
+            // form does the edit stay "modified".
             let body = null;
             try {
                 body = await response.json();
@@ -949,8 +949,8 @@
             return { status: "conflict", serverState: body.server_state };
         }
         if (response.status === 422) {
-            // Server-seitige Formularvalidierung fehlgeschlagen (#1111): Edit NICHT
-            // verwerfen — sonst ginge die dokumentierte Aenderung still verloren.
+            // Server-side form validation failed (#1111): do NOT discard the
+            // edit, or the documented change would be lost silently.
             let body = null;
             try {
                 body = await response.json();
@@ -958,21 +958,21 @@
                 body = {};
             }
             const fieldErrors = (body && body.errors) || {};
-            // Refs #2720: Der unbeaufsichtigte Hintergrund-Replay (options.replay)
-            // hat kein Formular, an dem die Fehler stehen koennten. Als "modified"
-            // gaelte der Edit weiter als sendbare Arbeit und ginge bei jedem
-            // Seitenstart erneut raus (jeder Versuch zaehlt gegen das
-            // Schreiblimit). Wie beim Anlegen (#2187) wandert er ins Dead-Letter:
-            // erhalten, in der Liste "Nicht uebertragbar" sichtbar, nur
-            // Feldnamen + Fehlercodes im Detail.
+            // Refs #2720: The unattended background replay (options.replay) has
+            // no form to show the errors on. Left as "modified" the edit would
+            // still count as sendable work and go out again on every page start
+            // (each attempt counts against the write limit). As with a create
+            // (#2187) it moves to the dead letter: kept, visible in the list
+            // "Nicht uebertragbar", with only field names and error codes as
+            // detail.
             if (options && options.replay === true) {
                 const errorCodes = _errorCodesOnly(fieldErrors);
                 await _store().markEventDead(record.pk, "invalid", JSON.stringify(errorCodes));
                 _fireCountEvent();
                 return { status: "dead", deadReason: "invalid", errors: errorCodes, statusCode: response.status };
             }
-            // Mit sichtbarem Formular: als "modified" behalten und die Fehler dort
-            // melden.
+            // With a visible form: keep it as "modified" and report the errors
+            // there.
             await _store().updateEventLocalStatus(record.pk, "modified");
             _fireCountEvent();
             return { status: "invalid", errors: fieldErrors };

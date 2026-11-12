@@ -335,7 +335,7 @@ describe("#2289 — Edit-Replay (Aenderungen)", () => {
         expect(store.updateEventLocalStatus).toHaveBeenCalledWith(eventPkA, "clean");
     });
 
-    it("laesst Konflikte unberuehrt und legt eine abgelehnte Bearbeitung als nicht uebertragbar ab", async () => {
+    it("leaves conflicts untouched and files a rejected edit as not transferable", async () => {
         const record = modifiedRecord(eventPkA);
         rows.set(record.pk, record);
         vi.stubGlobal(
