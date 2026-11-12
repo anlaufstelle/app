@@ -429,3 +429,54 @@ def test_admin_settings_2fa_requirement_is_refused_only_on_the_demo(
     if demo_mode:
         assert response.url == change_url
         assert _messages(response) == [DEMO_REFUSAL]
+
+
+@pytest.mark.django_db
+def test_demo_refuses_admin_password_change_of_the_shared_account(client, admin_user):
+    """Changing the shared password in the admin would sign out every other visitor."""
+    from django.test import Client
+
+    from core.models import AuditLog
+
+    other_session = Client()
+    other_session.force_login(admin_user)
+    original_password_hash = admin_user.password
+    change_url = reverse("admin:password_change")
+    new_password = "Changed-Shared-Passphrase-731!"
+
+    with override_settings(DEMO_MODE=True, SUDO_MODE_ENABLED=False, **_demo_guard_settings()):
+        client.force_login(admin_user)
+        page = client.get(change_url)
+        response = client.post(
+            change_url,
+            {"old_password": "testpass123", "new_password1": new_password, "new_password2": new_password},
+            HTTP_REFERER=change_url,
+        )
+        other_page = other_session.get("/")
+
+    admin_user.refresh_from_db()
+    assert page.status_code == 200
+    assert response.status_code == 302
+    assert response.url == change_url
+    assert _messages(response) == [DEMO_REFUSAL]
+    assert admin_user.password == original_password_hash
+    assert other_page.status_code == 200
+    assert other_page.wsgi_request.user.is_authenticated
+    assert not AuditLog.objects.filter(user=admin_user, action=AuditLog.Action.CREDENTIALS_REVOKED).exists()
+
+
+@pytest.mark.django_db
+def test_admin_password_change_still_works_outside_the_demo(client, admin_user):
+    new_password = "Changed-Shared-Passphrase-731!"
+
+    with override_settings(DEMO_MODE=False, SUDO_MODE_ENABLED=False, **_demo_guard_settings()):
+        client.force_login(admin_user)
+        response = client.post(
+            reverse("admin:password_change"),
+            {"old_password": "testpass123", "new_password1": new_password, "new_password2": new_password},
+        )
+
+    admin_user.refresh_from_db()
+    assert response.status_code == 302
+    assert response.url == reverse("admin:password_change_done")
+    assert admin_user.check_password(new_password)

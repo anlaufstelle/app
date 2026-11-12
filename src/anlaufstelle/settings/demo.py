@@ -85,11 +85,12 @@ DEMO_LOGINS = [
 # by the reset, it is a flag file) or lock a shared account until the hourly
 # reset: changing the second factor or the passkeys of an account (setup,
 # device change, passkey registration and removal, regenerating backup codes,
-# disabling 2FA), changing the password, deactivating, deleting or re-roling
-# users and changing facility settings in the admin. Signing in with a second
-# factor stays open. POST only — visitors can still view every page. The
-# account and facility settings forms refuse only a change of the 2FA
-# requirement (core.middleware.demo_guard.refuse_demo_change).
+# disabling 2FA), changing the password (the admin's password change is
+# blocked by URL name below), and deactivating, deleting or re-roling users or
+# changing facility settings in the admin. Signing in with a second factor
+# stays open. POST only — visitors can still view every page. The account and
+# facility settings forms refuse only a change of the 2FA requirement
+# (core.middleware.demo_guard.refuse_demo_change).
 DEMO_GUARD_BLOCKED_PREFIXES = (
     "/system/maintenance/",
     "/mfa/setup/",
@@ -103,8 +104,12 @@ DEMO_GUARD_BLOCKED_PREFIXES = (
     "/admin-mgmt/core/settings/",
 )
 
-# Demo guard by URL name, for routes whose path carries another account's pk:
-# resetting the second factor of another shared account through account
-# management. Viewing the page and the rest of account management stay open.
+# Demo guard by URL name, for routes whose path carries another account's pk
+# or is not covered by a prefix: resetting the second factor of another shared
+# account through account management, and changing the password in the admin.
+# Viewing the pages and the rest of account management stay open.
 # The demo login panel (auth/_demo_credentials.html) mirrors both lists.
-DEMO_GUARD_BLOCKED_URL_NAMES = ("core:user_access_mfa_reset",)
+DEMO_GUARD_BLOCKED_URL_NAMES = (
+    "core:user_access_mfa_reset",
+    "admin:password_change",
+)
