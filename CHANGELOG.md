@@ -44,10 +44,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- **Massenlösch-Alarm zählt Entscheidungen über Löschvorschläge nicht mehr mit** (#2717) — Freigeben, Ablehnen, Zurückstellen und Reaktivieren von Löschvorschlägen löschen nichts und lösen den Alarm deshalb nicht mehr aus. Echte Löschungen zählen weiter.
-- **Vier-Augen-Freigabe verfällt, wenn die Löschfrist wieder in die Zukunft rückt** (#2714) — Ist ein freigegebenes Ereignis beim Aufbewahrungslauf nicht mehr fällig, etwa nach neuer Fallaktivität oder einer längeren Frist, geht der Vorschlag mit Audit-Eintrag zurück in die Prüfung und beide Freigaben entfallen. Wird es später wieder fällig, braucht die Löschung eine neue Freigabe durch zwei Personen.
-- **Fehler in einer Einrichtung stoppt den Aufbewahrungslauf der übrigen nicht mehr** (#2717) — Bricht die Verarbeitung einer Einrichtung mit einem unerwarteten Fehler ab, setzt der nächtliche Lauf mit den folgenden Einrichtungen fort, zählt die Einrichtung als fehlgeschlagen und endet mit Fehler. Das Protokoll nennt nur Einrichtung und Fehlerart, keine gespeicherten Werte.
-- **Schlüsselrotation verschiebt die Anonymisierung inaktiver Personen nicht mehr** (#2715) — Die Neuverschlüsselung lässt den Änderungszeitpunkt von Personen, Fällen und Aufgaben unverändert, sodass die Inaktivitätsfrist bis zur Anonymisierung nicht neu beginnt. Eine gleichzeitige fachliche Änderung hat weiterhin Vorrang vor der Rotation.
+- **Aufbewahrungslauf und Massenlösch-Alarm korrigiert** (#2717) — Entscheidungen über Löschvorschläge zählen nicht mehr als Löschung. Bricht eine Einrichtung mit einem Fehler ab, bearbeiten Lösch- und Vorschlagslauf die übrigen weiter und enden mit Fehler; das Protokoll nennt nur Einrichtung und Fehlerart.
+- **Löschfreigabe verfällt, wenn die Frist nach hinten rückt** (#2714) — Rückt die Fälligkeit nach einer Freigabe nach hinten, etwa durch neue Fallaktivität, verwirft der Aufbewahrungslauf die erteilten Freigaben mit Audit-Eintrag, auch wenn das Ereignis inzwischen wieder fällig ist. Die Löschung braucht dann zwei neue Freigaben.
+- **Schlüsselrotation verschiebt die Anonymisierung inaktiver Personen nicht mehr** (#2715) — Die Neuverschlüsselung lässt den Änderungszeitpunkt von Personen, Fällen und Aufgaben unverändert; eine gleichzeitige fachliche Änderung hat weiterhin Vorrang.
 
 ## [0.99.10] - 2026-11-11
 
