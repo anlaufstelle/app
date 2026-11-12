@@ -598,6 +598,8 @@ Fuer alle `anlaufstelle-*.log` unter `/var/log` eine Logrotate-Regel mit
 regelmaessiger Rotation, Komprimierung und begrenzter Aufbewahrung einrichten;
 nach Aenderungen `sudo logrotate --debug /etc/logrotate.conf` pruefen.
 
+**Webhook-Installationen:** Bei gesetzter `BREACH_NOTIFICATION_WEBHOOK_URL` den Scan-Befehl in der folgenden Host-Crontab durch `docker compose --env-file .env exec -T cron python manage.py detect_breaches` ersetzen. Das setzt einen laufenden `cron`-Dienst mit der Zusatz-Compose-Datei aus § 6.5b voraus. In `maintenance` besteht kein Ausgang: Zustellversuche scheitern und der Scan wird rot. Den Scan nur über einen Scheduler ausführen.
+
 ```cron
 # Anlaufstelle – Host-Cron (Backup + Hygiene). Alles Weitere macht der
 # cron-Sidecar aus §3.2 — diese Eintraege NICHT dupliziert einrichten!
@@ -1469,6 +1471,8 @@ Der vollständige Scan schreibt bei Zustellfehlern einen fehlgeschlagenen Laufma
 4. **Post-Incident** — Lessons-Learned + Anpassung der Heuristik-Schwellen.
 
 Einrichtung: Der `cron`-Sidecar fuehrt `detect_breaches` ab Werk stuendlich aus ([§ 3.1](#31-uebersicht), [§ 3.2](#32-cron-sidecar-standard)); es ist **kein** zusaetzlicher Cron-Eintrag noetig, eine zweite Zeile liesse den Job doppelt laufen. Nur ohne Sidecar steht die Zeile in der Host-Crontab-Alternative aus [§ 3.3](#33-host-cron-backup--restliche-host-jobs). Einen Lauf sofort ausserhalb des Zeitplans anstossen:
+
+Bei gesetzter `BREACH_NOTIFICATION_WEBHOOK_URL` statt des folgenden `maintenance`-Aufrufs `docker compose --env-file .env exec -T cron python manage.py detect_breaches` verwenden, mit dem laufenden `cron`-Dienst und der Dateiliste von oben. In `maintenance` besteht kein Ausgang: Zustellversuche scheitern und der Scan wird rot.
 
 ```bash
 docker compose -f docker-compose.prod.yml run --rm -T maintenance detect_breaches

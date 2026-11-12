@@ -592,6 +592,8 @@ Configure a logrotate rule for all `anlaufstelle-*.log` files under `/var/log`
 with regular rotation, compression, and bounded retention; after changes,
 check it with `sudo logrotate --debug /etc/logrotate.conf`.
 
+**Webhook installs:** With `BREACH_NOTIFICATION_WEBHOOK_URL` configured, replace the scan command in the host crontab below with `docker compose --env-file .env exec -T cron python manage.py detect_breaches`. This requires a running `cron` service with the additional Compose file from § 6.5b. In `maintenance` there is no egress: delivery attempts fail and the scan turns red. Run the scan under only one scheduler.
+
 ```cron
 # Anlaufstelle – Host cron (backup + hygiene). Everything else is handled by the
 # cron sidecar from §3.2 — do NOT set these entries up twice!
@@ -1455,6 +1457,8 @@ The full scan writes a failed run marker on delivery failure. The operations ove
 4. **Post-incident** — Lessons learned + adjust the heuristic thresholds.
 
 Setup: The `cron` sidecar runs `detect_breaches` hourly out of the box ([§ 3.1](#31-overview), [§ 3.2](#32-cron-sidecar-standard)); **no** additional cron entry is needed, a second line would run the job twice. Only without the sidecar does the line belong in the host crontab alternative from [§ 3.3](#33-host-cron-backup--remaining-host-jobs). Trigger a run immediately outside the schedule:
+
+With `BREACH_NOTIFICATION_WEBHOOK_URL` configured, use `docker compose --env-file .env exec -T cron python manage.py detect_breaches` instead of the following `maintenance` invocation, with the running `cron` service and Compose list from above. In `maintenance` there is no egress: delivery attempts fail and the scan turns red.
 
 ```bash
 docker compose -f docker-compose.prod.yml run --rm -T maintenance detect_breaches
@@ -3446,4 +3450,4 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.10 -->
 <!-- translation-date: 2026-11-12 -->
-<!-- source-hash: 28a991809c0442a2e2167eb53229bd7c9c0e2d6e -->
+<!-- source-hash: e863903239a04e4e26eddfd3e3d333fceab030a1 -->
