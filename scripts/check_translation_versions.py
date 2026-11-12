@@ -36,6 +36,7 @@ TRANSLATED_FILES = [
     "docs/screenshots.en.md",
     "docs/en/README.md",
     "docs/en/admin-guide.md",
+    "docs/en/accessibility-audit.md",
     "docs/en/ops-runbook.md",
     "docs/en/user-guide.md",
     "docs/en/domain-concept-summary.md",
