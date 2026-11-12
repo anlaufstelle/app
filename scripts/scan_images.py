@@ -47,8 +47,8 @@ Decision rule
   period when it is below ``critical`` (``GRACE_MAX_SEVERITY``), has a published
   fix (a fixed version, the same test as for the app image) and its identifier
   was published (``PublishedDate``) after the build of the scanned image
-  (``created`` of its image config): such an image cannot carry the fix, and it
-  cannot be patched here. The finding then does not block until ``GRACE_DAYS``
+  (``created`` of its image config): such an image predates the identifier, and
+  it cannot be patched here. The finding then does not block until ``GRACE_DAYS``
   days after the publication (valid through that UTC day), which leaves the
   upstream maintainer time to rebuild and us time to take over the new digest.
   A finding without fix, with an unclear fix status, at ``critical``, known
