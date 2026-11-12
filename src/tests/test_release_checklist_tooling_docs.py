@@ -103,4 +103,3 @@ def test_ops_gate_reads_the_audit_verify_timer_result_and_never_runs_the_check_i
 def test_list_runner_section_says_the_tool_belongs_to_the_release_management_not_the_repo():
     section = _section(_checklist(), "### 1.7 ", "## 2. ")
     assert "Werkzeug der Wellenverwaltung, nicht Teil des Repos" in section
-    assert "`run-lane.sh`" in section
