@@ -47,6 +47,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **CSV-Export in Ortszeit** (#2713) — Datum und Uhrzeit der Statistik-Ereignisse werden in der Zeitzone der Anwendung ausgegeben, auch nahe Mitternacht und bei Sommerzeit. Früher exportierte CSV-Dateien tragen UTC-Zeiten.
 - **Sitzungsschutz bei Faktoränderungen** (#2736) — Nach Passkey-Entfernung, TOTP-Änderung oder Passwortwechsel werden widerrufene Sitzungscookies auch nach dem Speichern geprüft; gültige Reset- und Einladungslinks funktionieren mit altem Cookie. Widerrufe nach der letzten Prüfung können bei verspäteter Zustellung weiterhin abmelden.
 - **Offline gesendetes Formular landet auf einer ganzen Seite** (#2730) — Ein offline gespeichertes Formular zeigte nur die Meldung ohne Navigation; jetzt erscheint die Formularseite mit Hinweis und Navigation. Eine neue App-Version lädt nicht mehr neu, solange ein Formular gesendet wird.
 - **Verschlüsseltes Ja/Nein-Feld in der Vorschau korrekt** (#2712) — Zeitstrom, Kontaktliste und Übergabe zeigten ein verschlüsseltes Ja/Nein-Feld wie „Krankenhaus“ aus dem Standardpaket immer als „Ja“, auch wenn kein Häkchen gesetzt war. Die Vorschau entschlüsselt den Wert jetzt vor der Prüfung; ein nicht lesbarer Wert erscheint als „[verschlüsselt]“.

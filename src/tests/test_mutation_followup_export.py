@@ -298,6 +298,7 @@ class TestBuildEventRowStaticColumns:
             data_json={},
             created_by=staff_user,
         )
+        event.refresh_from_db()
         row = _build_event_row(event, {}, [], staff_user)
         assert row[0] == "02.01.2026"
         # Stunde:Minute, zweistellig — ``%H:%M``-Mutation auf ``%H-%M`` würde failen.

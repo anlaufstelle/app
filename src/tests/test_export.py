@@ -2,7 +2,8 @@
 
 import csv
 import io
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from django.test import Client as DjangoClient
@@ -435,3 +436,22 @@ class TestSampleReport1PdfQuellenausweis:
         assert "Datenquelle" in html
         assert "Monats-Aggregate" in html
         assert "nach Ablauf der Löschfristen erhalten" in html
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("month", [1, 7], ids=["winter", "summer"])
+def test_event_csv_uses_local_midnight_after_database_roundtrip(facility, admin_user, doc_type_kontakt, month):
+    """The exported day and time agree with the local date filter."""
+    from core.services.system.export import export_events_csv
+
+    local = datetime(2026, month, 11, 0, 30, tzinfo=ZoneInfo("Europe/Berlin"))
+    event = Event.objects.create(
+        facility=facility, document_type=doc_type_kontakt, occurred_at=local, created_by=admin_user
+    )
+    event.refresh_from_db()
+    assert event.occurred_at.utcoffset() == timedelta(0)
+    with timezone.override("Europe/Berlin"):
+        rows = list(csv.reader(io.StringIO("".join(export_events_csv(facility, local.date(), local.date())))))
+
+    assert len(rows) == 3
+    assert rows[2][:2] == ["11.01.2026" if month == 1 else "11.07.2026", "00:30"]

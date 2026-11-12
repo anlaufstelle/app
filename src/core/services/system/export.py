@@ -216,9 +216,10 @@ def _build_event_row(event, all_field_templates, field_slugs, user):
         contact_stage = event.client.get_contact_stage_display()
         age_cluster = event.client.get_age_cluster_display()
 
+    local = timezone.localtime(event.occurred_at)
     row = [
-        event.occurred_at.strftime("%d.%m.%Y"),
-        event.occurred_at.strftime("%H:%M"),
+        local.strftime("%d.%m.%Y"),
+        local.strftime("%H:%M"),
         _sanitize_csv_cell(event.document_type.name),
         _sanitize_csv_cell(client_name),
         _sanitize_csv_cell(contact_stage),
