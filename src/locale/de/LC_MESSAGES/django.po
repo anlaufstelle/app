@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-12 09:01+0100\n"
+"POT-Creation-Date: 2026-11-12 16:09+0100\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -15250,5 +15250,5 @@ msgid "Der tägliche Aufbewahrungslauf legt für abgelaufene Ereignisse „Mit Z
 msgstr "Der tägliche Aufbewahrungslauf legt für abgelaufene Ereignisse „Mit Zusatzangaben“ Löschvorschläge an. Die manuelle Löschfreigabe braucht zwei verschiedene aktive Personen der eigenen Einrichtung mit Rolle Leitung oder Anwendungsbetreuung und dem Recht „Löschbestätigung“. Die erste Freigabe hält den Vorschlag ausstehend (1 von 2 Freigaben), die zweite erlaubt die Löschung beim nächsten Lauf, wenn das Ereignis dann noch fällig ist und nach der aktuellen Frist schon bei der ersten Freigabe fällig war; sonst setzt der Lauf den Vorschlag zurück und verwirft beide Freigaben. Zurückstellen, Legal Hold und Ablehnung verwerfen die erste Freigabe; nach Wiedervorlage sind erneut zwei Freigaben nötig. Ausnahme: Nur wenn die Einrichtung die standardmäßig ausgeschaltete Auto-Freigabe nach mehrfacher Zurückstellung eingeschaltet hat, gibt der Lauf einen Vorschlag nach Erreichen der maximalen Zurückstellungszahl und Ablauf der Wiedervorlage selbst frei. Zurückstellen schützt bis zur Wiedervorlage. Anonyme Ereignisse und „Nur Pseudonym“ werden automatisch gelöscht. Aufbewahrungssperren (Legal Holds) verhindern die Löschung. Die Einrichtung benennt mindestens zwei aktive Konten für die manuelle Freigabe; mit nur einem Konto bleibt es bei 1 von 2 Freigaben. Die Compliance-Karte „Genehmiger für den Aufbewahrungslauf“ prüft Rolle und Anzahl. Die Karte „Genehmiger für Löschanträge“ zählt weiterhin aktive Löschantragsberechtigte unabhängig von ihrer Rolle."
 
 #: src/templates/auth/_demo_credentials.html:58
-msgid "Wartungsmodus, Änderungen an 2FA und Passkeys (auch an der 2FA-Pflicht), Passwortänderung sowie Benutzer und Einstellungen im Admin sind gesperrt."
-msgstr "Wartungsmodus, Änderungen an 2FA und Passkeys (auch an der 2FA-Pflicht), Passwortänderung sowie Benutzer und Einstellungen im Admin sind gesperrt."
+msgid "Wartungsmodus, Änderungen an 2FA und Passkeys (auch an der 2FA-Pflicht), Passwortänderung sowie Benutzer und Einstellungen im Admin sind gesperrt. Bei bestehenden Konten sind auch Änderungen an Aktivstatus, Rolle und Benutzername gesperrt, einschließlich des eigenen Kontos."
+msgstr "Wartungsmodus, Änderungen an 2FA und Passkeys (auch an der 2FA-Pflicht), Passwortänderung sowie Benutzer und Einstellungen im Admin sind gesperrt. Bei bestehenden Konten sind auch Änderungen an Aktivstatus, Rolle und Benutzername gesperrt, einschließlich des eigenen Kontos."

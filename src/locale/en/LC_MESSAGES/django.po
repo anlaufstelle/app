@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-12 09:01+0100\n"
+"POT-Creation-Date: 2026-11-12 16:09+0100\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -15162,5 +15162,5 @@ msgid "Der tägliche Aufbewahrungslauf legt für abgelaufene Ereignisse „Mit Z
 msgstr "The daily retention run creates deletion proposals for expired events \"With additional details\". Manual deletion release requires two different active people of the own facility with the role Manager or Application support and the \"Deletion confirmation\" permission. The first release keeps the proposal pending (1 of 2 releases); the second allows deletion in the next run if the event is still due then and, under the current deadline, was already due at the first release; otherwise the run resets the proposal and discards both releases. Deferring, legal hold and rejection discard the first release; after the follow-up date, two releases are required again. Exception: only if the facility has switched on the auto-release after repeated deferrals, which is off by default, does the run release a proposal itself once the maximum number of deferrals is reached and the follow-up date has passed. Deferring protects until the follow-up date. Anonymous events and \"Pseudonym only\" are deleted automatically. Retention holds (legal holds) prevent deletion. The facility names at least two active accounts for manual release; with only one account it stays at 1 of 2 releases. The compliance card \"Approvers for the retention run\" checks role and number. The card \"Approvers for deletion requests\" still counts active deletion-request approvers regardless of their role."
 
 #: src/templates/auth/_demo_credentials.html:58
-msgid "Wartungsmodus, Änderungen an 2FA und Passkeys (auch an der 2FA-Pflicht), Passwortänderung sowie Benutzer und Einstellungen im Admin sind gesperrt."
-msgstr "Maintenance mode, changes to 2FA and passkeys (including the 2FA requirement), password changes, and users and settings in the admin are blocked."
+msgid "Wartungsmodus, Änderungen an 2FA und Passkeys (auch an der 2FA-Pflicht), Passwortänderung sowie Benutzer und Einstellungen im Admin sind gesperrt. Bei bestehenden Konten sind auch Änderungen an Aktivstatus, Rolle und Benutzername gesperrt, einschließlich des eigenen Kontos."
+msgstr "Maintenance mode, changes to 2FA and passkeys (including the 2FA requirement), password changes, and users and settings in the admin are blocked. For existing accounts, changes to active status, role and username are blocked as well, including your own account."
