@@ -61,6 +61,8 @@ g) The text of an entry after the dash has at most ``MAX_ENTRY_CHARS``
    characters, in the operator-actions section ``MAX_OPERATOR_ENTRY_CHARS``.
    The text is counted as rendered: a Markdown link counts with its label,
    not with its target. An entry without a dash is measured as a whole.
+   Indented lines below an entry (nested bullets, wrapped text) count
+   towards its limit.
 h) One entry per ticket and section. The tickets of an entry are the ``#NNN``
    references before the dash; a mention in the text of another entry does
    not count. The same ticket may still appear in two sections, for example
@@ -68,7 +70,8 @@ h) One entry per ticket and section. The tickets of an entry are the ``#NNN``
    section is exempt: operators work through it step by step, so one ticket
    may list each required step as its own entry.
 i) The sections follow ``SECTION_ORDER``.
-j) No blank line between two entries of a section.
+j) No blank line between two entries of a section, and none between an
+   entry and its nested lines.
 k) A blank line before every ``### `` heading.
 """
 
@@ -124,6 +127,23 @@ def entry_text_length(text: str) -> int:
     """
     _head, body = _split_entry(text)
     return len(_LINK_RE.sub(r"\1", body).strip())
+
+
+def _continuation_length(lines: list[str], entry_index: int, end: int) -> int:
+    """Length of the indented lines that continue the entry at ``entry_index``.
+
+    Nested bullets and wrapped lines belong to their entry, so they count
+    towards its limit (rule g), measured as rendered like the entry text.
+    """
+    total = 0
+    for idx in range(entry_index + 1, end):
+        raw = lines[idx]
+        if not raw.strip():
+            continue
+        if not raw[0].isspace():
+            break
+        total += len(_LINK_RE.sub(r"\1", raw).strip())
+    return total
 
 
 def find_unreleased_block(lines: list[str]) -> tuple[int, int] | None:
@@ -255,7 +275,7 @@ def analyze_unreleased(lines: list[str], start: int, end: int) -> tuple[list[tup
                 errors.extend(_second_entries(text, section_name, lineno, seen_tickets))
 
             limit = MAX_OPERATOR_ENTRY_CHARS if section_name == OPERATOR_SECTION else MAX_ENTRY_CHARS
-            length = entry_text_length(text)
+            length = entry_text_length(text) + _continuation_length(lines, idx, end)
             if length > limit:
                 errors.append(
                     (
@@ -271,6 +291,8 @@ def analyze_unreleased(lines: list[str], start: int, end: int) -> tuple[list[tup
         # Indented lines continue the entry above; anything else ends the list.
         if not raw[0].isspace():
             previous_was_entry = False
+        elif previous_was_entry and blank_since_previous:
+            errors.append((lineno, "Blank line inside the list: a nested line follows its entry directly."))
         blank_since_previous = False
 
     close_section()
