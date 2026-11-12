@@ -877,6 +877,10 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
             response["HX-Retarget"] = f"#tally-row-{event.document_type_id}"
             response["HX-Reswap"] = "outerHTML"
             response["HX-Trigger-After-Swap"] = "zeitstrom-changed"
+            # A number form that was open for this tile must not outlive the save.
+            response.content += render_to_string(
+                "core/zeitstrom/partials/tally_number_slot_oob.html", request=request
+            ).encode()
             return response
         response = render(
             request,
@@ -887,6 +891,11 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
             # The undo bar lives in a fixed slot outside the tile grid.
             response.content += render_to_string(
                 "core/zeitstrom/partials/tally_undo_slot_oob.html", context, request=request
+            ).encode()
+        if context["row"].get("requires_number_input"):
+            # The number form lives in a panel-level slot; close it with the save.
+            response.content += render_to_string(
+                "core/zeitstrom/partials/tally_number_slot_oob.html", request=request
             ).encode()
         response["HX-Retarget"] = f"#tally-row-{event.document_type_id}"
         response["HX-Reswap"] = "outerHTML"

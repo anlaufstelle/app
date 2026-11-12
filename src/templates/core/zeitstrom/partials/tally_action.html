@@ -7,9 +7,10 @@
        data-testid="tally-increment-{{ row.document_type.pk }}"
        {% if tally_summary %}data-tally-window-start="{{ tally_summary.window_start|date:'c' }}"
        data-tally-window-end="{{ tally_summary.window_end|date:'c' }}"{% endif %}
+       aria-haspopup="dialog"
        hx-get="{{ row.tally_increment_url }}"
-       hx-target="#tally-action-{{ row.document_type.pk }}"
-       hx-swap="outerHTML"
+       hx-target="#tally-number-form-slot"
+       hx-swap="innerHTML"
        aria-label="{% blocktrans with name=row.document_type.name %}Werte für {{ name }} eingeben{% endblocktrans %}">+ …</a>
     {% else %}
     <form method="post" action="{% url 'core:tally_increment' %}"

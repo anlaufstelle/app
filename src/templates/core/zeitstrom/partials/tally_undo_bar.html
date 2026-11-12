@@ -1,7 +1,8 @@
 {% load i18n %}
-{% comment %}Rückgängig-Leiste der Strichliste: zeigt den letzten Strich. Mobil fest über
-der Bottom-Nav, ab md im Fluss unter dem Panel. Die Restzeit ist ein aria-hidden-Zusatz
-(Countdown in tally-undo.js); angesagt wird nur der statische Text einmal beim Erscheinen.{% endcomment %}
+{% comment %}Undo bar of the tally, showing the last tap. Fixed above the bottom nav on
+small screens, in flow below the panel from md up. The remaining time is an
+aria-hidden suffix (countdown in tally-undo.js); only the static text is announced,
+once, when the bar appears.{% endcomment %}
 <div data-tally-undo-bar
      class="fixed inset-x-3 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-40 md:static md:inset-auto md:z-auto flex items-center justify-between gap-3 rounded-[10px] bg-ink text-white px-4 py-2 min-h-[44px] shadow-lg md:shadow-none">
     <span class="text-[13px] min-w-0" data-testid="tally-undo-announcement"><span aria-hidden="true">{% blocktrans with name=row.document_type.name %}+1 {{ name }} gezählt{% endblocktrans %}</span><span class="sr-only">{% blocktrans with name=row.document_type.name %}+1 {{ name }} gezählt, Rückgängig möglich{% endblocktrans %}</span></span>

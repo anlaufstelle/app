@@ -33,6 +33,8 @@ class TallyNumberDataForm(forms.Form):
             # wird ein zurückgerendertes ``value=1.5`` zur HTML-Step-Basis und
             # der Browser blockiert danach korrigierte Ganzzahlen wie ``10``.
             field.widget.attrs["step"] = "any"
+            # Touch target of at least 44 px on small screens (bottom sheet).
+            field.widget.attrs["class"] = f"{field.widget.attrs.get('class', '')} min-h-[44px] md:min-h-0".strip()
             self.fields[field_template.slug] = field
 
         if self.fields:

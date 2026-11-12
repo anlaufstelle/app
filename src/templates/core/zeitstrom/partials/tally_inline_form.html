@@ -1,15 +1,32 @@
 {% load i18n %}
-<div id="tally-action-{{ document_type.pk }}" class="basis-full flex flex-col gap-3 pt-2"
-     data-testid="tally-inline-row-{{ document_type.pk }}">
+{% comment %}Number form of the tally as a dialog (popover on desktop, bottom sheet on mobile).
+tally-undo.js opens it (show/showModal, focus, Escape, click outside) and sets aria-modal
+for the bottom sheet only. Without JavaScript it is visible through ``open``; on the full
+page (tally_page) it stays a static card that submits natively: the page has no
+slot, so htmx must not intercept the submit (errors re-render the whole page).{% endcomment %}
+<dialog open id="tally-number-form-{{ document_type.pk }}"
+        class="{% if tally_page %}block static{% else %}m-0 p-4 w-full max-w-none fixed inset-x-0 bottom-0 top-auto rounded-t-[16px] md:absolute md:inset-x-auto md:bottom-auto md:w-[360px] md:max-w-[360px] md:rounded-[12px] border border-subtle bg-surface text-ink shadow-xl backdrop:bg-black/40 md:backdrop:bg-transparent z-40{% endif %}"
+        data-tally-number-sheet
+        data-document-type="{{ document_type.pk }}"
+        aria-labelledby="tally-number-title-{{ document_type.pk }}"
+        data-testid="tally-inline-row-{{ document_type.pk }}">
+    <div class="flex items-start justify-between gap-3 mb-3">
+        <h2 id="tally-number-title-{{ document_type.pk }}" class="text-[15px] font-bold text-ink">{{ document_type.name }}</h2>
+        <button type="button" data-tally-number-close
+                class="md:hidden inline-flex items-center justify-center min-h-[44px] min-w-[44px] -mt-2 -mr-2 rounded-md text-ink-soft"
+                aria-label="{% trans 'Schließen' %}">
+            <svg aria-hidden="true" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+    </div>
     <form method="post"
           action="{% url 'core:tally_increment' %}"
           class="flex flex-col gap-3"
           data-offline-tally-form
           data-testid="tally-inline-form-{{ document_type.pk }}"
-          hx-post="{% url 'core:tally_increment' %}"
-          hx-target="#tally-action-{{ document_type.pk }}"
+          {% if tally_page %}hx-disable{% else %}hx-post="{% url 'core:tally_increment' %}"
+          hx-target="#tally-number-form-slot"
           hx-headers='{"X-Idempotency-Key": "{{ idempotency_key }}"}'
-          hx-swap="outerHTML">
+          hx-swap="innerHTML"{% endif %}>
         {% csrf_token %}
         <input type="hidden" name="document_type" value="{{ document_type.pk }}">
         <input type="hidden" name="idempotency_key" value="{{ idempotency_key }}">
@@ -37,11 +54,9 @@
         </div>
         <div class="flex items-center justify-end gap-2">
             <a href="{{ tally_next }}"
-                    class="btn-secondary min-h-[44px] md:min-h-[36px] px-3 rounded-md text-[13px] font-semibold"
+                    class="btn-secondary inline-flex items-center min-h-[44px] md:min-h-[36px] px-3 rounded-md text-[13px] font-semibold"
                     data-testid="tally-cancel-{{ document_type.pk }}"
-                    hx-get="{{ tally_increment_url }}&amp;cancel=1"
-                    hx-target="#tally-action-{{ document_type.pk }}"
-                    hx-swap="outerHTML">
+                    data-tally-number-close>
                 {% trans "Abbrechen" %}
             </a>
             <button type="submit" class="btn-primary min-h-[44px] md:min-h-[36px] px-3 rounded-md text-[13px] font-semibold"
@@ -50,4 +65,4 @@
             </button>
         </div>
     </form>
-</div>
+</dialog>

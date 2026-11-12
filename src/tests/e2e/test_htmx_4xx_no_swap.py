@@ -135,37 +135,53 @@ def _retire_document_type(e2e_env, document_type_pk):
 
 
 class TestTallyCancelForDisabledTypeStaysInPlace:
-    def test_rejection_leaves_card_in_place_and_shows_notice(self, lead_page, base_url, e2e_env):
+    """Cancelling the number entry is client-side; the server route stays safe.
+
+    The cancel link of the popover/bottom sheet closes the dialog in the
+    browser (no request). The legacy ``cancel=1`` route is still served and
+    must reject a disabled type without swapping anything.
+    """
+
+    def test_client_side_cancel_closes_the_dialog_without_a_request(self, lead_page, base_url, e2e_env):
         document_type_pk = _ensure_number_tally_type(e2e_env)
         try:
             page = lead_page
             page.goto(f"{base_url}/", wait_until="domcontentloaded")
 
-            card = page.locator(f"#tally-action-{document_type_pk}")
-            expect(card).to_be_visible(timeout=5000)
-            card.locator(f"[data-testid='tally-increment-{document_type_pk}']").click()
-            cancel_link = card.locator(f"[data-testid='tally-cancel-{document_type_pk}']")
+            tile = page.locator(f"#tally-row-{document_type_pk}")
+            expect(tile).to_be_visible(timeout=5000)
+            tile.locator(f"[data-testid='tally-increment-{document_type_pk}']").click()
+            dialog = page.locator(f"#tally-number-form-slot [data-testid='tally-inline-row-{document_type_pk}']")
+            cancel_link = dialog.locator(f"[data-testid='tally-cancel-{document_type_pk}']")
             expect(cancel_link).to_be_visible(timeout=5000)
 
             # Another tab disables the type while the value form stays open.
             _disable_tally_opt_in(e2e_env, document_type_pk)
 
-            with page.expect_response(lambda r: "cancel=1" in r.url) as info:
-                cancel_link.click()
-            response = info.value
+            requests = []
+            page.on("request", lambda request: requests.append(request.url))
+            cancel_link.click()
+
+            expect(dialog).to_have_count(0, timeout=5000)
+            expect(tile).to_be_visible()
+            assert not [url for url in requests if "/partials/tally/increment/" in url], requests
+            expect(page.locator(_TOAST)).to_have_count(0)
+        finally:
+            _retire_document_type(e2e_env, document_type_pk)
+
+    def test_cancel_route_rejects_a_disabled_type_without_swapping(self, lead_page, base_url, e2e_env):
+        document_type_pk = _ensure_number_tally_type(e2e_env)
+        try:
+            _disable_tally_opt_in(e2e_env, document_type_pk)
+
+            response = lead_page.request.get(
+                f"{base_url}/partials/tally/increment/",
+                params={"document_type": document_type_pk, "cancel": "1"},
+                headers={"HX-Request": "true"},
+            )
 
             assert response.status == 400, response.status
             assert response.headers.get("hx-reswap") == "none"
-
-            # The card was not replaced by the message text — the value form is
-            # still there (no swap, thanks to HX-Reswap: none).
-            expect(card).to_be_visible(timeout=5000)
-            expect(cancel_link).to_be_visible()
-            assert "nicht für die Strichliste freigegeben" not in card.inner_text()
-
-            toast = page.locator(_TOAST)
-            expect(toast).to_be_visible(timeout=5000)
-            expect(toast).to_contain_text("nicht für die Strichliste freigegeben")
         finally:
             _retire_document_type(e2e_env, document_type_pk)
 

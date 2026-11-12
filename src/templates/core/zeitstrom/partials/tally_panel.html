@@ -4,7 +4,7 @@ Pflichtwerte bleiben direkte „+1"-POSTs. Typen mit ausschließlich erforderlic
 Zahlenfeldern öffnen zuerst das kompakte HTMX-Formular; dessen POST läuft danach
 durch denselben create_event-Pfad.{% endcomment %}
 {% if tally_summary.rows %}
-<section id="tally-panel" class="mb-5 bg-surface border border-subtle rounded-[10px] overflow-hidden"
+<section id="tally-panel" class="relative mb-5 bg-surface border border-subtle rounded-[10px]"
          data-testid="tally-panel" aria-labelledby="tally-heading">
     <div class="px-4 py-3 flex items-center gap-3 flex-wrap border-b border-subtle">
         <svg aria-hidden="true" class="w-4 h-4 text-ink-muted flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9l2 2 4-4"/></svg>
@@ -21,7 +21,9 @@ durch denselben create_event-Pfad.{% endcomment %}
         {% include "core/zeitstrom/partials/tally_row.html" %}
         {% endfor %}
     </div>
-    {# Fester Platz der Rückgängig-Leiste (OOB-Ziel); ausserhalb des Kachelrasters. #}
+    {# Target of the number form (popover/bottom sheet); outside the tile grid so no tile moves. #}
+    <div id="tally-number-form-slot" data-hx-no-focus data-testid="tally-number-form-slot"></div>
+    {# Reserved place of the undo bar (out-of-band target); outside the tile grid. #}
     <div id="tally-undo-slot" class="md:min-h-[44px] md:px-4 md:py-2 md:border-t md:border-subtle" aria-live="polite"
          data-testid="tally-undo-slot"></div>
 </section>

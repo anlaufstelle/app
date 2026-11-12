@@ -69,7 +69,9 @@ class TestCollaborativeTally:
             ):
                 syringe_button_b.click()
 
-            syringe_form_b = page_b.locator('[data-testid^="tally-inline-form-"]')
+            # The number form lives in the panel-level slot (popover on desktop),
+            # not inside the tile; the live refresh must leave it untouched.
+            syringe_form_b = page_b.locator('#tally-number-form-slot [data-testid^="tally-inline-form-"]')
             expect(syringe_form_b).to_be_visible()
             wait_until_htmx_bound(page_b, syringe_form_b)
             syringe_form_b.locator('input[name="ausgabe"]').fill("17")
@@ -99,7 +101,8 @@ class TestCollaborativeTally:
 
             # Undo exactly the first +1 after B observed it.  B must naturally
             # converge to baseline; the newly observed card must disappear.
-            undo_a = contact_row_a.locator('[data-testid="tally-undo"]')
+            # The undo bar sits in the fixed slot outside the tile grid.
+            undo_a = page_a.locator('#tally-undo-slot [data-testid="tally-undo"]')
             expect(undo_a).to_be_visible()
             with page_a.expect_response(
                 lambda response: response.request.method == "POST" and "/partials/tally/undo/" in response.url

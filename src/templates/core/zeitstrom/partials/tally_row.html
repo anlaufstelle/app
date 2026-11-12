@@ -1,8 +1,8 @@
 {% load i18n %}
-{% comment %}Strichlisten-Kachel: die ganze Kachel ist das Tap-Ziel. Der Knopf der
-Aktion spannt per ::after die Kachel auf (Stretched-Target); Zähler, Aktions-Badge
-und Typname liegen innerhalb. data-tally-pulse markiert den frischen Strich für
-den Farbpuls in tally-undo.js.{% endcomment %}
+{% comment %}Tally tile: the whole tile is the tap target. The action button
+stretches over the tile with ::after (stretched target); counter, action badge
+and type name sit inside. data-tally-pulse flags a freshly counted tile for the
+colour pulse in tally-undo.js.{% endcomment %}
 <div id="tally-row-{{ row.document_type.pk }}"
      class="tally-tile relative flex flex-col justify-between gap-1 min-w-0 min-h-[72px] md:min-h-[64px] p-2.5 transition-colors duration-[450ms] active:scale-[0.98] motion-reduce:active:scale-100 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent"
      data-testid="tally-row-{{ row.document_type.pk }}"{% if tally_undo_token %}

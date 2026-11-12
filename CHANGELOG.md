@@ -31,16 +31,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Frontend-Werkzeuge aktualisiert** (#2698, #2699, #2700, #2701) — vitest 5.1.0, jsdom 31.0.0, tailwindcss und @tailwindcss/cli 4.3.4 (nur Entwicklungswerkzeuge, keine ausgelieferte Bibliothek betroffen); die erzeugte Stylesheet-Datei weicht in einzelnen Selektoren und Variablen ab, die Sichtprüfung steht als Hand-Check an.
 - **GitHub-Actions-Pins aktualisiert** (#2692) — codeql-action 4.39.3, docker/login-action 4.8.0 und cosign-installer 4.1.3, weiterhin als volle Commit-SHA mit Versionskommentar.
 - **Freitext-Review im Datenschutz-Hub, nur für Leitung** (#2689) — Der Hauptpunkt in der Seitenleiste entfällt; die Prüfliste ist ein Reiter im Bereich Datenschutz, erreichbar für Leitung und Anwendungsbetreuung. Assistenz und Fachkraft haben keinen Zugriff mehr.
+- **Strichliste als Tap-Kacheln** (#2651) — Jeder Typ ist eine Kachel mit großem Zähler und `+1`-Marke; die ganze Kachel zählt, leuchtet kurz auf und zeigt den Offline-Status auf sich selbst. Typen mit Zahlenfeldern tragen `+ …`.
+- **Rückgängig der Strichliste als feste Leiste mit Countdown** (#2652) — Nach einem Strich erscheint 60 Sekunden lang eine feste Leiste mit „Rückgängig · 58 s“ unter der Strichliste, am Handy über der Navigation. Die Kacheln springen nicht mehr; die Leiste zeigt immer den letzten Strich.
+- **Zahleneingabe der Strichliste als Popover bzw. Bottom-Sheet** (#2653) — Die Werteingabe öffnet am Desktop als Popover an der Kachel, am Handy als Fenster von unten; die Liste verschiebt sich nicht. Escape, Abbrechen oder ein Klick außerhalb schließen, der Fokus kehrt zur Kachel zurück.
 
 ### Fixed
 
 - **Verschlüsseltes Ja/Nein-Feld in der Vorschau korrekt** (#2712) — Zeitstrom, Kontaktliste und Übergabe zeigten ein verschlüsseltes Ja/Nein-Feld wie „Krankenhaus“ aus dem Standardpaket immer als „Ja“, auch wenn kein Häkchen gesetzt war. Die Vorschau entschlüsselt den Wert jetzt vor der Prüfung; ein nicht lesbarer Wert erscheint als „[verschlüsselt]“.
 - **Dokumentationstyp-Filter im Zeitstrom findet auch an vollen Tagen alle Treffer** (#2717) — Der Filter griff erst nach der Grenze von 200 Einträgen; an einem Tag mit mehr Einträgen blieb er leer, obwohl es Treffer gab. Er filtert jetzt vor der Grenze, auch für die automatische Aktualisierung.
-
-### Changed
-
-- **Strichliste als Tap-Kacheln** (#2651) — Jeder Typ ist eine Kachel mit großem Zähler und `+1`-Marke; die ganze Kachel zählt, leuchtet kurz auf und zeigt den Offline-Status auf sich selbst. Typen mit Zahlenfeldern tragen `+ …`.
-- **Rückgängig der Strichliste als feste Leiste mit Countdown** (#2652) — Nach einem Strich erscheint 60 Sekunden lang eine feste Leiste mit „Rückgängig · 58 s“ unter der Strichliste, am Handy über der Navigation. Die Kacheln springen nicht mehr; die Leiste zeigt immer den letzten Strich.
 
 ## [0.99.10] - 2026-11-11
 

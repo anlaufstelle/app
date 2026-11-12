@@ -72,7 +72,9 @@ class TestTallyRowRefresh:
         assert 'data-testid="tally-panel"' not in content
         assert f'name="{number.slug}"' not in content
 
-    def test_validation_and_cancel_replace_only_the_action_area(self, client, facility, staff_user):
+    def test_validation_replaces_only_the_form_and_server_cancel_only_the_action_area(
+        self, client, facility, staff_user
+    ):
         document_type, number = _number_tally_type(facility)
         other = DocumentType.objects.create(facility=facility, name="Andere", tally_enabled=True)
         client.force_login(staff_user)
@@ -85,7 +87,7 @@ class TestTallyRowRefresh:
             HTTP_HX_REQUEST="true",
         )
         invalid_content = invalid.content.decode()
-        assert f'id="tally-action-{document_type.pk}"' in invalid_content
+        assert f'id="tally-number-form-{document_type.pk}"' in invalid_content
         assert f'id="tally-row-{document_type.pk}"' not in invalid_content
         assert f'id="tally-row-{other.pk}"' not in invalid_content
         assert "HX-Trigger-After-Swap" not in invalid
@@ -216,7 +218,10 @@ class TestTallyRowRefresh:
         )
 
         assert first.status_code == replay.status_code == 200
-        assert replay.content == b""
+        # No row is rendered; the body only empties the number-form slot out of band.
+        body = replay.content.decode()
+        assert "tally-row-" not in body and "tally-count-" not in body
+        assert 'id="tally-number-form-slot"' in body and 'hx-swap-oob="innerHTML"' in body
         assert replay["HX-Retarget"] == f"#tally-row-{document_type.pk}"
         assert replay["HX-Trigger-After-Swap"] == "zeitstrom-changed"
 

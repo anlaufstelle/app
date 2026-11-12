@@ -1,4 +1,4 @@
-// Strichlisten-Skript: Farbpuls der Kachel nach einem frischen Strich.
+// Tally script: tile colour pulse and the undo bar countdown.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const PULSE_MS = 450;

@@ -26,6 +26,8 @@
             scriptData.labelLocalUnknown ||
             "Lokal wartende Kontakte konnten nicht gelesen werden. Angezeigt ist der letzte bestätigte Serverstand.",
         retry: scriptData.labelRetry || "Erneut versuchen",
+        cancel: scriptData.labelCancel || "Abbrechen",
+        close: scriptData.labelClose || "Schließen",
     };
 
     function store() {
@@ -304,9 +306,58 @@
         return link;
     }
 
+    // Same slot the server-rendered form uses; created in the panel when the
+    // page has none (older markup).
+    function numberFormSlot(button) {
+        let slot = document.getElementById("tally-number-form-slot");
+        if (slot) return slot;
+        const panel = button.closest("#tally-panel") || document.getElementById("tally-panel");
+        if (!panel) return null;
+        slot = document.createElement("div");
+        slot.id = "tally-number-form-slot";
+        slot.setAttribute("data-hx-no-focus", "");
+        panel.appendChild(slot);
+        return slot;
+    }
+
+    function closeNumberSheet(sheet) {
+        if (window.tallyNumberSheet && window.tallyNumberSheet.close) {
+            window.tallyNumberSheet.close(sheet);
+        } else {
+            sheet.remove();
+        }
+    }
+
     function renderWarmNumberForm(button, snapshotRow) {
         const row = button.closest('[data-testid^="tally-row-"]');
-        if (!row || row.querySelector("[data-offline-tally-number-form]")) return;
+        const slot = row ? numberFormSlot(button) : null;
+        if (!slot || slot.querySelector("[data-offline-tally-number-form]")) return;
+        const typeId = String(snapshotRow.document_type_id);
+        const nameElement = row.querySelector('[data-testid^="tally-name-"]');
+        const sheet = document.createElement("dialog");
+        sheet.id = "tally-number-form-" + typeId;
+        sheet.setAttribute("open", "");
+        sheet.setAttribute("data-tally-number-sheet", "");
+        sheet.dataset.documentType = typeId;
+        sheet.setAttribute("aria-labelledby", "tally-number-title-" + typeId);
+        sheet.className =
+            "m-0 p-4 w-full max-w-none fixed inset-x-0 bottom-0 top-auto rounded-t-[16px] md:absolute md:inset-x-auto md:bottom-auto md:w-[360px] md:max-w-[360px] md:rounded-[12px] border border-subtle bg-surface text-ink shadow-xl backdrop:bg-black/40 md:backdrop:bg-transparent z-40";
+        const header = document.createElement("div");
+        header.className = "flex items-start justify-between gap-3 mb-3";
+        const title = document.createElement("h2");
+        title.id = "tally-number-title-" + typeId;
+        title.className = "text-[15px] font-bold text-ink";
+        title.textContent = (nameElement && nameElement.textContent.trim()) || defaultLabels.countContact;
+        const closeButton = document.createElement("button");
+        closeButton.type = "button";
+        closeButton.setAttribute("data-tally-number-close", "");
+        closeButton.setAttribute("aria-label", defaultLabels.close);
+        closeButton.className =
+            "md:hidden inline-flex items-center justify-center min-h-[44px] min-w-[44px] -mt-2 -mr-2 rounded-md text-ink-soft";
+        closeButton.textContent = "×";
+        header.appendChild(title);
+        header.appendChild(closeButton);
+        sheet.appendChild(header);
         const form = document.createElement("form");
         form.setAttribute("data-offline-tally-number-form", "");
         form.dataset.documentType = snapshotRow.document_type_id;
@@ -316,7 +367,7 @@
             : "all";
         form.dataset.tallyWindowStart = warmTallySnapshot.window_start || "";
         form.dataset.tallyWindowEnd = warmTallySnapshot.window_end || "";
-        form.className = "basis-full flex flex-wrap items-end gap-2 pt-2";
+        form.className = "flex flex-col gap-3";
         (snapshotRow.fields || []).forEach(function (field) {
             const label = document.createElement("label");
             label.className = "text-[12px] font-semibold text-ink-soft";
@@ -330,16 +381,25 @@
             input.name = field.slug;
             if (field.min_value !== null && field.min_value !== undefined) input.min = String(field.min_value);
             if (field.max_value !== null && field.max_value !== undefined) input.max = String(field.max_value);
-            input.className = "rounded-md border border-subtle bg-surface px-2 py-1.5 text-[13px] w-28";
+            input.className = "rounded-md border border-subtle bg-surface px-2 py-1.5 text-[13px] w-28 min-h-[44px] md:min-h-0";
             label.appendChild(caption);
             label.appendChild(input);
             form.appendChild(label);
         });
+        const actions = document.createElement("div");
+        actions.className = "flex items-center justify-end gap-2";
+        const cancel = document.createElement("button");
+        cancel.type = "button";
+        cancel.setAttribute("data-tally-number-close", "");
+        cancel.className = "btn-secondary min-h-[44px] md:min-h-[36px] px-3 rounded-md text-[13px] font-semibold";
+        cancel.textContent = defaultLabels.cancel;
         const submit = document.createElement("button");
         submit.type = "submit";
-        submit.className = "btn-primary min-h-[44px] px-3 rounded-md text-[13px] font-semibold";
+        submit.className = "btn-primary min-h-[44px] md:min-h-[36px] px-3 rounded-md text-[13px] font-semibold";
         submit.textContent = defaultLabels.countContact;
-        form.appendChild(submit);
+        actions.appendChild(cancel);
+        actions.appendChild(submit);
+        form.appendChild(actions);
         form.addEventListener("submit", async function (event) {
             event.preventDefault();
             submit.disabled = true;
@@ -348,6 +408,7 @@
                 if (!response.ok) throw new Error("TallyHTTP" + response.status);
                 form.reset();
                 notifyZeitstromChanged(response);
+                closeNumberSheet(sheet);
                 const useSnapshot = await revalidateFacilitySnapshot();
                 await refreshOnlinePanel({ useSnapshot: useSnapshot });
             } catch (_error) {
@@ -355,7 +416,7 @@
                 if (!message) {
                     message = document.createElement("p");
                     message.setAttribute("data-offline-tally-form-error", "");
-                    message.className = "basis-full text-[12px] text-red-700";
+                    message.className = "text-[12px] text-red-700";
                     form.appendChild(message);
                 }
                 message.textContent = defaultLabels.submitError;
@@ -363,9 +424,14 @@
                 submit.disabled = false;
             }
         });
-        row.appendChild(form);
-        const first = form.querySelector("input");
-        if (first) first.focus();
+        sheet.appendChild(form);
+        slot.replaceChildren(sheet);
+        if (window.tallyNumberSheet && window.tallyNumberSheet.open) {
+            window.tallyNumberSheet.open(sheet, button);
+        } else {
+            const first = form.querySelector("input");
+            if (first) first.focus();
+        }
     }
 
     // Refs #2626: unclear local state. One notice per panel (role=alert so the

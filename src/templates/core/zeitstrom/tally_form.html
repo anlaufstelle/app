@@ -6,7 +6,7 @@
 {% block content %}
 <section class="max-w-xl mx-auto bg-surface border border-subtle rounded-[10px] p-5">
     <h1 class="text-lg font-bold text-ink mb-4">{% trans "Kontakt zählen" %}</h1>
-    {% include "core/zeitstrom/partials/tally_inline_form.html" %}
+    {% include "core/zeitstrom/partials/tally_inline_form.html" with tally_page=True %}
 </section>
 {% endblock %}
 
@@ -26,5 +26,7 @@
         data-label-submit-error="{% trans 'Erfassung konnte nicht gespeichert werden.' %}"
         data-label-count-contact="{% trans 'Kontakt zählen' %}"
         data-label-local-unknown="{% trans 'Lokal wartende Kontakte konnten nicht gelesen werden. Angezeigt ist der letzte bestätigte Serverstand.' %}"
-        data-label-retry="{% trans 'Erneut versuchen' %}"></script>
+        data-label-retry="{% trans 'Erneut versuchen' %}"
+        data-label-cancel="{% trans 'Abbrechen' %}"
+        data-label-close="{% trans 'Schließen' %}"></script>
 {% endblock %}

@@ -170,8 +170,8 @@
     .card {
         @apply bg-surface border border-subtle rounded-[10px];
     }
-    /* Strichlisten-Kachel; der Farbpuls (bg-accent-light/border-accent) kommt
-       als Utility aus tally-undo.js und überschreibt diese Ruhefarben. */
+    /* Tally tile; the colour pulse (bg-accent-light/border-accent) is added as
+       utilities by tally-undo.js and overrides these resting colours. */
     .tally-tile {
         @apply bg-surface border border-subtle rounded-[10px];
     }

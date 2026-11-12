@@ -229,13 +229,13 @@ class TestNumberTallyIdempotency:
         )
         assert inline.status_code == 200
         inline_content = inline.content.decode()
-        assert f'<div id="tally-action-{document_type.pk}"' in inline_content
+        assert f'<dialog open id="tally-number-form-{document_type.pk}"' in inline_content
         assert '<form method="post"' in inline_content
         assert f'action="{url}"' in inline_content
         assert "data-offline-tally-form" in inline_content
         assert f'hx-post="{url}"' in inline_content
-        assert f'hx-target="#tally-action-{document_type.pk}"' in inline_content
-        assert 'hx-swap="outerHTML"' in inline_content
+        assert 'hx-target="#tally-number-form-slot"' in inline_content
+        assert 'hx-swap="innerHTML"' in inline_content
         assert f'name="document_type" value="{document_type.pk}"' in inline_content
         assert f'name="idempotency_key" value="{key}"' in inline_content
         assert f'hx-headers=\'{{"X-Idempotency-Key": "{key}"}}\'' in inline_content

@@ -529,6 +529,7 @@ describe("warmer Online-Zeitstrom", () => {
         const input = form.querySelector('input[name="anzahl"]');
         expect(input.min).toBe("2");
         expect(input.max).toBe("9");
+        expect(input.className).toContain("min-h-[44px]");
         expect(global.fetch).not.toHaveBeenCalled();
         input.value = "7";
         form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
@@ -959,3 +960,55 @@ describe("tally tile status placement", () => {
         expect(status.nextElementSibling).toBe(tile.querySelector("[data-offline-tally-blocked]"));
     });
 });
+
+// Warm number form: rendered into the panel-level slot as a labelled dialog,
+// not as an inline row inside the tile.
+describe("warm number form in the panel slot", () => {
+    async function warmPanel({ withSlot }) {
+        const bundle = facilityBundle();
+        bundle.tally.rows[0].mode = "number";
+        bundle.tally.rows[0].fields = [{ slug: "anzahl", name: "Anzahl", min_value: 1, max_value: 9 }];
+        await store.saveFacilityBundle(bundle);
+        document.body.innerHTML = `<section id="tally-panel"><div class="grid"><div data-testid="tally-row-${TYPE_A}"><span data-testid="tally-count-${TYPE_A}">12</span><button data-testid="tally-increment-${TYPE_A}" hx-get="/partials/tally/increment/">+ …</button></div></div>${withSlot ? '<div id="tally-number-form-slot"></div>' : ""}</section>`;
+        vi.spyOn(window.navigator, "onLine", "get").mockReturnValue(false);
+        global.fetch = vi.fn(async () => new Response("queued", { status: 200 }));
+        await tallyUi.refreshOnlinePanel();
+        document.querySelector(`[data-testid="tally-increment-${TYPE_A}"]`).click();
+    }
+
+    it("renders the form as a labelled dialog inside the slot, outside of the tile", async () => {
+        await warmPanel({ withSlot: true });
+
+        const slot = document.getElementById("tally-number-form-slot");
+        const sheet = slot.querySelector("[data-tally-number-sheet]");
+        const tile = document.querySelector(`[data-testid="tally-row-${TYPE_A}"]`);
+        expect(sheet.tagName).toBe("DIALOG");
+        expect(sheet.dataset.documentType).toBe(TYPE_A);
+        expect(sheet.querySelector(`#${sheet.getAttribute("aria-labelledby")}`)).not.toBeNull();
+        expect(sheet.querySelector("form[data-offline-tally-number-form]")).not.toBeNull();
+        expect(tile.contains(sheet)).toBe(false);
+        expect(document.querySelector(".basis-full")).toBeNull();
+        expect(sheet.querySelectorAll("[data-tally-number-close]").length).toBe(2);
+    });
+
+    it("creates the slot in the panel when the page has none and never renders a second form", async () => {
+        await warmPanel({ withSlot: false });
+
+        const slot = document.getElementById("tally-number-form-slot");
+        expect(slot).not.toBeNull();
+        expect(document.getElementById("tally-panel").contains(slot)).toBe(true);
+        document.querySelector(`[data-testid="tally-increment-${TYPE_A}"]`).click();
+        expect(document.querySelectorAll("[data-offline-tally-number-form]")).toHaveLength(1);
+    });
+
+    it("closes the sheet after the local submit succeeded", async () => {
+        await warmPanel({ withSlot: true });
+        const form = document.querySelector("[data-offline-tally-number-form]");
+        form.querySelector("input").value = "4";
+
+        form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+
+        await vi.waitFor(() => expect(document.querySelector("[data-tally-number-sheet]")).toBeNull());
+    });
+});
+

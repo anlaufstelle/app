@@ -172,7 +172,7 @@ class TestTallyTilePanel:
         # No-JS fallback and HTMX hooks stay on the element.
         assert link.attrs["href"].startswith(reverse("core:tally_increment"))
         assert link.attrs["hx-get"] == link.attrs["href"]
-        assert link.attrs["hx-target"] == f"#tally-action-{document_type.pk}"
+        assert link.attrs["hx-target"] == "#tally-number-form-slot"
 
     def test_form_hooks_and_labels_survive_the_restyling(self, facility, staff_user, doc_type_contact):
         tree = _parse(_render_panel(facility, staff_user))

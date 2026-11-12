@@ -196,12 +196,12 @@ def test_inline_partial_posts_numbers_to_existing_increment_endpoint(facility):
 
     assert f'data-testid="tally-inline-form-{document_type.pk}"' in html
     assert 'hx-post="/partials/tally/increment/"' in html
-    assert html.count(f'hx-target="#tally-action-{document_type.pk}"') == 2
+    assert html.count('hx-target="#tally-number-form-slot"') == 1
     assert f'name="document_type" value="{document_type.pk}"' in html
     assert f'name="{ausgabe.slug}"' in html
     assert 'type="number"' in html
     assert 'name="idempotency_key"' in html
-    assert "cancel=1" in html
+    assert "data-tally-number-close" in html
 
 
 @pytest.mark.django_db
@@ -228,7 +228,7 @@ def test_tally_panel_opens_number_form_via_htmx_get(facility):
     assert f'data-testid="tally-count-{document_type.pk}"' in html
     assert 'hx-get="/partials/tally/increment/?document_type=' in html
     assert 'hx-post="/partials/tally/increment/"' not in html
-    assert f'hx-target="#tally-action-{document_type.pk}"' in html
+    assert 'hx-target="#tally-number-form-slot"' in html
 
     action_html = render_to_string(
         "core/zeitstrom/partials/tally_action.html",
