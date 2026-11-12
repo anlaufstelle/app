@@ -33,6 +33,12 @@ RESOLVE_STRESS_FACTOR = 2
 INRELEASE_FILES = 4
 # Each requested package plus one dependency that is missing on the runner image.
 DEB_FILES_PER_PACKAGE = 2
+# ``playwright install --with-deps chromium`` / ``install-deps chromium`` (Playwright 1.63.0, nativeDeps
+# ubuntu24.04-x64) name 33 packages for chromium plus tools; allow 7 more for dependencies pulled in
+# (xvfb, xfonts-*). How many are really missing on the runner image is not known offline.
+PLAYWRIGHT_MAX_DEB_FILES = 40
+# No apt or Playwright-deps step may run longer than this; the budget below has to fit inside it.
+MAX_STEP_MINUTES = 20
 # Left for the working fallback mirror to deliver the lists and the .deb files.
 RESERVE_SECONDS = 120
 
@@ -94,7 +100,7 @@ def test_workflows_install_packages_only_through_the_bounded_helper():
         assert "apt-get" not in run and "apt install" not in run, (name, job, step)
         assert "apt-mirrors" not in run, (name, job, "do not rewrite the runner's mirror list")
         if PLAYWRIGHT_APT.search(run) or HELPER_CALL in run:
-            assert 0 < step.get("timeout-minutes", 0) <= 10, (name, job, step)
+            assert 0 < step.get("timeout-minutes", 0) <= MAX_STEP_MINUTES, (name, job, step)
         if HELPER_CALL in run and "--configure-only" not in run:
             calls += 1
             assert re.search(rf"{re.escape(HELPER_CALL)}\s+[a-z0-9]", run), (name, job, step)
@@ -135,6 +141,22 @@ def test_dead_first_mirror_leaves_room_for_the_fallback_mirror_within_the_step_l
             dead = dead_mirror_seconds(retries=retries, timeout=timeout, files=files, resolve=resolve)
             assert dead + RESERVE_SECONDS <= limit, (name, job, resolve, dead, limit)
     assert checked >= 3
+
+
+@pytest.mark.architecture
+def test_playwright_system_deps_fit_the_dead_mirror_budget_within_their_step_limit():
+    """Playwright runs its own ``apt-get update`` and ``install`` (no -o options, no skip when present)."""
+    dropin = _dropin_text()
+    retries = int(re.search(r'Acquire::Retries "(\d+)";', dropin).group(1))
+    timeout = max(int(m) for m in re.findall(r'Acquire::https?::Timeout "(\d+)";', dropin))
+    dead = dead_mirror_seconds(retries=retries, timeout=timeout, files=INRELEASE_FILES + PLAYWRIGHT_MAX_DEB_FILES)
+    seen = 0
+    for name, job, _steps_of_job, _index, step in _steps():
+        if not PLAYWRIGHT_APT.search(step.get("run", "")):
+            continue
+        seen += 1
+        assert dead + RESERVE_SECONDS <= step["timeout-minutes"] * 60, (name, job, dead, step["timeout-minutes"])
+    assert seen >= 2
 
 
 @pytest.mark.architecture

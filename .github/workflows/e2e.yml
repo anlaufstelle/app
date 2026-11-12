@@ -82,8 +82,12 @@ jobs:
       # reached (#2707).
       - run: scripts/ci/apt_install.sh libharfbuzz-subset0
         timeout-minutes: 8
-      # ``playwright install --with-deps`` / ``install-deps`` run their own apt-get, which we cannot give -o
-      # options; the drop-in gives them the same retry/timeout budget (their steps keep the 10-minute limit).
+      # ``playwright install --with-deps`` / ``install-deps`` run their own ``apt-get update`` and
+      # ``apt-get install -y --no-install-recommends <packages>`` (Playwright 1.63.0, registry/dependencies.ts),
+      # always, even when everything is present, and without -o options; apt reads /etc/apt/apt.conf.d on every
+      # call, so the drop-in gives them the helper's retry budget. Dead first mirror: 4 InRelease + up to 40
+      # .deb files (33 packages named for chromium plus dependencies) x 20 s = 880 s, plus 120 s kept free for
+      # the working mirror and the browser download = 1000 s, hence the 20-minute limit (#2707).
       - run: scripts/ci/apt_install.sh --configure-only
         timeout-minutes: 2
       - run: npm ci
@@ -101,11 +105,11 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('requirements-dev.txt') }}
       - name: Install Playwright browsers
         run: python -m playwright install --with-deps chromium
-        timeout-minutes: 10
+        timeout-minutes: 20
         if: steps.playwright-cache.outputs.cache-hit != 'true'
       - name: Install Playwright system deps only (cache hit)
         run: python -m playwright install-deps chromium
-        timeout-minutes: 10
+        timeout-minutes: 20
         if: steps.playwright-cache.outputs.cache-hit == 'true'
       # Protokolliert den Schnitt im Log: welche Scheibe wie viele Dateien und
       # Tests traegt. Macht eine schiefe Verteilung sichtbar, bevor jemand die
