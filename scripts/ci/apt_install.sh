@@ -6,15 +6,33 @@
 #                                    cannot parametrise (``playwright install --with-deps``) obey it
 #
 # Why: the runner's mirror list names the Azure mirror first. When it resolves badly (about 20 s per
-# name-resolution attempt, seen on 2026-11-11) every index file is tried on that mirror first. With the
-# old ``Acquire::Retries=3`` that was 4 attempts x 4 InRelease files x 20 s = 320 s, longer than the
+# name-resolution attempt, seen on 2026-11-11) every file apt requests is tried on that mirror first. With
+# the old ``Acquire::Retries=3`` that was 4 attempts x 4 InRelease files x 20 s = 320 s, longer than the
 # 5-minute step limit, so apt never reached the fallback mirror.
 #
-# Budget (the workflows give the step 8 minutes = 480 s; tests/test_workflow_apt_guard.py recomputes it):
-#   attempts per file         = Retries + 1                    = 2
-#   update, dead first mirror = 2 x 4 InRelease x 20 s         = 160 s
-#   install, dead first mirror= 2 x <=3 .deb files x 20 s      = 120 s
-#   worst case before the fallback mirror answers              = 280 s  (58 % of the limit)
+# How apt behaves (apt 2.7.14, the version on noble; source files in the Debian/apt repository):
+#   * Retries are counted per file, not per mirror (apt-pkg/acquire-item.cc ``Item::Item`` reads
+#     ``Acquire::Retries``; apt-pkg/acquire-worker.cc ``Worker::HandleFailure``). A transient failure
+#     (``TmpResolveFailure`` included, acquire-worker.cc ``URI_FAILURE``) is repeated on the same mirror
+#     until the counter is zero, only then the next mirror of the list is tried (``PopAlternativeURI``;
+#     the list comes from the mirror method, methods/mirror.cc ``RedirectItem``, apt-transport-mirror(1)).
+#   * A dead mirror is not remembered across files: methods/connect.cc caches only ``EAI_NONAME`` in
+#     ``bad_addr``; ``EAI_AGAIN`` ("Temporary failure resolving", the 2026-11-11 symptom) is not cached. So
+#     every InRelease and every .deb pays the full time again.
+#   * ``Acquire::http::Timeout`` limits connect and stalled reads (apt.conf(5)); the libc resolver runs
+#     before it and ignores it. One attempt therefore lasts max(resolution, Timeout).
+#   * Index files (Packages, Components, ...) are fetched from the mirror that delivered their InRelease
+#     (``Acquire::SameMirrorForAllIndexes``, default true; acquire-item.cc ``QueueURI`` and
+#     ``CheckDownloadDone``). They cost nothing on a dead first mirror, so the option is pinned below.
+#
+# Budget (the workflows give the step 8 minutes = 480 s; tests/test_workflow_apt_guard.py recomputes it from
+# these options and the real step limits, also with the resolution time doubled and 120 s kept free for the
+# working mirror):
+#   attempts per file                                       = Retries + 1 = 1
+#   dead first mirror, update  = 4 InRelease x 1 x 20 s      =  80 s
+#   dead first mirror, install = 4 .deb (2 packages + 1 dependency each) x 20 s = 80 s
+#   worst case before the fallback mirror answers            = 160 s (resolution doubled: 320 s)
+# This is a model from the apt sources, not a measurement; the 20 s figure comes from one incident log.
 # A healthy run needs well under a minute, and none at all when the packages are already installed.
 #
 # ``--error-on=any`` makes a partial outage fail loudly instead of continuing with stale package lists.
@@ -22,16 +40,18 @@
 # location without notice.
 set -euo pipefail
 
-APT_OPTS=(-o Acquire::Retries=1 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15)
+APT_OPTS=(-o Acquire::Retries=0 -o Acquire::http::Timeout=15 -o Acquire::https::Timeout=15
+  -o Acquire::SameMirrorForAllIndexes=true)
 SUDO="${APT_INSTALL_SUDO-sudo}"
 CONF_DIR="${APT_CONF_DIR:-/etc/apt/apt.conf.d}"
 
 if [ "${1:-}" = "--configure-only" ]; then
   $SUDO mkdir -p "$CONF_DIR"
   $SUDO tee "$CONF_DIR/99-ci-apt-budget" >/dev/null <<'CONF'
-Acquire::Retries "1";
+Acquire::Retries "0";
 Acquire::http::Timeout "15";
 Acquire::https::Timeout "15";
+Acquire::SameMirrorForAllIndexes "true";
 CONF
   exit 0
 fi

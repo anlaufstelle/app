@@ -60,8 +60,9 @@ jobs:
       # Runner-Image bringt das Paket nicht mit; kuenftige WeasyPrint-Versionen
       # setzen es voraus. Gleiche Zeile in e2e.yml, Paket auch im Dockerfile.
       # apt budget (scripts/ci/apt_install.sh): skips apt when the packages are present; otherwise a dead
-      # first mirror costs at most 2 attempts x (4 InRelease + 3 .deb) x 20 s = 280 s of the 480 s limit,
-      # so the fallback mirror is still reached (#2707).
+      # first mirror costs one attempt per file (8 files: 4 InRelease + 2 .deb per package) x 20 s
+      # = 160 s of the 480 s limit (320 s with the resolution doubled), so the fallback mirror is still
+      # reached (#2707).
       - run: scripts/ci/apt_install.sh gettext libharfbuzz-subset0
         timeout-minutes: 8
       # ``styles.css`` ist ein gitignoriertes Tailwind-Build-Artefakt (v4, #1480):

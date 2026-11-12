@@ -75,8 +75,9 @@ jobs:
         with:
           python-version: "3.14"
       # apt budget (scripts/ci/apt_install.sh): skips apt when the packages are present; otherwise a dead
-      # first mirror costs at most 2 attempts x (4 InRelease + 3 .deb) x 20 s = 280 s of the 480 s limit,
-      # so the fallback mirror is still reached (#2707).
+      # first mirror costs one attempt per file (6 files: 4 InRelease + 2 .deb per package) x 20 s
+      # = 120 s of the 480 s limit (240 s with the resolution doubled), so the fallback mirror is still
+      # reached (#2707).
       - run: scripts/ci/apt_install.sh gettext
         timeout-minutes: 8
       - run: python scripts/check_translations.py
