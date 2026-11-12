@@ -248,27 +248,19 @@ class TestPostWebhookOpenerComposition:
 
 
 class TestPostWebhookRejectionLogging:
-    def test_url_validation_failure_logs_exact_message(self, settings, caplog):
-        """Killt ``x__post_webhook__mutmut_14`` (Format-Argument ``exc`` ->
-        ``None``), ``_15`` (kein Praefix-Format, nur ``logger.warning(exc)``),
-        ``_16`` (Format-Argument komplett entfernt) und ``_17``
-        (XX-Marker-Variante des Log-Praefixes): die geloggte Meldung muss
-        EXAKT Praefix + Ausnahmetext tragen — das ist die einzige
-        Diagnoseinformation im Ops-Log, warum ein Webhook-POST unterblieb."""
-        settings.BREACH_NOTIFICATION_WEBHOOK_URL = "http://insecure.example/hook"
+    def test_url_validation_failure_logs_only_error_class(self, settings, caplog):
+        """URL rejection must identify the error without revealing credentials (Refs #2719)."""
+        settings.BREACH_NOTIFICATION_WEBHOOK_URL = "https:///private-token?key=secret"
         with caplog.at_level("WARNING", logger="core.services.compliance.breach_detection"):
             assert _post_webhook({"kind": "x"}) is False
         messages = [r.getMessage() for r in caplog.records]
-        assert messages == ["breach_webhook_url_rejected: Webhook scheme 'http' not allowed (https only)."]
+        assert messages == ["breach_webhook_failed: ValueError"]
 
-    def test_delivery_failure_logs_exact_message(self, settings, monkeypatch, caplog):
-        """Killt ``x__post_webhook__mutmut_53`` (Format-Argument ``exc`` ->
-        ``None``), ``_54`` (kein Praefix-Format), ``_55`` (Format-Argument
-        entfernt) und ``_56`` (XX-Marker-Variante des Log-Praefixes) — die
-        zweite ``logger.warning``-Stelle bei fehlgeschlagener Zustellung."""
+    def test_delivery_failure_logs_only_error_class(self, settings, monkeypatch, caplog):
+        """Transport exception messages may contain the secret webhook URL (Refs #2719)."""
 
         def _raise_open(self, req, *args, **kwargs):
-            raise urllib.error.URLError("connection refused")
+            raise urllib.error.URLError("https://example.com/private-token?key=secret")
 
         monkeypatch.setattr("urllib.request.OpenerDirector.open", _raise_open)
         monkeypatch.setattr("socket.gethostbyname", lambda host: "93.184.216.34")
@@ -276,7 +268,7 @@ class TestPostWebhookRejectionLogging:
         with caplog.at_level("WARNING", logger="core.services.compliance.breach_detection"):
             assert _post_webhook({"kind": "x"}) is False
         messages = [r.getMessage() for r in caplog.records]
-        assert messages == ["breach_webhook_failed: <urlopen error connection refused>"]
+        assert messages == ["breach_webhook_failed: URLError"]
 
 
 class TestPostWebhookUrlSettingDefault:
