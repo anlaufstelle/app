@@ -106,24 +106,18 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
         selected_filter = state.time_filter
         selected_filter_id = state.time_filter_id
 
-        # Build feed items
+        # Build feed items; the document-type filter (from Timeline) runs in
+        # the query, before the feed cap.
+        doc_type_id = state.doc_type_id
         feed_items = build_feed_items(
             facility,
             target_date,
             feed_type,
             time_filter=selected_filter,
             user=self.request.user,
+            document_type_id=doc_type_id or None,
         )
         enrich_events_with_preview(feed_items, self.request.user)
-
-        # Document type filter (from Timeline)
-        doc_type_id = state.doc_type_id
-        if doc_type_id:
-            feed_items = [
-                item
-                for item in feed_items
-                if item["type"] != "event" or str(item["object"].document_type_id) == doc_type_id
-            ]
 
         from core.services.compliance import allowed_sensitivities_for_user
 
@@ -699,17 +693,9 @@ class ZeitstromFeedPartialView(AssistantOrAboveRequiredMixin, ZeitstromWatchFoll
             feed_type,
             time_filter=time_filter,
             user=self.request.user,
+            document_type_id=state.doc_type_id or None,
         )
         enrich_events_with_preview(feed_items, self.request.user)
-
-        # Document type filter
-        doc_type_id = state.doc_type_id
-        if doc_type_id:
-            feed_items = [
-                item
-                for item in feed_items
-                if item["type"] != "event" or str(item["object"].document_type_id) == doc_type_id
-            ]
 
         context["feed_items"] = feed_items
         show_tally_panel = state.is_live_tally_context

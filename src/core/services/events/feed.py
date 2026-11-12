@@ -194,10 +194,12 @@ def activities_for_feed_read(facility, user):
     return activities
 
 
-def _feed_events(facility, start_dt, end_dt, user, include_all):
+def _feed_events(facility, start_dt, end_dt, user, include_all, document_type_id=None):
     """Event-Zweig des Feeds (Refs #1892, Extraktion aus ``build_feed_items``).
 
     Exclude bans when loading all types to avoid duplicates with bans feed.
+    The document-type filter runs in the query, before the cap, so older
+    matches are not cut off by newer events of other types.
     """
     events_qs = events_for_feed_read(facility, user).filter(
         occurred_at__gte=start_dt,
@@ -205,6 +207,8 @@ def _feed_events(facility, start_dt, end_dt, user, include_all):
     )
     if include_all:
         events_qs = events_qs.exclude(document_type__system_type="ban")
+    if document_type_id:
+        events_qs = events_qs.filter(document_type_id=document_type_id)
     events = events_qs.select_related("document_type", "client", "created_by").order_by("-occurred_at")[
         :FEED_MAX_PER_TYPE
     ]
@@ -254,12 +258,15 @@ def _feed_bans(facility, start_dt, end_dt, user):
     return [{"type": "ban", "occurred_at": e.occurred_at, "object": e} for e in bans]
 
 
-def build_feed_items(facility, target_date, feed_type, time_filter=None, user=None):
+def build_feed_items(facility, target_date, feed_type, time_filter=None, user=None, document_type_id=None):
     """Build a unified feed of events, activities, work items, and bans for a given date.
 
     *user* is required for sensitivity-based event visibility — without it the
     feed includes events whose existence the caller is not allowed to know
     about (#522). Callers must always pass ``request.user``.
+
+    *document_type_id* restricts the event cards to one document type; the
+    other card kinds (activities, work items, bans) are not affected.
 
     Refs #1892: je Feed-Sorte ein eigener ``_feed_<sorte>``-Builder; hier
     bleiben nur Zweig-Auswahl, Merge und Sortierung.
@@ -268,7 +275,9 @@ def build_feed_items(facility, target_date, feed_type, time_filter=None, user=No
     include_all = feed_type == "" or feed_type == "all"
 
     events_list = (
-        _feed_events(facility, start_dt, end_dt, user, include_all) if feed_type == "events" or include_all else []
+        _feed_events(facility, start_dt, end_dt, user, include_all, document_type_id)
+        if feed_type == "events" or include_all
+        else []
     )
     activities_list = (
         _feed_activities(facility, start_dt, end_dt, user, include_all)

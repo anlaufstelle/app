@@ -267,9 +267,9 @@ def _feed_projection(facility, user, state: ZeitstromState):
         )
         if include_all:
             events = events.exclude(document_type__system_type="ban")
-        rows = list(events.values(*_EVENT_VALUES).order_by("-occurred_at")[:FEED_MAX_PER_TYPE])
         if state.doc_type_id:
-            rows = [row for row in rows if str(row["document_type_id"]) == state.doc_type_id]
+            events = events.filter(document_type_id=state.doc_type_id)
+        rows = list(events.values(*_EVENT_VALUES).order_by("-occurred_at")[:FEED_MAX_PER_TYPE])
         items.extend({"type": "event", "time": row["occurred_at"], "row": row} for row in rows)
 
     if state.feed_type == "activities" or include_all:
