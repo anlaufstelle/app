@@ -6,14 +6,17 @@
  */
 
 /*
- * Gemeinsame Basis der beiden Klientel-Autocompletes (Refs #1016, C5).
- * ``eventClientAutocomplete`` erweitert ``clientAutocomplete`` nur um Cases-/
- * Stage-Logik; die untenstehenden Methoden waren in beiden Komponenten Zeile
- * fuer Zeile identisch. Sie werden per ``Object.assign(literal, shared)`` in
- * beide Komponenten gemischt — NUR Methoden, keine Getter: ``Object.assign``
- * wuerde Getter beim Kopieren auswerten und als statischen Wert ablegen
- * (Reaktivitaet kaputt), daher bleiben Getter in den jeweiligen Literalen.
- * Pro-Instanz-State (query/results/…) lebt ebenfalls im jeweiligen Literal.
+ * Factory of the two person autocompletes (Refs #1016, #2570).
+ * ``_createAutocomplete(extension)`` returns a fresh object per Alpine
+ * instance: base state, reactive getters and the shared search/selection
+ * methods have exactly one implementation here. ``clientAutocomplete`` uses
+ * the base as is; ``eventClientAutocomplete`` passes an extension with its
+ * case loading and minimum-level logic. The extension may override the named
+ * hooks ``buildAutocompleteUrl``, ``afterSelect``, ``afterSelectionCleared``
+ * and ``init``.
+ * The extension is merged via property DESCRIPTORS, never ``Object.assign``:
+ * ``Object.assign`` would evaluate getters while copying and store them as
+ * static values (reactivity broken).
  */
 let _autocompleteInstance = 0;
 function _nextAutocompleteListboxId() {
@@ -27,148 +30,215 @@ function _nextAutocompleteIds() {
     return { listboxId, inputId: listboxId.replace("-list", "-input") };
 }
 
-const _autocompleteShared = {
-    resetSearch() {
-        this._fetchGen++;
-        this.searchState = "idle";
-        this.results = [];
-        this.enrichedResults = [];
-        this.highlightIndex = -1;
-        this.searched = false;
-        this.show = false;
-    },
-    fetchResults() {
-        const gen = ++this._fetchGen;
-        this.results = [];
-        this.enrichedResults = [];
-        this.highlightIndex = -1;
-        this.searched = false;
-        this.searchState = "loading";
-        this.show = true;
-        const url = this.buildAutocompleteUrl
-            ? this.buildAutocompleteUrl()
-            : `${this._autocompleteUrl}?q=${encodeURIComponent(this.query)}`;
-        return fetch(url)
-            .then((response) => {
-                if (!response.ok) throw new Error("Search request failed");
-                return response.json();
-            })
-            .then((data) => {
-                if (gen !== this._fetchGen) return;
-                if (!Array.isArray(data)) throw new Error("Invalid search response");
-                this.searchState = "success";
-                this._applyResults(data);
-            })
-            .catch(() => {
-                if (gen !== this._fetchGen) return;
-                this.searchState = "error";
-                this.results = [];
-                this.enrichedResults = [];
-                this.searched = false;
+function _createAutocomplete(extension = {}) {
+    const base = {
+        ..._nextAutocompleteIds(),
+        query: "",
+        results: [],
+        enrichedResults: [],
+        selectedId: "",
+        show: false,
+        highlightIndex: -1,
+        _justSelected: false,
+        _fetchGen: 0,
+        _autocompleteUrl: "",
+        // Refs #1803: `searched` tells "not typed enough yet" from "searched
+        // and found nothing"; without it a zero-hit list stayed invisible.
+        searched: false,
+        searchState: "idle",
+        // Visible hint instead of a silent reset when a type change clears an
+        // already chosen person.
+        selectionCleared: false,
+        // Label of the required minimum contact level, translated server-side
+        // from the ``data-min-stage-label`` of the <option>.
+        minStageLabel: "",
+        _minStageHintTemplate: "",
+        init() {
+            this._initCommon();
+        },
+        get unconfirmedQuery() {
+            return !this.selectedId && this.query.trim().length > 0;
+        },
+        get activeDescendant() {
+            return this.show && this.highlightIndex >= 0 && this.highlightIndex < this.results.length
+                ? `${this.listboxId}-option-${this.highlightIndex}` : null;
+        },
+        get ariaExpanded() {
+            return this.show ? "true" : "false";
+        },
+        get hasVisibleResults() {
+            return this.show && this.results.length > 0;
+        },
+        get noMatches() {
+            return this.show && this.searched && this.searchState !== "error" && this.results.length === 0;
+        },
+        get showMinStageHint() {
+            return this.minStageLabel !== "";
+        },
+        get minStageHint() {
+            return this._minStageHintTemplate.replace("%(stage)s", this.minStageLabel);
+        },
+        // Named hooks; the event variant overrides them.
+        buildAutocompleteUrl() {
+            return `${this._autocompleteUrl}?${new URLSearchParams({ q: this.query }).toString()}`;
+        },
+        afterSelect() {},
+        afterSelectionCleared() {},
+        selectItem(item) {
+            this._notifySelectionChanged();
+            this._justSelected = true;
+            this.resetSearch();
+            this.selectedId = item.id;
+            this.query = item.pseudonym;
+            this.show = false;
+            this.searched = false;
+            this.selectionCleared = false;
+            this.results = [];
+            this.highlightIndex = -1;
+            this.afterSelect(item);
+        },
+        resetSearch() {
+            this._fetchGen++;
+            this.searchState = "idle";
+            this.results = [];
+            this.enrichedResults = [];
+            this.highlightIndex = -1;
+            this.searched = false;
+            this.show = false;
+        },
+        fetchResults() {
+            const gen = ++this._fetchGen;
+            this.results = [];
+            this.enrichedResults = [];
+            this.highlightIndex = -1;
+            this.searched = false;
+            this.searchState = "loading";
+            this.show = true;
+            const url = this.buildAutocompleteUrl();
+            return fetch(url)
+                .then((response) => {
+                    if (!response.ok) throw new Error("Search request failed");
+                    return response.json();
+                })
+                .then((data) => {
+                    if (gen !== this._fetchGen) return;
+                    if (!Array.isArray(data)) throw new Error("Invalid search response");
+                    this.searchState = "success";
+                    this._applyResults(data);
+                })
+                .catch(() => {
+                    if (gen !== this._fetchGen) return;
+                    this.searchState = "error";
+                    this.results = [];
+                    this.enrichedResults = [];
+                    this.searched = false;
+                });
+        },
+        _initCommon() {
+            this.query = this.$el.dataset.initialPseudonym || "";
+            this.selectedId = this.$el.dataset.initialClientId || "";
+            this._autocompleteUrl = this.$el.dataset.autocompleteUrl || "";
+            this._minStageHintTemplate = this.$el.dataset.minStageHint || "";
+            // CSP-friendly: enriche Items mit isHighlighted statt
+            // ``highlightIndex === idx`` im Template (Refs #693).
+            this.$watch("highlightIndex", () => this._enrich());
+            this.$watch("results", () => this._enrich());
+        },
+        _enrich() {
+            const hi = this.highlightIndex;
+            this.enrichedResults = this.results.map((c, i) => {
+                const isHi = i === hi;
+                return Object.assign({}, c, {
+                    optionId: `${this.listboxId}-option-${i}`,
+                    isHighlighted: isHi,
+                    highlightClass: isHi ? "bg-accent-light" : "",
+                });
             });
-    },
-    _initCommon() {
-        this.query = this.$el.dataset.initialPseudonym || "";
-        this.selectedId = this.$el.dataset.initialClientId || "";
-        this._autocompleteUrl = this.$el.dataset.autocompleteUrl || "";
-        this._minStageHintTemplate = this.$el.dataset.minStageHint || "";
-        // CSP-friendly: enriche Items mit isHighlighted statt
-        // ``highlightIndex === idx`` im Template (Refs #693).
-        this.$watch("highlightIndex", () => this._enrich());
-        this.$watch("results", () => this._enrich());
-    },
-    _enrich() {
-        const hi = this.highlightIndex;
-        this.enrichedResults = this.results.map((c, i) => {
-            const isHi = i === hi;
-            return Object.assign({}, c, {
-                optionId: `${this.listboxId}-option-${i}`,
-                isHighlighted: isHi,
-                highlightClass: isHi ? "bg-accent-light" : "",
-            });
-        });
-    },
-    _notifySelectionChanged() {
-        window.dispatchEvent(new CustomEvent("client-selection-changed"));
-    },
-    setQuery(event) {
-        this._notifySelectionChanged();
-        this.query = event.target.value;
-        this._justSelected = false;
-        this.resetSearch();
-        this.selectedId = "";
-        // Clear case intent before Alpine's asynchronous watcher or debounce.
-        if (this.loadCasesForClient) this.loadCasesForClient("");
-    },
-    setSelectedId(event) {
-        this._notifySelectionChanged();
-        this.resetSearch();
-        this.selectedId = event.target.value;
-    },
-    hideResults() {
-        this.show = false;
-        this.highlightIndex = -1;
-    },
-    /**
-     * Antwort uebernehmen — inkl. Leerzustand (Refs #1803).
-     *
-     * Vorher stand hier ``this.show = data.length > 0``; genau das war der
-     * stumme Zweig. Die Schwelle ist dieselbe zwei Zeichen wie in der globalen
-     * Suche: darunter ist „nichts gefunden" keine Aussage.
-     */
-    _applyResults(data) {
-        this.highlightIndex = -1;
-        this.results = data;
-        this.searched = this.query.trim().length >= 2;
-        this.show = data.length > 0 || this.searched;
-    },
-    selectByEvent(event) {
-        const idx = parseInt(event.currentTarget.dataset.idx, 10);
-        if (Number.isFinite(idx) && this.results[idx]) {
-            this.selectItem(this.results[idx]);
-            this.$refs?.clientInput?.focus();
-        }
-    },
-    highlightByEvent(event) {
-        const idx = parseInt(event.currentTarget.dataset.idx, 10);
-        if (Number.isFinite(idx)) {
-            this.highlightIndex = idx;
-        }
-    },
-    moveHighlightUp() {
-        this.moveHighlight(-1);
-    },
-    moveHighlightDown() {
-        this.moveHighlight(1);
-    },
-    moveHighlight(delta) {
-        if (!this.show || this.results.length === 0) return;
-        this.highlightIndex =
-            (this.highlightIndex + delta + this.results.length) %
-            this.results.length;
-    },
-    confirmHighlight() {
-        if (
-            this.show &&
-            this.highlightIndex >= 0 &&
-            this.highlightIndex < this.results.length
-        ) {
-            this.selectItem(this.results[this.highlightIndex]);
-        }
-    },
-    onInput() {
-        // Ignore a pending debounce after selection; real input clears the flag.
-        if (this._justSelected) return;
-        this.highlightIndex = -1;
-        this.selectionCleared = false;
-        this.fetchResults();
-    },
-    onFocus() {
-        if (!this.show && !this._justSelected) {
+        },
+        _notifySelectionChanged() {
+            window.dispatchEvent(new CustomEvent("client-selection-changed"));
+        },
+        setQuery(event) {
+            this._notifySelectionChanged();
+            this.query = event.target.value;
+            this._justSelected = false;
+            this.resetSearch();
+            this.selectedId = "";
+            // Clear dependent intent (case) before Alpine's asynchronous watcher or debounce.
+            this.afterSelectionCleared();
+        },
+        setSelectedId(event) {
+            this._notifySelectionChanged();
+            this.resetSearch();
+            this.selectedId = event.target.value;
+        },
+        hideResults() {
+            this.show = false;
+            this.highlightIndex = -1;
+        },
+        /**
+         * Antwort uebernehmen — inkl. Leerzustand (Refs #1803).
+         *
+         * Vorher stand hier ``this.show = data.length > 0``; genau das war der
+         * stumme Zweig. Die Schwelle ist dieselbe zwei Zeichen wie in der globalen
+         * Suche: darunter ist „nichts gefunden" keine Aussage.
+         */
+        _applyResults(data) {
+            this.highlightIndex = -1;
+            this.results = data;
+            this.searched = this.query.trim().length >= 2;
+            this.show = data.length > 0 || this.searched;
+        },
+        selectByEvent(event) {
+            const idx = parseInt(event.currentTarget.dataset.idx, 10);
+            if (Number.isFinite(idx) && this.results[idx]) {
+                this.selectItem(this.results[idx]);
+                this.$refs?.clientInput?.focus();
+            }
+        },
+        highlightByEvent(event) {
+            const idx = parseInt(event.currentTarget.dataset.idx, 10);
+            if (Number.isFinite(idx)) {
+                this.highlightIndex = idx;
+            }
+        },
+        moveHighlightUp() {
+            this.moveHighlight(-1);
+        },
+        moveHighlightDown() {
+            this.moveHighlight(1);
+        },
+        moveHighlight(delta) {
+            if (!this.show || this.results.length === 0) return;
+            this.highlightIndex =
+                (this.highlightIndex + delta + this.results.length) %
+                this.results.length;
+        },
+        confirmHighlight() {
+            if (
+                this.show &&
+                this.highlightIndex >= 0 &&
+                this.highlightIndex < this.results.length
+            ) {
+                this.selectItem(this.results[this.highlightIndex]);
+            }
+        },
+        onInput() {
+            // Ignore a pending debounce after selection; real input clears the flag.
+            if (this._justSelected) return;
+            this.highlightIndex = -1;
+            this.selectionCleared = false;
             this.fetchResults();
-        }
-    },
-};
+        },
+        onFocus() {
+            if (!this.show && !this._justSelected) {
+                this.fetchResults();
+            }
+        },
+    };
+    // Descriptors keep the getters live (no evaluation while copying).
+    return Object.defineProperties(base, Object.getOwnPropertyDescriptors(extension));
+}
 
 document.addEventListener("alpine:init", () => {
     // The slot survives innerHTML swaps, including validation failures.
@@ -466,74 +536,7 @@ document.addEventListener("alpine:init", () => {
      * auf das Input-Element, nicht auf den x-data-Container — daher
      * speichern wir die URL direkt im State.
      */
-    Alpine.data("clientAutocomplete", () =>
-        Object.assign(
-            {
-                ..._nextAutocompleteIds(),
-                query: "",
-                results: [],
-                enrichedResults: [],
-                selectedId: "",
-                show: false,
-                highlightIndex: -1,
-                _justSelected: false,
-                _fetchGen: 0,
-                _autocompleteUrl: "",
-                // Refs #1803 (Konzept §3.8): `searched` unterscheidet „noch nicht
-                // genug getippt" von „gesucht und nichts gefunden". Ohne diese
-                // Unterscheidung blieb das Listenfeld bei null Treffern schlicht
-                // unsichtbar — ununterscheidbar davon, dass die Suche noch gar
-                // nicht lief.
-                searched: false,
-                searchState: "idle",
-                // Sichtbarer Hinweis statt wortlosem Reset, wenn ein Typwechsel
-                // die bereits getroffene Personenauswahl leert.
-                selectionCleared: false,
-                // Label der geforderten Mindest-Kontaktstufe, serverseitig
-                // uebersetzt aus dem ``data-min-stage-label`` des <option>.
-                minStageLabel: "",
-                _minStageHintTemplate: "",
-                init() {
-                    this._initCommon();
-                },
-                get unconfirmedQuery() {
-                    return !this.selectedId && this.query.trim().length > 0;
-                },
-                get activeDescendant() {
-                    return this.show && this.highlightIndex >= 0 && this.highlightIndex < this.results.length
-                        ? `${this.listboxId}-option-${this.highlightIndex}` : null;
-                },
-                get ariaExpanded() {
-                    return this.show ? "true" : "false";
-                },
-                get hasVisibleResults() {
-                    return this.show && this.results.length > 0;
-                },
-                get noMatches() {
-                    return this.show && this.searched && this.searchState !== "error" && this.results.length === 0;
-                },
-                get showMinStageHint() {
-                    return this.minStageLabel !== "";
-                },
-                get minStageHint() {
-                    return this._minStageHintTemplate.replace("%(stage)s", this.minStageLabel);
-                },
-                selectItem(item) {
-                    this._notifySelectionChanged();
-                    this._justSelected = true;
-                    this.resetSearch();
-                    this.selectedId = item.id;
-                    this.query = item.pseudonym;
-                    this.show = false;
-                    this.searched = false;
-                    this.selectionCleared = false;
-                    this.results = [];
-                    this.highlightIndex = -1;
-                },
-            },
-            _autocompleteShared,
-        ),
-    );
+    Alpine.data("clientAutocomplete", () => _createAutocomplete());
 
     /**
      * Klientel- + Fall-Autocomplete fuer NewContact (events/create.html).
@@ -543,39 +546,15 @@ document.addEventListener("alpine:init", () => {
      * nicht mehr der x-data-Container).
      */
     Alpine.data("eventClientAutocomplete", () =>
-        Object.assign(
+        _createAutocomplete(
             {
-                ..._nextAutocompleteIds(),
-                query: "",
-                results: [],
-                enrichedResults: [],
-                selectedId: "",
-                show: false,
                 anonymousAllowed: true,
                 minStage: "",
-                highlightIndex: -1,
-                // Refs #1803 (Konzept §3.8): `searched` unterscheidet „noch nicht
-                // genug getippt" von „gesucht und nichts gefunden". Ohne diese
-                // Unterscheidung blieb das Listenfeld bei null Treffern schlicht
-                // unsichtbar — ununterscheidbar davon, dass die Suche noch gar
-                // nicht lief.
-                searched: false,
-                searchState: "idle",
-                // Sichtbarer Hinweis statt wortlosem Reset, wenn ein Typwechsel
-                // die bereits getroffene Personenauswahl leert.
-                selectionCleared: false,
-                // Label der geforderten Mindest-Kontaktstufe, serverseitig
-                // uebersetzt aus dem ``data-min-stage-label`` des <option>.
-                minStageLabel: "",
-                _minStageHintTemplate: "",
-                _justSelected: false,
-                _fetchGen: 0,
                 clientCases: [],
                 casesState: "idle",
                 _casesGen: 0,
                 _casesClientId: "",
                 selectedCaseId: "",
-                _autocompleteUrl: "",
                 _casesForClientUrl: "",
                 // Refs #1813 (T4, §6.5): ?case=-Vorbelegung vom Server
                 // (data-initial-case-id); wird in loadCasesForClient() beim
@@ -634,16 +613,6 @@ document.addEventListener("alpine:init", () => {
                         });
                     }
                 },
-                get unconfirmedQuery() {
-                    return !this.selectedId && this.query.trim().length > 0;
-                },
-                get activeDescendant() {
-                    return this.show && this.highlightIndex >= 0 && this.highlightIndex < this.results.length
-                        ? `${this.listboxId}-option-${this.highlightIndex}` : null;
-                },
-                get ariaExpanded() {
-                    return this.show ? "true" : "false";
-                },
                 get notAnonymousAllowed() {
                     return !this.anonymousAllowed;
                 },
@@ -653,18 +622,6 @@ document.addEventListener("alpine:init", () => {
                 get showCaseDropdown() {
                     return this.selectedId && this.clientCases.length > 0;
                 },
-                get hasVisibleResults() {
-                    return this.show && this.results.length > 0;
-                },
-                get noMatches() {
-                    return this.show && this.searched && this.searchState !== "error" && this.results.length === 0;
-                },
-                get showMinStageHint() {
-                    return this.minStageLabel !== "";
-                },
-                get minStageHint() {
-                    return this._minStageHintTemplate.replace("%(stage)s", this.minStageLabel);
-                },
                 get showNoCasesHint() {
                     // Refs #1735: Ohne konfigurierte Cases-URL (Rolle darf
                     // ``cases_for_client`` nicht abrufen) wird gar nicht erst
@@ -672,6 +629,7 @@ document.addEventListener("alpine:init", () => {
                     // stehen, das waere eine unbelegte Behauptung.
                     return this.selectedId && this._casesForClientUrl && this.casesState === "success" && this.clientCases.length === 0;
                 },
+                // Extension of the base search URL: the minimum contact level.
                 buildAutocompleteUrl() {
                     const params = new URLSearchParams({ q: this.query });
                     if (this.minStage) params.set("min_stage", this.minStage);
@@ -711,18 +669,11 @@ document.addEventListener("alpine:init", () => {
                         this.selectionCleared = false;
                     }
                 },
-                selectItem(item) {
-                    this._notifySelectionChanged();
-                    this._justSelected = true;
-                    this.resetSearch();
-                    this.selectedId = item.id;
-                    this.query = item.pseudonym;
-                    this.show = false;
-                    this.searched = false;
-                    this.selectionCleared = false;
-                    this.results = [];
-                    this.highlightIndex = -1;
+                afterSelect(item) {
                     this.loadCasesForClient(item.id);
+                },
+                afterSelectionCleared() {
+                    this.loadCasesForClient("");
                 },
                 updateContextLink(event) {
                     const link = event.currentTarget;
@@ -785,7 +736,6 @@ document.addEventListener("alpine:init", () => {
                 },
                 setSelectedCaseId(event) { this.selectedCaseId = event.target.value; },
             },
-            _autocompleteShared,
         ),
     );
 
