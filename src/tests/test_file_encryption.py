@@ -441,3 +441,46 @@ class TestVaultHeaderBounds:
 
         with pytest.raises(EncryptionError, match="Truncated"):
             list(decrypt_file_stream(out))
+
+
+class _NonSeekableStream:
+    """Read-only stream without seek support, forcing the buffered write path."""
+
+    def __init__(self, data):
+        self._stream = io.BytesIO(data)
+
+    def read(self, size=-1):
+        return self._stream.read(size)
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("_encryption_key")
+class TestEncryptFileIsDurable:
+    """The encrypted file and its directory entry are flushed to disk."""
+
+    @pytest.mark.parametrize("seekable", [True, False], ids=["seekable-stream", "non-seekable-stream"])
+    def test_file_and_directory_are_fsynced(self, tmp_path, monkeypatch, seekable):
+        import os
+        import stat
+
+        real_fsync = os.fsync
+        calls = []
+
+        def spy(fd):
+            mode = os.fstat(fd).st_mode
+            calls.append(("dir" if stat.S_ISDIR(mode) else "file", os.fstat(fd).st_size))
+            return real_fsync(fd)
+
+        monkeypatch.setattr(os, "fsync", spy)
+        data = b"X" * (CHUNK_SIZE * 2 + 7)
+        stream = io.BytesIO(data) if seekable else _NonSeekableStream(data)
+        output = tmp_path / "vault" / "durable.enc"
+
+        encrypt_file(stream, output, file_id="durable-id")
+
+        written = output.stat().st_size
+        kinds = [kind for kind, _size in calls]
+        assert kinds == ["file", "dir"]
+        # The data had left the userspace buffer when the file was synced.
+        assert calls[0][1] == written
+        assert b"".join(decrypt_file_stream(output, file_id="durable-id")) == data

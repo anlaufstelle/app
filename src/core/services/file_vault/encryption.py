@@ -20,6 +20,7 @@ from cryptography.fernet import Fernet, InvalidToken, MultiFernet
 from django.conf import settings
 from django.test.signals import setting_changed
 
+from core.services.file_vault.file_locks import fsync_directory
 from core.services.file_vault.keyring import split_key_ring
 
 if TYPE_CHECKING:
@@ -295,6 +296,11 @@ def encrypt_file(input_stream, output_path, file_id=None):
         out.write(struct.pack(">I", len(token_bytes)))
         out.write(token_bytes)
 
+    def _persist(out):
+        # An upload must survive a crash right after it was acknowledged.
+        out.flush()
+        os.fsync(out.fileno())
+
     seekable = hasattr(input_stream, "seek") and (not hasattr(input_stream, "seekable") or input_stream.seekable())
 
     if seekable:
@@ -315,6 +321,8 @@ def encrypt_file(input_stream, output_path, file_id=None):
             for index in range(total):
                 data = input_stream.read(CHUNK_SIZE)
                 _write_token(out, _encrypt_chunk(index, total, data))
+            _persist(out)
+        fsync_directory(output_path.parent)
         return
 
     # Fallback (nicht-seekbarer Stream): puffern wie bisher. In-place ersetzt
@@ -336,6 +344,8 @@ def encrypt_file(input_stream, output_path, file_id=None):
         out.write(struct.pack(">I", total))
         for token in raw_chunks:
             _write_token(out, token)
+        _persist(out)
+    fsync_directory(output_path.parent)
 
 
 def decrypt_file_stream(input_path, file_id=None, *, fernet=None):
