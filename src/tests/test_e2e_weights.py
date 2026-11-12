@@ -22,13 +22,21 @@ def run(script, *args):
     )
 
 
-def test_weighted_partition_and_positive_median_fallback(tmp_path):
+def test_weighted_partition_and_calibrated_fallback(tmp_path):
     base = tmp_path / "specs"
     base.mkdir()
     for name in "abcd":
         (base / f"test_{name}.py").write_text("def test_one(): pass\n")
     weights = tmp_path / "weights.json"
-    weights.write_text(json.dumps({"test_a.py": 6, "test_b.py": 2, "_meta": {}}))
+    weights.write_text(
+        json.dumps(
+            {
+                "test_a.py": 6,
+                "test_b.py": 2,
+                "_meta": {"fallback": {"seconds_per_test": 4, "test_counts": {"test_c.py": 1, "test_d.py": 1}}},
+            }
+        )
+    )
     args = ("--base-dir", base, "--weights", weights, "--slices", 2)
     first = run("scripts/e2e_slice.py", *args, "--index", 1)
     assert first.returncode == 0, first.stderr
@@ -40,10 +48,11 @@ def test_weighted_partition_and_positive_median_fallback(tmp_path):
     assert "max/mean: 1.000" in summary.stdout
     assert "unmeasured: 2" in summary.stdout
     assert "test_c.py" in summary.stdout and "test_d.py" in summary.stdout
-    weights.write_text('{"_meta": {}}')
+    # Fully measured legacy files do not need a fallback calibration.
+    weights.write_text(json.dumps({**{f"test_{name}.py": 1 for name in "abcd"}, "_meta": {}}))
     summary = run("scripts/e2e_slice.py", *args, "--summary")
     assert summary.returncode == 0
-    assert "2.00s" in summary.stdout and "unmeasured: 4" in summary.stdout
+    assert "2.00s" in summary.stdout and "unmeasured: 0" in summary.stdout
 
 
 def test_workflow_partition_union_and_weight_coverage():
@@ -152,13 +161,22 @@ def test_slicer_ignores_stale_weights_but_validator_rejects_them(tmp_path):
     for name in "abc":
         (base / f"test_{name}.py").write_text("def test_one(): pass\n")
     weights = tmp_path / "weights.json"
-    weights.write_text(json.dumps({"test_a.py": 6, "test_b.py": 2, "test_deleted.py": 1000, "_meta": {}}))
+    weights.write_text(
+        json.dumps(
+            {
+                "test_a.py": 6,
+                "test_b.py": 2,
+                "test_deleted.py": 1000,
+                "_meta": {"fallback": {"seconds_per_test": 4, "test_counts": {"test_c.py": 1}}},
+            }
+        )
+    )
     args = ("--base-dir", base, "--weights", weights, "--slices", 2)
     summary = run("scripts/e2e_slice.py", *args, "--summary")
     assert summary.returncode == 0, summary.stderr
     assert "stale: 1" in summary.stdout
     assert "unmeasured: 1" in summary.stdout
-    assert "6.00s" in summary.stdout  # The stale weight must not affect the fallback median.
+    assert summary.stdout.count("6.00s") == 2  # The stale weight must not affect calibrated estimates.
     selected = []
     for index in (1, 2):
         result = run("scripts/e2e_slice.py", *args, "--index", index)
@@ -317,7 +335,7 @@ def test_partition_manifest_validation(tmp_path, corruption):
     for name in "abcd":
         (base / f"test_{name}.py").write_text("def test_one(): pass\n")
     weights = tmp_path / "weights.json"
-    weights.write_text('{"_meta": {}}')
+    weights.write_text(json.dumps({**{f"test_{name}.py": 1 for name in "abcd"}, "_meta": {}}))
     args = ("--base-dir", base, "--weights", weights, "--slices", 2)
     buckets = [run("scripts/e2e_slice.py", *args, "--index", index).stdout.splitlines() for index in (1, 2)]
     assert all(buckets)
@@ -426,6 +444,15 @@ def test_unmeasured_file_weight_scales_with_collected_test_count(tmp_path, test_
     missing_count = run("scripts/e2e_slice.py", "--base-dir", base, "--weights", output, "--slices", 1, "--index", 1)
     assert missing_count.returncode == 2 and missing_count.stdout == ""
     assert "regenerate weights with --collection" in missing_count.stderr
+    assert "or add collected counts to _meta.fallback.test_counts" in missing_count.stderr
+    assert "seconds_per_test * test_count" in missing_count.stderr
+    # Recovery without JUnit sources keeps the measured weights and calibration rate.
+    data["_meta"]["fallback"]["test_counts"]["test_new.py"] = 7
+    output.write_text(json.dumps(data))
+    recovered = run("scripts/e2e_slice.py", "--base-dir", base, "--weights", output, "--slices", 1, "--summary")
+    assert recovered.returncode == 0, recovered.stderr
+    assert f"{7.5 + 1.5 * (test_count + 7):.2f}s" in recovered.stdout
+    assert "unmeasured: 2" in recovered.stdout
 
 
 @pytest.mark.parametrize("nodes", [[], ["test_one", "test_one"], ["test_absent.py::test_one"]])
@@ -448,6 +475,8 @@ def test_converter_rejects_invalid_fallback_collection(tmp_path, nodes):
 @pytest.mark.parametrize(
     "fallback",
     [
+        None,
+        {},
         {"seconds_per_test": 0, "test_counts": {}},
         {"seconds_per_test": float("nan"), "test_counts": {}},
         {"seconds_per_test": 3, "test_counts": {"test_quick_exit_geometry.py": True}},
@@ -462,3 +491,19 @@ def test_invalid_fallback_calibration_fails_without_a_partial_file_list(tmp_path
     assert validated.returncode == 2
     selected = run("scripts/e2e_slice.py", "--weights", weights, "--slices", 1, "--index", 1)
     assert selected.returncode == 2 and selected.stdout == ""
+
+
+@pytest.mark.parametrize("measured", [False, True])
+def test_missing_fallback_calibration_rejects_unmeasured_files(tmp_path, measured):
+    base = tmp_path / "specs"
+    base.mkdir()
+    for name in ("test_measured.py", "test_unmeasured.py"):
+        (base / name).write_text("def test_one(): pass\n")
+    weights = tmp_path / "weights.json"
+    data = {"_meta": {}}
+    if measured:
+        data["test_measured.py"] = 6
+    weights.write_text(json.dumps(data))
+    for mode in (("--index", 1), ("--summary",)):
+        selected = run("scripts/e2e_slice.py", "--base-dir", base, "--weights", weights, "--slices", 1, *mode)
+        assert selected.returncode == 2 and selected.stdout == ""

@@ -49,9 +49,9 @@ def _validate_weights(data: dict, base: Path, require_existing: bool) -> dict[st
 
 
 def _fallback_weights(meta: dict, base: Path, require_existing: bool) -> dict[str, float] | None:
-    fallback = meta.get("fallback")
-    if fallback is None:
+    if "fallback" not in meta:
         return None
+    fallback = meta["fallback"]
     if not isinstance(fallback, dict) or not isinstance(fallback.get("test_counts"), dict):
         raise ValueError("Fallback must contain collected test_counts")
     rate = fallback.get("seconds_per_test")
