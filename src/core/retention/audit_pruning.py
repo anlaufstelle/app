@@ -214,12 +214,17 @@ def prune_auditlog(facility, settings_obj, now=None, dry_run=False):
     count = qs.count()
     if count == 0 or dry_run:
         return {"count": count}
-    deleted_hashes = {value for value in qs.values_list("entry_hash", flat=True) if value}
     newest_boundary = qs.order_by("-timestamp", "-id").values_list("entry_hash", flat=True).first() or ""
-    survivor_prevs = set(
-        AuditLog.objects.filter(facility=facility).exclude(pk__in=qs.values("pk")).values_list("prev_hash", flat=True)
+    # Refs #2717 (finding no. 17): the database intersects survivor
+    # predecessors with deleted hashes; only the boundaries themselves reach
+    # Python, not every hash of the chain.
+    boundary_hashes = sorted(
+        set(
+            AuditLog.objects.filter(facility=facility, prev_hash__in=qs.exclude(entry_hash="").values("entry_hash"))
+            .exclude(pk__in=qs.values("pk"))
+            .values_list("prev_hash", flat=True)
+        )
     )
-    boundary_hashes = sorted(survivor_prevs & deleted_hashes)
     if connection.vendor == "postgresql":
         with bypass_replication_triggers():
             qs.delete()

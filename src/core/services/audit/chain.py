@@ -280,6 +280,10 @@ class ChainResult:
     last_entry_at: datetime | None = None
 
 
+# Rows fetched per round trip while streaming a chain (Refs #2717, no. 17).
+_VERIFY_CHUNK_SIZE = 2000
+
+
 def _authenticated_checkpoints(rows):
     """Yield the ``AUDIT_PRUNE_CHECKPOINT`` rows whose own hash verifies.
 
@@ -404,16 +408,23 @@ def verify_chain(facility, *, hwm=None) -> ChainResult:
     from core.models import AuditLog, Facility
 
     facility_id = facility.pk if isinstance(facility, Facility) else facility
-    rows = list(AuditLog.objects.filter(facility_id=facility_id).order_by("timestamp", "id"))
-    boundaries = _checkpoint_boundaries(rows)
-    # R16: Menge aller physisch vorhandenen entry_hashes — der HWM-Anker muss
-    # darin liegen, sonst wurde der Tail abgeschnitten / die Kette geleert.
-    present_hashes = {r.entry_hash for r in rows if r.entry_hash}
+    chain = AuditLog.objects.filter(facility_id=facility_id)
+    # Refs #2717 (finding no. 17): the chain is streamed, not loaded as a list.
+    # Checkpoints are read up front -- a later checkpoint legitimises an
+    # earlier gap -- and they are few (one per prune run that deleted rows).
+    checkpoints = list(chain.filter(action=AuditLog.Action.AUDIT_PRUNE_CHECKPOINT).order_by("timestamp", "id"))
+    boundaries = _checkpoint_boundaries(checkpoints)
+    # R16: der HWM-Anker muss physisch in der Kette liegen, sonst wurde der
+    # Tail abgeschnitten / die Kette geleert. Only the anchor itself is looked
+    # for instead of collecting every hash of the chain.
+    anchor_entry = hwm.get(facility_id) if hwm is not None else None
+    anchor = anchor_entry.get("last_entry_hash") if isinstance(anchor_entry, dict) else None
+    anchor_seen = False
 
     prev_entry: str | None = None
     prev_at = None
     checked = 0
-    for row in rows:
+    for row in chain.order_by("timestamp", "id").iterator(chunk_size=_VERIFY_CHUNK_SIZE):
         if not row.entry_hash:
             where = "after" if checked else "before"
             return ChainResult(
@@ -435,9 +446,12 @@ def verify_chain(facility, *, hwm=None) -> ChainResult:
             return ChainResult(False, checked, str(row.pk), "prev_hash linkage break (row deleted/inserted)")
         prev_entry = row.entry_hash
         prev_at = row.timestamp
+        if anchor and row.entry_hash == anchor:
+            anchor_seen = True
 
     if hwm is not None:
-        reason = hwm.check(facility_id, present_hashes, pruned_before=_pruned_before(rows))
+        present_hashes = {anchor} if anchor_seen and anchor else set()
+        reason = hwm.check(facility_id, present_hashes, pruned_before=_pruned_before(checkpoints))
         if reason:
             return ChainResult(False, checked, None, reason, last_entry_hash=prev_entry, last_entry_at=prev_at)
 

@@ -243,8 +243,10 @@ class HighWaterMarkStore:
     def check(self, facility_id, present_hashes: set[str], *, pruned_before: dict | None = None) -> str | None:
         """Prueft die aktuelle Kette gegen den gespeicherten Tail-Anker.
 
-        ``present_hashes`` ist die Menge aller aktuell in der Kette physisch
-        vorhandenen ``entry_hash``-Werte. Fehlt der zuletzt verankerte Tail
+        ``present_hashes`` enthaelt die aktuell in der Kette physisch
+        vorhandenen ``entry_hash``-Werte -- mindestens den Anker, falls er da
+        ist; ``verify_chain`` reicht nur ihn durch, statt alle Hashes der
+        Kette zu sammeln (Refs #2717, finding no. 17). Fehlt der zuletzt verankerte Tail
         darin, wurden die juengste(n) Zeile(n) abgeschnitten oder die Kette
         geleert. Ohne vorherigen Anker (Erst-Lauf / neue Facility) ⇒ ``None``.
 
