@@ -2,7 +2,7 @@
 // The worker must not answer it with the HTMX flash fragment (the browser would
 // replace the whole page with a bare fragment: no navigation, no styles, no
 // sw-register.js). A navigation gets a redirect to the page it came from; the
-// offline shell served for that page shows the notice. HTMX requests and the
+// server page or offline shell served for that page shows the notice. HTMX requests and the
 // fetch() of the full-page number form keep the fragment with its HTMX headers.
 //
 // Real sw.js code in a VM context (pattern: sw-tally.test.mjs).
@@ -169,6 +169,53 @@ describe("offline native form POST (navigation)", () => {
 
         const again = await (await dispatchFetch(handlers.fetch, navigationGet(FORM_PAGE))).text();
         expect(again).not.toContain("offline-navigation-notice");
+    });
+
+    it.each([true, false])("shows each queued POST notice once when the follow-up server is reachable: %s", async (online) => {
+        const { handlers, context, queued } = workerContext();
+        await selectLanguage(handlers);
+        const serverHtml = shellHtml("server form");
+        for (let submission = 0; submission < 2; submission += 1) {
+            context.fetch.mockRejectedValue(new TypeError("write timed out"));
+            await dispatchFetch(handlers.fetch, nativePost(FORM_PAGE));
+            if (online) {
+                context.fetch.mockImplementation(async () => new Response(serverHtml, {
+                    status: 200,
+                    headers: {
+                        "Content-Type": "text/html; charset=utf-8",
+                        "Content-Security-Policy": SHELL_POLICY,
+                        "Content-Length": String(serverHtml.length),
+                        "X-Server-Page": "yes",
+                    },
+                }));
+            }
+
+            // An intervening HTMX read must neither consume nor acquire the notice.
+            const partial = await dispatchFetch(handlers.fetch, new Request(FORM_PAGE, {
+                headers: { "HX-Request": "true" },
+            }));
+            const partialHtml = await partial.text();
+            expect(partialHtml).not.toContain("offline-navigation-notice");
+            if (online) expect(partialHtml).toBe(serverHtml);
+            else expect(partialHtml).toContain("offline-partial-banner");
+
+            const page = await dispatchFetch(handlers.fetch, navigationGet(FORM_PAGE));
+            const html = await page.text();
+            expect(page.status).toBe(200);
+            expect(page.headers.get("Content-Security-Policy")).toBe(SHELL_POLICY);
+            expect(page.headers.get("HX-Retarget")).toBeNull();
+            expect(html).toMatch(/^<!doctype html>/);
+            expect(html.match(/data-testid="offline-navigation-notice"/g)).toHaveLength(1);
+            expect(html).toContain("lokal verschlüsselt");
+            expect(page.headers.get("Content-Length")).toBeNull();
+            if (online) {
+                expect(html).toContain("server form");
+                expect(page.headers.get("X-Server-Page")).toBe("yes");
+            }
+            const reload = await dispatchFetch(handlers.fetch, navigationGet(FORM_PAGE));
+            expect(await reload.text()).not.toContain("offline-navigation-notice");
+            expect(queued).toHaveLength(submission + 1);
+        }
     });
 
     it("the notice is only shown on the page the redirect points to", async () => {

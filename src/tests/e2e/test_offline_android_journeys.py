@@ -39,6 +39,7 @@ import uuid
 from contextlib import suppress
 
 import pytest
+from playwright.sync_api import expect
 
 from ._helpers import do_real_login as _do_real_login
 from ._helpers import python_bin as _python
@@ -497,6 +498,81 @@ class TestMidSessionCaptureRoundtrip:
                 f"Aufgabe '{title}' fehlt nach abgeschlossenem Reconnect: {sync!r}"
             )
         finally:
+            with suppress(Exception):
+                page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()
+
+    def test_timed_out_native_post_shows_notice_on_server_page_and_syncs_once(self, browser, base_url, e2e_env):
+        """Refs #2730: the GET recovers after the native POST times out into the queue."""
+        title = f"Android-Recovered-Task {uuid.uuid4().hex[:8]}"
+        context = _android_context(browser)
+        page = context.new_page()
+        page.set_default_timeout(30000)
+        held_posts = []
+        replay_keys = []
+        queue_messages = []
+        form_url = f"{base_url}/workitems/new/"
+
+        def delay_first_post(route):
+            request = route.request
+            if request.method != "POST":
+                route.fallback()
+            elif request.headers.get("x-offline-replay"):
+                replay_keys.append(request.headers.get("x-idempotency-key"))
+                route.fallback()
+            else:
+                # Leave only the first network POST unanswered. The real worker's
+                # write timeout must enqueue it; the redirect GET can reach Django.
+                held_posts.append(route)
+
+        page.on(
+            "console",
+            lambda message: queue_messages.append(message.text) if message.text == "test-queued-post" else None,
+        )
+        try:
+            _do_real_login(page, base_url)
+            page.goto(form_url, wait_until="domcontentloaded")
+            _wait_for_active_service_worker(page)
+            page.evaluate("""() => navigator.serviceWorker.addEventListener('message', (event) => {
+                if (event.data?.type === 'QUEUE_REQUEST') console.log('test-queued-post');
+            })""")
+            context.route(form_url, delay_first_post)
+            page.fill("input[name='title']", title)
+            started = time.monotonic()
+            with page.expect_navigation(wait_until="domcontentloaded") as navigation:
+                page.click("button.btn-primary[type=submit]", no_wait_after=True)
+            response = navigation.value
+            elapsed = time.monotonic() - started
+            assert len(held_posts) == 1, held_posts
+            assert elapsed >= 6, f"POST did not reach the worker's six-second timeout: {elapsed}"
+            assert queue_messages == ["test-queued-post"], queue_messages
+            assert response.status == 200
+            # Django's form has a CSRF token; the offline shell cannot supply it.
+            expect(page.locator("form:has(input[name='title']) input[name='csrfmiddlewaretoken']")).to_have_count(1)
+            assert page.url == form_url
+            notice = page.get_by_test_id("offline-navigation-notice")
+            expect(notice).to_have_count(1)
+            expect(notice).to_be_visible()
+            expect(notice).to_contain_text("lokal verschlüsselt")
+            expect(notice).to_contain_text("werden bei Verbindung automatisch gesendet")
+
+            sync = _dispatch_online_and_await_sync(page)
+            assert not sync.get("error"), sync
+            assert not sync["timedOut"], sync
+            assert sync["queue"] == [], sync
+            count_script = (
+                "from core.models import WorkItem;"
+                f" print(WorkItem.objects.filter(title='{title}', is_deleted=False).count())"
+            )
+            assert _shell(e2e_env, count_script)[-1] == "1"
+            assert replay_keys == [held_posts[0].request.headers["x-idempotency-key"]], replay_keys
+            page.reload(wait_until="domcontentloaded")
+            expect(page.get_by_test_id("offline-navigation-notice")).to_have_count(0)
+            assert _shell(e2e_env, count_script)[-1] == "1"
+        finally:
+            for route in held_posts:
+                with suppress(Exception):
+                    route.abort()
             with suppress(Exception):
                 page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
             context.close()

@@ -650,7 +650,7 @@ function _flashResponse(text, opts) {
 // navigation, no styles, no sw-register.js, so a waiting worker is never
 // activated there). A navigation is redirected to the page it came from
 // instead (303, a reload does not post again); the notice waits for the
-// offline shell served for that page and is shown there exactly once. HTMX
+// document served for that page and is shown there exactly once. HTMX
 // requests and fetch() calls are never navigations and keep the fragment.
 const NAVIGATION_NOTICE_TTL_MS = 30000;
 let pendingNavigationNotice = null;
@@ -696,7 +696,7 @@ function _escapeHtml(text) {
         .replace(/"/g, "&quot;");
 }
 
-// Puts the notice into the flash slot of the offline shell (offline_base.html);
+// Puts the notice into the flash slot of the server page or offline shell;
 // a document without that slot gets it at the start of its body.
 async function _withNavigationNotice(response, notice) {
     if (!notice || !response) return response;
@@ -1137,10 +1137,9 @@ self.addEventListener("fetch", (event) => {
         //    Browser-Default „Sie sind offline / Chrome-Dino"
         event.respondWith(
             fetch(request, { signal: AbortSignal.timeout(READ_FETCH_TIMEOUT_MS) }).then((response) => {
-                // Refs #2730: the server answered; a notice still waiting
-                // for this page is dropped instead of surfacing later.
-                _takeNavigationNotice(request);
-                return response;
+                // Refs #2730: the POST may have timed out into the queue even
+                // though this GET succeeds. Show its notice on either document.
+                return _withNavigationNotice(response, _takeNavigationNotice(request));
             }, () => {
                 if (request.headers.get("HX-Request") === "true") {
                     // Kompaktes, gestyltes Banner statt der Voll-Shell — der
