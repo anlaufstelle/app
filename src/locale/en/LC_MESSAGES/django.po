@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-12 08:33+0100\n"
+"POT-Creation-Date: 2026-11-12 08:39+0100\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -15164,3 +15164,7 @@ msgstr "+1 %(name)s counted"
 #, python-format
 msgid "+1 %(name)s gezählt, Rückgängig möglich"
 msgstr "+1 %(name)s counted, undo available"
+
+#: src/core/services/client/merge.py:909
+msgid "Die behaltene Person trägt eigene Zusatzfelder, die nicht aus der Zusammenführung stammen — Aufheben nicht möglich, weil sie verloren gingen. Die eigenen Zusatzfelder der behaltenen Person zuerst leeren, dann erneut aufheben."
+msgstr "The kept person has extra fields of its own that did not come from the merge — the merge cannot be undone because they would be lost. Clear the kept person’s own extra fields first, then undo again."
