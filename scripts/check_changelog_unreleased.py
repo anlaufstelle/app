@@ -107,7 +107,16 @@ MAX_OPERATOR_ENTRY_CHARS = 600
 _SUBSECTION_RE = re.compile(r"^### (.+?)\s*$")
 _BULLET_RE = re.compile(r"^- (.*)$")
 _ISSUE_REF_RE = re.compile(r"#(\d+)")
-_LINK_RE = re.compile(r"\[([^\]]*)\]\([^)]*\)")
+# A Markdown link. The label may hold one level of brackets (``[`a[0]`](…)``)
+# and the target one level of parentheses (``…/a_(b)``). Every repetition is
+# bounded and possessive, so malformed input cannot make the match backtrack
+# or grow beyond a fixed work per starting bracket. Known limit: a label of
+# more than 300 or a target of more than 2000 characters is not recognised as
+# a link and then counts in full.
+_LINK_RE = re.compile(
+    r"\[((?:[^\[\]]|\[[^\[\]]{0,100}\]){0,300}+)\]"
+    r"\((?:[^()]|\([^()]{0,100}\)){0,2000}+\)"
+)
 _HEAD_SEPARATOR = " — "
 _BOLD_MARK = "**"
 
