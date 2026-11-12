@@ -186,6 +186,11 @@
         @apply grid w-full min-w-0 min-h-[48px] items-center gap-x-3 text-left text-[13px] py-2 pr-3.5;
         grid-template-columns: 3px 44px minmax(0,1fr) minmax(0,1fr);
     }
+    .feed-row-header:focus-visible {
+        @apply ring-0 ring-offset-0;
+        outline: 2px solid var(--accent);
+        outline-offset: -2px;
+    }
     .feed-row-edge {
         @apply col-start-1 row-span-2 self-stretch;
     }

@@ -305,6 +305,53 @@ class TestFeedCardHeaderToggle:
 
 
 class TestFeedRowsAndGroups:
+    @pytest.mark.parametrize("position", ["first", "middle", "last", "only"])
+    def test_keyboard_focus_outline_stays_inside_visible_rows(
+        self, authenticated_page, base_url, feed_fixture, position
+    ):
+        page = authenticated_page
+        # The work-item filter has exactly one row; the mixed feed has five.
+        feed_filter = "&type=workitems" if position == "only" else ""
+        page.goto(f"{base_url}/?date={FEED_DAY}&time_filter=all{feed_filter}", wait_until="domcontentloaded")
+        rows = page.locator("#feed-list .feed-row-header")
+        count = rows.count()
+        assert count == 1 if position == "only" else count >= 5
+        index = {"first": 0, "middle": count // 2, "last": count - 1, "only": 0}[position]
+        target = rows.nth(index)
+        # Reach the row by keyboard, including the single-row feed.
+        for _ in range(80):
+            page.keyboard.press("Tab")
+            if target.evaluate("el => el === document.activeElement"):
+                break
+        expect(target).to_be_focused()
+        values = target.evaluate("""el => {
+            const css = getComputedStyle(el), row = el.getBoundingClientRect();
+            const box = el.closest('.feed-rows').getBoundingClientRect();
+            const width = parseFloat(css.outlineWidth), offset = parseFloat(css.outlineOffset);
+            const extent = width + offset;
+            const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1;
+            const ctx = canvas.getContext('2d', {willReadFrequently: true});
+            function luminance(colour) {
+                ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = colour; ctx.fillRect(0, 0, 1, 1);
+                const rgb = Array.from(ctx.getImageData(0, 0, 1, 1).data).slice(0, 3).map(c => {
+                    c /= 255; return c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4;
+                });
+                return .2126 * rgb[0] + .7152 * rgb[1] + .0722 * rgb[2];
+            }
+            const ink = luminance(css.outlineColor);
+            const contrasts = [getComputedStyle(el.closest('.feed-rows')).backgroundColor,
+                getComputedStyle(document.body).backgroundColor].map(colour => {
+                    const bg = luminance(colour);
+                    return (Math.max(ink, bg) + .05) / (Math.min(ink, bg) + .05);
+                });
+            return {style: css.outlineStyle, colour: css.outlineColor, width, offset, contrasts,
+                inside: row.left - extent >= box.left + 1 && row.right + extent <= box.right - 1 &&
+                    row.top - extent >= box.top + 1 && row.bottom + extent <= box.bottom - 1};
+        }""")
+        assert values["style"] == "solid" and values["width"] >= 2, values
+        assert values["offset"] <= -values["width"] and values["inside"], values
+        assert min(values["contrasts"]) >= 3, values
+
     def test_hour_groups_expand_with_keyboard(self, authenticated_page, base_url, feed_fixture):
         page = authenticated_page
         page.goto(f"{base_url}/?date={FEED_DAY}&time_filter=all", wait_until="domcontentloaded")
