@@ -1,7 +1,7 @@
 """A two-person approval only covers the deadline it was given for.
 
 If the event of an approved proposal is no longer due when the retention run
-looks at it (new case activity, a reopened case or a longer retention period),
+looks at it (new case activity or a longer retention period),
 the run returns the proposal to review and discards both approvals with an
 audit row. A later deletion needs a new two-person approval.
 """

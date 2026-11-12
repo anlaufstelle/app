@@ -675,12 +675,15 @@ def reset_approval_if_deadline_moved(proposal, settings_obj, now):
     """Discard the approvals of a locked event proposal if its deadline moved.
 
     The one decision point for the reset sweep and the deletion loop; the
-    caller holds the target rows and the proposal row. An approval covers only
+    caller holds the Settings row behind ``settings_obj``, the target rows and
+    the proposal row. An approval covers only
     the deadline it was given for (Refs #2714): the event must be due now and
     must already have been due, by today's anchors and periods, when the first
     approval was given. This holds for a lone first approval as well as for a
-    final one. New case activity, a reopened case or a longer period
-    after the approval fail the second test even once the event is due again.
+    final one. New case activity after the approval, or a longer period that
+    ends after it, fails the second test even once the event is due again.
+    Reopening a case is no such reason: it does not write the case activity
+    time, so it does not move the anchor later.
     Only the deadline counts here: holds and processing restrictions keep a due
     event from deletion without voiding its approval. Returns ``True`` when the
     approval was discarded.
