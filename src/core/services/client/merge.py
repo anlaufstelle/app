@@ -898,6 +898,19 @@ def unmerge_client(source, user):
     document_type_adopted = inventory.get("document_type_adopted", False)
     target_stage_before = inventory.get("target_stage_before")
 
+    if document_type_adopted:
+        # The target had no type before the merge, so undoing it empties its
+        # extra fields. Anything beyond what the merge adopted (its own values
+        # kept through the merge, or entries added since) would be lost: refuse.
+        adopted = set(adopted_slugs)
+        if any(slug not in adopted and not _is_empty_value(value) for slug, value in (target.data_json or {}).items()):
+            raise ValidationError(
+                _(
+                    "Die behaltene Person trägt Zusatzfelder, die nicht aus der Zusammenführung stammen — "
+                    "Aufheben der Zusammenführung nicht möglich, weil sie verloren gingen."
+                )
+            )
+
     from core.services.system.ban_revision import (
         bump_ban_revision_for_client_change,
         client_has_ban_banner_entries,

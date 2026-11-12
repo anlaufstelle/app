@@ -708,6 +708,49 @@ class TestUnmerge:
         assert client_qualified.is_deleted is False
         assert client_qualified.data_json.get("diagnose")  # Quelle unangetastet
 
+    def test_unmerge_clears_adopted_type_and_data_of_empty_target(
+        self, facility, source, target, doc_type_client_profile, lead_user
+    ):
+        """Normal case: the target had no type and no data, so undo empties it again."""
+        source.document_type = doc_type_client_profile
+        source.data_json = {"diagnose": "F32"}
+        source.save()
+        merge_clients(source, target, lead_user)
+        source.refresh_from_db()
+        target.refresh_from_db()
+        assert target.document_type_id == doc_type_client_profile.pk
+
+        unmerge_client(source, lead_user)
+
+        target.refresh_from_db()
+        assert target.document_type_id is None
+        assert target.data_json == {}
+
+    def test_unmerge_refuses_when_target_holds_data_beyond_the_merge(
+        self, facility, source, target, doc_type_client_profile, lead_user
+    ):
+        """A target that had its own extra fields (without a type) must not lose them on undo."""
+        Client.objects.filter(pk=target.pk).update(document_type=None, data_json={"wohnsituation": "eigene Wohnung"})
+        source.document_type = doc_type_client_profile
+        source.data_json = {"diagnose": "F32"}
+        source.save()
+        merge_clients(source, target, lead_user)
+        source.refresh_from_db()
+        target.refresh_from_db()
+        assert target.document_type_id == doc_type_client_profile.pk
+        assert target.data_json["wohnsituation"] == "eigene Wohnung"
+        assert "diagnose" in target.data_json
+
+        with pytest.raises(ValidationError):
+            unmerge_client(source, lead_user)
+
+        target.refresh_from_db()
+        source.refresh_from_db()
+        assert target.document_type_id == doc_type_client_profile.pk
+        assert target.data_json["wohnsituation"] == "eigene Wohnung"
+        assert source.merged_into_id == target.pk
+        assert source.is_deleted is True
+
     def test_unmerge_keeps_post_merge_events_on_target(
         self, facility, source, target, doc_type_contact, staff_user, lead_user
     ):
