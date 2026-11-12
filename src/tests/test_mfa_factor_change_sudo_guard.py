@@ -184,9 +184,9 @@ class TestFactorChangeWithSudo:
         codes_vorher = _stored_backup_tokens(staff_user)
         _verified(client, staff_user)
         _in_sudo(client)
-        neu = _pending_device(client, staff_user)
+        new_device = _pending_device(client, staff_user)
 
-        response = client.post(SETUP_URL, {"token": _valid_token(neu)})
+        response = client.post(SETUP_URL, {"token": _valid_token(new_device)})
 
         assert response.status_code == 302
         assert response.url == BACKUP_CODES_URL
@@ -197,8 +197,8 @@ class TestFactorChangeWithSudo:
 
         assert ack.status_code == 302
         assert ack.url == SETTINGS_URL
-        neu.refresh_from_db()
-        assert neu.confirmed is True
+        new_device.refresh_from_db()
+        assert new_device.confirmed is True
         assert _audit_count(staff_user, AuditLog.Action.MFA_ENABLED) == 1
 
     def test_passkey_only_account_get_renders_setup(self, client, staff_user):
@@ -283,9 +283,9 @@ class TestSudoToggleOff:
 
     def test_factor_change_without_sudo_session_proceeds(self, client, staff_user, bestandsfaktor):
         _verified(client, staff_user)
-        neu = _pending_device(client, staff_user)
+        new_device = _pending_device(client, staff_user)
 
-        response = client.post(SETUP_URL, {"token": _valid_token(neu)})
+        response = client.post(SETUP_URL, {"token": _valid_token(new_device)})
 
         assert response.status_code == 302
         assert response.url == BACKUP_CODES_URL
@@ -306,10 +306,10 @@ class TestFactorChangeUnderRlsRole:
         generate_backup_codes(staff_user)
         _verified(client, staff_user)
         _in_sudo(client)
-        neu = _pending_device(client, staff_user)
+        new_device = _pending_device(client, staff_user)
 
         with as_rls_role(rls_test_role, facility_id=staff_user.facility_id):
-            response = client.post(SETUP_URL, {"token": _valid_token(neu)})
+            response = client.post(SETUP_URL, {"token": _valid_token(new_device)})
 
         assert response.status_code == 302
         assert response.url == BACKUP_CODES_URL
@@ -326,10 +326,10 @@ class TestFactorChangeUnderRlsRole:
         generate_backup_codes(super_admin_user)
         _verified(client, super_admin_user)
         _in_sudo(client)
-        neu = _pending_device(client, super_admin_user)
+        new_device = _pending_device(client, super_admin_user)
 
         with as_rls_role(rls_test_role, facility_id=""):
-            response = client.post(SETUP_URL, {"token": _valid_token(neu)})
+            response = client.post(SETUP_URL, {"token": _valid_token(new_device)})
 
         assert response.status_code == 302
         assert response.url == BACKUP_CODES_URL

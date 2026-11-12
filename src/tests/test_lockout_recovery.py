@@ -171,7 +171,7 @@ class TestRecoveryTokenFlow:
         assert response.status_code == 302
         assert response.url.endswith("/account/recovery/sent/")
         assert len(mail.outbox) == 0
-        assert any("Recovery-Mail-Versand fehlgeschlagen" in record.message for record in caplog.records)
+        assert any("Sending the recovery mail failed" in record.message for record in caplog.records)
         assert AuditLog.objects.filter(
             user=staff_user,
             action=AuditLog.Action.PASSWORD_RESET_REQUESTED,

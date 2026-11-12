@@ -104,9 +104,9 @@ class LockoutRecoveryRequestView(FormView):
         _set_session_vars(getattr(user, "facility", None), is_super_admin=False)
         token = build_recovery_token(user)
         confirm_path = reverse_lazy("core:lockout_recovery_confirm", kwargs={"token": token})
-        # Refs #1967: Schema und Host aus EXTERNAL_ORIGIN statt aus dem
-        # Request — der Entsperr-Link traegt ein Token und darf nicht auf
-        # einen vom Aufrufer bestimmten Host zeigen.
+        # Refs #1967: scheme and host come from EXTERNAL_ORIGIN, not from the
+        # request -- the unlock link carries a token and must not point to a
+        # host chosen by the caller.
         confirm_url = build_external_url(str(confirm_path))
         body = render_to_string(
             "auth/lockout_recovery_email.txt",
@@ -121,7 +121,7 @@ class LockoutRecoveryRequestView(FormView):
                 [email],
             )
         except Exception:
-            logger.exception("Recovery-Mail-Versand fehlgeschlagen")
+            logger.exception("Sending the recovery mail failed")
         log_audit_event(
             self.request,
             AuditLog.Action.PASSWORD_RESET_REQUESTED,
