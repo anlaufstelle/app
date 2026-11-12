@@ -16,7 +16,7 @@ from django.db import connection, transaction
 from django.db.models import Exists, OuterRef, Q
 from django.utils import timezone
 
-from core.models import AuditLog, Case, Client, Event
+from core.models import AuditLog, Case, Client, Event, Settings
 from core.retention.legal_holds import (
     exclude_cases_with_active_holds,
     exclude_clients_with_active_holds,
@@ -25,6 +25,7 @@ from core.retention.legal_holds import (
 from core.services.audit import audit_event
 from core.services.audit.chain import _checkpoint_boundaries, advisory_lock_name, compute_entry_hash
 from core.services.dashboard.release_log import RELEASE_EXPORT_Q
+from core.services.dynamic_protection import lock_dynamic_protection
 from core.services.dynamic_records import DYNAMIC_DATA_MODELS, dynamic_case_lookup, dynamic_client_lookup
 from core.services.system import bypass_replication_triggers
 
@@ -302,6 +303,11 @@ def prune_auditlog(facility, settings_obj, now=None, dry_run=False):
 
 @transaction.atomic
 def _prune_auditlog(facility, settings_obj, now=None, dry_run=False):
+    if facility is not None and not dry_run:
+        # Read the period in force before target locks, and keep it stable
+        # through deletion and checkpoint: gate, Settings, targets (Refs #2716).
+        lock_dynamic_protection(facility.pk)
+        settings_obj = Settings.objects.select_for_update().filter(facility=facility).first() or settings_obj
     months = getattr(settings_obj, "auditlog_retention_months", 0) or 0
     if months <= 0:
         return {"count": 0}
