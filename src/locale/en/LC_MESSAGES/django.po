@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-12 18:56+0100\n"
+"POT-Creation-Date: 2026-11-12 23:15+0100\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -15226,3 +15226,15 @@ msgstr "Team"
 
 msgid "Gezählte Kontakte anzeigen"
 msgstr "Show counted contacts"
+
+#: src/templates/components/_event_card.html:4
+#: src/templates/core/events/partials/table.html:8
+msgid "Zeit"
+msgstr "Time"
+
+#: src/templates/core/events/partials/result_count.html:2
+#, python-format
+msgid "%(count)s Treffer"
+msgid_plural "%(count)s Treffer"
+msgstr[0] "%(count)s result"
+msgstr[1] "%(count)s results"

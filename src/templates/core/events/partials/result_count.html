@@ -1,2 +1,2 @@
 {% load i18n %}
-<span id="event-result-count" role="status" class="text-[13px] text-ink-muted"{% if result_count_oob %} hx-swap-oob="outerHTML"{% endif %}>{% blocktranslate with count=events.paginator.count %}{{ count }} Treffer{% endblocktranslate %}</span>
+<span id="event-result-count" role="status" class="text-[13px] text-ink-muted"{% if result_count_oob %} hx-swap-oob="outerHTML"{% endif %}>{% blocktranslate count count=events.paginator.count %}{{ count }} Treffer{% plural %}{{ count }} Treffer{% endblocktranslate %}</span>
