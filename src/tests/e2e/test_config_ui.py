@@ -771,12 +771,23 @@ class TestFieldBoardKeepsFocusPlace:
         show the condition section, so a focus move to ``#condition-board`` neither scrolled nor
         counted as a failure. With the section below the fold the focus move scrolls the page.
         """
-        page.set_viewport_size({"width": 1280, "height": 500})
+        page.set_viewport_size({"width": 1280, "height": 800})
         pk = _create_doctype(page, base_url, _cfg_name("DT-FOCUS-SMALL"))
         group = _cfg_name("GRP")
         _add_group(page, group)
         self._wait_for_preview_settled(page)
+        # Derive the window height from the measured layout: the distance between the top of the field
+        # board and the top of the condition board does not depend on the scroll position, so a window
+        # clearly shorter than it keeps the condition board out of view once the field board sits at the
+        # top edge. (A fixed height is not enough: the page can only scroll so far, and a tall window
+        # leaves the condition board visible under the field board.)
+        gap = page.evaluate(
+            """() => document.getElementById('condition-board').getBoundingClientRect().top
+                - document.getElementById('field-board').getBoundingClientRect().top"""
+        )
+        page.set_viewport_size({"width": 1280, "height": max(200, int(gap) - 80)})
         page.evaluate("document.getElementById('field-board').scrollIntoView({block: 'start'})")
+        page.wait_for_timeout(100)
         before = self._state(page)
         assert before["conditionBoardTop"] > before["innerHeight"], f"condition board is in the window: {before}"
         return pk, group, before
