@@ -100,8 +100,10 @@ WAS BEWUSST NICHT HIER STEHT — und warum es trotzdem funktioniert:
 
     Space for the button (Refs #2660): the offline navigation is at least 60 px
     high, so the content below it starts under the button's 48 px. The
-    navigation row itself and the status bar start at y = 0 and keep
-    ``pr-36 md:pr-56`` (144/224 px) free on the right — the button needs 136 px
+    navigation row itself and the status bars start at y = 0 and keep
+    ``pr-36 md:pr-56`` (144/224 px) free on the right (on the coloured bars
+    themselves via a child variant on ``#offline-status``, never on the sticky
+    wrapper, which would leave a transparent tap-catching strip) — the button needs 136 px
     (mobile) and 208 px (from md) from the right edge, measured with a wide
     fallback font.
 
@@ -145,7 +147,7 @@ WAS BEWUSST NICHT HIER STEHT — und warum es trotzdem funktioniert:
              data-sync-complete-message="{% trans 'Übertragung beendet.' %}"
              data-queue-unknown-message="{% trans 'Stand der wartenden Änderungen unklar. Bitte erneut versuchen.' %}"
              data-conflict-message="{% trans 'Neuer Konflikt. Öffnen Sie die Seite „Konflikte“ über den Link im Konfliktbanner zur Auflösung.' %}"
-             id="offline-status" class="pr-36 md:pr-56">
+             id="offline-status" class="[&>:not(.sr-only)]:pr-36 md:[&>:not(.sr-only)]:pr-56">
             <span class="sr-only" role="status" aria-live="polite" aria-atomic="true"
                   data-testid="offline-status-announcer" x-text="announcement"></span>
             <div x-show="offline" x-cloak

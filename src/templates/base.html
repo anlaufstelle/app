@@ -108,7 +108,11 @@
     no page element — title row, action buttons, back link, form field — can
     run underneath it. The three full-width notices that start at y = 0 (offline
     status, demo notice, 2FA reminder) cannot be moved below the button, so each
-    keeps ``pr-36 md:pr-56`` (144/224 px) free on the right. Footprint of the
+    keeps ``pr-36 md:pr-56`` (144/224 px) free on the right. The reserve of the
+    status bars sits on the coloured bars themselves (child variant on
+    ``#offline-status``), never on the sticky wrapper: a padded wrapper would
+    leave a transparent strip next to the bars that swallows taps while the page
+    scrolls underneath it. Footprint of the
     button measured from the right edge, worst case with a wide fallback font:
     mobile 16 px padding + about 120 px button = 136 px, from md 32 px + about
     176 px = 208 px — the reserve is one step larger than that.
@@ -164,7 +168,7 @@
              data-sync-complete-message="{% trans 'Übertragung beendet.' %}"
              data-queue-unknown-message="{% trans 'Stand der wartenden Änderungen unklar. Bitte erneut versuchen.' %}"
              data-conflict-message="{% trans 'Neuer Konflikt. Öffnen Sie die Seite „Konflikte“ über den Link im Konfliktbanner zur Auflösung.' %}"
-             id="offline-status" class="pr-36 md:ml-60 md:pr-56">
+             id="offline-status" class="md:ml-60 [&>:not(.sr-only)]:pr-36 md:[&>:not(.sr-only)]:pr-56">
             <span class="sr-only" role="status" aria-live="polite" aria-atomic="true"
                   data-testid="offline-status-announcer" x-text="announcement"></span>
             <div x-show="offline" x-cloak

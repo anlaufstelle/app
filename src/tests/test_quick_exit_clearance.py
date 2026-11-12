@@ -45,11 +45,17 @@ class _Page(HTMLParser):
         self.wrapper_depth = None
         self.wrapper = None
         self.inside = []  # (tag, attrs) of every element inside the content wrapper
+        self.status_depth = None
+        self.status_children = []  # attrs of the direct children of #offline-status
 
     def handle_starttag(self, tag, attrs):
         attributes = dict(attrs)
         if attributes.get("id"):
             self.by_id[attributes["id"]] = attributes
+        if self.status_depth is not None and len(self.stack) == self.status_depth + 1:
+            self.status_children.append(attributes)
+        if attributes.get("id") == "offline-status":
+            self.status_depth = len(self.stack)
         if attributes.get("id") == "flash-messages" and self.stack:
             self.wrapper_depth = len(self.stack) - 1
             self.wrapper = self.stack[-1][1]
@@ -66,6 +72,8 @@ class _Page(HTMLParser):
                 break
         if self.wrapper_depth is not None and len(self.stack) <= self.wrapper_depth:
             self.wrapper_depth = None
+        if self.status_depth is not None and len(self.stack) <= self.status_depth:
+            self.status_depth = None
 
 
 def _parse(html):
@@ -93,6 +101,23 @@ def _right_reserve(classes):
     mobile = _px(classes, "pr")
     desktop = _px(classes, "pr", variant="md")
     return mobile or 0, desktop if desktop is not None else (mobile or 0)
+
+
+def _child_reserve(wrapper_classes):
+    """Right reserve the wrapper hands to its children: ``(mobile, desktop)`` in px.
+
+    The classes read ``[&>:not(.sr-only)]:pr-N`` and ``md:[&>:not(.sr-only)]:pr-N``
+    (the live-region announcer is exempt).
+    """
+    mobile = desktop = 0
+    for name in wrapper_classes:
+        match = re.fullmatch(r"(md:)?\[&>:not\(\.sr-only\)\]:pr-(\d+(?:\.\d+)?)", name)
+        if match:
+            if match.group(1):
+                desktop = float(match.group(2)) * 4
+            else:
+                mobile = float(match.group(2)) * 4
+    return mobile, desktop or mobile
 
 
 @pytest.mark.django_db
@@ -149,15 +174,36 @@ class TestFullWidthNoticesKeepTheRightEdgeFree:
         assert mobile >= MOBILE_FOOTPRINT_PX + 4, f"mobile reserve {mobile}px < footprint {MOBILE_FOOTPRINT_PX}px"
         assert desktop >= DESKTOP_FOOTPRINT_PX + 4, f"desktop reserve {desktop}px < footprint {DESKTOP_FOOTPRINT_PX}px"
 
+    def _assert_bars_carry_the_reserve(self, page):
+        """The reserve sits on the coloured bars; the sticky wrapper itself stays unpadded.
+
+        A padded wrapper would leave a transparent strip next to the bars that
+        swallows taps while the page scrolls beneath it, and it would narrow
+        the bars. Only the button's own surface may cover the page.
+        """
+        wrapper = _classes(page.by_id["offline-status"])
+        own_padding = [n for n in wrapper if re.match(r"^(md:)?(p|pr|px|mr|mx)-", n)]
+        assert not own_padding, f"#offline-status must not carry spacing on the right: {own_padding}"
+        reserve = _child_reserve(wrapper)
+        self._assert_reserve({"pr-%g" % (reserve[0] / 4), "md:pr-%g" % (reserve[1] / 4)})
+        assert page.status_children, "the status wrapper must contain the bars"
+        for bar in page.status_children:
+            classes = _classes(bar)
+            if "sr-only" in classes:
+                continue  # the live-region announcer takes no space
+            # A bar's own right padding would override the child variant: keep it off.
+            assert _px(classes, "pr") is None and _px(classes, "pr", variant="md") is None
+            assert "mr-" not in " ".join(classes)
+
     def test_online_offline_status_bar(self, client, staff_user, settings_obj):
         client.force_login(staff_user)
         page = _parse(client.get(reverse("core:zeitstrom")).content.decode())
-        self._assert_reserve(_classes(page.by_id["offline-status"]))
+        self._assert_bars_carry_the_reserve(page)
 
     def test_offline_shell_status_bar_and_navigation(self, client, settings_obj):
         html = client.get(reverse("core:offline_client_shell")).content.decode()
         page = _parse(html)
-        self._assert_reserve(_classes(page.by_id["offline-status"]))
+        self._assert_bars_carry_the_reserve(page)
         nav_inner = re.search(r'<nav[^>]*data-testid="offline-nav".*?<div class="([^"]+)"', html, re.S)
         assert nav_inner, "the offline shell must render its navigation"
         self._assert_reserve(set(nav_inner.group(1).split()))
