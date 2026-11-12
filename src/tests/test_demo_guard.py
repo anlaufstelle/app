@@ -167,3 +167,83 @@ def test_demo_sign_in_with_totp_completes(client, staff_user):
     assert verify.status_code == 302
     assert verify.url != reverse("mfa_verify")
     assert client.session.get("mfa_verified") is True
+
+
+@cache
+def _demo_guard_settings():
+    """Every demo guard setting exactly as the demo settings module defines it."""
+    result = _run_demo_import(
+        "import anlaufstelle.settings.demo as demo;"
+        "print(repr({name: getattr(demo, name) for name in dir(demo) if name.startswith('DEMO_GUARD_')}))"
+    )
+    assert result.returncode == 0, result.stderr
+    return ast.literal_eval(result.stdout.strip())
+
+
+@pytest.mark.django_db
+def test_demo_refuses_admin_reset_of_another_accounts_second_factor(client, admin_user, staff_user):
+    """Account management must not reset the second factor of a shared demo account."""
+    from django.test import Client
+
+    from core.models import AuditLog, EncryptedTOTPDevice
+
+    target_session = Client()
+    target_session.force_login(staff_user)
+    device = EncryptedTOTPDevice.objects.create(user=staff_user, name="target", confirmed=True)
+    original_password_hash = staff_user.password
+    reset_url = reverse("core:user_access_mfa_reset", kwargs={"pk": staff_user.pk})
+
+    with override_settings(DEMO_MODE=True, SUDO_MODE_ENABLED=True, **_demo_guard_settings()):
+        client.force_login(admin_user)
+        sudo = client.post(reverse("sudo_mode"), {"password": "testpass123", "next": reset_url})
+        assert sudo.status_code == 302
+        assert sudo.url == reset_url
+        page = client.get(reset_url)
+        response = client.post(reset_url, HTTP_REFERER=reset_url)
+        target_page = target_session.get(reverse("mfa_verify"))
+
+    staff_user.refresh_from_db()
+    assert page.status_code == 200
+    assert response.status_code == 302
+    assert response.url == reset_url
+    assert [str(message) for message in get_messages(response.wsgi_request)] == [
+        "Diese Aktion ist im Demo-Modus deaktiviert."
+    ]
+    assert EncryptedTOTPDevice.objects.filter(pk=device.pk, confirmed=True).exists()
+    assert staff_user.password == original_password_hash
+    assert target_page.status_code == 200
+    assert not AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.MFA_RESET_BY_ADMIN).exists()
+
+
+@pytest.mark.parametrize(
+    ("name", "kwargs"),
+    (
+        ("core:user_access_list", {}),
+        ("core:user_access_create", {}),
+        ("core:user_access_update", {"pk": 7}),
+        ("core:user_access_invite", {"pk": 7}),
+        ("core:user_access_unlock", {"pk": 7}),
+    ),
+)
+def test_demo_keeps_the_rest_of_account_management_open(name, kwargs):
+    request = _request("POST", reverse(name, kwargs=kwargs))
+    with override_settings(DEMO_MODE=True, **_demo_guard_settings()):
+        response = DemoGuardMiddleware(_passthrough)(request)
+
+    assert response.content == b"passed"
+
+
+def test_admin_reset_passes_the_guard_outside_the_demo():
+    request = _request("POST", reverse("core:user_access_mfa_reset", kwargs={"pk": 7}))
+    with override_settings(DEMO_MODE=False, **_demo_guard_settings()):
+        response = DemoGuardMiddleware(_passthrough)(request)
+
+    assert response.content == b"passed"
+
+
+def test_unknown_path_passes_the_guard_in_the_demo():
+    request = _request("POST", "/no-such-route/")
+    with override_settings(DEMO_MODE=True, **_demo_guard_settings()):
+        response = DemoGuardMiddleware(_passthrough)(request)
+
+    assert response.content == b"passed"

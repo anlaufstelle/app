@@ -99,3 +99,9 @@ DEMO_GUARD_BLOCKED_PREFIXES = (
     "/password-change/",
     "/admin-mgmt/core/user/",
 )
+
+# Demo guard by URL name, for routes whose path carries another account's pk:
+# resetting the second factor of another shared account through account
+# management. Viewing the page and the rest of account management stay open.
+# The demo login panel (auth/_demo_credentials.html) mirrors both lists.
+DEMO_GUARD_BLOCKED_URL_NAMES = ("core:user_access_mfa_reset",)

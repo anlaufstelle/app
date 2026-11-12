@@ -19,11 +19,20 @@ from __future__ import annotations
 from django.conf import settings
 from django.contrib import messages
 from django.shortcuts import redirect
+from django.urls import Resolver404, resolve
 from django.utils.translation import gettext as _
 
 from core.views.utils import safe_redirect_path
 
 DEFAULT_BLOCKED_PREFIXES = ("/system/maintenance/",)
+
+
+def _view_name(request) -> str | None:
+    """Return the URL name the request resolves to, or None for unknown paths."""
+    try:
+        return resolve(request.path_info, urlconf=getattr(request, "urlconf", None)).view_name
+    except Resolver404:
+        return None
 
 
 class DemoGuardMiddleware:
@@ -33,7 +42,12 @@ class DemoGuardMiddleware:
     def __call__(self, request):
         if getattr(settings, "DEMO_MODE", False) and request.method == "POST":
             blocked = tuple(getattr(settings, "DEMO_GUARD_BLOCKED_PREFIXES", DEFAULT_BLOCKED_PREFIXES))
-            if blocked and request.path.startswith(blocked):
+            # Routes with a dynamic part (e.g. another account's pk) are blocked
+            # by URL name, so the rest of their section stays usable.
+            blocked_names = frozenset(getattr(settings, "DEMO_GUARD_BLOCKED_URL_NAMES", ()))
+            if (blocked and request.path.startswith(blocked)) or (
+                blocked_names and _view_name(request) in blocked_names
+            ):
                 messages.error(request, _("Diese Aktion ist im Demo-Modus deaktiviert."))
                 # L6 (Refs #1375): Open-Redirect-Schutz. Der Referer ist
                 # angreifer-kontrollierbar und diese Middleware laeuft vor
