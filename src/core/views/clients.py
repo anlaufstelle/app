@@ -5,7 +5,7 @@ import logging
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Case, F, IntegerField, Max, Q, Value, When
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
@@ -16,7 +16,13 @@ from django.views import View
 from django.views.decorators.http import require_http_methods
 
 from core.constants import RATELIMIT_MUTATION
-from core.forms.clients import ClientForm, ClientInlineCreateForm, DynamicClientDataForm
+from core.forms.clients import (
+    PSEUDONYM_TAKEN_MESSAGE,
+    ClientForm,
+    ClientInlineCreateForm,
+    DynamicClientDataForm,
+    is_pseudonym_conflict,
+)
 from core.models import AuditLog, Client, DocumentType, Event, FieldTemplate, RectificationRequest, WorkItem
 from core.models import Case as CaseModel
 from core.services.attachments import (
@@ -486,6 +492,17 @@ class ClientCreateView(StaffRequiredMixin, View):
                 "core/clients/form.html",
                 {"form": form, "data_form": data_form, "is_edit": False},
             )
+        except IntegrityError as exc:
+            # A concurrent request took the pseudonym between the form check and
+            # the write; the transaction is rolled back, the staged files are gone.
+            if not is_pseudonym_conflict(exc):
+                raise
+            form.add_error("pseudonym", PSEUDONYM_TAKEN_MESSAGE)
+            return render(
+                request,
+                "core/clients/form.html",
+                {"form": form, "data_form": data_form, "is_edit": False},
+            )
 
         messages.success(request, _("Person wurde angelegt."))
         return redirect("core:client_detail", pk=client.pk)
@@ -518,12 +535,19 @@ class ClientInlineCreateView(StaffRequiredMixin, View):
         if not form.is_valid():
             return render(request, self.template_name, {"form": form})
 
-        client = create_client(
-            facility=request.current_facility,
-            user=request.user,
-            pseudonym=form.cleaned_data["pseudonym"],
-            contact_stage=form.cleaned_data["contact_stage"],
-        )
+        try:
+            client = create_client(
+                facility=request.current_facility,
+                user=request.user,
+                pseudonym=form.cleaned_data["pseudonym"],
+                contact_stage=form.cleaned_data["contact_stage"],
+            )
+        except IntegrityError as exc:
+            # A concurrent request took the pseudonym between the form check and the write.
+            if not is_pseudonym_conflict(exc):
+                raise
+            form.add_error("pseudonym", PSEUDONYM_TAKEN_MESSAGE)
+            return render(request, self.template_name, {"form": form})
         response = HttpResponse("")
         response["HX-Trigger-After-Swap"] = json.dumps(
             {
@@ -841,13 +865,20 @@ class ClientUpdateView(StaffRequiredMixin, View):
                     )
                     if type_switched:
                         discard_type_switch_file_chains(client, request.user)
-                    client = update_client(
-                        client,
-                        request.user,
-                        old_stage=old_stage,
-                        expected_updated_at=expected_updated_at,
-                        **fields,
-                    )
+                    try:
+                        client = update_client(
+                            client,
+                            request.user,
+                            old_stage=old_stage,
+                            expected_updated_at=expected_updated_at,
+                            **fields,
+                        )
+                    except IntegrityError as exc:
+                        # A concurrent request took the pseudonym between the form
+                        # check and the write: report it like the form check does.
+                        if not is_pseudonym_conflict(exc):
+                            raise
+                        raise ValidationError(PSEUDONYM_TAKEN_MESSAGE) from exc
                     if doc_type is not None:
                         apply_attachment_changes(
                             client,

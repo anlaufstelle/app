@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from django import forms
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError
 from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext_lazy as _
 
@@ -33,6 +34,19 @@ class DynamicClientDataForm(DynamicDataForm):
     """
 
 
+PSEUDONYM_TAKEN_MESSAGE = _("Eine Person mit diesem Pseudonym existiert bereits in dieser Einrichtung.")
+_PSEUDONYM_CONSTRAINT = "unique_facility_pseudonym"
+
+
+def is_pseudonym_conflict(exc: IntegrityError) -> bool:
+    """True only for the per-facility pseudonym uniqueness constraint.
+
+    The form check and the write are two steps, so two concurrent requests can
+    both pass the check. Any other integrity error is a real defect.
+    """
+    return _PSEUDONYM_CONSTRAINT in str(exc)
+
+
 class _FacilityScopedPseudonymMixin:
     """Shared facility-local uniqueness check for full and inline forms."""
 
@@ -47,7 +61,7 @@ class _FacilityScopedPseudonymMixin:
         if self.instance and self.instance.pk and not self.instance._state.adding:
             qs = qs.exclude(pk=self.instance.pk)
         if qs.exists():
-            raise ValidationError(_("Eine Person mit diesem Pseudonym existiert bereits in dieser Einrichtung."))
+            raise ValidationError(PSEUDONYM_TAKEN_MESSAGE)
         return pseudonym
 
 
