@@ -43,6 +43,7 @@ kann.
     <div class="flex items-center justify-between mb-2">
         <div class="flex items-center gap-2 min-w-0">
             {% if selectable %}
+            <label class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0">
             <input type="checkbox"
                 name="workitem_ids"
                 value="{{ wi.pk }}"
@@ -50,8 +51,9 @@ kann.
                 class="h-4 w-4 rounded border-subtle text-accent"
                 {% if forbidden_ids and wi.pk|stringformat:'s' in forbidden_ids %}checked{% endif %}
                 @change="onToggleItem">
+            </label>
             {% endif %}
-            <a href="{% url 'core:workitem_detail' pk=wi.pk %}" class="text-[14px] font-semibold text-ink hover:text-accent truncate">{{ wi.title }}</a>
+            <a href="{% url 'core:workitem_detail' pk=wi.pk %}" class="inline-flex items-center min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 text-[14px] font-semibold text-ink hover:text-accent"><span class="min-w-0 whitespace-normal wrap-anywhere md:truncate">{{ wi.title }}</span></a>
         </div>
         <div class="flex items-center gap-2">
             {% due_date_info wi as ddi %}
@@ -79,7 +81,7 @@ kann.
     {% if wi.client or wi.assigned_to %}
     <div class="flex items-center text-[12px] text-ink-muted gap-3 mb-3">
         {% if wi.client %}
-        <a href="{% url 'core:client_detail' pk=wi.client.pk %}" class="text-accent hover:underline font-semibold">{{ wi.client.pseudonym }}</a>
+        <a href="{% url 'core:client_detail' pk=wi.client.pk %}" class="inline-flex items-center min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 text-accent hover:underline font-semibold">{{ wi.client.pseudonym }}</a>
         {% endif %}
         {% if wi.assigned_to %}
         <span>{% trans "Zugewiesen:" %} {{ wi.assigned_to }}</span>
@@ -90,14 +92,14 @@ kann.
     {% entity_dynamic_details wi request.user %}
 
     {# Status-Buttons. Refs #1419: expected_updated_at gehoert in jeden Status-POST — es ist das Optimistic-Lock-Token des Offline-Payloads (der SW friert den Button-Body beim Queueing ein); online wertet der Server es bewusst nicht aus (Status-LWW bleibt). #}
-    <div class="flex items-center gap-2">
+    <div class="flex flex-wrap md:flex-nowrap items-center gap-2">
         {% if wi.status == "open" %}
         {# Refs #1146: Tabellenaktionen mit der Einzelansicht (#1130/#1147) vereinheitlicht — „Übernehmen" (in_progress), direkter „Als erledigt markieren"-Pfad und „Als nicht relevant schließen" statt „Verwerfen". Die abschließenden Aktionen (erledigt/verworfen) fragen vor dem Statuswechsel per hx-confirm nach (HTMX-Buttons, wie bei Goals/Retention). #}
         <button hx-post="{% url 'core:workitem_status_update' pk=wi.pk %}"
                 hx-vals='{"status": "in_progress", "expected_updated_at": "{{ wi.updated_at.isoformat }}"}'
                 hx-target="#workitem-{{ wi.pk }}"
                 hx-swap="outerHTML"
-                class="px-3 py-1 text-[12px] font-semibold rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100">
+                class="min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 px-3 py-1 text-[12px] font-semibold rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100">
             {% trans "Übernehmen" %}
         </button>
         <button hx-post="{% url 'core:workitem_status_update' pk=wi.pk %}"
@@ -106,7 +108,7 @@ kann.
                 hx-target="#workitem-{{ wi.pk }}"
                 hx-swap="outerHTML"
                 {% if recent_done_target %}hx-include="#filter-item-type,#filter-priority,#filter-assigned-to,#filter-due"{% endif %}
-                class="px-3 py-1 text-[12px] font-semibold rounded-md bg-green-50 text-green-700 hover:bg-green-100">
+                class="min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 px-3 py-1 text-[12px] font-semibold rounded-md bg-green-50 text-green-700 hover:bg-green-100">
             {% trans "Als erledigt markieren" %}
         </button>
         <button hx-post="{% url 'core:workitem_status_update' pk=wi.pk %}"
@@ -115,7 +117,7 @@ kann.
                 hx-target="#workitem-{{ wi.pk }}"
                 hx-swap="outerHTML"
                 {% if recent_done_target %}hx-include="#filter-item-type,#filter-priority,#filter-assigned-to,#filter-due"{% endif %}
-                class="px-3 py-1 text-[12px] font-semibold rounded-md bg-canvas text-ink-muted hover:bg-canvas">
+                class="min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 px-3 py-1 text-[12px] font-semibold rounded-md bg-canvas text-ink-muted hover:bg-canvas">
             {% trans "Als nicht relevant schließen" %}
         </button>
         {% elif wi.status == "in_progress" %}
@@ -126,14 +128,14 @@ kann.
                 hx-target="#workitem-{{ wi.pk }}"
                 hx-swap="outerHTML"
                 {% if recent_done_target %}hx-include="#filter-item-type,#filter-priority,#filter-assigned-to,#filter-due"{% endif %}
-                class="px-3 py-1 text-[12px] font-semibold rounded-md bg-green-50 text-green-700 hover:bg-green-100">
+                class="min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 px-3 py-1 text-[12px] font-semibold rounded-md bg-green-50 text-green-700 hover:bg-green-100">
             {% trans "Erledigt" %}
         </button>
         <button hx-post="{% url 'core:workitem_status_update' pk=wi.pk %}"
                 hx-vals='{"status": "open", "expected_updated_at": "{{ wi.updated_at.isoformat }}"}'
                 hx-target="#workitem-{{ wi.pk }}"
                 hx-swap="outerHTML"
-                class="px-3 py-1 text-[12px] font-semibold rounded-md bg-canvas text-ink-muted hover:bg-canvas">
+                class="min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 px-3 py-1 text-[12px] font-semibold rounded-md bg-canvas text-ink-muted hover:bg-canvas">
             {% trans "Zurücksetzen" %}
         </button>
         {% elif wi.status == "done" %}

@@ -65,7 +65,7 @@
                data-filter-persist-exclude
                value="{{ q }}"
                placeholder="{% trans 'Pseudonym suchen...' %}"
-               class="w-full bg-surface border border-subtle rounded-[10px] pl-8 pr-3 py-2 text-[13px] text-ink"
+               class="w-full min-h-[44px] md:min-h-0 bg-surface border border-subtle rounded-[10px] pl-8 pr-3 py-2 text-[13px] text-ink"
                hx-get="{% url 'core:client_list' %}"
                hx-trigger="keyup changed delay:300ms"
                hx-target="#client-table"
@@ -74,7 +74,7 @@
         >
         {% include "components/_htmx_spinner.html" with spinner_id="client-table-spinner" position_class="absolute right-2.5 top-1/2 -translate-y-1/2" %}
     </div>
-    <select name="stage" aria-label="{% trans 'Kontaktstufe filtern' %}" class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft cursor-pointer"
+    <select name="stage" aria-label="{% trans 'Kontaktstufe filtern' %}" class="min-h-[44px] md:min-h-0 bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft cursor-pointer"
             hx-get="{% url 'core:client_list' %}"
             hx-trigger="change"
             hx-target="#client-table"
@@ -85,7 +85,7 @@
         <option value="{{ value }}" {% if value == selected_stage %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
     </select>
-    <select name="age" aria-label="{% trans 'Altersgruppe filtern' %}" class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft cursor-pointer"
+    <select name="age" aria-label="{% trans 'Altersgruppe filtern' %}" class="min-h-[44px] md:min-h-0 bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft cursor-pointer"
             hx-get="{% url 'core:client_list' %}"
             hx-trigger="change"
             hx-target="#client-table"
@@ -98,7 +98,9 @@
     </select>
 </div>
 
+<div class="max-md:[&_summary]:min-h-[44px]">
 {% include "components/_contact_stage_legend.html" %}
+</div>
 
 {% comment %}Refs #1059 (A11Y-036), Refs #2155: Live-Suche und Filter tauschen
 #client-table stumm aus — die neue Trefferzahl erreichte assistive Technik

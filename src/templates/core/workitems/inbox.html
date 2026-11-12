@@ -32,7 +32,7 @@ vollzuschreiben.
     <div>
         <label for="filter-item-type" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Typ" %}</label>
         <select id="filter-item-type" name="item_type"
-            class="block w-full bg-surface border border-subtle rounded-[10px] text-[13px] text-ink-soft px-2.5 py-1.5"
+            class="block w-full min-h-[44px] md:min-h-0 bg-surface border border-subtle rounded-[10px] text-[13px] text-ink-soft px-2.5 py-1.5"
             hx-get="{% url 'core:workitem_inbox' %}"
             hx-target="#inbox-content"
             hx-trigger="change"
@@ -50,7 +50,7 @@ vollzuschreiben.
     <div>
         <label for="filter-priority" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Priorität" %}</label>
         <select id="filter-priority" name="priority"
-            class="block w-full bg-surface border border-subtle rounded-[10px] text-[13px] text-ink-soft px-2.5 py-1.5"
+            class="block w-full min-h-[44px] md:min-h-0 bg-surface border border-subtle rounded-[10px] text-[13px] text-ink-soft px-2.5 py-1.5"
             hx-get="{% url 'core:workitem_inbox' %}"
             hx-target="#inbox-content"
             hx-trigger="change"
@@ -67,7 +67,7 @@ vollzuschreiben.
     <div>
         <label for="filter-assigned-to" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Zugewiesen an" %}</label>
         <select id="filter-assigned-to" name="assigned_to"
-            class="block w-full bg-surface border border-subtle rounded-[10px] text-[13px] text-ink-soft px-2.5 py-1.5"
+            class="block w-full min-h-[44px] md:min-h-0 bg-surface border border-subtle rounded-[10px] text-[13px] text-ink-soft px-2.5 py-1.5"
             hx-get="{% url 'core:workitem_inbox' %}"
             hx-target="#inbox-content"
             hx-trigger="change"
@@ -87,7 +87,7 @@ vollzuschreiben.
     <div>
         <label for="filter-due" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Fälligkeit" %}</label>
         <select id="filter-due" name="due"
-            class="block w-full bg-surface border border-subtle rounded-[10px] text-[13px] text-ink-soft px-2.5 py-1.5"
+            class="block w-full min-h-[44px] md:min-h-0 bg-surface border border-subtle rounded-[10px] text-[13px] text-ink-soft px-2.5 py-1.5"
             hx-get="{% url 'core:workitem_inbox' %}"
             hx-target="#inbox-content"
             hx-trigger="change"
@@ -105,7 +105,7 @@ vollzuschreiben.
     <div>
         <label for="filter-status" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Status" %}</label>
         <select id="filter-status" name="status"
-            class="block w-full bg-surface border border-subtle rounded-[10px] text-[13px] text-ink-soft px-2.5 py-1.5"
+            class="block w-full min-h-[44px] md:min-h-0 bg-surface border border-subtle rounded-[10px] text-[13px] text-ink-soft px-2.5 py-1.5"
             hx-get="{% url 'core:workitem_inbox' %}"
             hx-target="#inbox-content"
             hx-trigger="change"
@@ -123,7 +123,7 @@ vollzuschreiben.
     <div>
         <label for="filter-done-period" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Zeitraum (Erledigt)" %}</label>
         <select id="filter-done-period" name="done_period"
-            class="block w-full bg-surface border border-subtle rounded-[10px] text-[13px] text-ink-soft px-2.5 py-1.5"
+            class="block w-full min-h-[44px] md:min-h-0 bg-surface border border-subtle rounded-[10px] text-[13px] text-ink-soft px-2.5 py-1.5"
             hx-get="{% url 'core:workitem_inbox' %}"
             hx-target="#inbox-content"
             hx-trigger="change"
@@ -219,7 +219,7 @@ vollzuschreiben.
         <input type="checkbox" id="workitem-select-all"
             class="h-4 w-4 rounded border-subtle text-accent"
             @change="onToggleAll">
-        <label for="workitem-select-all">{% trans "Alle sichtbaren auswählen" %}</label>
+        <label for="workitem-select-all" class="inline-flex items-center min-h-[44px] md:min-h-0">{% trans "Alle sichtbaren auswählen" %}</label>
     </div>
 
     <div id="inbox-content">

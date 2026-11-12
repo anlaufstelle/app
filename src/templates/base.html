@@ -232,7 +232,7 @@
     {% endif %}
 
     {# --- Main Content: always visible, offset on desktop --- #}
-    <main id="main-content" class="{% if session_fully_authenticated %}md:ml-60 pb-20 md:pb-0 {% endif %}min-h-screen overflow-x-hidden">
+    <main id="main-content" class="{% if session_fully_authenticated %}md:ml-60 pb-20 md:pb-0 {% endif %}min-h-screen overflow-x-hidden max-md:[&_footer_a]:inline-flex max-md:[&_footer_a]:min-h-[44px] max-md:[&_footer_a]:min-w-[44px] max-md:[&_footer_a]:items-center max-md:[&_footer_a]:justify-center">
         {# 2FA-Setup-Reminder — Countdown der Grace-Frist (Refs #689). #}
         {% include "partials/_mfa_setup_reminder.html" %}
         {# Demo-Banner — kennzeichnet synthetische Daten + naechsten Reset (Refs #1062). #}

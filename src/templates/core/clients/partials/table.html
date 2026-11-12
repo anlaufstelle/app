@@ -51,7 +51,7 @@ steht.{% endcomment %}
             <div class="flex items-start justify-between gap-2 sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.5fr)_auto] sm:gap-4 sm:items-center sm:px-4 sm:py-3">
                 {# Pseudonym + Offline-Badge #}
                 <div role="cell" class="flex-1 min-w-0 sm:flex-auto">
-                    <a href="{% url 'core:client_detail' client.pk %}" class="block sm:inline" data-testid="client-detail-link">
+                    <a href="{% url 'core:client_detail' client.pk %}" class="flex min-h-[44px] items-center md:inline md:min-h-0" data-testid="client-detail-link">
                         <div class="flex items-center gap-2">
                             <span class="text-[14px] font-semibold text-accent truncate hover:underline">{{ client.pseudonym }}</span>
                             <span x-show="isOffline" x-cloak
@@ -130,7 +130,7 @@ steht.{% endcomment %}
                     <button type="button"
                             @click.prevent.stop="toggleOffline"
                             :disabled="busy"
-                            class="inline-flex items-center text-[12px] text-ink-muted hover:text-accent disabled:opacity-50"
+                            class="inline-flex items-center min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 text-[12px] text-ink-muted hover:text-accent disabled:opacity-50"
                             data-testid="row-take-offline-btn"
                             :aria-label="offlineToggleLabel">
                         <svg aria-hidden="true" class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>

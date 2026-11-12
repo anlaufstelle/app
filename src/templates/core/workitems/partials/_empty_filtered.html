@@ -10,6 +10,6 @@ erneut die alten Filter herstellt. Das ``href`` zeigt auf die ungefilterte
 {% endcomment %}
 <p class="text-sm text-ink-muted">{% trans "Keine Treffer für die aktuellen Filter" %}</p>
 <a href="{% url 'core:workitem_inbox' %}" data-filter-reset
-   class="inline-flex items-center gap-1 mt-1 text-[13px] font-semibold text-accent hover:underline">
+   class="inline-flex items-center min-h-[44px] md:min-h-0 gap-1 mt-1 text-[13px] font-semibold text-accent hover:underline">
     {% trans "Filter zurücksetzen" %}
 </a>

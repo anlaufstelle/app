@@ -66,7 +66,7 @@ Standardmäßig eingeklappt. Die Überschrift benennt den Zeitraum eindeutig
 (letzte 7 Tage), damit "kürzlich" verständlich ist.
 {% endcomment %}
 <details class="group border-t border-subtle pt-4" data-testid="recent-done">
-    <summary class="flex items-center gap-2 cursor-pointer list-none select-none text-[12px] font-bold uppercase tracking-wider text-ink-muted hover:text-ink-soft">
+    <summary class="min-h-[44px] md:min-h-0 flex items-center gap-2 cursor-pointer list-none select-none text-[12px] font-bold uppercase tracking-wider text-ink-muted hover:text-ink-soft">
         {# Chevron dreht beim Aufklappen (group-open) — klarer Aufklapp-Indikator. #}
         <svg aria-hidden="true" class="w-3.5 h-3.5 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
         {% comment %}
@@ -102,7 +102,7 @@ Standardmäßig eingeklappt. Die Überschrift benennt den Zeitraum eindeutig
         {% endcomment %}
         {% if done_items_extra %}
         <details class="group/extra mt-3" data-testid="recent-done-extra">
-            <summary class="inline-flex items-center gap-1.5 cursor-pointer list-none select-none text-[13px] font-semibold text-accent hover:underline">
+            <summary class="min-h-[44px] md:min-h-0 inline-flex items-center gap-1.5 cursor-pointer list-none select-none text-[13px] font-semibold text-accent hover:underline">
                 <svg aria-hidden="true" class="w-3 h-3 transition-transform group-open/extra:rotate-90" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
                 <span class="group-open/extra:hidden">{% blocktrans count count=done_items_extra|length %}Alle {{ count }} der letzten 7 Tage anzeigen{% plural %}Alle {{ count }} der letzten 7 Tage anzeigen{% endblocktrans %}</span>
                 <span class="hidden group-open/extra:inline">{% trans "Weitere der letzten 7 Tage ausblenden" %}</span>
@@ -130,7 +130,7 @@ zugewiesen"-Eingrenzung erhalten bleibt.
 {% endcomment %}
 <p class="mt-3">
     <a href="{% url 'core:workitem_inbox' %}?item_type={{ selected_item_type|urlencode }}&priority={{ selected_priority|urlencode }}&assigned_to={{ selected_assigned_to|urlencode }}&due={{ selected_due|urlencode }}&status=done&done_period=30"
-       class="inline-flex items-center gap-1 text-[13px] font-semibold text-accent hover:underline"
+       class="inline-flex items-center min-h-[44px] md:min-h-0 gap-1 text-[13px] font-semibold text-accent hover:underline"
        data-testid="all-done-link">
         {% trans "Alle erledigten Aufgaben anzeigen" %}
     </a>

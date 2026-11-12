@@ -61,7 +61,7 @@
                 <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
             </span>
             {% endif %}
-            {% if target_date != today %}<a href="{{ today_url }}" data-testid="zeitstrom-date-today" class="inline-flex items-center min-h-[44px] md:min-h-0 px-1 text-[12px] font-semibold text-accent hover:underline">{% trans "Heute" %}</a>{% endif %}
+            {% if target_date != today %}<a href="{{ today_url }}" data-testid="zeitstrom-date-today" class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 px-1 text-[12px] font-semibold text-accent hover:underline">{% trans "Heute" %}</a>{% endif %}
         </nav>
         {% if time_filters %}
         <div class="flex items-center gap-2">
@@ -145,7 +145,7 @@
             {% endfor %}
             {% if document_types %}
             <select id="filter-doc-type" name="doc_type" aria-label="{% trans 'Nach Dokumentationstyp filtern' %}"
-                class="ml-auto rounded-md border border-subtle bg-surface text-[12px] text-ink-soft px-2.5 py-1"
+                class="ml-auto min-h-[44px] md:min-h-0 rounded-md border border-subtle bg-surface text-[12px] text-ink-soft px-2.5 py-1"
                 hx-get="{% url 'core:zeitstrom_feed_partial' %}?feed_only=1"
                 hx-include="#zeitstrom-filter-state"
                 hx-target="#feed-list"
@@ -169,7 +169,7 @@
                     @click="toggle"
                     :aria-pressed="allExpanded"
                     data-testid="zeitstrom-collapse-toggle"
-                    class="inline-flex items-center gap-1.5 text-[12px] font-medium text-ink-muted hover:text-ink border border-subtle bg-surface hover:bg-canvas rounded-md px-2.5 py-1.5 min-h-[36px]">
+                    class="inline-flex items-center gap-1.5 text-[12px] font-medium text-ink-muted hover:text-ink border border-subtle bg-surface hover:bg-canvas rounded-md px-2.5 py-1.5 min-h-[44px] md:min-h-[36px]">
                 <span class="inline-flex transition-transform duration-200" :class="rotateClass" aria-hidden="true">
                     <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
                         <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
