@@ -4,7 +4,8 @@ The run reads the facility settings once when it starts. A period extended
 after that must still protect an activity, a handover note or an eventless
 identified person that the run reaches later; the deletion or anonymization is
 decided on the period read under the Settings lock in the target's own
-transaction.
+transaction. A shortened period reaches newly due targets in the next run at
+the latest; the selection keeps the period the step started with.
 """
 
 import threading
@@ -19,7 +20,7 @@ from django.db import connection, connections, transaction
 from django.utils import timezone
 
 from core.management.commands import enforce_retention as command
-from core.models import Activity, Client, Settings, ShiftHandoverNote
+from core.models import Activity, Client, Event, Settings, ShiftHandoverNote
 from core.retention import enforcement
 from core.services.system.settings import update_settings
 from tests._retention_race_helpers import backend_pid, waits_for_a_lock
@@ -236,3 +237,42 @@ def test_extension_uncommitted_at_the_lock_governs_the_step(
     assert main["blocked"] is True
     assert getattr(Settings.objects.get(facility=facility), field) == 90
     assert _target_kept(kind, target)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("kind", ["event", "activity"])
+def test_shortened_period_reaches_newly_due_targets_in_the_next_run(
+    facility, settings_obj, client_identified, doc_type_contact, admin_user, monkeypatch, kind
+):
+    """90 -> 30 days before the steps: the 45-day-old target stays this run and goes in the next."""
+    field = "retention_anonymous_days" if kind == "event" else "retention_activities_days"
+    setattr(settings_obj, field, 90)
+    settings_obj.save(update_fields=[field])
+    if kind == "event":
+        target = Event.objects.create(
+            facility=facility,
+            is_anonymous=True,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now() - timedelta(days=45),
+            data_json={"duration": 20},
+        )
+    else:
+        target = _target("activity", facility, client_identified, 45)
+    real = command.process_facility_retention
+
+    def shorten_before_events(current_facility, run_settings, now, dry_run):
+        update_settings(Settings.objects.get(facility=facility), admin_user, **{field: 30})
+        return real(current_facility, run_settings, now, dry_run)
+
+    def removed():
+        if kind == "event":
+            return Event.objects.get(pk=target.pk).is_deleted
+        return not Activity.objects.filter(pk=target.pk).exists()
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(command, "process_facility_retention", shorten_before_events)
+        _run(facility)
+    assert not removed()
+
+    _run(facility)
+    assert removed()
