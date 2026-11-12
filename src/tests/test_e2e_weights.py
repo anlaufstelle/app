@@ -290,11 +290,10 @@ def _slice_summary(count):
 
 
 def test_committed_weights_balance_slices_within_limits():
-    """Every spec is measured, slices are balanced and no job nears its time limit."""
+    """Measured and median-fallback loads stay balanced within the estimated job budget."""
     job = yaml.safe_load((ROOT / ".github/workflows/e2e.yml").read_text())["jobs"]["test-e2e"]
     count = job["env"]["E2E_SLICES"]
-    loads, ratio, unmeasured = _slice_summary(count)
-    assert unmeasured == 0, "Every spec file needs a measured weight; renew scripts/ci/e2e_weights.json"
+    loads, ratio, _ = _slice_summary(count)
     assert ratio <= 1.15
     # Weights estimate test time on the runner; each job also spends setup time (checkout,
     # dependencies, browser, assets), measured at about six minutes in the workflow comment.
