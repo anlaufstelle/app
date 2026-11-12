@@ -90,7 +90,10 @@ def test_ops_gate_reads_the_audit_verify_timer_result_and_never_runs_the_check_i
     assert "nicht grün" in item
     assert "nicht von Hand" in item
     # the unit named in the checklist is the one the timer installer creates
-    installer = (ROOT / "dev-ops/deploy/install-timers.sh").read_text(encoding="utf-8")
+    installer_path = ROOT / "dev-ops/deploy/install-timers.sh"
+    if not installer_path.exists():
+        pytest.skip("dev-ops/deploy/install-timers.sh not in the public snapshot")
+    installer = installer_path.read_text(encoding="utf-8")
     assert 'install_timer audit-verify "' in installer
     assert '"$ADMIN_RUN verify_audit_chain"' in installer
     # the read-only command is the only shell command of the line: no run of the management command
