@@ -43,7 +43,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Strichliste als Tap-Kacheln** (#2651) — Jeder Typ ist eine Kachel mit großem Zähler und `+1`-Marke; die ganze Kachel zählt, leuchtet kurz auf und zeigt den Offline-Status auf sich selbst. Typen mit Zahlenfeldern tragen `+ …`.
 - **Rückgängig der Strichliste als feste Leiste mit Countdown** (#2652) — Nach einem Strich erscheint 60 Sekunden lang eine feste Leiste mit „Rückgängig · 58 s“ unter der Strichliste, am Handy über der Navigation. Die Kacheln springen nicht mehr; die Leiste zeigt immer den letzten Strich.
 - **Zahleneingabe der Strichliste als Popover bzw. Bottom-Sheet** (#2653) — Die Werteingabe öffnet am Desktop als Popover an der Kachel, am Handy als Fenster von unten; die Liste verschiebt sich nicht. Escape, Abbrechen oder ein Klick außerhalb schließen, der Fokus kehrt zur Kachel zurück.
-- **Kettenprüfung mit geringerem Speicherbedarf und ohne Fehlalarm bei ruhenden Einrichtungen** (#2717) — `verify_audit_chain` liest Audit-Zeilen schrittweise, die Bereinigung ermittelt Kettengrenzen in der Datenbank. Ein bereinigter Anker einer ruhenden Einrichtung gilt nicht mehr als Bruch, wenn ein signierter Prüfpunkt ihn führt und er laut Ankerdatei vor der Fristgrenze lag.
+- **Kettenprüfung und Statistik mit weniger Aufwand** (#2717) — Die Statistikseite berechnet die Live-Personenzahlen gezielt; `verify_audit_chain` liest schrittweise und die Bereinigung sucht Kettengrenzen in der Datenbank. Ein signierter Prüfpunkt und ein Anker vor der Fristgrenze verhindern einen Fehlalarm bei bereinigten ruhenden Einrichtungen.
 
 ### Fixed
 

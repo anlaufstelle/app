@@ -352,6 +352,14 @@ def _aggregate_top_clients(base_qs) -> list[dict]:
     return [{"pseudonym": row["client__pseudonym"], "count": row["count"]} for row in rows]
 
 
+def get_live_client_statistics(facility, date_from, date_to, document_type=None):
+    """Return only the non-additive person terms over the full live period."""
+    return {
+        "top_clients": _aggregate_top_clients(event_queryset_for_period(facility, date_from, date_to, document_type)),
+        "unique_clients": count_unique_clients(facility, date_from, date_to, document_type),
+    }
+
+
 def get_statistics(facility, date_from, date_to, document_type=None):
     """Statistics data for a facility in the given period.
 

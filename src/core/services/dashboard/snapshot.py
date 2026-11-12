@@ -20,6 +20,7 @@ from core.reporting.registry import get_backend, get_backends
 from core.services.dashboard.statistics import (
     PERSONS_KEY,
     count_unique_clients,
+    get_live_client_statistics,
     get_statistics,
     get_statistics_for_events,
 )
@@ -586,7 +587,7 @@ def get_statistics_hybrid(facility, date_from, date_to):
     merged[SNAPSHOT_AS_OF_KEY] = as_of
 
     # top_clients always from a live full-range query
-    live_full = get_statistics(facility, date_from, date_to)
+    live_full = get_live_client_statistics(facility, date_from, date_to)
     merged["top_clients"] = live_full["top_clients"]
 
     # K4b (Refs #1770): ``unique_clients`` ist als einziges Feld nicht additiv
