@@ -184,7 +184,8 @@ def test_shift_filter_statements_carry_plain_range_bounds(client, staff_user, fa
         for query in captured.captured_queries
         if 'FROM "core_event"' in query["sql"] and ("MIN(" in query["sql"] or "tstzmultirange" in query["sql"])
     ]
-    assert len(statements) == 3  # bounds aggregate, count, page
+    assert len(statements) == 4  # bounds aggregate, count, page, day counts (#2659)
+    assert sum("GROUP BY" in sql for sql in statements) == 1
     for sql in statements:
         assert '"core_event"."occurred_at" >=' in sql
         assert '"core_event"."occurred_at" <=' in sql
@@ -224,7 +225,8 @@ def test_query_count_is_constant_for_page_size(staff_user, sample_event, django_
         request.user = staff_user
         request.current_facility = Facility.objects.get(pk=sample_event.facility_id)
         # Refs #2605: page contents add one read and two shared field-metadata reads.
-        with django_assert_num_queries(11):
+        # Day counts add one grouped read for the visible calendar days (#2659).
+        with django_assert_num_queries(12):
             response = EventListView.as_view(page_size=page_size)(request)
             assert response.status_code == 200
 

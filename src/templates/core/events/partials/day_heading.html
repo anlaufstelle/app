@@ -1,0 +1,4 @@
+{% load i18n %}
+<h2 data-event-day="{{ group.day|date:'Y-m-d' }}" class="bg-surface-alt px-3.5 py-2 text-[13px] font-semibold text-ink">
+    {{ group.day|date:"D, j. M" }} — {% blocktranslate count count=group.count %}{{ count }} Kontakt{% plural %}{{ count }} Kontakte{% endblocktranslate %}
+</h2>

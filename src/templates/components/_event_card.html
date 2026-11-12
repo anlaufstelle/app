@@ -1,10 +1,11 @@
 {% load i18n core_tags %}
 <div class="feed-row" x-data="expandableCard" {% if not ignore_global_collapse %}x-init="applyGlobalCollapse" @zeitstrom-collapse-all.window="applyGlobalCollapse"{% endif %}>
     <button type="button" @click="toggle" aria-expanded="false" :aria-expanded="expanded"
+            {% if time_only %}aria-label="{% translate 'Zeit' %}: {{ event.occurred_at|time:'H:i' }} · {% translate 'Typ' %}: {{ event.document_type.name }} · {% translate 'Person' %}: {% if show_client %}{% if event.is_anonymous %}{% translate 'Anonym' %}{% elif event.client %}{{ event.client.pseudonym }}{% endif %}{% endif %} · {% translate 'Angaben' %}: {% if show_case and event.case and not event.case.is_deleted %}{% translate 'Fall' %}: {{ event.case.title }} · {% endif %}{% for pf in event.preview_fields %}{{ pf.label }}: {{ pf.value }}{% if not forloop.last %} · {% endif %}{% endfor %} · {% translate 'Erfasst von' %}: {% if event.created_by %}{{ event.created_by.display_name|default:event.created_by.username }}{% endif %}"{% endif %}
             aria-controls="event-detail-{{ event.pk }}" data-testid="event-card-toggle" class="feed-row-header">
         <span data-feed-column="edge" class="feed-row-edge bg-event" aria-hidden="true"></span>
         <span data-feed-column="time" class="feed-row-time" title="{{ event.occurred_at|date:'DATETIME_FORMAT' }}">
-            {{ event.occurred_at|time:"H:i" }}{% if show_date %}<span class="block text-[11px]">{{ event.occurred_at|date:"d.m.y" }}</span>{% endif %}
+            {{ event.occurred_at|time:"H:i" }}{% if show_date and not time_only %}<span class="block text-[11px]">{{ event.occurred_at|date:"d.m.y" }}</span>{% endif %}
         </span>
         <span data-feed-column="type" class="feed-row-type">{{ event.document_type.name }}</span>
         <span data-feed-column="person" class="feed-row-person">

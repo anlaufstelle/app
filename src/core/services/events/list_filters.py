@@ -5,8 +5,9 @@ from datetime import date, timedelta
 from urllib.parse import urlencode
 from uuid import UUID
 
-from django.db.models import BooleanField, Max, Min
+from django.db.models import BooleanField, Count, Max, Min
 from django.db.models.expressions import RawSQL
+from django.db.models.functions import TruncDate
 from django.utils import timezone
 from django.utils.formats import date_format
 from django.utils.translation import gettext as _
@@ -201,6 +202,26 @@ def event_list_queryset(facility, user, filters, *, options=None):
         related.append("case")
         columns.extend(["case__id", "case__title", "case__is_deleted"])
     return queryset.select_related(*related).only(*columns).order_by("-occurred_at", "-pk")
+
+
+def event_list_day_groups(queryset, page_events):
+    """Group page rows by local day, counting the full filtered result for those days."""
+    groups = {}
+    for event in page_events:
+        day = timezone.localdate(event.occurred_at)
+        groups.setdefault(day, {"day": day, "events": []})["events"].append(event)
+    if not groups:
+        return []
+    counts = (
+        queryset.order_by()
+        .annotate(day=TruncDate("occurred_at", tzinfo=timezone.get_current_timezone()))
+        .filter(day__in=groups)
+        .values("day")
+        .annotate(count=Count("pk"))
+    )
+    for row in counts:
+        groups[row["day"]]["count"] = row["count"]
+    return list(groups.values())
 
 
 def event_list_page_contents(facility, user, page_events):

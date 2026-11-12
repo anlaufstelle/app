@@ -2,8 +2,20 @@
 {% if filter_form_oob %}{% include "core/events/partials/filter_form.html" %}{% endif %}
 {% if events %}
 <div class="feed-rows" aria-label="{% translate 'Kontakte' %}">
-{% for event in events %}
-    {% include "components/_event_card.html" with show_date=True show_client=True show_case=show_cases ignore_global_collapse=True %}
+<div data-event-columns="" aria-hidden="true" class="hidden md:block">
+    <div class="feed-row-header text-ink-muted">
+        <span></span><span class="feed-row-time">{% translate "Zeit" %}</span>
+        <span class="feed-row-type">{% translate "Typ" %}</span>
+        <span class="feed-row-person">{% translate "Person" %}</span>
+        <span class="feed-row-details">{% translate "Angaben" %}</span>
+        <span class="feed-row-by">{% translate "Erfasst von" %}</span>
+    </div>
+</div>
+{% for group in day_groups %}
+    {% include "core/events/partials/day_heading.html" %}
+    {% for event in group.events %}
+        {% include "components/_event_card.html" with time_only=True show_client=True show_case=show_cases ignore_global_collapse=True %}
+    {% endfor %}
 {% endfor %}
 </div>
 {% include "components/_pagination.html" with page=events extra_params=pagination_params %}
