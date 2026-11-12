@@ -1324,9 +1324,9 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
                 removals=removal_actions(request.POST),
                 expected_updated_at=expected_updated_at,
                 expected_form_state=expected_form_state,
-                # Refs #1338: JSON-/Offline-Replay-Clients müssen den
-                # Versions-Token mitschicken (kein stilles Last-Write-Wins
-                # mehr). Der klassische HTML-Formular-Pfad bleibt unverändert.
+                # Refs #1338: JSON and offline-replay clients must send the
+                # version token (no more silent last-write-wins). The classic
+                # HTML form path stays unchanged.
                 require_version_token=wants_json,
             )
             try:

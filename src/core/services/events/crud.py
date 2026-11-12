@@ -363,18 +363,17 @@ def lock_event_for_edit(event):
     Person gehaengt, deren Zeile wir nicht gesperrt haben: Abbruch statt
     Nachsperren (Muster ``lock_event_for_case_link``).
 
-    **Erste Sperre des Vorgangs** (Refs #2359): Wer vor der Bearbeitung
-    weitere Zeilen dieses Ereignisses sperrt (die Anhangs-Vorsperre in
-    ``update_event_with_attachments``), ruft diesen Helfer ZUERST. Die Vorsperre leitet
-    die Person aus ``event.client_id`` ab; nach einem Zusammenfuehren traegt die
-    Instanz dort noch die alte Person. Liefe sie zuerst, hielte der Vorgang
-    bereits das Ereignis, wenn dieser Helfer die frisch gelesene Person
-    sperrt — eine Kante Ereignis -> Person gegen eine parallele Fallzuordnung
-    (Person -> Fall -> Ereignis). Deshalb gleicht der Helfer die Bindung der
-    Instanz an die gesperrte Person an: alle folgenden Sperren finden Person
-    und Ereignis bereits gehalten vor. Ein zweiter Aufruf in derselben
-    Transaktion (``update_event``) liest dieselbe Bindung und sperrt nichts
-    Neues.
+    **First lock of the operation** (Refs #2359): a caller that locks further
+    rows of this event before the edit (the attachment pre-lock in
+    ``update_event_with_attachments``) calls this helper FIRST. The pre-lock
+    derives the person from ``event.client_id``; after a merge the instance
+    still carries the old person there. If the pre-lock ran first, the
+    operation would already hold the event when this helper locks the freshly
+    read person — an edge event -> person against a concurrent case
+    assignment (person -> case -> event). The helper therefore aligns the
+    instance's binding with the locked person: every later lock finds person
+    and event already held. A second call in the same transaction
+    (``update_event``) reads the same binding and locks nothing new.
     """
     from core.services.case.state_contract import EVENT_WRITE_GONE_MESSAGE, _raise_if_clients_revoked
     from core.services.client.restriction import assert_processing_allowed
@@ -430,13 +429,13 @@ def update_event(
     Versions-Token wird nie gerettet. Ohne Fingerabdruck (Default,
     JSON-/Offline-Replay) gilt der Versionsvertrag unveraendert.
 
-    Allowlist (Refs #1789): ``**kwargs`` bleibt in der Signatur, die Menge der
-    erlaubten Felder ist aber **leer**. ``update_event`` war die letzte der
-    vier Update-Services ohne Mass-Assignment-Prüfung (Restpunkt aus #1786):
-    jedes durchgereichte Feld landete blind im ``setattr``. Kein heutiger
-    Aufrufer nutzt Kwargs — ``update_event_with_attachments`` übergibt ausschließlich
-    ``data_json``. Ein künftiges Update-Feld muss deshalb bewusst in
-    ``allowed`` eingetragen werden, statt still durchzurutschen.
+    Allowlist (Refs #1789): ``**kwargs`` stays in the signature, but the set
+    of allowed fields is **empty**. ``update_event`` was the last of the four
+    update services without a mass-assignment check (leftover from #1786):
+    every passed field landed blindly in ``setattr``. No current caller passes
+    kwargs — ``update_event_with_attachments`` passes only ``data_json``. A
+    future update field must therefore be added to ``allowed`` deliberately
+    instead of slipping through.
     """
     from core.services.security import check_version_conflict
 
