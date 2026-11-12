@@ -536,3 +536,17 @@ def test_hold_on_a_final_approval_clears_it_for_good(approved, facility, lead_us
     assert proposal.first_approved_by_id == lead_user.pk
     assert not _reset_rows(proposal).exists()
     assert not Event.objects.get(pk=event.pk).is_deleted
+
+
+def test_reset_without_any_deadline_removes_the_overdue_proposal(approved, facility, qualified_period, monkeypatch):
+    """No regular event is left without a deadline; this checks the defensive branch."""
+    from core.retention import proposals as proposals_module
+
+    event, proposal = approved
+    assert proposal.deletion_due_at < timezone.localdate()
+    monkeypatch.setattr(proposals_module, "iter_strategies", lambda *args, **kwargs: iter(()))
+    assert proposals_module.reset_approvals_with_moved_deadline(facility, qualified_period, timezone.now()) == 1
+    assert not RetentionProposal.objects.filter(pk=proposal.pk).exists()
+    assert not Event.objects.get(pk=event.pk).is_deleted
+    row = _reset_rows(proposal).get()
+    assert row.detail["reason"] == "no_deadline_applies"

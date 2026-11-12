@@ -607,12 +607,26 @@ def _reopen_for_new_review(proposal, settings_obj, now, *, reason):
     covers the deadline it was given for, and so does a lone first approval
     (Refs #2714). The deletion date follows the current deadline, so the
     dashboard does not show the proposal as overdue while the event is not due.
-    A new review starts a new deferral count: deferrals from before the reset
-    must not bring the automatic approval closer.
+    If no deadline applies to the event any more, there is nothing to review:
+    the proposal is removed after the audit row, and the proposal run creates a
+    new one once a deadline applies and has passed. A new review starts a new
+    deferral count: deferrals from before the reset must not bring the
+    automatic approval closer.
     """
     deletion_due_at = _current_deadline(proposal.facility, settings_obj, now, proposal.target_id)
-    if deletion_due_at is not None:
-        proposal.deletion_due_at = deletion_due_at
+    if deletion_due_at is None:
+        audit_retention_decision(
+            proposal.facility,
+            target_type=proposal.target_type,
+            target_id=proposal.target_id,
+            action=AuditLog.Action.DELETE,
+            category="retention_proposal_approval_reset",
+            retention_category=proposal.retention_category,
+            reason="no_deadline_applies",
+        )
+        proposal.delete()
+        return
+    proposal.deletion_due_at = deletion_due_at
     proposal.status = RetentionProposal.Status.PENDING
     proposal.first_approved_by = None
     proposal.first_approved_at = None
