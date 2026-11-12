@@ -566,13 +566,13 @@ Die folgenden Themen sind Zielbilder ohne Zusage und ohne Termin, keine implemen
 
 | Thema | Beschreibung |
 |-------|-------------|
-| KDS-Export | Export für die Deutsche Suchthilfestatistik; ohne Zusage zu Format und Umfang |
-| Externe API für Trägersysteme | Authentifizierte Schnittstelle mit Einrichtungs-Scoping; die vorhandenen JSON-Endpunkte sind intern und sitzungsgebunden |
-| Berichte je Einrichtung konfigurierbar | Die Einrichtung soll selbst einstellen können, wie die ausgelieferten Berichte für sie erscheinen |
-| Module je Einrichtung schaltbar | Funktionsbereiche je Einrichtung ein- und ausschalten |
-| Einrichtung und erste Schritte im Browser | Einrichten und erste Schritte in der Oberfläche statt über Kommandozeile und Django-Admin |
-| Konfigurationspakete exportieren und erweitern | Die Konfiguration einer Einrichtung als Paket exportieren; Pakete lassen sich erweitern |
-| Rechtstexte und E-Mail-Vorlagen in der Oberfläche pflegen | Pflege der Texte durch die Einrichtung in der Oberfläche |
+| KDS-Export | Zielbild: Export für die Deutsche Suchthilfestatistik; ohne Zusage zu Format und Umfang |
+| Externe API für Trägersysteme | Zielbild: authentifizierte Schnittstelle mit Einrichtungs-Scoping; die vorhandenen JSON-Endpunkte sind intern und sitzungsgebunden |
+| Berichte je Einrichtung konfigurierbar | Zielbild: Darstellung ausgelieferter Berichte je Einrichtung anpassen (Sichtbarkeit, Reihenfolge, Spalten, Standardzeitraum, Tabelle oder Diagramm) |
+| Module je Einrichtung schaltbar | Zielbild: Schalter je Einrichtung für einzelne Funktionsbereiche mit Ausblenden ihrer Einstiege und Erhalt vorhandener Daten |
+| Einrichtung und erste Schritte im Browser | Zielbild: Erststart-Einrichtung, zustandsbasierte erste Schritte und fachlicher Einrichtungsassistent im Browser; Ausgestaltung vor Umsetzung im Konzept zu klären |
+| Konfigurationspakete exportieren und erweitern | Zielbild: Dokumentationstypen und Feldvorlagen als Konfigurationspaket exportieren; Paketinhalt um Zeitfenster, Schnellvorlagen und Einrichtungs-Einstellungen erweitern |
+| Rechtstexte und E-Mail-Vorlagen in der Oberfläche pflegen | Zielbild: Impressum, Datenschutzerklärung und E-Mail-Vorlagen durch die Systemadministration in der Oberfläche pflegen |
 
 ---
 
