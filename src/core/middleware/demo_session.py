@@ -12,7 +12,8 @@ and auth revision: revocation can overlap the save. A response completed before
 revocation can still arrive late; its old key cannot authenticate after rotation.
 Explicit logout, session clearing and absolute expiry retain Django's cookie
 behavior unless auth was already rejected: the key is then deleted server-side
-and its cookie stays inert. New session creation retains Django's behavior.
+and its cookie stays inert. Explicitly created sessions (login, keyed token
+handover) retain Django's behavior.
 Expired idle sessions remain anonymous even when their inert cookie stays until
 browser expiry. Skipped cookie writes still retain Vary: Cookie for caches.
 """
