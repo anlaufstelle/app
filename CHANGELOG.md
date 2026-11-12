@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Keine.
 
+### Changed
+
+- **Changelog-Einträge folgen einer festen Form** (#2704) — Für Mitwirkende: Ein Eintrag hat höchstens zwei Sätze und 350 Zeichen (Betreiber-Aktionen 600), je Ticket und Abschnitt gibt es einen Eintrag, die Abschnitte stehen in fester Folge. `make changelog-check` prüft das; Nachrunden ändern den Eintrag, sie hängen nichts an.
+
 ## [0.99.10] - 2026-11-11
 
 Weiterer Release-Kandidat vor 1.0: bündelt neue Basis-Image-Digests für PostgreSQL, Redis, ClamAV und Caddy (Betreiber-Aktion), einen Schwachstellen-Scan für App- und Fremdimages als Release-Gate mit befristeten Ausnahmen, die Advisory- und SBOM-Prüfung manuell vendorter JavaScript-Bibliotheken, ein offen bleibendes Offline-Bearbeitungsformular, Barrierefreiheits-Korrekturen, einen gehärteten Sprachcookie sowie Sicherheitsupdates für Entwicklungsabhängigkeiten.
