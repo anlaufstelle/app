@@ -316,13 +316,33 @@ class TestNarrowViewportAndEnglish:
             page.set_default_timeout(30000)
             _open_list(page, base_url, f"case={kl_data['case']}")
             form = page.locator("#event-filters")
+            expect(form.get_by_role("link", name="Week", exact=True)).to_be_visible()
+            expect(form.get_by_role("link", name="Reset all", exact=True)).to_be_visible()
+            active_filters = form.get_by_role("list", name="Active filters", exact=True)
+            expect(active_filters).to_be_visible()
+            period_chip = active_filters.locator('[data-filter-chip="period"]')
+            expect(period_chip).to_be_visible()
+            expect(period_chip.locator("span").first).to_have_text(re.compile(r"^Period: .+"))
+            period_text = period_chip.locator("span").first.inner_text()
+            expect(period_chip.get_by_role("link", name=f"Remove filter: {period_text}", exact=True)).to_be_visible()
             text = form.inner_text()
             for english in ("Today", "Period", "All types", "Only mine"):
                 assert english in text or english in form.inner_html(), (english, text)
             # The selects sit in the closed panel; read the option labels from the DOM.
             options = page.locator("#event-filters select option[value='']").all_text_contents()
             assert options and all(o.strip() for o in options)
-            for german in ("Heute", "Alle Typen", "Alle Personen", "Alle Fälle", "Nur meine"):
+            for german in (
+                "Heute",
+                "Woche",
+                "Alle zurücksetzen",
+                "Aktive Filter",
+                "Zeitraum:",
+                "Filter entfernen:",
+                "Alle Typen",
+                "Alle Personen",
+                "Alle Fälle",
+                "Nur meine",
+            ):
                 assert german not in form.inner_html(), german
             assert page.locator("#event-q").get_attribute("placeholder") == "Search contacts …"
             # Date fields are not part of this check (format belongs to the locale work).
