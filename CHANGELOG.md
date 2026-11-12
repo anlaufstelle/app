@@ -46,6 +46,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Löschfreigaben neu geprüft** (#2714) — Ist das Ereignis nicht mehr fällig oder war es nach aktuellen Fristen bei der ersten Freigabe noch nicht fällig, verwirft der Lauf die Freigaben mit Audit und setzt den Vorschlag zurück. Es gilt die Frist bei der Löschentscheidung, auch für Aktivitäten, Übergabenotizen, Personen ohne Ereignis, Papierkorb und Historie.
 - **Schlüsselrotation verschiebt die Anonymisierung inaktiver Personen nicht mehr** (#2715) — Die Neuverschlüsselung lässt den Änderungszeitpunkt von Personen, Fällen und Aufgaben unverändert; eine gleichzeitige fachliche Änderung hat weiterhin Vorrang.
 - **Kettenprüfung und Audit-Bereinigung mit begrenztem Speicherbedarf** (#2717) — `verify_audit_chain` liest das Audit-Protokoll einer Einrichtung zeilenweise statt am Stück, und die Bereinigung lässt die Datenbank die Kettengrenzen bestimmen. Der Speicherbedarf des nächtlichen Laufs wächst damit nicht mehr mit der Länge des Protokolls.
+- **Kettenprüfung und Audit-Bereinigung mit geringerem Speicherbedarf** (#2717) — `verify_audit_chain` liest Audit-Zeilen schrittweise; die Bereinigung ermittelt Kettengrenzen in der Datenbank. Damit müssen nicht mehr sämtliche Audit-Zeilen und Hashes zugleich im Anwendungsspeicher liegen.
 
 ### Fixed
 
