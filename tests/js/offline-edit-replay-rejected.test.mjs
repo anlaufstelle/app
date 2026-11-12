@@ -230,7 +230,7 @@ describe("other outcomes stay as before", () => {
 // resend the rejected edit (it would still be "modified"). Concurrency across
 // tabs rests on the exclusive Web Lock and is not exercised here.
 describe("two sync triggers coalesced in one tab", () => {
-    it("send every edit exactly once in the rerun, also with a rejected one among them", async () => {
+    it("send every edit exactly once across the run and its rerun, also with a rejected one among them", async () => {
         await saveEdit(PK_A, { dauer: "11" });
         await saveEdit(PK_B, { dauer: "5" });
         await saveEdit(PK_C, { dauer: "6" });
