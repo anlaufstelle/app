@@ -2025,6 +2025,8 @@ The management command `enforce_retention` enforces the configured periods. Depe
 
 Persons whose events are then all deleted are anonymized in the same run. Without events, the `retention_identified_days` inactivity period applies only to pseudonym-only people without open cases. The anchor is the latest person change (`updated_at`), substantive case activity (`last_activity_at`), task change or attachment change on the person or case (creation, replacement or removal). Key rotation does not update `updated_at` of people, cases and tasks and therefore does not move this anchor. For events it still updates `updated_at`; that is not a deadline anchor, event deadlines are based on the event time and the case anchor. People with additional details without events are excluded from automatic anonymization; the proposal path currently supports only events, and automatic retention enforcement for these people is missing. Pseudonym-only people without events but with an open case are excluded from the inactivity path. The facility regularly reviews people with additional details without events and submits a deletion request where necessary; it records the review interval in the deletion concept. See [`anonymization.py`](../../src/core/retention/anonymization.py). Holds and Art. 18 protect both paths. The other fields of the group "Datenschutz und Fristen" are not periods: `retention_auto_approve_after_defer` and `retention_max_defer_count` control how deferred deletion proposals are handled in the retention dashboard, `retention_use_k_anonymization` and `k_anonymity_threshold` control k-anonymization (both below).
 
+The run deletes activities and handover notes and anonymizes persons without events by the period in force when it decides on the individual record; if the period is extended during the run, the record is kept.
+
 > **The handover note is hard-deleted, not soft-deleted** (Refs #2042) -- like activities. What counts is the date of the last change (`updated_at`), not creation; key rotation deliberately does not advance that timestamp and therefore does not extend the period. There is **no** legal hold for handover notes: holds protect client, case and event records for ongoing proceedings, whereas the shift note is a duty note with no personal reference in the data model (see (DE: [security-notes.md](../security-notes.md))). Every run with matches writes an audit row (`DELETE`, category `handover_notes`) carrying the count and the period -- never any text.
 
 **Manual execution:**
@@ -2581,5 +2583,5 @@ Person anonymization clears these dynamic fields as well as related titles and g
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: 17d1f36cba63c00d2ce290edb83826e80be6bb3c -->
+<!-- source-hash: 2591df82d625b13739e06758207e27e1729a891e -->
 <!-- translation-date: 2026-11-12 -->

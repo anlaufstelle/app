@@ -829,14 +829,23 @@ def enforce_activities(facility, settings_obj, now, dry_run):
     # ``_soft_delete_events``).
     deleted = 0
     deferred = 0
+    decided_days = settings_obj.retention_activities_days
     for pk in list(qs.values_list("pk", flat=True)):
         with transaction.atomic():
+            # The period in force now decides, not the one the run started with
+            # (Refs #2714); Settings before the target rows, see
+            # :func:`lock_current_settings`.
+            current_settings = lock_current_settings(facility) or settings_obj
             activity, ist_gehalten = _lock_activity_and_recheck_hold(facility, pk)
             if ist_gehalten:
                 deferred += 1
             if activity is None:
                 continue
+            days = current_settings.retention_activities_days
+            if days < 1 or activity.occurred_at >= now - timedelta(days=days):
+                continue
             activity.delete()
+            decided_days = days
             deleted += 1
     if deferred:
         # „nicht geloescht" und „nicht angeschaut" muessen fuer die
@@ -852,7 +861,7 @@ def enforce_activities(facility, settings_obj, now, dry_run):
             category="activities",
             command="enforce_retention",
             count=deleted,
-            retention_days=settings_obj.retention_activities_days,
+            retention_days=decided_days,
             deferred=deferred,
         )
     elif deleted:
@@ -863,7 +872,7 @@ def enforce_activities(facility, settings_obj, now, dry_run):
             category="activities",
             command="enforce_retention",
             count=deleted,
-            retention_days=settings_obj.retention_activities_days,
+            retention_days=decided_days,
         )
     return {"count": deleted}
 
@@ -904,12 +913,19 @@ def enforce_handover_notes(facility, settings_obj, now, dry_run):
         return {"count": qs.count()}
 
     deleted = 0
+    decided_days = settings_obj.retention_handover_notes_days
     for pk in list(qs.values_list("pk", flat=True)):
         with transaction.atomic():
+            # The period in force now decides (Refs #2714); Settings before the
+            # note row, see :func:`lock_current_settings`.
+            current_settings = lock_current_settings(facility) or settings_obj
+            days = current_settings.retention_handover_notes_days
+            if days < 1:
+                continue
             # Refs #2377: die Sperre bleibt an die Einrichtung des Laufs gebunden.
             note = (
                 ShiftHandoverNote.objects.select_for_update()
-                .filter(pk=pk, facility=facility, updated_at__lt=cutoff)
+                .filter(pk=pk, facility=facility, updated_at__lt=now - timedelta(days=days))
                 .first()
             )
             if note is None:
@@ -918,6 +934,7 @@ def enforce_handover_notes(facility, settings_obj, now, dry_run):
                 # Stand von vorhin ist nicht rueckholbar (Refs #2124).
                 continue
             note.delete()
+            decided_days = days
             deleted += 1
     if deleted:
         audit_retention_decision(
@@ -927,7 +944,7 @@ def enforce_handover_notes(facility, settings_obj, now, dry_run):
             category="handover_notes",
             command="enforce_retention",
             count=deleted,
-            retention_days=settings_obj.retention_handover_notes_days,
+            retention_days=decided_days,
         )
     return {"count": deleted}
 

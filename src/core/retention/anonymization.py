@@ -65,6 +65,7 @@ from core.services.client import (
 from core.services.client.main import _lock_client_case_rows
 from core.services.compliance import is_k_anonymous, k_anonymize_client
 from core.services.dashboard.external_report import DEFAULT_K_THRESHOLD, effective_k_threshold
+from core.services.system.settings import lock_current_settings
 
 logger = logging.getLogger(__name__)
 
@@ -317,8 +318,17 @@ def anonymize_clients(facility, dry_run, *, deferred_ids=None):
     skipped_holds = 0
     for client_pk in candidate_pks:
         with transaction.atomic():
-            # ``core_client`` ist die erste Stufe der kanonischen Ordnung und
-            # der gemeinsame Koordinationspunkt mit ``create_hold_for_target``.
+            # The idle period in force now decides, not the one the run started
+            # with (Refs #2714). Settings come before the person row, the order
+            # of :func:`core.services.system.settings.lock_current_settings`.
+            current_settings = lock_current_settings(facility) or settings_obj
+            current_idle_cutoff = (
+                now - timedelta(days=current_settings.retention_identified_days)
+                if current_settings and current_settings.retention_identified_days >= 1
+                else None
+            )
+            # ``core_client`` ist die erste Datenstufe der kanonischen Ordnung
+            # und der gemeinsame Koordinationspunkt mit ``create_hold_for_target``.
             # ALLE Lesungen liegen bewusst DANACH — erst dann sind sie stabile
             # Aussagen und nicht der Stand von vorhin.
             locked = Client.objects.select_for_update().filter(pk=client_pk, facility=facility).first()
@@ -343,13 +353,13 @@ def anonymize_clients(facility, dry_run, *, deferred_ids=None):
                 continue
             # Re-read the same eligibility under Person -> Case -> Event locks.
             if not events.exists() and (
-                idle_cutoff is None
+                current_idle_cutoff is None
                 or not _with_inactivity_state(Client.objects.filter(pk=client_pk, facility=facility))
                 .filter(
                     contact_stage=Client.ContactStage.IDENTIFIED,
                     is_deleted=False,
                     has_open_case=False,
-                    inactivity_anchor__lt=idle_cutoff,
+                    inactivity_anchor__lt=current_idle_cutoff,
                 )
                 .exists()
             ):
