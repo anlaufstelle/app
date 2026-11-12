@@ -529,36 +529,35 @@ class _PinnedHTTPSHandler(urllib.request.HTTPSHandler):
         return _PinnedHTTPSConnection(host, pinned_ip=self._pinned_ip, **kwargs)
 
 
-def _post_webhook(payload: dict) -> bool:
-    """Optional: Webhook-Notification bei aktiver ``BREACH_NOTIFICATION_WEBHOOK_URL``.
+def _post_webhook(payload: dict, *, error_details: dict | None = None) -> bool:
+    """Send through the validated, pinned HTTPS connection without redirects.
 
-    Refs #772 — vor jedem Aufruf wird die URL durch ``_validate_webhook_url``
-    geprueft (https-only + public-IP). Verstoesse werden geloggt und
-    fuehren zu ``return False`` statt einem stillen Aufruf gegen Cloud-
-    Metadata oder den loopback. Redirects werden via ``_NoRedirectHandler``
-    nicht gefolgt (A5.2).
+    Expected URL and transport failures return False. Optional audit metadata
+    contains only the exception class, never a URL or an exception message.
+    Payload serialization stays outside the transport error boundary so that
+    programming errors are not mistaken for delivery failures (Refs #2719).
     """
     url = getattr(settings, "BREACH_NOTIFICATION_WEBHOOK_URL", None)
     if not url:
         return False
+    body = json.dumps(payload).encode("utf-8")
     try:
         pinned_ip = _validate_webhook_url(url)
-    except ValueError as exc:
-        logger.warning("breach_webhook_url_rejected: %s", exc)
-        return False
-    try:
-        req = urllib.request.Request(  # noqa: S310 — _validate_webhook_url SSRF-haerten
+        req = urllib.request.Request(  # noqa: S310 — validated public HTTPS target
             url,
-            data=json.dumps(payload).encode("utf-8"),
+            data=body,
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        # A5.2: Opener mit gepinnter IP (kein DNS-Rebinding) + ohne Redirect-Folgen.
+        # Pin the validated IP and reject redirects (Refs #1016).
         opener = urllib.request.build_opener(_NoRedirectHandler, _PinnedHTTPSHandler(pinned_ip))
-        opener.open(req, timeout=5)  # noqa: S310 — validate + IP-Pin + NoRedirect gegen SSRF
+        opener.open(req, timeout=5)  # noqa: S310 — validated URL + IP pin + no redirects
         return True
-    except (urllib.error.URLError, OSError) as exc:
-        logger.warning("breach_webhook_failed: %s", exc)
+    except (urllib.error.URLError, OSError, http.client.HTTPException, ValueError) as exc:
+        error_class = type(exc).__name__
+        logger.warning("breach_webhook_failed: %s", error_class)
+        if error_details is not None:
+            error_details["error_class"] = error_class
         return False
 
 
@@ -566,7 +565,7 @@ def _webhook_configured() -> bool:
     return bool(getattr(settings, "BREACH_NOTIFICATION_WEBHOOK_URL", None))
 
 
-def _record_delivery(entry: AuditLog, delivered: bool) -> AuditLog:
+def _record_delivery(entry: AuditLog, delivered: bool, error_details: dict) -> AuditLog:
     """Append the outcome of one delivery attempt for finding ``entry``."""
     return audit_event(
         AuditLog.Action.BREACH_SCAN_COMPLETED,
@@ -578,6 +577,7 @@ def _record_delivery(entry: AuditLog, delivered: bool) -> AuditLog:
             "category": WEBHOOK_DELIVERY_CATEGORY,
             "kind": (entry.detail or {}).get("kind"),
             "result": WEBHOOK_DELIVERED if delivered else WEBHOOK_FAILED,
+            **error_details,
         },
     )
 
@@ -591,8 +591,9 @@ def _notify(entry: AuditLog, payload: dict) -> bool | None:
     """
     if not _webhook_configured():
         return None
-    delivered = _post_webhook(payload)
-    _record_delivery(entry, delivered)
+    error_details: dict = {}
+    delivered = _post_webhook(payload, error_details=error_details)
+    _record_delivery(entry, delivered, error_details)
     return delivered
 
 

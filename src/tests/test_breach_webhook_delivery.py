@@ -6,6 +6,7 @@ replaced at ``urllib.request.OpenerDirector.open`` and DNS at
 IP pinning) still runs.
 """
 
+import http.client
 import json
 import urllib.error
 from datetime import timedelta
@@ -267,3 +268,60 @@ class TestFailedDeliveryIsRetried:
         call_command("detect_breaches")
 
         assert receiver.attempts == 1
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("scope", ["facility", "system"])
+@pytest.mark.parametrize("error_type", [http.client.BadStatusLine, http.client.InvalidURL, TimeoutError, ValueError])
+def test_transport_failure_is_recorded_and_retried(
+    scope, error_type, facility, admin_user, receiver, thresholds, monkeypatch, caplog
+):
+    secret = "https://hooks.example.com/private-token?key=secret"
+    original_open = urllib.request.OpenerDirector.open
+
+    def fail_transport(*args, **kwargs):
+        raise error_type(secret)
+
+    monkeypatch.setattr("urllib.request.OpenerDirector.open", fail_transport)
+    if scope == "system":
+        _anonymous_burst()
+    else:
+        _login_burst(facility, admin_user)
+
+    with pytest.raises(CommandError, match="Breach webhook delivery failed 1 time"):
+        call_command("detect_breaches")
+
+    finding = _violations().get()
+    assert finding.facility_id == (None if scope == "system" else facility.pk)
+    delivery = AuditLog.objects.get(detail__category="breach_webhook_delivery")
+    assert delivery.target_id == str(finding.pk)
+    assert delivery.detail["result"] == "failed"
+    assert delivery.detail["error_class"] == error_type.__name__
+    assert secret not in json.dumps(delivery.detail)
+    assert secret not in caplog.text
+    assert _latest_scan_marker().detail["job_run"]["status"] == "failed"
+
+    monkeypatch.setattr("urllib.request.OpenerDirector.open", original_open)
+    _quiet(thresholds)
+    call_command("detect_breaches")
+    call_command("detect_breaches")
+
+    assert [body["audit_id"] for body in receiver.bodies] == [str(finding.pk)]
+    assert _violations().count() == 1
+    assert list(
+        AuditLog.objects.filter(detail__category="breach_webhook_delivery")
+        .order_by("timestamp")
+        .values_list("detail__result", flat=True)
+    ) == ["failed", "delivered"]
+    assert _latest_scan_marker().detail["job_run"]["status"] == "success"
+
+
+@pytest.mark.django_db
+def test_programming_error_is_not_treated_as_delivery_failure(facility, admin_user, receiver, thresholds, monkeypatch):
+    def broken_transport(*args, **kwargs):
+        raise TypeError("programming error")
+
+    monkeypatch.setattr("urllib.request.OpenerDirector.open", broken_transport)
+    _login_burst(facility, admin_user)
+    with pytest.raises(TypeError, match="programming error"):
+        call_command("detect_breaches")

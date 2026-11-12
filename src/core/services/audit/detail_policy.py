@@ -26,6 +26,7 @@ class UnknownAuditDetailKeyError(ValueError):
 # ---------------------------------------------------------------------------
 
 AUDIT_DETAIL_KEYS: dict[str, str] = {
+    "error_class": "Webhook delivery failure: exception class only, no message, URL or credentials (Refs #2719)",
     "discarded_field_count": "Number of filled dynamic fields discarded by a confirmed type change; no values",
     "review_field": "Configured field key or fixed column name; never a text value",
     "reviewed_until": "Review expiry date in ISO format; no free text",
