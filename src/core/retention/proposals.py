@@ -584,6 +584,105 @@ def _clear_first_approval(proposal, user, *, reason):
     )
 
 
+def _reopen_for_new_review(proposal, *, reason):
+    """Return an approved proposal to review and discard both approvals, with audit evidence.
+
+    The caller holds the target and proposal locks. A two-person approval only
+    covers the deadline it was given for (Refs #2714).
+    """
+    proposal.status = RetentionProposal.Status.PENDING
+    proposal.first_approved_by = None
+    proposal.first_approved_at = None
+    proposal.approved_by = None
+    proposal.approved_at = None
+    proposal.auto_approved_at = None
+    proposal.save(
+        update_fields=[
+            "status",
+            "first_approved_by",
+            "first_approved_at",
+            "approved_by",
+            "approved_at",
+            "auto_approved_at",
+        ]
+    )
+    audit_retention_decision(
+        proposal.facility,
+        target_type=proposal.target_type,
+        target_id=proposal.target_id,
+        action=AuditLog.Action.DELETE,
+        category="retention_proposal_approval_reset",
+        retention_category=proposal.retention_category,
+        reason=reason,
+    )
+
+
+def _is_expired(facility, settings_obj, now, event_ids):
+    """Return the ids among ``event_ids`` whose retention deadline has passed."""
+    expired = set()
+    for strategy in iter_strategies(facility, settings_obj, now):
+        expired.update(strategy.queryset.filter(pk__in=event_ids).values_list("pk", flat=True))
+    return expired
+
+
+def reopen_approved_proposal_if_not_due(proposal, settings_obj, now):
+    """Reopen a locked approved proposal whose event is no longer due.
+
+    Only the deadline counts here: holds and processing restrictions keep a
+    due event from deletion without voiding its approval. Returns ``True``
+    when the proposal was reopened.
+    """
+    if proposal.status != RetentionProposal.Status.APPROVED:
+        return False
+    if proposal.target_id in _is_expired(proposal.facility, settings_obj, now, [proposal.target_id]):
+        return False
+    _reopen_for_new_review(proposal, reason="no_longer_due")
+    return True
+
+
+def reopen_approved_proposals_not_due(facility, settings_obj, now):
+    """Reopen every latest approved event proposal whose event is no longer due.
+
+    New case activity, a reopened case or a longer retention period can move
+    the deadline back into the future after the second approval. The event then
+    drops out of the deletion run; without this step the old approval would
+    delete it once it is due again (Refs #2714). Locks follow the approval
+    order: target rows first, then the proposal. Returns the number reopened.
+    """
+    approved = list(
+        RetentionProposal.objects.filter(
+            facility=facility, target_type="Event", status=RetentionProposal.Status.APPROVED
+        ).values_list("pk", "target_id")
+    )
+    if not approved:
+        return 0
+    live = set(
+        Event.objects.filter(
+            facility=facility, pk__in={target_id for _, target_id in approved}, is_deleted=False
+        ).values_list("pk", flat=True)
+    )
+    expired = _is_expired(facility, settings_obj, now, live)
+    reopened = 0
+    for pk, target_id in approved:
+        if target_id not in live or target_id in expired:
+            continue
+        with transaction.atomic():
+            _lock_target_rows_for_approval(
+                RetentionProposal(facility=facility, target_type="Event", target_id=target_id)
+            )
+            latest = (
+                RetentionProposal.objects.filter(facility=facility, target_type="Event", target_id=target_id)
+                .select_for_update()
+                .order_by("-proposed_at", "-pk")
+                .first()
+            )
+            # Historical decisions are never made active (Refs #2590).
+            if latest is None or latest.pk != pk:
+                continue
+            reopened += int(reopen_approved_proposal_if_not_due(latest, settings_obj, now))
+    return reopened
+
+
 @transaction.atomic
 def defer_proposal(proposal, user, days=30):
     """Defer a retention proposal by `days` (default 30) — sets DEFERRED status.

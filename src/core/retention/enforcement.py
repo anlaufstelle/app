@@ -305,6 +305,12 @@ def _soft_delete_events(
                         .filter(pk=pk)
                         .exists()
                     ):
+                        if is_qualified:
+                            # The approval does not cover a deadline that moved back
+                            # into the future after selection (Refs #2714).
+                            from core.retention.proposals import reopen_approved_proposal_if_not_due
+
+                            reopen_approved_proposal_if_not_due(latest, current_settings, now or timezone.now())
                         continue
                 else:
                     # Direct callers may supply an explicit period without facility settings.
@@ -566,6 +572,13 @@ def enforce_qualified(
     Returns ``{"count": N}``.
     """
 
+    from core.retention.proposals import create_proposals_for_facility, reopen_approved_proposals_not_due
+
+    if not dry_run:
+        # Refs #2714: an approval whose event is no longer due must not delete
+        # it later; the proposal goes back to two-person review.
+        reopen_approved_proposals_not_due(facility, settings_obj, now)
+
     # Security N8 (Refs #1445): defensiver Abbruch bei 0/negativer Frist (s. enforce_anonymous).
     if settings_obj.retention_qualified_days < 1:
         return {"count": 0}
@@ -581,7 +594,6 @@ def enforce_qualified(
     # sperrte sie und meldete sie als ``deferred``: Dauerrauschen im
     # Lauf-Protokoll, das die Zurueckstellung als Signal entwertet.
     held_case_ids = get_active_hold_target_ids(facility, "Case")
-    from core.retention.proposals import create_proposals_for_facility
 
     qs = next(
         strategy.queryset
