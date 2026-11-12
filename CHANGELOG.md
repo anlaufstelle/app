@@ -43,6 +43,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Anmeldung nach Passkey-Entfernung bleibt erhalten** (#2736) — Verspätete Antworten mit einer widerrufenen Sitzung überschreiben die neue Anmeldung nicht mehr. Das gilt auch beim Entfernen oder Wechseln des TOTP-Faktors und beim Passwortwechsel.
 - **Verschlüsseltes Ja/Nein-Feld in der Vorschau korrekt** (#2712) — Zeitstrom, Kontaktliste und Übergabe zeigten ein verschlüsseltes Ja/Nein-Feld wie „Krankenhaus“ aus dem Standardpaket immer als „Ja“, auch wenn kein Häkchen gesetzt war. Die Vorschau entschlüsselt den Wert jetzt vor der Prüfung; ein nicht lesbarer Wert erscheint als „[verschlüsselt]“.
 - **Feld-Board behält den Fokus nach einer Aktion** (#2709) — Nach „Feld zuordnen“ oder „Neue Gruppe“ sprang Fokus (und bei kleinem Fenster die Ansicht) zum Abschnitt „Bedingte Sichtbarkeit“. Jetzt bleibt beides am Feld-Board.
 - **Im Hintergrund abgelehnte Offline-Bearbeitung wird nicht mehr bei jedem Seitenaufruf neu gesendet** (#2720) — Lehnt der Server eine Offline-Bearbeitung ab, erscheint sie unter „Nicht übertragbar“, lässt sich in der Personenansicht korrigieren und zählt nicht mehr gegen das Schreiblimit.
