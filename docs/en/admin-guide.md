@@ -2091,7 +2091,7 @@ Before operation, review periods and auto-approval (off by default). The request
 
 The actual deletion run executes an approved proposal (APPROVED) for events with additional details only with evidence of both approvals or the verified auto-approval exception. Incomplete evidence causes the event to be skipped and reported; its card says “Approval evidence incomplete – will not be deleted”. A dry run (`--dry-run`) counts candidates and does not replace the evidence check when deleting.
 
-An approval only covers the deadline it was given for. If an event's deadline later moves back, for example through new case activity or a longer period, the next deletion run (not the dry run) returns the proposal to pending with an audit entry and discards the approvals given, including a lone first approval. This also applies if the event is due again at the time of the run but the approval was given before the current deadline. The proposal's deletion date then follows the current deadline, provided a deadline applies to the event, and the count of deferrals starts again. Once the event is due again, two new approvals are required. If a legal hold reopens a finally approved proposal, both approvals are discarded as well.
+An approval only covers a deadline that had already passed when it was given. If an event is no longer due at the next deletion run (not the dry run), or by the current periods was not yet due at the first approval, for example after new case activity or a longer period, the run returns the proposal to pending with an audit entry and discards the approvals given, including a lone first approval. The deadline in force at the moment of the deletion decision counts, even if it was changed while the run was underway. The proposal's deletion date then follows the current deadline, provided a deadline applies to the event, and the count of deferrals starts again. Deletion then again needs the approval path described above: two approvals or, if enabled, auto-approval. If a legal hold reopens a finally approved proposal, both approvals are discarded as well.
 
 #### Retention of the Event History
 
@@ -2581,5 +2581,5 @@ Person anonymization clears these dynamic fields as well as related titles and g
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: 508d4f3859080f23073096ad778b80a0eda5d16c -->
+<!-- source-hash: d84f9e9af212b56c9030f3f70c0425ff9fcd2ab0 -->
 <!-- translation-date: 2026-11-12 -->
