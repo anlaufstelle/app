@@ -195,14 +195,15 @@ class TestHubTabRoleFilter:
         assert 'data-testid="subnav-tab-deletion-requests"' in content
         assert 'data-testid="subnav-tab-rectification-requests"' in content
         assert 'data-testid="subnav-tab-retention"' in content
+        assert 'data-testid="subnav-tab-free-text-review"' in content
         assert 'data-testid="subnav-tab-audit"' not in content
         assert 'data-testid="subnav-tab-dsgvo"' not in content
 
-    def test_facility_admin_datenschutz_subnav_has_six_tabs(self, client, admin_user):
+    def test_facility_admin_datenschutz_subnav_has_seven_tabs(self, client, admin_user):
         client.force_login(admin_user)
         content = client.get(reverse("core:datenschutz_uebersicht")).content.decode()
 
-        assert len(_pills(content)) == 6
+        assert len(_pills(content)) == 7
 
     def test_verwaltung_subnav_has_six_tabs_for_admin(self, client, admin_user):
         """Einstellungen und Zugänge erweitern den Hub auf sechs Reiter (#1885/#1871)."""

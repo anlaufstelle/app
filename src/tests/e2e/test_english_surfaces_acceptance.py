@@ -132,7 +132,6 @@ def _paths(who: str, ids: dict) -> list[str]:
         f"/cases/{ids['case']}/episodes/new/",
         "/workitems/",
         "/workitems/new/",
-        "/free-text-review/",
         "/mfa/settings/",
         "/offline/",
         "/hilfe/",
@@ -142,7 +141,8 @@ def _paths(who: str, ids: dict) -> list[str]:
         "/hilfe/datenschutz/",
     ]
     if who in {"lead", "admin"}:
-        paths.append("/statistics/")
+        # The free-text review is reserved for lead and admin (a staff request answers 403).
+        paths += ["/statistics/", "/free-text-review/"]
     if who == "admin":
         paths += [
             "/config/document-types/",

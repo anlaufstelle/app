@@ -6,7 +6,7 @@ import pytest
 from django.db import DatabaseError, transaction
 from django.utils import timezone
 
-from core.models import DocumentTypeField, FieldTemplate, FreeTextReview
+from core.models import DocumentTypeField, FieldTemplate, FreeTextReview, User
 from core.services.free_text_review import get_entry, mark_review
 from tests.test_rls_functional import as_rls_role, rls_test_role  # noqa: F401
 
@@ -15,7 +15,7 @@ from tests.test_rls_functional import as_rls_role, rls_test_role  # noqa: F401
 def test_review_policy_hides_foreign_rows_and_rejects_foreign_writes(
     rls_test_role,  # noqa: F811
     facility,
-    staff_user,
+    lead_user,
     sample_event,
     second_facility,
     foreign_staff,
@@ -23,9 +23,12 @@ def test_review_policy_hides_foreign_rows_and_rejects_foreign_writes(
 ):
     field = FieldTemplate.objects.create(facility=second_facility, name="Notiz", field_type="textarea")
     DocumentTypeField.objects.create(document_type=foreign_event.document_type, field_template=field)
+    # Only a lead reviews; the other facility's reviewer is promoted for this scenario.
+    foreign_staff.role = User.Role.LEAD
+    foreign_staff.save(update_fields=["role"])
     reviews = []
     for scope, user, person in [
-        (facility, staff_user, sample_event),
+        (facility, lead_user, sample_event),
         (second_facility, foreign_staff, foreign_event),
     ]:
         person.data_json = {"notiz": "Neutral source content"}

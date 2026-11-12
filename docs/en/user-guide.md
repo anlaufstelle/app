@@ -1176,7 +1176,7 @@ without expiry even after manual event deletion.
 
 ## Free-text review
 
-Open **Free-text review** in navigation at `/free-text-review/`. The list contains only currently readable, nonempty, unencrypted event free text in the signed-in facility. Assistants, staff, leads and facility administrators can review it within existing read permissions. Type and field protection also apply; encrypted values and fields not configured as text/textarea are excluded. Events belonging to deleted or inactive people are hidden; personless events may remain visible. System administrators receive no access.
+Open **Privacy → Free-text review** at `/free-text-review/`. The list contains only currently readable, nonempty, unencrypted event free text in the signed-in facility. Leads and facility administrators can review it within existing read permissions; assistants and staff have no access. Type and field protection also apply; encrypted values and fields not configured as text/textarea are excluded. Events belonging to deleted or inactive people are hidden; personless events may remain visible. System administrators receive no access.
 
 The only model is **Event free text**. Optionally filter by **Changed through**, **Created or reviewed by**, and a **Pattern hint**. The facility comes from the signed-in session. **Review text** opens an individual text, where you can mark it through the selected day, inclusive, or revoke the mark. Changed content or an expired date requires another review. Marking and revocation are audited without text content and do not change the original text. **Open source text** links to the event detail page.
 
@@ -1186,5 +1186,5 @@ Phone, email, date and address patterns are detected heuristically and locally o
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: e4469f55b6e92910c7ab8d277dbcc69db0f9870f -->
+<!-- source-hash: b8be06f1ddf34b2d19a40d3edea04494d605ddf0 -->
 <!-- translation-date: 2026-11-12 -->

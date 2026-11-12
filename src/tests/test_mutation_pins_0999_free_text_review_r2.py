@@ -14,7 +14,7 @@ from tests._factories import make_client, make_event
 pytestmark = pytest.mark.django_db
 
 
-def test_client_cleanup_keeps_another_clients_event_review(facility, staff_user, sample_event):
+def test_client_cleanup_keeps_another_clients_event_review(facility, staff_user, lead_user, sample_event):
     """Removing one client's reviews preserves another client's marker: x_remove_target_reviews__mutmut_8."""
     other_client = make_client(facility=facility, pseudonym="Other person", created_by=staff_user)
     other_event = make_event(
@@ -27,9 +27,9 @@ def test_client_cleanup_keeps_another_clients_event_review(facility, staff_user,
     )
     markers = []
     for event in (other_event, sample_event):
-        entry = get_entry(facility, staff_user, "Event", event.pk, "notiz")
+        entry = get_entry(facility, lead_user, "Event", event.pk, "notiz")
         markers.append(
-            mark_review(facility, staff_user, "Event", event.pk, "notiz", timezone.localdate(), entry.fingerprint)
+            mark_review(facility, lead_user, "Event", event.pk, "notiz", timezone.localdate(), entry.fingerprint)
         )
     kept = list(FreeTextReview.objects.for_facility(facility).filter(pk=markers[0].pk).values())
 

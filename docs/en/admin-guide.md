@@ -2565,7 +2565,7 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 ## Organising free-text reviews
 
-The **Free-text review** navigation item (`/free-text-review/`) shows only non-empty, unencrypted event text/textarea values in the current facility. Assistants and higher facility roles read only within existing type and field visibility. Titles, pseudonyms and dynamic person/case/episode/task fields are outside the review. System administrators gain no clinical review permissions.
+The **Free-text review** tab in the Privacy area (`/free-text-review/`) shows only non-empty, unencrypted event text/textarea values in the current facility. Leads and facility administrators read only within existing type and field visibility; assistants and staff have no access. Titles, pseudonyms and dynamic person/case/episode/task fields are outside the review. System administrators gain no clinical review permissions.
 
 A review stores target model, target UUID, field key, expiry date, reviewing account, timestamp and a server-side HMAC content fingerprint, without copying free text. Facility scoping and a direct RLS policy protect this metadata. Content changes, expiry and a change of `SECRET_KEY` invalidate existing marks. Manual marking and revocation are audited with target/field/date rather than text or matched snippets. Deletion and anonymisation through supported write paths remove associated marks; audit history remains. Saving an encrypted field template removes all marks for its field key within the same facility in the save transaction, including when encryption is already enabled. The shared data rewrite and event re-encryption also remove any remaining marks atomically with the content change. Changes to `is_encrypted` through `update`, `bulk_update` and conflict upserts are rejected; use the regular save path. A downgrade does not recreate marks.
 
@@ -2579,5 +2579,5 @@ Person anonymization clears these dynamic fields as well as related titles and g
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: 2b1bf45c76efb9dcb36c25552d3b91866708db9c -->
-<!-- translation-date: 2026-10-30 -->
+<!-- source-hash: d40114717d684e1a6fba4ef2dcc244560bc1b2b6 -->
+<!-- translation-date: 2026-11-12 -->

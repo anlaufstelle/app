@@ -20,7 +20,7 @@ from core.services.free_text_review import (
     revoke_review,
 )
 from core.utils.ratelimit import ratelimit
-from core.views.mixins import AssistantOrAboveRequiredMixin
+from core.views.mixins import LeadOrAdminRequiredMixin
 
 
 def _page_number(raw):
@@ -34,7 +34,7 @@ def _page_number(raw):
     return number
 
 
-class FreeTextReviewListView(AssistantOrAboveRequiredMixin, View):
+class FreeTextReviewListView(LeadOrAdminRequiredMixin, View):
     @method_decorator(never_cache)
     def get(self, request):
         page_number = _page_number(request.GET.get("page"))
@@ -77,7 +77,7 @@ class FreeTextReviewListView(AssistantOrAboveRequiredMixin, View):
         return render(request, template, context, status=200 if form.is_valid() else 400)
 
 
-class FreeTextReviewTargetView(AssistantOrAboveRequiredMixin, View):
+class FreeTextReviewTargetView(LeadOrAdminRequiredMixin, View):
     def _render(self, request, entry, form, *, status=200):
         context = {"entry": entry, "form": form, "model_label": TARGET_LABELS[entry.target_type]}
         template = (

@@ -65,9 +65,9 @@ def count_queries(client, url, params=None):
 
 
 def test_event_list_query_count_is_independent_of_row_count(
-    client, facility, staff_user, client_identified, doc_type_contact
+    client, facility, staff_user, lead_user, client_identified, doc_type_contact
 ):
-    client.force_login(staff_user)
+    client.force_login(lead_user)
     url = reverse("core:free_text_review_list")
     make_events(facility, staff_user, doc_type_contact, client_identified, 3)
     few, response = count_queries(client, url, {"model": "Event"})
@@ -80,9 +80,9 @@ def test_event_list_query_count_is_independent_of_row_count(
 
 @pytest.mark.parametrize("model", ["Event"])
 def test_list_query_count_is_constant_across_pages(
-    client, facility, staff_user, client_identified, doc_type_contact, model
+    client, facility, staff_user, lead_user, client_identified, doc_type_contact, model
 ):
-    client.force_login(staff_user)
+    client.force_login(lead_user)
     url = reverse("core:free_text_review_list")
     make_events(facility, staff_user, doc_type_contact, client_identified, 2 * PAGE_SIZE + 5)
     counts = {}
@@ -92,7 +92,7 @@ def test_list_query_count_is_constant_across_pages(
     assert counts[1] == counts[2] == counts[3]
 
 
-def test_only_the_displayed_page_is_processed(client, facility, staff_user, monkeypatch):
+def test_only_the_displayed_page_is_processed(client, facility, staff_user, lead_user, monkeypatch):
     make_review_events(facility, staff_user, PAGE_SIZE + 10)
     built = []
     original = review_service.salted_hmac
@@ -102,7 +102,7 @@ def test_only_the_displayed_page_is_processed(client, facility, staff_user, monk
         return original(*args, **kwargs)
 
     monkeypatch.setattr(review_service, "salted_hmac", counting_hmac)
-    client.force_login(staff_user)
+    client.force_login(lead_user)
     url = reverse("core:free_text_review_list")
     first = client.get(url, {"model": "Event"}).context
     assert len(first["entries"]) == PAGE_SIZE
@@ -116,9 +116,9 @@ def test_only_the_displayed_page_is_processed(client, facility, staff_user, monk
     assert not second["page_obj"].has_next()
 
 
-def test_pages_are_ordered_newest_first_without_gaps(client, facility, staff_user):
+def test_pages_are_ordered_newest_first_without_gaps(client, facility, staff_user, lead_user):
     people = make_review_events(facility, staff_user, PAGE_SIZE + 3)
-    client.force_login(staff_user)
+    client.force_login(lead_user)
     url = reverse("core:free_text_review_list")
     seen = [
         entry.target_id
@@ -128,10 +128,10 @@ def test_pages_are_ordered_newest_first_without_gaps(client, facility, staff_use
     assert seen == [person.pk for person in reversed(people)]
 
 
-def test_risk_filter_pages_across_the_whole_table(client, facility, staff_user):
+def test_risk_filter_pages_across_the_whole_table(client, facility, staff_user, lead_user):
     make_review_events(facility, staff_user, PAGE_SIZE + 5, text="Mail me at person{}@example.org")
     make_review_events(facility, staff_user, 7, text="Nothing special {}", prefix="Other")
-    client.force_login(staff_user)
+    client.force_login(lead_user)
     url = reverse("core:free_text_review_list")
     first = client.get(url, {"model": "Event", "risk": "email"}).context
     second = client.get(url, {"model": "Event", "risk": "email", "page": 2}).context
@@ -142,14 +142,14 @@ def test_risk_filter_pages_across_the_whole_table(client, facility, staff_user):
     assert {entry.target_id for entry in first["entries"]}.isdisjoint(entry.target_id for entry in second["entries"])
 
 
-def test_changed_before_and_editor_filters_apply_before_paging(client, facility, staff_user, lead_user):
+def test_changed_before_and_editor_filters_apply_before_paging(client, facility, staff_user, lead_user, admin_user):
     people = make_review_events(facility, staff_user, PAGE_SIZE + 4)
-    Event.objects.filter(pk=people[0].pk).update(created_by=lead_user)
-    client.force_login(staff_user)
+    Event.objects.filter(pk=people[0].pk).update(created_by=admin_user)
+    client.force_login(lead_user)
     url = reverse("core:free_text_review_list")
-    only_lead = client.get(url, {"model": "Event", "editor": str(lead_user.pk)}).context
-    assert [entry.target_id for entry in only_lead["entries"]] == [people[0].pk]
-    assert not only_lead["page_obj"].has_next()
+    only_admin = client.get(url, {"model": "Event", "editor": str(admin_user.pk)}).context
+    assert [entry.target_id for entry in only_admin["entries"]] == [people[0].pk]
+    assert not only_admin["page_obj"].has_next()
     future = (timezone.localdate() - timedelta(days=1)).isoformat()
     assert not client.get(url, {"model": "Event", "changed_before": future}).context["entries"]
 
@@ -158,7 +158,7 @@ def test_get_entry_ignores_marks_of_other_targets(facility, staff_user, lead_use
     sample_event.data_json = {"notiz": "Target text"}
     sample_event.save(update_fields=["data_json"])
     with CaptureQueriesContext(connection) as baseline:
-        review_service.get_entry(facility, staff_user, "Event", sample_event.pk, "notiz")
+        review_service.get_entry(facility, lead_user, "Event", sample_event.pk, "notiz")
     others = make_review_events(facility, staff_user, 25)
     FreeTextReview.objects.bulk_create(
         FreeTextReview(
@@ -173,7 +173,7 @@ def test_get_entry_ignores_marks_of_other_targets(facility, staff_user, lead_use
         for person in others
     )
     with CaptureQueriesContext(connection) as loaded:
-        entry = review_service.get_entry(facility, staff_user, "Event", sample_event.pk, "notiz")
+        entry = review_service.get_entry(facility, lead_user, "Event", sample_event.pk, "notiz")
     assert entry.review is None
     assert len(loaded) == len(baseline)
     reviews_sql = [q["sql"] for q in loaded if "core_freetextreview" in q["sql"]]
@@ -182,11 +182,9 @@ def test_get_entry_ignores_marks_of_other_targets(facility, staff_user, lead_use
 
 
 def test_editor_filter_ignores_marks_of_hidden_event_fields_before_paging(
-    client, facility, assistant_user, lead_user, staff_user, client_identified, doc_type_contact
+    client, facility, lead_user, admin_user, staff_user, client_identified, doc_type_contact
 ):
-    restricted = FieldTemplate.objects.create(
-        facility=facility, name="Restricted review", field_type="textarea", sensitivity="elevated"
-    )
+    restricted = FieldTemplate.objects.create(facility=facility, name="Restricted review", field_type="textarea")
     DocumentTypeField.objects.create(document_type=doc_type_contact, field_template=restricted)
     events = make_events(facility, staff_user, doc_type_contact, client_identified, PAGE_SIZE + 1)
     Event.objects.filter(pk__in=[e.pk for e in events]).update(
@@ -194,28 +192,32 @@ def test_editor_filter_ignores_marks_of_hidden_event_fields_before_paging(
     )
     oldest = events[0]
     Event.objects.filter(pk=oldest.pk).update(updated_at=timezone.now() - timedelta(days=1))
-    # The lead only marks the elevated field of the 50 newer events, and the visible one of the oldest.
+    # The admin marks the later-hidden field of the newer events, and the visible one of the oldest.
     for event in events:
         key = "notiz" if event.pk == oldest.pk else restricted.slug
-        entry = review_service.get_entry(facility, lead_user, "Event", event.pk, key)
-        review_service.mark_review(facility, lead_user, "Event", event.pk, key, timezone.localdate(), entry.fingerprint)
-    client.force_login(assistant_user)
+        entry = review_service.get_entry(facility, admin_user, "Event", event.pk, key)
+        review_service.mark_review(
+            facility, admin_user, "Event", event.pk, key, timezone.localdate(), entry.fingerprint
+        )
+    # The field stops being a text field afterwards, so it leaves every review: its marks stay orphaned.
+    FieldTemplate.objects.filter(pk=restricted.pk).update(field_type="number")
+    client.force_login(lead_user)
     url = reverse("core:free_text_review_list")
-    response = client.get(url, {"model": "Event", "editor": str(lead_user.pk)})
+    response = client.get(url, {"model": "Event", "editor": str(admin_user.pk)})
     assert response.status_code == 200
     assert [entry.target_id for entry in response.context["entries"]] == [oldest.pk]
     assert not response.context["page_obj"].has_next()
 
 
 def test_event_pages_skip_events_without_a_nonblank_text_value(
-    client, facility, staff_user, client_identified, doc_type_contact
+    client, facility, staff_user, lead_user, client_identified, doc_type_contact
 ):
     events = make_events(facility, staff_user, doc_type_contact, client_identified, PAGE_SIZE + 5)
     unusable = [{"notiz": ""}, {"notiz": "   "}, {"notiz": None}, {"notiz": 15}, {"notiz": {"marker": 1}}]
     for index, event in enumerate(events[1:]):
         Event.objects.filter(pk=event.pk).update(data_json=unusable[index % len(unusable)])
     Event.objects.filter(pk=events[0].pk).update(updated_at=timezone.now() - timedelta(days=1))
-    client.force_login(staff_user)
+    client.force_login(lead_user)
     response = client.get(reverse("core:free_text_review_list"), {"model": "Event"})
     assert response.status_code == 200
     assert [entry.target_id for entry in response.context["entries"]] == [events[0].pk]
@@ -223,9 +225,9 @@ def test_event_pages_skip_events_without_a_nonblank_text_value(
 
 
 @pytest.mark.parametrize("raw", ["-3", "0", "abc", "1.5", "", "9" * 5000], ids=lambda raw: raw[:12] or "empty")
-def test_malformed_page_numbers_fall_back_to_the_first_page(client, facility, staff_user, raw):
+def test_malformed_page_numbers_fall_back_to_the_first_page(client, facility, staff_user, lead_user, raw):
     make_review_events(facility, staff_user, 3)
-    client.force_login(staff_user)
+    client.force_login(lead_user)
     response = client.get(reverse("core:free_text_review_list"), {"model": "Event", "page": raw})
     assert response.status_code == 200
     assert response.context["page_obj"].number == 1
@@ -236,9 +238,9 @@ def test_malformed_page_numbers_fall_back_to_the_first_page(client, facility, st
     "raw", [str(2**63), "999999999999999999999999", "1" + "0" * 400], ids=["bigint", "24-digits", "401-digits"]
 )
 @pytest.mark.parametrize("risk", ["", "email"])
-def test_page_numbers_beyond_the_supported_range_are_not_found(client, facility, staff_user, raw, risk):
+def test_page_numbers_beyond_the_supported_range_are_not_found(client, facility, staff_user, lead_user, raw, risk):
     make_review_events(facility, staff_user, 1)
-    client.force_login(staff_user)
+    client.force_login(lead_user)
     client.raise_request_exception = False
     with CaptureQueriesContext(connection) as queries:
         response = client.get(reverse("core:free_text_review_list"), {"model": "Event", "page": raw, "risk": risk})
@@ -247,9 +249,9 @@ def test_page_numbers_beyond_the_supported_range_are_not_found(client, facility,
     assert not [q for q in queries if '"core_event"."data_json"' in q["sql"] or "core_freetextreview" in q["sql"]]
 
 
-def test_last_supported_page_is_an_empty_page_not_an_error(client, facility, staff_user):
+def test_last_supported_page_is_an_empty_page_not_an_error(client, facility, staff_user, lead_user):
     make_review_events(facility, staff_user, 1)
-    client.force_login(staff_user)
+    client.force_login(lead_user)
     response = client.get(reverse("core:free_text_review_list"), {"model": "Event", "page": review_service.MAX_PAGE})
     assert response.status_code == 200
     assert response.context["entries"] == []
@@ -258,7 +260,7 @@ def test_last_supported_page_is_an_empty_page_not_an_error(client, facility, sta
 
 @pytest.mark.parametrize("change", ["unassign", "empty"])
 def test_editor_choices_exclude_reviewers_without_visible_entries(
-    client, facility, assistant_user, staff_user, lead_user, client_identified, doc_type_contact, change
+    client, facility, lead_user, staff_user, admin_user, client_identified, doc_type_contact, change
 ):
     field = FieldTemplate.objects.create(facility=facility, name="Extra text", field_type="textarea")
     assignment = DocumentTypeField.objects.create(document_type=doc_type_contact, field_template=field)
@@ -272,36 +274,40 @@ def test_editor_choices_exclude_reviewers_without_visible_entries(
         occurred_at=timezone.now(),
         data_json={"notiz": "Still visible", field.slug: "Previously reviewed"},
     )
-    entry = review_service.get_entry(facility, lead_user, "Event", event.pk, field.slug)
+    entry = review_service.get_entry(facility, admin_user, "Event", event.pk, field.slug)
     review_service.mark_review(
-        facility, lead_user, "Event", event.pk, field.slug, timezone.localdate(), entry.fingerprint
+        facility, admin_user, "Event", event.pk, field.slug, timezone.localdate(), entry.fingerprint
     )
     if change == "unassign":
         assignment.delete()
     else:
         event.data_json[field.slug] = ""
         event.save(update_fields=["data_json"])
-    client.force_login(assistant_user)
+    client.force_login(lead_user)
     response = client.get(reverse("core:free_text_review_list"), {"model": "Event"})
     assert response.status_code == 200
     choices = dict(response.context["filter_form"].fields["editor"].choices)
-    assert str(lead_user.pk) not in choices
+    assert str(admin_user.pk) not in choices
     assert str(staff_user.pk) in choices
 
 
 def test_editor_choices_keep_reviewers_of_currently_visible_fields(
-    client, facility, assistant_user, staff_user, lead_user, client_identified, doc_type_contact
+    client, facility, lead_user, staff_user, admin_user, client_identified, doc_type_contact
 ):
     event = make_events(facility, staff_user, doc_type_contact, client_identified, 1)[0]
-    entry = review_service.get_entry(facility, lead_user, "Event", event.pk, "notiz")
-    review_service.mark_review(facility, lead_user, "Event", event.pk, "notiz", timezone.localdate(), entry.fingerprint)
-    client.force_login(assistant_user)
+    entry = review_service.get_entry(facility, admin_user, "Event", event.pk, "notiz")
+    review_service.mark_review(
+        facility, admin_user, "Event", event.pk, "notiz", timezone.localdate(), entry.fingerprint
+    )
+    client.force_login(lead_user)
     response = client.get(reverse("core:free_text_review_list"), {"model": "Event"})
     assert response.status_code == 200
-    assert str(lead_user.pk) in dict(response.context["filter_form"].fields["editor"].choices)
+    assert str(admin_user.pk) in dict(response.context["filter_form"].fields["editor"].choices)
 
 
-def test_numeric_field_slug_is_listed_and_filterable(client, facility, staff_user, client_identified, doc_type_contact):
+def test_numeric_field_slug_is_listed_and_filterable(
+    client, facility, staff_user, lead_user, client_identified, doc_type_contact
+):
     field = FieldTemplate.objects.create(facility=facility, name="123", field_type="textarea")
     field.full_clean()
     assert field.slug == "123"
@@ -314,8 +320,8 @@ def test_numeric_field_slug_is_listed_and_filterable(client, facility, staff_use
         occurred_at=timezone.now(),
         data_json={field.slug: "Visible text"},
     )
-    assert review_service.get_entry(facility, staff_user, "Event", event.pk, field.slug).text == "Visible text"
-    client.force_login(staff_user)
+    assert review_service.get_entry(facility, lead_user, "Event", event.pk, field.slug).text == "Visible text"
+    client.force_login(lead_user)
     url = reverse("core:free_text_review_list")
     for params in ({"model": "Event"}, {"model": "Event", "editor": str(staff_user.pk)}):
         response = client.get(url, params)

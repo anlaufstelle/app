@@ -21,7 +21,7 @@ from core.services.sensitive_patterns import detect_patterns
     ],
     ids=["date-between-digits", "seven-digits", "sixteen-digits", "seventeen-digits"],
 )
-def test_phone_risk_retains_inclusive_bounds_and_removes_dates(facility, staff_user, sample_event, text, categories):
+def test_phone_risk_retains_inclusive_bounds_and_removes_dates(facility, lead_user, sample_event, text, categories):
     """Review risk filtering preserves phone boundaries after date removal.
 
     x_detect_patterns__mutmut_19, x_detect_patterns__mutmut_21,
@@ -29,7 +29,7 @@ def test_phone_risk_retains_inclusive_bounds_and_removes_dates(facility, staff_u
     """
     sample_event.data_json = {"notiz": text}
     sample_event.save(update_fields=["data_json"])
-    entries = list_page(facility, staff_user, "Event").entries
+    entries = list_page(facility, lead_user, "Event").entries
     assert [(entry.target_id, entry.field_key) for entry in entries] == [(sample_event.pk, "notiz")]
     assert detect_patterns(text) == categories
     expected = [sample_event.pk] if "phone" in categories else []

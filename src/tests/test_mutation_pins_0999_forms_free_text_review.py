@@ -24,7 +24,7 @@ def review_date(monkeypatch):
     return today
 
 
-def test_editor_choices_exclude_foreign_facility_candidates(facility, second_facility, staff_user):
+def test_editor_choices_exclude_foreign_facility_candidates(facility, second_facility, lead_user):
     """Candidate IDs cannot expose an editor from another facility.
 
     xǁReviewFilterFormǁ__init____mutmut_39
@@ -32,11 +32,11 @@ def test_editor_choices_exclude_foreign_facility_candidates(facility, second_fac
     foreign = User.objects.create_user(username="aaa_foreign_editor", facility=second_facility)
     form = ReviewFilterForm(
         facility=facility,
-        user=staff_user,
-        editor_ids=[foreign.pk, staff_user.pk],
+        user=lead_user,
+        editor_ids=[foreign.pk, lead_user.pk],
     )
 
-    assert {value for value, _label in form.fields["editor"].choices} == {"", str(staff_user.pk)}
+    assert {value for value, _label in form.fields["editor"].choices} == {"", str(lead_user.pk)}
     assert foreign.username not in str(form["editor"])
 
 
@@ -117,13 +117,13 @@ def test_mark_without_fingerprint_has_readable_field_error(review_date):
     assert escape(expected) in str(form["fingerprint"].errors)
 
 
-def test_filter_requires_model_when_choices_exist(facility, staff_user):
+def test_filter_requires_model_when_choices_exist(facility, lead_user):
     """Available models make the model selection mandatory for submitted filters.
 
     xǁReviewFilterFormǁ__init____mutmut_11
     xǁReviewFilterFormǁ__init____mutmut_14
     """
-    form = ReviewFilterForm({"model": "", "editor": ""}, facility=facility, user=staff_user)
+    form = ReviewFilterForm({"model": "", "editor": ""}, facility=facility, user=lead_user)
 
     assert list(form.fields["model"].choices)
     assert form.fields["model"].required
@@ -131,16 +131,16 @@ def test_filter_requires_model_when_choices_exist(facility, staff_user):
     assert form.errors["model"] == [form.fields["model"].error_messages["required"]]
 
 
-def test_filter_preserves_keyword_bound_data(facility, staff_user):
+def test_filter_preserves_keyword_bound_data(facility, lead_user):
     """Keyword data binds the form and preserves the selected model, editor and cutoff date.
 
     xǁReviewFilterFormǁ__init____mutmut_2
     """
     form = ReviewFilterForm(
-        data={"model": "Event", "changed_before": "2026-01-02", "editor": str(staff_user.pk), "risk": ""},
+        data={"model": "Event", "changed_before": "2026-01-02", "editor": str(lead_user.pk), "risk": ""},
         facility=facility,
-        user=staff_user,
-        editor_ids=[staff_user.pk],
+        user=lead_user,
+        editor_ids=[lead_user.pk],
     )
 
     assert form.is_bound
@@ -148,45 +148,45 @@ def test_filter_preserves_keyword_bound_data(facility, staff_user):
     assert form.cleaned_data == {
         "model": "Event",
         "changed_before": date(2026, 1, 2),
-        "editor": str(staff_user.pk),
+        "editor": str(lead_user.pk),
         "risk": "",
     }
 
 
-def test_all_editors_option_submits_empty_filter(facility, staff_user):
+def test_all_editors_option_submits_empty_filter(facility, lead_user):
     """Selecting all editors cleans to the empty editor filter used by the list service.
 
     xǁReviewFilterFormǁ__init____mutmut_29
     """
-    unbound = ReviewFilterForm(facility=facility, user=staff_user, editor_ids=[staff_user.pk])
+    unbound = ReviewFilterForm(facility=facility, user=lead_user, editor_ids=[lead_user.pk])
     value, label = next(iter(unbound.fields["editor"].choices))
     assert str(label) == _("Alle")
     form = ReviewFilterForm(
         {"model": "Event", "editor": value},
         facility=facility,
-        user=staff_user,
-        editor_ids=[staff_user.pk],
+        user=lead_user,
+        editor_ids=[lead_user.pk],
     )
 
     assert form.is_valid(), form.errors
     assert form.cleaned_data["editor"] == ""
 
 
-def test_editor_labels_use_display_name_with_username_fallback(facility, staff_user):
+def test_editor_labels_use_display_name_with_username_fallback(facility, lead_user):
     """Editor labels prefer a display name and fall back to a nonempty username.
 
     xǁReviewFilterFormǁ__init____mutmut_35
     """
     named = User.objects.create_user(username="named_editor", display_name="Visible editor", facility=facility)
     unnamed = User.objects.create_user(username="unnamed_editor", display_name="", facility=facility)
-    form = ReviewFilterForm(facility=facility, user=staff_user, editor_ids=[named.pk, unnamed.pk])
+    form = ReviewFilterForm(facility=facility, user=lead_user, editor_ids=[named.pk, unnamed.pk])
 
     labels = dict(form.fields["editor"].choices)
     assert labels[str(named.pk)] == "Visible editor"
     assert labels[str(unnamed.pk)] == "unnamed_editor"
 
 
-def test_filter_widgets_expose_and_render_styling_classes(facility, staff_user):
+def test_filter_widgets_expose_and_render_styling_classes(facility, lead_user):
     """Every filter widget exposes its case-sensitive styling through the class attribute and HTML.
 
     xǁReviewFilterFormǁ__init____mutmut_59
@@ -195,7 +195,7 @@ def test_filter_widgets_expose_and_render_styling_classes(facility, staff_user):
     xǁReviewFilterFormǁ__init____mutmut_62
     xǁReviewFilterFormǁ__init____mutmut_63
     """
-    form = ReviewFilterForm(facility=facility, user=staff_user)
+    form = ReviewFilterForm(facility=facility, user=lead_user)
     expected = {"rounded", "border", "border-ink-muted", "bg-surface", "p-2", "text-ink"}
 
     for name, field in form.fields.items():

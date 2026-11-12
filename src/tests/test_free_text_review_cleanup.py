@@ -6,7 +6,7 @@ from django.db import transaction
 from django.db.models import QuerySet
 from django.utils import timezone
 
-from core.models import AuditLog, DocumentTypeField, FieldTemplate, FreeTextReview
+from core.models import AuditLog, DocumentTypeField, FieldTemplate, FreeTextReview, User
 from core.services.file_vault import is_encrypted_value, safe_decrypt
 from core.services.free_text_review import get_entry, mark_review
 from tests._factories import make_document_type, make_event
@@ -16,10 +16,10 @@ pytestmark = pytest.mark.django_db
 
 
 @pytest.fixture
-def marked_event(request, facility, staff_user):
+def marked_event(request, facility, lead_user):
     obj, field = populate(request, "Event")
-    entry = get_entry(facility, staff_user, "Event", obj.pk, field)
-    mark_review(facility, staff_user, "Event", obj.pk, field, timezone.localdate(), entry.fingerprint)
+    entry = get_entry(facility, lead_user, "Event", obj.pk, field)
+    mark_review(facility, lead_user, "Event", obj.pk, field, timezone.localdate(), entry.fingerprint)
     return obj
 
 
@@ -46,29 +46,29 @@ def test_person_revocation_cleans_event_marker(marked_event, facility, staff_use
 
 
 @pytest.mark.parametrize("fixture", ["case_open", "episode", "sample_workitem"])
-def test_removed_targets_do_not_own_review_markers(request, marked_event, facility, staff_user, fixture):
+def test_removed_targets_do_not_own_review_markers(request, marked_event, facility, lead_user, fixture):
     from django.http import Http404
 
     target = request.getfixturevalue(fixture)
     with pytest.raises(Http404):
-        get_entry(facility, staff_user, type(target).__name__, target.pk, "description")
+        get_entry(facility, lead_user, type(target).__name__, target.pk, "description")
     target.delete()
     assert list(FreeTextReview.objects.for_facility(facility).values_list("target_type", "target_id")) == [
         ("Event", marked_event.pk)
     ]
 
 
-def test_marked_event_soft_delete_removes_metadata(facility, staff_user, sample_event):
+def test_marked_event_soft_delete_removes_metadata(facility, staff_user, lead_user, sample_event):
     from core.services.events.crud import soft_delete_event
 
-    entry = get_entry(facility, staff_user, "Event", sample_event.pk, "notiz")
-    mark_review(facility, staff_user, "Event", sample_event.pk, "notiz", timezone.localdate(), entry.fingerprint)
+    entry = get_entry(facility, lead_user, "Event", sample_event.pk, "notiz")
+    mark_review(facility, lead_user, "Event", sample_event.pk, "notiz", timezone.localdate(), entry.fingerprint)
     soft_delete_event(sample_event, staff_user)
     assert not FreeTextReview.objects.for_facility(facility).filter(target_type="Event").exists()
 
 
 @pytest.fixture
-def marked_field_world(facility, staff_user, sample_event, second_facility, second_facility_user):
+def marked_field_world(facility, staff_user, lead_user, sample_event, second_facility, second_facility_user):
     field = FieldTemplate.objects.for_facility(facility).get(slug="notiz")
     other_field = FieldTemplate.objects.create(facility=facility, name="Other review", field_type="textarea")
     DocumentTypeField.objects.create(document_type=sample_event.document_type, field_template=other_field)
@@ -98,11 +98,14 @@ def marked_field_world(facility, staff_user, sample_event, second_facility, seco
         data_json={field.slug: "Foreign event content"},
         created_by=second_facility_user,
     )
+    # Only a lead reviews; the other facility's reviewer is promoted for this scenario.
+    second_facility_user.role = User.Role.LEAD
+    second_facility_user.save(update_fields=["role"])
     reviews = []
     for scope, user, event, key in [
-        (facility, staff_user, sample_event, field.slug),
-        (facility, staff_user, second_event, field.slug),
-        (facility, staff_user, sample_event, other_field.slug),
+        (facility, lead_user, sample_event, field.slug),
+        (facility, lead_user, second_event, field.slug),
+        (facility, lead_user, sample_event, other_field.slug),
         (second_facility, second_facility_user, foreign_event, field.slug),
     ]:
         entry = get_entry(scope, user, "Event", event.pk, key)

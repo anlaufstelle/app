@@ -322,4 +322,10 @@ def test_review_navigation_respects_facility_roles(client, request, role):
     response = client.get(
         reverse("core:workitem_inbox") if role != "super_admin_user" else reverse("core:system_dashboard")
     )
-    assert ('data-testid="nav-free-text-review"' in response.content.decode()) == (role != "super_admin_user")
+    content = response.content.decode()
+    # The review is no sidebar entry any more; it is a tab of the privacy hub for lead and admin only.
+    assert 'data-testid="nav-free-text-review"' not in content
+    assert 'href="/free-text-review/"' not in content
+    hub = client.get(reverse("core:datenschutz_uebersicht"))
+    has_tab = hub.status_code == 200 and 'data-testid="subnav-tab-free-text-review"' in hub.content.decode()
+    assert has_tab == (role in {"lead_user", "admin_user"})

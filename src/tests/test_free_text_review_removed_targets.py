@@ -6,8 +6,8 @@ from django.urls import reverse
 pytestmark = pytest.mark.django_db
 
 
-def test_staff_review_list_defaults_to_an_existing_target(client, staff_user):
-    client.force_login(staff_user)
+def test_lead_review_list_defaults_to_an_existing_target(client, lead_user):
+    client.force_login(lead_user)
     response = client.get(reverse("core:free_text_review_list"))
     assert response.status_code == 200
     assert response.context["filter_form"].cleaned_data["model"] == "Event"
@@ -22,9 +22,9 @@ def test_staff_review_list_defaults_to_an_existing_target(client, staff_user):
         ("WorkItem", "sample_workitem", "description"),
     ],
 )
-def test_removed_review_targets_return_not_found(request, client, staff_user, target, fixture, field):
+def test_removed_review_targets_return_not_found(request, client, lead_user, target, fixture, field):
     owner = request.getfixturevalue(fixture)
-    client.force_login(staff_user)
+    client.force_login(lead_user)
     url = reverse(
         "core:free_text_review_target", kwargs={"target_type": target, "target_id": owner.pk, "field_key": field}
     )
@@ -32,7 +32,7 @@ def test_removed_review_targets_return_not_found(request, client, staff_user, ta
     assert client.post(url, {"action": "revoke"}).status_code == 404
 
 
-@pytest.mark.parametrize("role", ["assistant_user", "staff_user", "lead_user", "admin_user"])
+@pytest.mark.parametrize("role", ["lead_user", "admin_user"])
 def test_review_defaults_use_a_remaining_allowed_target(request, client, role, sample_event):
     client.force_login(request.getfixturevalue(role))
     response = client.get(reverse("core:free_text_review_list"))
@@ -42,13 +42,13 @@ def test_review_defaults_use_a_remaining_allowed_target(request, client, role, s
 
 
 @pytest.mark.parametrize("partial", [False, True])
-def test_review_without_remaining_targets_returns_an_empty_page(client, assistant_user, monkeypatch, partial):
+def test_review_without_remaining_targets_returns_an_empty_page(client, lead_user, monkeypatch, partial):
     from core.services.free_text_review import TARGET_LABELS
 
     monkeypatch.setattr("core.views.free_text_review.TARGET_LABELS", {})
     monkeypatch.setattr("core.forms.free_text_review.TARGET_LABELS", {})
     assert "Event" in TARGET_LABELS
-    client.force_login(assistant_user)
+    client.force_login(lead_user)
     headers = {"HTTP_HX_REQUEST": "true"} if partial else {}
     response = client.get(reverse("core:free_text_review_list"), **headers)
     assert response.status_code == 200
@@ -57,13 +57,13 @@ def test_review_without_remaining_targets_returns_an_empty_page(client, assistan
 
 
 @pytest.mark.parametrize("target", ["Client", "Case", "Episode", "WorkItem"])
-def test_removed_review_list_target_is_not_found(client, staff_user, target):
-    client.force_login(staff_user)
+def test_removed_review_list_target_is_not_found(client, lead_user, target):
+    client.force_login(lead_user)
     assert client.get(reverse("core:free_text_review_list"), {"model": target}).status_code == 404
 
 
-def test_review_list_describes_only_event_texts(client, staff_user):
-    client.force_login(staff_user)
+def test_review_list_describes_only_event_texts(client, lead_user):
+    client.force_login(lead_user)
     response = client.get(reverse("core:free_text_review_list"))
     assert response.status_code == 200
     assert list(response.context["filter_form"].fields["model"].choices) == [("Event", "Ereignis-Freitexte")]

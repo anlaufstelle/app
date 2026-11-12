@@ -12,10 +12,10 @@ from core.services.free_text_review import get_entry, mark_review
 
 
 @pytest.mark.django_db(transaction=True)
-def test_parallel_marks_keep_one_row_and_audit_both(facility, staff_user, sample_event):
+def test_parallel_marks_keep_one_row_and_audit_both(facility, lead_user, sample_event):
     sample_event.data_json = {"notiz": "Neutral review content"}
     sample_event.save()
-    entry = get_entry(facility, staff_user, "Event", sample_event.pk, "notiz")
+    entry = get_entry(facility, lead_user, "Event", sample_event.pk, "notiz")
     start = Barrier(2)
 
     def mark():
@@ -23,7 +23,7 @@ def test_parallel_marks_keep_one_row_and_audit_both(facility, staff_user, sample
             start.wait(timeout=10)
             review = mark_review(
                 facility,
-                staff_user,
+                lead_user,
                 "Event",
                 sample_event.pk,
                 "notiz",

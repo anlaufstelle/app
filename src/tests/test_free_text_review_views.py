@@ -25,7 +25,7 @@ def target_url(obj, field):
     )
 
 
-@pytest.mark.parametrize("role", ["assistant_user", "staff_user", "lead_user", "admin_user", "super_admin_user"])
+@pytest.mark.parametrize("role", ["lead_user", "admin_user", "super_admin_user"])
 @pytest.mark.parametrize("target_type", ["Client", "Case", "Episode", "WorkItem", "Event"])
 def test_view_role_matrix(request, client, facility, role, target_type):
     obj, field = populate(request, target_type)
@@ -41,10 +41,10 @@ def test_view_role_matrix(request, client, facility, role, target_type):
         assert b"Private test content" not in response.content
 
 
-def test_list_mark_revoke_and_hints(client, facility, staff_user, sample_event):
+def test_list_mark_revoke_and_hints(client, facility, lead_user, sample_event):
     sample_event.data_json["notiz"] = "Write person@example.org"
     sample_event.save()
-    client.force_login(staff_user)
+    client.force_login(lead_user)
     url = reverse("core:free_text_review_list")
     response = client.get(url)
     assert response.status_code == 200
@@ -52,7 +52,7 @@ def test_list_mark_revoke_and_hints(client, facility, staff_user, sample_event):
     assert "no-store" in response.headers["Cache-Control"]
     partial = client.get(url, HTTP_HX_REQUEST="true")
     assert b"<!DOCTYPE" not in partial.content
-    entry = get_entry(facility, staff_user, "Event", sample_event.pk, "notiz")
+    entry = get_entry(facility, lead_user, "Event", sample_event.pk, "notiz")
     detail_url = target_url(sample_event, "notiz")
     detail = client.get(detail_url)
     assert reverse("core:event_create").encode() in detail.content
@@ -70,11 +70,11 @@ def test_list_mark_revoke_and_hints(client, facility, staff_user, sample_event):
     assert sample_event.data_json["notiz"] == "Write person@example.org"
 
 
-def test_stale_and_invalid_posts_never_mark(client, facility, staff_user, sample_event):
+def test_stale_and_invalid_posts_never_mark(client, facility, lead_user, sample_event):
     sample_event.data_json["notiz"] = "First text"
     sample_event.save()
-    client.force_login(staff_user)
-    entry = get_entry(facility, staff_user, "Event", sample_event.pk, "notiz")
+    client.force_login(lead_user)
+    entry = get_entry(facility, lead_user, "Event", sample_event.pk, "notiz")
     sample_event.data_json["notiz"] = "Changed text"
     sample_event.save()
     url = target_url(sample_event, "notiz")
@@ -91,7 +91,7 @@ def test_stale_and_invalid_posts_never_mark(client, facility, staff_user, sample
 
 
 @pytest.mark.parametrize("target_type", ["Client", "Case", "Episode", "WorkItem", "Event"])
-def test_foreign_target_is_404(request, client, staff_user, target_type):
+def test_foreign_target_is_404(request, client, lead_user, target_type):
     fixture, field = {
         "Client": ("foreign_client", "notes"),
         "Case": ("foreign_case", "description"),
@@ -107,22 +107,22 @@ def test_foreign_target_is_404(request, client, staff_user, target_type):
         DocumentTypeField.objects.create(document_type=obj.document_type, field_template=field_template)
         obj.data_json = {field_template.slug: "Foreign private content"}
     obj.save()
-    client.force_login(staff_user)
+    client.force_login(lead_user)
     url = target_url(obj, field)
     assert client.get(url).status_code == 404
     assert client.post(url, {"action": "revoke"}).status_code == 404
 
 
-def test_filters_apply_to_visible_entries_only(client, facility, staff_user, sample_event, lead_user):
+def test_filters_apply_to_visible_entries_only(client, facility, lead_user, sample_event, admin_user):
     sample_event.data_json["notiz"] = "person@example.org"
     sample_event.save()
-    entry = get_entry(facility, staff_user, "Event", sample_event.pk, "notiz")
-    mark_review(facility, lead_user, "Event", sample_event.pk, "notiz", timezone.localdate(), entry.fingerprint)
-    client.force_login(staff_user)
+    entry = get_entry(facility, lead_user, "Event", sample_event.pk, "notiz")
+    mark_review(facility, admin_user, "Event", sample_event.pk, "notiz", timezone.localdate(), entry.fingerprint)
+    client.force_login(lead_user)
     url = reverse("core:free_text_review_list")
     assert len(client.get(url, {"risk": "email"}).context["entries"]) == 1
     assert not client.get(url, {"risk": "phone"}).context["entries"]
-    assert len(client.get(url, {"editor": str(lead_user.pk)}).context["entries"]) == 1
+    assert len(client.get(url, {"editor": str(admin_user.pk)}).context["entries"]) == 1
     assert not client.get(url, {"changed_before": (timezone.localdate() - timedelta(days=1)).isoformat()}).context[
         "entries"
     ]
@@ -135,23 +135,25 @@ def test_review_list_requires_login(client):
     assert client.get(reverse("core:free_text_review_list")).status_code == 302
 
 
-def test_filter_keeps_inactive_reviewers(client, facility, staff_user, lead_user, sample_event):
+def test_filter_keeps_inactive_reviewers(client, facility, lead_user, admin_user, sample_event):
     sample_event.data_json["notiz"] = "Neutral content"
     sample_event.save()
-    entry = get_entry(facility, staff_user, "Event", sample_event.pk, "notiz")
-    mark_review(facility, lead_user, "Event", sample_event.pk, "notiz", timezone.localdate(), entry.fingerprint)
-    lead_user.is_active = False
-    lead_user.save(update_fields=["is_active"])
-    client.force_login(staff_user)
-    response = client.get(reverse("core:free_text_review_list"), {"editor": str(lead_user.pk)})
+    entry = get_entry(facility, lead_user, "Event", sample_event.pk, "notiz")
+    mark_review(facility, admin_user, "Event", sample_event.pk, "notiz", timezone.localdate(), entry.fingerprint)
+    admin_user.is_active = False
+    admin_user.save(update_fields=["is_active"])
+    client.force_login(lead_user)
+    response = client.get(reverse("core:free_text_review_list"), {"editor": str(admin_user.pk)})
     assert response.status_code == 200
     assert len(response.context["entries"]) == 1
 
 
-def test_editor_choices_only_include_visible_source_metadata(client, facility, staff_user, admin_user, sample_event):
+def test_editor_choices_only_include_visible_source_metadata(
+    client, facility, staff_user, lead_user, admin_user, sample_event
+):
     sample_event.data_json["notiz"] = "Neutral source text"
     sample_event.save()
-    client.force_login(staff_user)
+    client.force_login(lead_user)
     response = client.get(reverse("core:free_text_review_list"))
     choices = {value for value, _label in response.context["filter_form"].fields["editor"].choices}
     assert str(staff_user.pk) in choices
@@ -165,10 +167,10 @@ def _qualified_audit(facility, person):
 
 
 @pytest.mark.parametrize("page", ["list", "target", "htmx_list"])
-def test_removed_qualified_notes_keep_person_read_audit(client, facility, staff_user, client_qualified, page):
+def test_removed_qualified_notes_keep_person_read_audit(client, facility, lead_user, client_qualified, page):
     set_record_text(client_qualified, "Qualified review content")
     client_qualified.save(update_fields=["document_type", "data_json"])
-    client.force_login(staff_user)
+    client.force_login(lead_user)
     audit = _qualified_audit(facility, client_qualified)
     normal = client.get(reverse("core:client_detail", kwargs={"pk": client_qualified.pk}))
     assert b"Qualified review content" in normal.content
@@ -189,7 +191,7 @@ def test_removed_qualified_notes_keep_person_read_audit(client, facility, staff_
 
 
 def test_read_audit_only_for_displayed_qualified_persons(
-    client, facility, staff_user, client_qualified, client_identified
+    client, facility, lead_user, client_qualified, client_identified
 ):
     from core.models import AuditLog
 
@@ -197,7 +199,7 @@ def test_read_audit_only_for_displayed_qualified_persons(
     client_qualified.save(update_fields=["document_type", "data_json"])
     set_record_text(client_identified, "Write person@example.org")
     client_identified.save(update_fields=["document_type", "data_json"])
-    client.force_login(staff_user)
+    client.force_login(lead_user)
     url = reverse("core:free_text_review_list")
     assert client.get(url, {"risk": "email"}).context["entries"] == []
     assert client.get(url).context["entries"] == []
@@ -208,36 +210,36 @@ def test_read_audit_only_for_displayed_qualified_persons(
     assert not _qualified_audit(facility, client_identified).exists()
 
 
-def test_model_change_refreshes_editor_choices(client, facility, staff_user, lead_user, sample_workitem, sample_event):
+def test_model_change_refreshes_editor_choices(client, facility, lead_user, admin_user, sample_workitem, sample_event):
 
-    sample_event.created_by = lead_user
+    sample_event.created_by = admin_user
     sample_event.save(update_fields=["created_by"])
-    client.force_login(staff_user)
+    client.force_login(lead_user)
     url = reverse("core:free_text_review_list")
     initial = client.get(url, {"model": "WorkItem"})
     assert initial.status_code == 404
     assert b"Neutral source text" not in initial.content
     response = client.get(url, {"model": "Event"}, HTTP_HX_REQUEST="true")
     assert response.status_code == 200
-    assert str(lead_user.pk) in dict(response.context["filter_form"].fields["editor"].choices)
+    assert str(admin_user.pk) in dict(response.context["filter_form"].fields["editor"].choices)
     # The partial carries the refreshed form, not only the result list.
     assert b'name="editor"' in response.content
-    assert f'value="{lead_user.pk}"'.encode() in response.content
+    assert f'value="{admin_user.pk}"'.encode() in response.content
 
 
 def test_stale_editor_selection_is_discarded_on_model_change(
-    client, facility, staff_user, lead_user, sample_workitem, sample_event
+    client, facility, staff_user, lead_user, admin_user, sample_workitem, sample_event
 ):
 
     sample_event.created_by = staff_user
     sample_event.save(update_fields=["created_by"])
-    sample_workitem.created_by = lead_user
+    sample_workitem.created_by = admin_user
     sample_workitem.save(update_fields=["created_by"])
-    client.force_login(staff_user)
+    client.force_login(lead_user)
     url = reverse("core:free_text_review_list")
     # The removed task cannot contribute an editor choice to the event list.
     for extra in ({}, {"HTTP_HX_REQUEST": "true"}):
-        response = client.get(url, {"model": "Event", "editor": str(lead_user.pk), "page": 1}, **extra)
+        response = client.get(url, {"model": "Event", "editor": str(admin_user.pk), "page": 1}, **extra)
         assert response.status_code == 200
         assert [entry.target_id for entry in response.context["entries"]] == [sample_event.pk]
         assert response.context["filter_form"].data.get("editor") is None

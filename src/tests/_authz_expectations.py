@@ -65,12 +65,12 @@ def E(url_name, category, *, get=None, post=None, **kw):
 
 
 EXPECTATIONS = (
-    E("core:free_text_review_list", "free-text-review", get=ASSISTANT_PLUS),
+    E("core:free_text_review_list", "free-text-review", get=LEAD_PLUS),
     E(
         "core:free_text_review_target",
         "free-text-review",
-        get=ASSISTANT_PLUS,
-        post=ASSISTANT_PLUS,
+        get=LEAD_PLUS,
+        post=LEAD_PLUS,
         url_kwargs=(("target_type", "Event"), ("target_id", "sample_event.pk"), ("field_key", "notiz")),
         idor=(("target_type", "Event"), ("target_id", "foreign_event.pk"), ("field_key", "notiz")),
         extra_ok=(422,),

@@ -33,7 +33,7 @@ def populate(request, target_type):
 
 
 @pytest.mark.parametrize("target_type", ["Client", "Case", "Episode", "WorkItem", "Event"])
-@pytest.mark.parametrize("role", ["assistant_user", "staff_user", "lead_user", "admin_user", "super_admin_user"])
+@pytest.mark.parametrize("role", ["lead_user", "admin_user", "super_admin_user"])
 def test_role_matrix(request, facility, target_type, role):
     obj, field = populate(request, target_type)
     user = request.getfixturevalue(role)
@@ -57,65 +57,65 @@ def test_role_matrix(request, facility, target_type, role):
 
 @pytest.mark.parametrize("target_type", ["Event"])
 @pytest.mark.parametrize("state", ["deleted", "inactive", "foreign"])
-def test_unavailable_targets_are_hidden(request, facility, staff_user, target_type, state, second_facility):
+def test_unavailable_targets_are_hidden(request, facility, lead_user, target_type, state, second_facility):
     obj, field = populate(request, target_type)
     person = request.getfixturevalue("client_identified")
     if state == "foreign":
         scope = second_facility
         with pytest.raises(PermissionDenied):
-            service().list_page(scope, staff_user, target_type)
+            service().list_page(scope, lead_user, target_type)
         return
     setattr(person, "is_deleted" if state == "deleted" else "is_active", state == "deleted")
     person.save()
-    assert service().list_page(facility, staff_user, target_type).entries == []
+    assert service().list_page(facility, lead_user, target_type).entries == []
     with pytest.raises(Http404):
-        service().get_entry(facility, staff_user, target_type, obj.pk, field)
+        service().get_entry(facility, lead_user, target_type, obj.pk, field)
     with pytest.raises(Http404):
-        service().mark_review(facility, staff_user, target_type, obj.pk, field, timezone.localdate(), "stale")
+        service().mark_review(facility, lead_user, target_type, obj.pk, field, timezone.localdate(), "stale")
 
 
 @pytest.mark.parametrize("target_type", ["Event"])
-def test_review_roundtrip_revocation_and_content_change(request, facility, staff_user, target_type):
+def test_review_roundtrip_revocation_and_content_change(request, facility, lead_user, target_type):
     from core.models import AuditLog, FreeTextReview
 
     obj, field = populate(request, target_type)
-    entry = service().get_entry(facility, staff_user, target_type, obj.pk, field)
+    entry = service().get_entry(facility, lead_user, target_type, obj.pk, field)
     until = timezone.localdate() + timedelta(days=14)
-    service().mark_review(facility, staff_user, target_type, obj.pk, field, until, entry.fingerprint)
+    service().mark_review(facility, lead_user, target_type, obj.pk, field, until, entry.fingerprint)
     review = FreeTextReview.objects.for_facility(facility).get()
     assert review.reviewed_until == until
-    assert review.reviewed_by == staff_user
+    assert review.reviewed_by == lead_user
     assert review.reviewed_at is not None
     assert review.content_fingerprint == entry.fingerprint
     assert "Private test content" not in str(review.__dict__)
-    assert service().get_entry(facility, staff_user, target_type, obj.pk, field).is_reviewed
+    assert service().get_entry(facility, lead_user, target_type, obj.pk, field).is_reviewed
     # Repeated marking updates one unique row.
-    service().mark_review(facility, staff_user, target_type, obj.pk, field, until, entry.fingerprint)
+    service().mark_review(facility, lead_user, target_type, obj.pk, field, until, entry.fingerprint)
     assert FreeTextReview.objects.for_facility(facility).count() == 1
-    service().revoke_review(facility, staff_user, target_type, obj.pk, field)
+    service().revoke_review(facility, lead_user, target_type, obj.pk, field)
     assert not FreeTextReview.objects.for_facility(facility).exists()
-    assert not service().get_entry(facility, staff_user, target_type, obj.pk, field).is_reviewed
+    assert not service().get_entry(facility, lead_user, target_type, obj.pk, field).is_reviewed
     audit = list(AuditLog.objects.for_facility(facility).filter(action__startswith="free_text_review"))
     assert len(audit) == 3
     assert {row.action for row in audit} == {"free_text_reviewed", "free_text_review_revoked"}
     assert all("Private test content" not in str(row.detail) for row in audit)
-    service().mark_review(facility, staff_user, target_type, obj.pk, field, until, entry.fingerprint)
+    service().mark_review(facility, lead_user, target_type, obj.pk, field, until, entry.fingerprint)
     obj.data_json = {"notiz": "Changed content"}
     obj.save(update_fields=["data_json"])
-    assert not service().get_entry(facility, staff_user, target_type, obj.pk, field).is_reviewed
+    assert not service().get_entry(facility, lead_user, target_type, obj.pk, field).is_reviewed
     with pytest.raises(ValidationError):
-        service().mark_review(facility, staff_user, target_type, obj.pk, field, until, entry.fingerprint)
+        service().mark_review(facility, lead_user, target_type, obj.pk, field, until, entry.fingerprint)
 
 
 @pytest.mark.parametrize("target_type", ["Event"])
-def test_personless_targets_remain_visible(request, facility, assistant_user, target_type):
+def test_personless_targets_remain_visible(request, facility, lead_user, target_type):
     obj, field = populate(request, target_type)
     obj.client = None
     obj.save(update_fields=["client"])
-    assert service().get_entry(facility, assistant_user, target_type, obj.pk, field).text == "Private test content"
+    assert service().get_entry(facility, lead_user, target_type, obj.pk, field).text == "Private test content"
 
 
-def test_event_fields_fail_closed(facility, assistant_user, lead_user, sample_event, doc_type_contact):
+def test_event_fields_fail_closed(facility, lead_user, sample_event, doc_type_contact):
     from core.models import DocumentType, DocumentTypeField, FieldTemplate
 
     for name, options in [
@@ -134,27 +134,28 @@ def test_event_fields_fail_closed(facility, assistant_user, lead_user, sample_ev
         "dauer": {"__encrypted__": True, "value": "Hidden"},
     }
     sample_event.save()
-    assert [entry.field_key for entry in service().list_page(facility, assistant_user, "Event").entries] == ["notiz"]
+    # Encrypted, numeric, unknown and marker values never enter a review; the lead reads elevated text fields.
     assert {entry.field_key for entry in service().list_page(facility, lead_user, "Event").entries} == {
         "notiz",
         "restricted",
     }
     doc_type_contact.sensitivity = DocumentType.Sensitivity.ELEVATED
     doc_type_contact.save()
-    assert service().list_page(facility, assistant_user, "Event").entries == []
-    with pytest.raises(Http404):
-        service().get_entry(facility, assistant_user, "Event", sample_event.pk, "notiz")
+    assert {entry.field_key for entry in service().list_page(facility, lead_user, "Event").entries} == {
+        "notiz",
+        "restricted",
+    }
 
 
-def test_expired_review_and_key_change(facility, staff_user, sample_event, settings):
+def test_expired_review_and_key_change(facility, lead_user, sample_event, settings):
     sample_event.data_json = {"notiz": "Original content"}
     sample_event.save()
-    entry = service().get_entry(facility, staff_user, "Event", sample_event.pk, "notiz")
+    entry = service().get_entry(facility, lead_user, "Event", sample_event.pk, "notiz")
     yesterday = timezone.localdate() - timedelta(days=1)
     with pytest.raises(ValidationError):
-        service().mark_review(facility, staff_user, "Event", sample_event.pk, "notiz", yesterday, entry.fingerprint)
+        service().mark_review(facility, lead_user, "Event", sample_event.pk, "notiz", yesterday, entry.fingerprint)
     service().mark_review(
-        facility, staff_user, "Event", sample_event.pk, "notiz", timezone.localdate(), entry.fingerprint
+        facility, lead_user, "Event", sample_event.pk, "notiz", timezone.localdate(), entry.fingerprint
     )
     settings.SECRET_KEY = "different-server-secret"
-    assert not service().get_entry(facility, staff_user, "Event", sample_event.pk, "notiz").is_reviewed
+    assert not service().get_entry(facility, lead_user, "Event", sample_event.pk, "notiz").is_reviewed

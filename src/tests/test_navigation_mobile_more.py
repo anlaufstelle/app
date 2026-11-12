@@ -98,12 +98,12 @@ def _render(client, user, url_name: str = "core:zeitstrom") -> str:
 class TestMoreMenuPerRole:
     """Konzept §5.2 — die Ziel-Liste, Zeile für Zeile, je Rolle."""
 
-    # Refs #918
-    # Facility roles gain the review entry; exact ordering stays pinned.
+    # Refs #2689
+    # The free-text review is a privacy-hub tab, not a menu row; exact ordering stays pinned.
     def test_assistant(self, client, assistant_user):
         """Assistants see contacts before files in the complete mobile menu."""
         entries = _more_entries(_render(client, assistant_user))
-        assert entries == [SUCHE, "/events/", "/attachments/", "/free-text-review/", HILFE, PROFIL, SPRACHE, ABMELDEN]
+        assert entries == [SUCHE, "/events/", "/attachments/", HILFE, PROFIL, SPRACHE, ABMELDEN]
 
     def test_staff(self, client, staff_user):
         """Staff see contacts before cases; privacy needs an own pending request."""
@@ -113,7 +113,6 @@ class TestMoreMenuPerRole:
             "/events/",
             "/cases/",
             "/attachments/",
-            "/free-text-review/",
             HILFE,
             PROFIL,
             SPRACHE,
@@ -136,7 +135,6 @@ class TestMoreMenuPerRole:
             "/events/",
             "/cases/",
             "/attachments/",
-            "/free-text-review/",
             "/datenschutz/",
             HILFE,
             PROFIL,
@@ -153,7 +151,6 @@ class TestMoreMenuPerRole:
             "/events/",
             "/cases/",
             "/attachments/",
-            "/free-text-review/",
             "/statistics/",
             "/datenschutz/",
             HILFE,
@@ -173,7 +170,6 @@ class TestMoreMenuPerRole:
             "/events/",
             "/cases/",
             "/attachments/",
-            "/free-text-review/",
             "/statistics/",
             "/datenschutz/",
             "/verwaltung/",

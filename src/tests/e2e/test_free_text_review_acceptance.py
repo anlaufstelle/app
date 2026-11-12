@@ -3,17 +3,19 @@
 The review is online only and reads event free texts of the facility. Person, case,
 episode and task are no review targets any more. Every test seeds its own document
 type, fields, person and event through the Django shell (the E2E database is shared,
-all names carry a ``E2E-FTX`` prefix and a random suffix) and runs as staff, lead
-and facility admin where the behaviour must hold for all three roles:
+all names carry a ``E2E-FTX`` prefix and a random suffix) and runs as lead and
+facility admin, the only roles that reach the review (Refs #2689; staff gets 403):
 
-1. The list shows the plain and the ``elevated`` event text, never an encrypted value,
-   an event of a ``high`` document type only to lead and admin, and never the text of
-   a carrier that is no review target.
+1. The list shows the plain and the ``elevated`` event text and the text of a ``high``
+   document type, never an encrypted value, and never the text of a carrier that is
+   no review target.
 2. Removed targets answer 404 by URL, for the list filter and for the target page.
 3. Marking, a changed text that invalidates the mark, marking again and revoking
    work in the browser.
-4. Protected plaintext (encrypted field; event of a ``high`` document type for staff)
-   never reaches the DOM of the list or the target page, which answers 404.
+4. Protected plaintext (encrypted field) never reaches the DOM of the list or the
+   target page, which answers 404.
+5. Staff gets 403 on the list and the target page; lead reaches the list through the
+   privacy hub tab, there is no sidebar entry.
 
 Waits use ``expect`` polling and response checks, never ``networkidle``.
 """
@@ -29,10 +31,8 @@ from ._helpers import django_shell
 
 pytestmark = pytest.mark.e2e
 
-ROLES = ["staff", "lead", "admin"]
-ROLE_FIXTURE = {"staff": "staff_page", "lead": "lead_page", "admin": "authenticated_page"}
-# Events of a ``high`` document type are outside the range of staff, within that of lead and admin.
-CAN_SEE_HIGH_TYPE = {"staff": False, "lead": True, "admin": True}
+ROLES = ["lead", "admin"]
+ROLE_FIXTURE = {"lead": "lead_page", "admin": "authenticated_page"}
 REMOVED_KINDS = ["Client", "Case", "Episode", "WorkItem"]
 
 
@@ -142,14 +142,9 @@ def test_list_shows_only_event_texts_and_no_protected_plaintext(request, base_ur
     assert "__encrypted__" not in body
     assert seed["slug_enc"] not in body, "an encrypted field is offered for review"
 
-    # Elevated is within the range of staff, lead and admin alike.
+    # Elevated and ``high`` document types are within the range of lead and admin alike.
     expect(entries.filter(has_text=texts["elevated"])).to_have_count(1)
-    high_entries = entries.filter(has_text=texts["high"])
-    if CAN_SEE_HIGH_TYPE[role]:
-        expect(high_entries).to_have_count(1)
-    else:
-        expect(high_entries).to_have_count(0)
-        assert texts["high"] not in body
+    expect(entries.filter(has_text=texts["high"])).to_have_count(1)
 
 
 @pytest.mark.parametrize("role", ROLES)
@@ -225,15 +220,31 @@ def test_protected_fields_answer_404_and_never_reach_the_dom(request, base_url, 
     assert response.status == 404
     assert texts["enc"] not in response.text()
 
-    # Event of a ``high`` document type: reviewable for lead and admin, hidden (404) for staff.
+    # Event of a ``high`` document type: reviewable for lead and admin.
     high = page.request.get(_target_url(base_url, "Event", seed["high_event"], seed["slug_plain"]))
-    if CAN_SEE_HIGH_TYPE[role]:
-        assert high.status == 200
-    else:
-        assert high.status == 404
-        assert texts["high"] not in high.text()
+    assert high.status == 200
 
-    # Elevated field: reviewable for staff, lead and admin.
+    # Elevated field: reviewable for lead and admin.
     elevated = page.request.get(_target_url(base_url, "Event", seed["event"], seed["slug_elevated"]))
     assert elevated.status == 200
     assert texts["enc"] not in elevated.text()
+
+
+def test_staff_gets_403_on_list_and_target_page(staff_page, base_url, e2e_env):
+    seed = _seed(e2e_env)
+    texts = seed["texts"]
+
+    response = staff_page.request.get(f"{base_url}/free-text-review/")
+    assert response.status == 403
+    assert texts["plain"] not in response.text()
+    target = staff_page.request.get(_target_url(base_url, "Event", seed["event"], seed["slug_plain"]))
+    assert target.status == 403
+    assert texts["plain"] not in target.text()
+
+
+def test_lead_reaches_the_review_through_the_privacy_hub_tab(lead_page, base_url):
+    lead_page.goto(f"{base_url}/datenschutz/", wait_until="domcontentloaded")
+    assert lead_page.get_by_test_id("nav-free-text-review").count() == 0
+    lead_page.get_by_test_id("subnav-tab-free-text-review").click()
+    expect(lead_page.get_by_role("heading", name="Freitext-Review", level=1)).to_be_visible()
+    expect(lead_page.get_by_test_id("subnav-tab-free-text-review")).to_have_attribute("aria-current", "page")

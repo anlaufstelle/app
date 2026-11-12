@@ -62,7 +62,7 @@ def _authorize(facility, user):
         facility is None
         or not user.is_authenticated
         or not user.is_active
-        or not user.is_assistant_or_above
+        or not user.is_lead_or_admin
         or user.facility_id != facility.pk
     ):
         raise PermissionDenied
