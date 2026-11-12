@@ -3,9 +3,10 @@
 The roadmap in section 8 lists targets without commitment and without a date.
 It must therefore carry no priority column or ticket numbers and excludes KDS.
 Sections 7 and 22 describe the KDS export as not implemented and not on the
-roadmap. Neither the concept nor its English summary may promise that export
-or call it a target, even alongside a disclaimer. Format and scope remain
-undecided. Section 22 names the bodies of the German addiction-help statistics.
+roadmap. Across both languages, export claims about KDS, addiction-help
+statistics and BASiS must match an allowed status statement, dataset definition
+or the BASiS review need. Format and scope remain undecided. Section 22 names
+the bodies of the German addiction-help statistics.
 Section 25 only points to roadmap steps that section 8 actually lists.
 """
 
@@ -34,20 +35,58 @@ AUTH_FUTURE_RE = re.compile(
 
 KDS_EXPORT_RE = re.compile(r"\bKDS[-\s]+(?:Export|Ausgabe)\b", re.IGNORECASE)
 KDS_STATUS = "nicht implementiert und nicht in der roadmap"
-# Keep the same small German future vocabulary as the authentication guard.
-# Check targets and promises independently of status or commitment disclaimers;
-# include the English summary's vocabulary without treating negated plans as promises.
-KDS_PROMISE_RE = re.compile(
-    AUTH_FUTURE_RE.pattern
-    + r"|\b(?:Zielbild\w*|Zusage|zugesagt|targets?|visions?|planned|scheduled|later|future|promise[ds]?|commitment)\b"
-    + r"|\bwill\b[^.!?\n]*\b(?:add\w*|implement\w*|come|be|support\w*)\b",
+# Preserve the product name's spelling: ordinary German "Basis" is unrelated.
+BASIS_MENTION_RE = re.compile(
+    r"(?-i:\bBASiS\b)|\bbasis[-\s]+(?:export|schnittstelle|interface|compatibility|kompatibilität)\b",
     re.IGNORECASE,
 )
-KDS_NEGATION_RE = re.compile(
-    r"\b(?:ohne|keine)\s+Zusage\b|\bnicht\s+(?:geplant|vorgesehen|zugesagt)\b"
-    r"|\b(?:without|no)\s+commitment\b|\bnot\s+(?:planned|scheduled|promised|a target|a vision)\b",
+STATISTICS_MENTION_RE = re.compile(r"Suchthilfestatistik|addiction[-\s]help statistics", re.IGNORECASE)
+EXPORT_ACTION_RE = re.compile(r"export|schnittstelle|interface|kompatibilität|compatibility", re.IGNORECASE)
+EXPORT_SUBJECT_DE = (
+    r"(?:(?:der|die|ein|eine) )?(?:KDS[- ](?:Export|Ausgabe)|BASiS[- ](?:Export|Schnittstelle)"
+    r"|Export für die (?:Deutsche )?Suchthilfestatistik)"
+)
+EXPORT_SUBJECT_EN = (
+    r"(?:an? |the )?(?:(?:KDS|BASiS)[- ](?:export|interface)"
+    r"|export for (?:the )?(?:German )?addiction[- ]help statistics)"
+)
+EXPORT_STATUS_DE = r"nicht implementiert und nicht in der roadmap(?: \(§ 8\))?"
+EXPORT_STATUS_EN = r"not implemented and is not on the roadmap(?: \((?:German concept )?§ 8\))?"
+# Full matches only: a status or definition must not license extra promises.
+# These are the permitted statements, not a vocabulary of forbidden futures.
+EXPORT_ALLOWED_RE = re.compile(
+    "|".join(
+        f"(?:{pattern})"
+        for pattern in (
+            rf"(?:Stand: )?(?:KDS[- ]Export: )?{EXPORT_SUBJECT_DE} (?:ist )?{EXPORT_STATUS_DE}",
+            rf"(?:KDS export: )?{EXPORT_SUBJECT_EN} is {EXPORT_STATUS_EN}",
+            r"KDS \(Kerndatensatz Suchthilfe\)",
+            r"(?:Der )?KDS ist ein Kerndatensatz",
+            r"(?:The )?KDS is (?:a|the) core dataset(?: for (?:German )?addiction[- ]help statistics)?",
+            r"BASiS-Kompatibilität ist ein fachlicher Prüfbedarf, keine zugesagte implementierte Schnittstelle",
+            r"§ 7 und § 22 beschreiben den KDS-Export als nicht implementiert und nicht in der Roadmap \(§ 8\); "
+            r"§ 22 erhält den Kerndatensatz als fachlichen Kontext und nennt IFT und EUDA statt DBDD/EBDD; "
+            r"BASiS bleibt fachlicher Prüfbedarf ohne implementierte Schnittstelle und ohne Roadmap-Eintrag",
+        )
+    ),
     re.IGNORECASE,
 )
+EXPORT_TABLE_ALLOWED = {
+    "kds": {
+        "kds",
+        "kds (kerndatensatz suchthilfe)",
+        "einheitlicher kerndatensatz der deutschen suchthilfestatistik. "
+        "relevant für einrichtungen, die sich an der deutschen suchthilfestatistik beteiligen; "
+        "ausgewertet wird sie vom ift institut für therapieforschung, münchen",
+    },
+    "basis": {
+        "basis",
+        "basis (bundesarbeitsgemeinschaft)",
+        "standardisierte leistungsdokumentation in der suchthilfe. "
+        "überlappung mit der statistik-zuordnung in der domänenbibliothek",
+        "fachlicher prüfbedarf; keine schnittstelle implementiert und nicht in der roadmap (§ 8)",
+    },
+}
 
 
 def _section(text: str, heading: str) -> str:
@@ -106,16 +145,53 @@ def test_roadmap_lists_the_agreed_topics(concept):
         assert undecided not in table, undecided
 
 
-def _kds_violations(text: str, *, check_sections: bool = True) -> list[str]:
-    """Check KDS claims across either document and require the German section status."""
+def _plain_export_statement(statement: str) -> str:
+    """Normalize Markdown emphasis before identifying and checking a subject."""
+    plain = re.sub(r"^\s*(?:[-*+] |\#{1,6} )", "", statement)
+    return " ".join(re.sub(r"[*_`]", "", plain).split()).rstrip(".")
+
+
+def _export_statements(text: str) -> list[tuple[str, str | None]]:
+    """Keep table cells separate and carry their subject into every cell."""
     blocks = re.split(r"\n\s*\n|\n(?=\s*(?:\||[-*+] |\#{1,6} ))", text)
-    mentions = [block for block in blocks if KDS_MENTION_RE.search(block)]
-    violations = [block for block in mentions if KDS_SCOPE_RE.search(block)]
-    for block in mentions:
-        # A history row may discuss other targets in separate sentences.
-        for sentence in re.split(r"(?<=[.!?])\s+", block):
-            if KDS_MENTION_RE.search(sentence) and KDS_PROMISE_RE.search(KDS_NEGATION_RE.sub("", sentence)):
-                violations.append(sentence)
+    statements = []
+    for block in blocks:
+        if block.lstrip().startswith("|"):
+            cells = block.strip().strip("|").split("|")
+            subject = None
+            label = _plain_export_statement(cells[0])
+            if KDS_MENTION_RE.search(label):
+                subject = "kds"
+            elif BASIS_MENTION_RE.search(label):
+                subject = "basis"
+            if subject:
+                statements.extend((cell, subject) for cell in cells)
+                continue
+            # History cells discuss unrelated features in separate sentences.
+            blocks_to_split = cells
+        else:
+            blocks_to_split = [block]
+        for value in blocks_to_split:
+            statements.extend((sentence, None) for sentence in re.split(r"(?<=[.!?])\s+", value))
+    return statements
+
+
+def _kds_violations(text: str, *, check_sections: bool = True) -> list[str]:
+    """Allow only export status, dataset definitions and the BASiS review need."""
+    violations = []
+    for statement, subject in _export_statements(text):
+        plain = _plain_export_statement(statement)
+        relevant = (
+            subject
+            or KDS_MENTION_RE.search(plain)
+            or BASIS_MENTION_RE.search(plain)
+            or (STATISTICS_MENTION_RE.search(plain) and EXPORT_ACTION_RE.search(plain))
+        )
+        if not relevant:
+            continue
+        allowed = EXPORT_ALLOWED_RE.fullmatch(plain) or plain.casefold() in EXPORT_TABLE_ALLOWED.get(subject, set())
+        if not allowed or ((subject == "kds" or KDS_MENTION_RE.search(plain)) and KDS_SCOPE_RE.search(plain)):
+            violations.append(statement)
     if check_sections:
         for heading in ("7. Modulstruktur", "22. Regulatorische Landschaft"):
             body = _section(text, heading)
@@ -248,13 +324,114 @@ def test_english_summary_has_no_kds_target_or_promise():
     "sentence",
     [
         "KDS export is not implemented and is not on the roadmap.",
-        "KDS export is not planned.",
         "KDS-Export ist nicht implementiert und nicht in der Roadmap (§ 8).",
-        "KDS-Export ist nicht geplant.",
     ],
 )
 def test_kds_guard_accepts_status_without_a_promise(concept, sentence):
     assert not _kds_violations(concept + f"\n\n{sentence}\n")
+
+
+@pytest.mark.parametrize(
+    ("sentence", "english"),
+    [
+        ("KDS-Export soll folgen.", False),
+        ("KDS-Export ist in Arbeit.", False),
+        ("KDS-Export folgt.", False),
+        ("KDS-Export kommt.", False),
+        ("KDS-Export ist nicht implementiert; er wird nachgeliefert.", False),
+        ("KDS-Export ist angestrebt.", False),
+        ("KDS-Export ist nicht implementiert, steht aber auf der Roadmap.", False),
+        ("KDS-Export ist in der Roadmap enthalten.", False),
+        ("Der Export für die Deutsche Suchthilfestatistik ist ein Ausblick.", False),
+        ("Ein Export für die Suchthilfestatistik ist Zielbild.", False),
+        ("KDS-Export ist nicht implementiert und nicht in der Roadmap; er ist als nächster Schritt eingeplant.", False),
+        ("KDS-Export ist nicht implementiert und nicht in der Roadmap; wir arbeiten daran.", False),
+        ("KDS-Export wird nachgerüstet.", False),
+        ("KDS-Export ist perspektivisch möglich.", False),
+        ("KDS export is coming soon.", True),
+        ("KDS export will follow.", True),
+        ("KDS export is on the roadmap.", True),
+        ("KDS export is under development.", True),
+        ("KDS export is intended.", True),
+        ("KDS export is not implemented but will be delivered.", True),
+        ("KDS export is envisaged.", True),
+        ("An export for the German addiction-help statistics is a target.", True),
+        ("KDS export is not implemented and is not on the roadmap, but we aim to add it.", True),
+        ("- KDS-Export für Einrichtungen.", False),
+        ("BASiS-Export ist Zielbild.", False),
+        ("BASiS-Schnittstelle ist in Arbeit.", False),
+        ("BASiS-Export nicht implementiert und nicht in der Roadmap; er soll folgen.", False),
+    ],
+)
+def test_export_guard_rejects_unlisted_claims(concept, sentence, english):
+    text = SUMMARY_EN.read_text(encoding="utf-8") if english else concept
+    assert _kds_violations(text + f"\n\n{sentence}\n", check_sections=not english)
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        "| BASiS | Zielbild: domänenspezifischer Export |",
+        (
+            "| BASiS | Fachlicher Prüfbedarf; keine Schnittstelle implementiert und nicht in der Roadmap (§ 8) "
+            "| Export folgt. |"
+        ),
+        "| KDS | KDS-Export nicht implementiert und nicht in der Roadmap (§ 8) | Export folgt. |",
+        "| KDS-Export | nicht implementiert und nicht in der Roadmap; soll folgen |",
+        (
+            "| BASiS | Fachlicher Prüfbedarf; keine Schnittstelle implementiert und nicht in der Roadmap (§ 8). "
+            "Export folgt. |"
+        ),
+    ],
+)
+def test_export_guard_checks_each_cell_with_its_table_subject(concept, row):
+    assert _kds_violations(concept + f"\n\n{row}\n")
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "KDS-Export ist nicht geplant.",
+        "KDS export is not planned.",
+        "Der KDS ist ein Kerndatensatz und der Export folgt.",
+        "KDS-Export ist nicht implementiert und nicht in der Roadmap, folgt aber bald.",
+        "Export für die Suchthilfestatistik ist Zielbild.",
+        "Export for German addiction-help statistics is coming soon.",
+        "BASiS-Kompatibilität ist ein fachlicher Prüfbedarf, die Schnittstelle folgt.",
+        "BASiS interface is not implemented and is not on the roadmap, but we aim to add it.",
+    ],
+)
+def test_export_guard_requires_complete_allowed_statements(concept, sentence):
+    assert _kds_violations(concept + f"\n\n{sentence}\n")
+
+
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "Der KDS ist ein Kerndatensatz.",
+        "KDS (Kerndatensatz Suchthilfe)",
+        "Ein Export für die Suchthilfestatistik ist nicht implementiert und nicht in der Roadmap (§ 8).",
+        "BASiS-Export ist nicht implementiert und nicht in der Roadmap (§ 8).",
+        "BASiS-Schnittstelle ist nicht implementiert und nicht in der Roadmap (§ 8).",
+        "BASiS-Kompatibilität ist ein fachlicher Prüfbedarf, keine zugesagte implementierte Schnittstelle.",
+        "An export for the German addiction-help statistics is not implemented and is not on the roadmap.",
+        "BASiS export is not implemented and is not on the roadmap.",
+    ],
+)
+def test_export_guard_accepts_only_status_definition_or_review_need(concept, sentence):
+    assert not _kds_violations(concept + f"\n\n{sentence}\n")
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "_KDS_-Export steht auf der Roadmap.",
+        "_BASiS_-Schnittstelle ist in Arbeit.",
+        "| _KDS_ | Export folgt. |",
+    ],
+)
+def test_export_guard_checks_markdown_subjects(concept, statement):
+    assert _kds_violations(concept + f"\n\n{statement}\n")
 
 
 def test_regulatory_section_names_current_bodies(concept):
