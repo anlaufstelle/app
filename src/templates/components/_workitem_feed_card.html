@@ -1,20 +1,12 @@
 {% load i18n date_tags %}
-<a href="{% url 'core:workitem_detail' pk=workitem.pk %}" class="flex bg-surface border border-subtle rounded-[10px] overflow-hidden hover:shadow-xs transition">
-    {# Linke Kante in Aufgaben-Farbe #}
-    <div class="w-[3px] bg-workitem flex-shrink-0"></div>
-    <div class="flex-1 px-3.5 py-3 min-w-0">
-        <div class="flex flex-wrap items-center gap-2">
-            <span class="font-mono text-[13px] font-medium text-ink-muted flex-shrink-0">{{ workitem.created_at|time:"H:i" }}</span>
-            <span data-testid="feed-kind-badge" class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-workitem-soft text-workitem-deep">{% trans "Aufgabe" %}</span>
-            <span class="text-[13px] font-semibold text-ink truncate min-w-0">{{ workitem.title|truncatewords:8 }}</span>
-            {% if workitem.priority == "urgent" %}
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-red-100 text-red-700">{% trans "Dringend" %}</span>
-            {% elif workitem.priority == "important" %}
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-yellow-100 text-yellow-700">{% trans "Wichtig" %}</span>
-            {% endif %}
-            {% if workitem.assigned_to %}
-            <span class="ml-auto text-[12px] text-ink-muted whitespace-nowrap">{{ workitem.assigned_to.display_name|default:workitem.assigned_to.username }}</span>
-            {% endif %}
-        </div>
-    </div>
+<a href="{% url 'core:workitem_detail' pk=workitem.pk %}" class="feed-row-header hover:bg-canvas">
+    <span data-feed-column="edge" class="feed-row-edge bg-workitem" aria-hidden="true"></span>
+    <span data-feed-column="time" class="feed-row-time">{{ workitem.created_at|time:"H:i" }}</span>
+    <span data-feed-column="type" class="feed-row-type">{{ workitem.title|truncatewords:8 }}</span>
+    <span data-feed-column="person" class="feed-row-person">{% if workitem.client %}{{ workitem.client.pseudonym }}{% endif %}</span>
+    <span data-feed-column="details" class="feed-row-details">
+        <span data-testid="feed-kind-badge" class="feed-kind-badge bg-workitem-soft text-workitem-deep">{% trans "Aufgabe" %}</span>
+        {% if workitem.priority == "urgent" %}<span class="feed-kind-badge bg-red-100 text-red-700">{% trans "Dringend" %}</span>{% elif workitem.priority == "important" %}<span class="feed-kind-badge bg-yellow-100 text-yellow-700">{% trans "Wichtig" %}</span>{% endif %}
+    </span>
+    <span data-feed-column="by" class="feed-row-by">{% if workitem.assigned_to %}{{ workitem.assigned_to.display_name|default:workitem.assigned_to.username }}{% endif %}</span>
 </a>

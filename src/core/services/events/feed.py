@@ -215,6 +215,16 @@ def _feed_events(facility, start_dt, end_dt, user, include_all, document_type_id
     return [{"type": "event", "occurred_at": e.occurred_at, "object": e} for e in events]
 
 
+def activity_person_label(activity):
+    """Person shown in the activity column, from already prefetched targets."""
+    target = activity.target
+    if isinstance(target, Client):
+        return target.pseudonym
+    if isinstance(target, Event) and target.client:
+        return target.client.pseudonym
+    return ""
+
+
 def _feed_activities(facility, start_dt, end_dt, user, include_all):
     """Activity-Zweig des Feeds (Refs #1892, Extraktion aus ``build_feed_items``)."""
     from core.services.dashboard.activity import activity_target_prefetch
@@ -229,7 +239,11 @@ def _feed_activities(facility, start_dt, end_dt, user, include_all):
         .prefetch_related(activity_target_prefetch())
         .order_by("-occurred_at")[:FEED_MAX_PER_TYPE]
     )
-    return [{"type": "activity", "occurred_at": a.occurred_at, "object": a} for a in activities]
+    items = []
+    for activity in activities:
+        activity.feed_person = activity_person_label(activity)
+        items.append({"type": "activity", "occurred_at": activity.occurred_at, "object": activity})
+    return items
 
 
 def _feed_workitems(facility, start_dt, end_dt):

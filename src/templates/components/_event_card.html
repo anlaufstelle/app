@@ -1,54 +1,26 @@
 {% load i18n core_tags %}
-
-<div class="flex bg-surface border border-subtle rounded-[10px] overflow-hidden" x-data="expandableCard" {% if not ignore_global_collapse %}x-init="applyGlobalCollapse" @zeitstrom-collapse-all.window="applyGlobalCollapse"{% endif %}>
-    {# Linke Kante in Kontakt-Farbe #}
-    <div class="w-[3px] bg-event flex-shrink-0"></div>
-    <div class="flex-1 px-3.5 py-3 min-w-0">
-        {# Ganze Kopfzeile togglet (nicht nur der Chevron); Button enthält nur Phrasing-Content (spans statt divs). #}
-        <button type="button"
-                @click="toggle"
-                aria-expanded="false"
-                :aria-expanded="expanded"
-                aria-controls="event-detail-{{ event.pk }}"
-                data-testid="event-card-toggle"
-                class="flex flex-wrap items-center gap-2 w-full text-left cursor-pointer">
-            {% if show_date %}
-            <span class="font-mono text-[13px] font-medium text-ink-muted flex-shrink-0">{{ event.occurred_at|date:"DATETIME_FORMAT" }}</span>
-            {% else %}
-            <span class="font-mono text-[13px] font-medium text-ink-muted flex-shrink-0">{{ event.occurred_at|time:"H:i" }}</span>
-            {% endif %}
-            <span data-testid="feed-kind-badge" class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-event-soft text-event-deep">{% trans "Kontakt" %}</span>
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-canvas border border-subtle text-ink-soft">{{ event.document_type.name }}</span>
-            {% if show_client %}
-                {% if event.is_anonymous %}
-                <span class="text-[12px] text-ink-muted italic">{% trans "Anonym" %}</span>
-                {% elif event.client %}
-                <span class="text-[12px] font-semibold text-accent truncate">{{ event.client.pseudonym }}</span>
-                {% endif %}
-            {% endif %}
-            {% if show_case and event.case and not event.case.is_deleted %}
-            <span class="text-[12px] text-ink-soft">{% trans "Fall" %}: {{ event.case.title }}</span>
-            {% endif %}
-            <span class="flex items-center gap-2 ml-auto shrink-0">
-                {% if event.created_by %}
-                <span class="text-[12px] text-ink-muted whitespace-nowrap">{{ event.created_by.display_name|default:event.created_by.username }}</span>
-                {% endif %}
-                <span class="inline-flex text-ink-muted transition-transform duration-200 p-0.5" :class="rotateClass" aria-hidden="true">
-                    <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
-                    </svg>
-                </span>
-            </span>
-        </button>
-        {% if event.preview_fields %}
-        <div class="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 text-[12px] text-ink-muted">
-            {% for pf in event.preview_fields %}
-            <span><span>{{ pf.label }}:</span> {{ pf.value }}</span>
-            {% endfor %}
-        </div>
-        {% endif %}
+<div class="feed-row" x-data="expandableCard" {% if not ignore_global_collapse %}x-init="applyGlobalCollapse" @zeitstrom-collapse-all.window="applyGlobalCollapse"{% endif %}>
+    <button type="button" @click="toggle" aria-expanded="false" :aria-expanded="expanded"
+            aria-controls="event-detail-{{ event.pk }}" data-testid="event-card-toggle" class="feed-row-header">
+        <span data-feed-column="edge" class="feed-row-edge bg-event" aria-hidden="true"></span>
+        <span data-feed-column="time" class="feed-row-time" title="{{ event.occurred_at|date:'DATETIME_FORMAT' }}">
+            {{ event.occurred_at|time:"H:i" }}{% if show_date %}<span class="block text-[11px]">{{ event.occurred_at|date:"d.m.y" }}</span>{% endif %}
+        </span>
+        <span data-feed-column="type" class="feed-row-type">{{ event.document_type.name }}</span>
+        <span data-feed-column="person" class="feed-row-person">
+            {% if show_client %}{% if event.is_anonymous %}<span class="text-ink-muted italic">{% trans "Anonym" %}</span>{% elif event.client %}{{ event.client.pseudonym }}{% endif %}{% endif %}
+        </span>
+        <span data-feed-column="details" class="feed-row-details">
+            {% if show_case and event.case and not event.case.is_deleted %}<span>{% trans "Fall" %}: {{ event.case.title }} · </span>{% endif %}
+            {% for pf in event.preview_fields %}<span>{{ pf.label }}: {{ pf.value }}{% if not forloop.last %} · {% endif %}</span>{% endfor %}
+        </span>
+        <span data-feed-column="by" class="feed-row-by">
+            {% if event.created_by %}<span class="truncate">{{ event.created_by.display_name|default:event.created_by.username }}</span>{% endif %}
+            <span class="inline-flex text-ink-muted transition-transform duration-200" :class="rotateClass" aria-hidden="true"><svg aria-hidden="true" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd"/></svg></span>
+        </span>
+    </button>
         <div id="event-detail-{{ event.pk }}" x-show="expanded" x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-100" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1" x-cloak>
-            <div class="mt-2 bg-canvas rounded-md px-3 py-2 text-[13px] text-ink-soft space-y-1">
+            <div class="mx-3.5 mb-3 mt-1 bg-canvas rounded-md px-3 py-2 text-[13px] text-ink-soft space-y-1">
                 {% if event.expanded_fields %}
                     {% for f in event.expanded_fields %}
                     <div>
@@ -73,5 +45,4 @@
                 </div>
             </div>
         </div>
-    </div>
 </div>

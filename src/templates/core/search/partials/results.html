@@ -63,7 +63,7 @@ Aufgaben sind eine eigene Etappe (#1842).
         {% endif %}
         <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Ereignisse" %} ({{ counts.events }})</h2>
         <p class="text-xs text-ink-muted mb-3">{% trans "Gesucht wird in den offen gespeicherten Feldinhalten der Ereignisse." %}</p>
-        <div class="space-y-2">
+        <div class="feed-rows">
             {% for event in events %}
             <div data-testid="search-result-event">
                 {% include "components/_event_card.html" with event=event show_date=True show_client=True %}

@@ -274,6 +274,7 @@ def _feed_projection(facility, user, state: ZeitstromState):
 
     if state.feed_type == "activities" or include_all:
         from core.services.dashboard.activity import activity_target_prefetch, render_activity_summary
+        from core.services.events.feed import activity_person_label
 
         activities = activities_for_feed_read(facility, user).filter(
             occurred_at__gte=start_dt,
@@ -292,6 +293,7 @@ def _feed_projection(facility, user, state: ZeitstromState):
                 "occurred_at": activity.occurred_at,
                 "verb": activity.verb,
                 "summary": render_activity_summary(activity),
+                "person": activity_person_label(activity),
                 "actor_id": activity.actor_id,
                 "actor__username": activity.actor.username if activity.actor else None,
                 "actor__display_name": activity.actor.display_name if activity.actor else None,
@@ -345,6 +347,7 @@ def _feed_projection(facility, user, state: ZeitstromState):
                 row["occurred_at"],
                 row["verb"],
                 row["summary"],
+                row["person"],
                 _related_user(row, "actor"),
                 row["target_type_id"],
                 row["target_type__model"],

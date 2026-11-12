@@ -1,7 +1,7 @@
 {% load i18n %}
 {% if filter_form_oob %}{% include "core/events/partials/filter_form.html" %}{% endif %}
 {% if events %}
-<div class="space-y-3" aria-label="{% translate 'Kontakte' %}">
+<div class="feed-rows" aria-label="{% translate 'Kontakte' %}">
 {% for event in events %}
     {% include "components/_event_card.html" with show_date=True show_client=True show_case=show_cases ignore_global_collapse=True %}
 {% endfor %}

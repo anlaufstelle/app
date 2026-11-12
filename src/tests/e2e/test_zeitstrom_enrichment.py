@@ -116,11 +116,7 @@ class TestEventCardPreview:
         assert event_cards.count() > 0, "No event cards found in Zeitstrom"
 
     def test_kind_badges_differ_in_color_by_card_kind(self, authenticated_page, base_url, feed_fixture):
-        """Contact, activity and task cards carry kind badges in three different colors.
-
-        Since the visual refresh the document type is a neutral badge; the color
-        only distinguishes the card kind (contact, activity, task, ban).
-        """
+        """Activities and tasks carry distinct badges; contacts use their type column."""
         page = authenticated_page
         page.goto(f"{base_url}/?date={FEED_DAY}", wait_until="domcontentloaded")
         expect(page.locator(_KIND_BADGE).first).to_be_visible()
@@ -132,14 +128,15 @@ class TestEventCardPreview:
             colors = badge.evaluate("(el) => [getComputedStyle(el).backgroundColor, getComputedStyle(el).color]")
             colors_by_kind.setdefault(badge.inner_text().strip(), set()).add(tuple(colors))
 
-        kinds = ("Kontakt", "Aktivität", "Aufgabe")
+        kinds = ("Aktivität", "Aufgabe")
+        assert "Kontakt" not in colors_by_kind
         assert set(kinds) <= set(colors_by_kind), colors_by_kind
         for kind in kinds:
             assert len(colors_by_kind[kind]) == 1, f"{kind} badges are not uniform: {colors_by_kind[kind]}"
         background = {kind: next(iter(colors_by_kind[kind]))[0] for kind in kinds}
         text = {kind: next(iter(colors_by_kind[kind]))[1] for kind in kinds}
-        assert len(set(background.values())) == 3, f"Kind badges share a background color: {background}"
-        assert len(set(text.values())) == 3, f"Kind badges share a text color: {text}"
+        assert len(set(background.values())) == 2, f"Kind badges share a background color: {background}"
+        assert len(set(text.values())) == 2, f"Kind badges share a text color: {text}"
 
 
 class TestActivityCards:

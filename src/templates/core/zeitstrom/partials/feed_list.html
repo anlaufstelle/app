@@ -13,7 +13,7 @@
 </div>
 {% endif %}
 {% if feed_items %}
-<div class="space-y-2">
+<div class="feed-rows">
     {% for item in feed_items %}
         {% if item.type == "event" %}
             {% include "components/_event_card.html" with event=item.object show_date=False show_client=True %}

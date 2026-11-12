@@ -178,6 +178,44 @@
     .tally-tile {
         @apply bg-surface border border-subtle rounded-[10px];
     }
+    /* Shared columns for timeline, contacts and search (#2656). */
+    .feed-rows {
+        @apply min-w-0 bg-surface border border-subtle-soft rounded-[10px] overflow-hidden divide-y divide-subtle-soft;
+    }
+    .feed-row-header {
+        @apply grid w-full min-w-0 min-h-[48px] items-center gap-x-3 text-left text-[13px] py-2 pr-3.5;
+        grid-template-columns: 3px 44px minmax(0,1fr) minmax(0,1fr);
+    }
+    .feed-row-edge {
+        @apply col-start-1 row-span-2 self-stretch;
+    }
+    .feed-row-time {
+        @apply col-start-2 row-start-1 font-mono text-[12px] text-ink-muted;
+    }
+    .feed-row-type {
+        @apply col-start-3 row-start-1 font-semibold text-ink truncate;
+    }
+    .feed-row-person {
+        @apply col-start-4 row-start-1 text-right text-accent truncate;
+    }
+    .feed-row-details {
+        @apply col-start-2 col-span-3 row-start-2 min-w-0 truncate text-[12px] text-ink-muted;
+    }
+    .feed-row-by {
+        @apply hidden min-w-0 max-w-40 items-center justify-end gap-2 truncate text-[12px] text-ink-muted;
+    }
+    .feed-kind-badge {
+        @apply inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold;
+    }
+    @media (min-width: 768px) {
+        .feed-row-header {
+            grid-template-columns: 3px 52px minmax(0,140px) minmax(0,110px) minmax(0,1fr) auto;
+        }
+        .feed-row-edge { @apply row-span-1; }
+        .feed-row-person { @apply text-left; }
+        .feed-row-details { @apply col-start-5 col-span-1 row-start-1; }
+        .feed-row-by { @apply col-start-6 row-start-1 flex; }
+    }
     .badge {
         @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
     }
