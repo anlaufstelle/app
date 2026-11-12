@@ -5,9 +5,10 @@ OOB markup preserves input properties in HTMX history snapshots. Search and pane
 immediately (they carry their own triggers); without JavaScript the form submits via "Filtern".
 Period rule: a preset (hidden ``range``) and the Von/Bis fields exclude each other; the segment
 links switch between them.
+Settle without a delay so visible OOB controls handle the next change immediately (#2658).
 {% endcomment %}
 {% block filter_attributes %}id="event-filters" method="get" action="{% url 'core:event_list' %}"
-    hx-get="{% url 'core:event_list' %}" hx-target="#event-table" hx-push-url="true" hx-indicator="#event-filters-spinner"
+    hx-get="{% url 'core:event_list' %}" hx-target="#event-table" hx-swap="innerHTML settle:0" hx-push-url="true" hx-indicator="#event-filters-spinner"
     data-filter-persist data-filter-persist-url {% if filter_form_oob %}hx-swap-oob="outerHTML"{% endif %}{% endblock %}
 {% block filter_search %}
 <div class="relative flex-1 min-w-[12rem]">

@@ -183,6 +183,33 @@ def expect_total(page, shown, total):
 
 
 class TestFilterRun:
+    def test_change_in_the_first_task_after_a_form_swap_is_applied(self, staff_page, base_url, dataset):
+        page = staff_page
+        open_list(page, base_url, RANGE)
+        open_filter_panel(page)
+        # Reproduce a change while the replacement form is already visible.
+        # A task queued by the OOB swap runs before HTMX's default settle timer.
+        page.evaluate(
+            """nextType => {
+                function onSwap(event) {
+                    if (event.target.id !== 'event-filters') return;
+                    document.removeEventListener('htmx:oobAfterSwap', onSwap);
+                    setTimeout(() => {
+                        const select = document.querySelector('#event-doc_type');
+                        select.focus();
+                        select.value = nextType;
+                        select.dispatchEvent(new Event('change', {bubbles: true}));
+                    }, 0);
+                }
+                document.addEventListener('htmx:oobAfterSwap', onSwap);
+            }""",
+            dataset["type_a"],
+        )
+        filter_by(page, lambda: page.select_option("#event-doc_type", dataset["type_b"]))
+        expect(page).to_have_url(re.compile(rf"doc_type={dataset['type_a']}"))
+        expect_total(page, PAGE_SIZE, 28)
+        expect(page.locator("#event-doc_type")).to_have_value(dataset["type_a"])
+
     def test_filter_run_narrows_rows_and_pushes_the_url(self, staff_page, base_url, dataset):
         page = staff_page
         open_list(page, base_url)

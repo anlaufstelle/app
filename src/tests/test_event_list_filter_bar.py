@@ -59,6 +59,16 @@ def form_items(page):
     return [(t, a, anc) for t, a, anc in page.items if any(x[1].get("id") == "event-filters" for x in anc)]
 
 
+@pytest.mark.parametrize("htmx", [False, True])
+def test_filter_swaps_bind_visible_controls_without_a_settle_delay(client, staff_user, sample_event, htmx):
+    headers = {"HTTP_HX_REQUEST": "true"} if htmx else {}
+    page = Page(list_response(client, staff_user, **headers).content)
+    form, _ = page.find("form", id="event-filters")[0]
+    # All filter triggers inherit this: bind the OOB controls in their insertion
+    # task so the next user change cannot disappear before they are processed.
+    assert form.get("hx-swap") == "innerHTML settle:0"
+
+
 def chip_links(page):
     return {a["data-filter-key"]: a for a, _ in page.find("a", **{"data-chip-remove": ""})}
 
