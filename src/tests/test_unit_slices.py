@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -190,3 +191,22 @@ def test_coverage_gate_does_not_assume_an_omitted_status_is_success(tmp_path):
     result = invoke("--coverage-dir", tmp_path)
     assert result.returncode == 2, result.stdout + result.stderr
     assert "did not succeed" in result.stderr
+
+
+def test_workflow_slice_estimates_stay_below_seventy_percent():
+    import yaml
+
+    job = yaml.safe_load((ROOT / ".github/workflows/test.yml").read_text())["jobs"]["test"]
+    count = len(job["strategy"]["matrix"]["slice"])
+    summary = invoke("--slices", count, "--summary")
+    assert summary.returncode == 0, summary.stdout + summary.stderr
+    loads = [float(value) * 60 for value in re.findall(r"([\d.]+) weighted minutes", summary.stdout)]
+    assert len(loads) == count
+    recipe = subprocess.run(
+        ["make", "-n", "test-unit-slice", "INDEX=1"], cwd=ROOT, capture_output=True, text=True, check=True
+    ).stdout
+    assert f"--slices {count} " in recipe
+    workers = int(re.search(r" -n (\d+) ", recipe).group(1))
+    assert workers > 0
+    # File weights include both workers' durations; reserve six minutes beyond ideal parallel time.
+    assert max(loads) / workers + 6 * 60 < job["timeout-minutes"] * 60 * 0.7

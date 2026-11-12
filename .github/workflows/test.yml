@@ -13,11 +13,10 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-24.04  # Moving label switches to Ubuntu 26 on 2026-10-19; upgrade deliberately after v0.99.8.
-    # Three file-based slices cover the complete collected unit suite (Refs #2598).
-    # Current collection: 24,951 tests (23,221 under src/tests, without release tooling).
-    # v0.99.7 measured 48-50 minutes on 2 vCPUs before slicing.
-    # 35 minutes per slice leaves room for runner variation and startup;
-    # the stage probe must confirm a mean <=24.5 minutes per slice.
+    # Three file-based slices use Stage duration weights refreshed on 2026-11-11 (Refs #2646).
+    # Each slice runs two workers (Makefile UNIT_WORKERS); file weights sum all duration phases.
+    # Budget estimate: weighted seconds / 2 + six minutes for setup and runner variation.
+    # Stage acceptance requires EACH job in EACH run <=24.5 minutes (70% of 35), including setup.
     timeout-minutes: 35
     strategy:
       fail-fast: false
