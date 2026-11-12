@@ -117,11 +117,10 @@ def test_client_list_query_count_is_bounded_per_page(client, facility, staff_use
     )
     client.force_login(staff_user)
 
-    # Auth-/MFA-Middleware, Facility-Kontext, Paginator, Seitenquery und
-    # gebündelte Badge-Queries brauchen derzeit 18 Reads. 20 lässt zwei Queries
-    # Spielraum, aber keine Query je zusätzlicher Person zu.
+    # Includes one fixed middleware read after saving the session to check
+    # key existence and the current auth revision, independent of page size.
     with CaptureQueriesContext(connection) as captured:
         response = client.get(reverse("core:client_list"))
 
     assert response.status_code == 200
-    _assert_query_budget(captured, 20)
+    _assert_query_budget(captured, 21)
