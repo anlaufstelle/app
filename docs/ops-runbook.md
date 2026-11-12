@@ -598,7 +598,7 @@ Fuer alle `anlaufstelle-*.log` unter `/var/log` eine Logrotate-Regel mit
 regelmaessiger Rotation, Komprimierung und begrenzter Aufbewahrung einrichten;
 nach Aenderungen `sudo logrotate --debug /etc/logrotate.conf` pruefen.
 
-**Webhook-Installationen:** Bei gesetzter `BREACH_NOTIFICATION_WEBHOOK_URL` den Scan-Befehl in der folgenden Host-Crontab durch `docker compose --env-file .env exec -T cron python manage.py detect_breaches` ersetzen. Das setzt einen laufenden `cron`-Dienst mit der Zusatz-Compose-Datei aus § 6.5b voraus. In `maintenance` besteht kein Ausgang: Zustellversuche scheitern und der Scan wird rot. Den Scan nur über einen Scheduler ausführen.
+**Webhook-Installationen:** Bei gesetzter `BREACH_NOTIFICATION_WEBHOOK_URL` den Scan im `cron`-Sidecar mit der Zusatz-Compose-Datei aus § 6.5b belassen (er plant ihn über `deploy/crontab` stündlich) und die `detect_breaches`-Zeile der Host-Crontab weglassen. Über `maintenance` besteht kein Ausgang: Zustellversuche scheitern und der Scan wird rot. Einen Sofortlauf mit `docker compose --env-file .env exec -T cron python manage.py detect_breaches` starten.
 
 ```cron
 # Anlaufstelle – Host-Cron (Backup + Hygiene). Alles Weitere macht der
@@ -626,13 +626,13 @@ Retention (03:00)" kippt oder wird zum Gleichstand; Host-TZ auf `Europe/Berlin`
 setzen oder die Host-Cron-Zeit entsprechend vorziehen.
 
 <details>
-<summary>Vollstaendige Host-Crontab — Alternative, wenn der `cron`-Sidecar nicht laeuft</summary>
+<summary>Vollständige Host-Crontab — Alternative ohne Webhook, wenn der `cron`-Sidecar nicht läuft</summary>
 
 Relevant nur, wenn im Compose-Stack der `cron`-Dienst bewusst nicht gestartet
 wird; laeuft er, fuehren diese Zeilen jeden Job doppelt aus. Die Zeilen setzen
 den Compose-Stack und den Dienst `maintenance` voraus. Wer ohne Compose
 orchestriert (z. B. k8s), uebertraegt dieselben Kommandos mit der Admin-Rolle
-in die eigene Umgebung.
+in die eigene Umgebung. Für Webhook-Installationen gilt stattdessen der Sidecar-Hinweis oben; die Scan-Zeile unten entfällt.
 **Grenze (Audit-Anker):** `backup.sh` liest den Anker ausschließlich per
 `docker compose exec -T cron cat`. Ist `cron` gestoppt oder die Ankerdatei
 fehlend, unlesbar oder leer, bricht das Backup mit Exit-Code 1 ab und
@@ -675,7 +675,7 @@ voraus. Das Beispiel gehoert ausschliesslich in `sudo crontab -e`.
 # Abgelaufene Django-Sitzungen bereinigen (taeglich 05:00)
 0 5 * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance clearsessions >> /var/log/anlaufstelle-clearsessions.log 2>&1
 
-# Breach-Detection-Scan (stuendlich zur 30. Minute, Refs #685)
+# Breach detection scan (hourly at minute 30, without webhook; Refs #685)
 30 * * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance detect_breaches >> /var/log/anlaufstelle-breach.log 2>&1
 
 # Materialized-View-Refresh (stuendlich zur 15. Minute, Details siehe Abschnitt 11)

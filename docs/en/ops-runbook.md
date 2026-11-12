@@ -592,7 +592,7 @@ Configure a logrotate rule for all `anlaufstelle-*.log` files under `/var/log`
 with regular rotation, compression, and bounded retention; after changes,
 check it with `sudo logrotate --debug /etc/logrotate.conf`.
 
-**Webhook installs:** With `BREACH_NOTIFICATION_WEBHOOK_URL` configured, replace the scan command in the host crontab below with `docker compose --env-file .env exec -T cron python manage.py detect_breaches`. This requires a running `cron` service with the additional Compose file from § 6.5b. In `maintenance` there is no egress: delivery attempts fail and the scan turns red. Run the scan under only one scheduler.
+**Webhook installs:** With `BREACH_NOTIFICATION_WEBHOOK_URL` configured, keep the scan in the `cron` sidecar with the additional Compose file from § 6.5b (it schedules the scan hourly via `deploy/crontab`) and omit the `detect_breaches` line from the host crontab. In `maintenance` there is no egress: delivery attempts fail and the scan turns red. Start an immediate scan with `docker compose --env-file .env exec -T cron python manage.py detect_breaches`.
 
 ```cron
 # Anlaufstelle – Host cron (backup + hygiene). Everything else is handled by the
@@ -620,13 +620,13 @@ retention (03:00)" ordering flips or degenerates into a tie. Set the host time
 zone to `Europe/Berlin` or move the host cron time earlier accordingly.
 
 <details>
-<summary>Complete host crontab — alternative if the `cron` sidecar does not run</summary>
+<summary>Complete host crontab — alternative without a webhook if the `cron` sidecar does not run</summary>
 
 Relevant only if the `cron` service of the Compose stack is deliberately not
 started; if it runs, these lines execute every job twice. The lines require the
 Compose stack and the `maintenance` service. Anyone orchestrating without Compose
 (e.g. k8s) transfers the same commands, with the admin role, to their own
-environment.
+environment. For webhook installs, use the sidecar guidance above instead; omit the scan line below.
 **Limit (audit anchor):** `backup.sh` reads the anchor only through
 `docker compose exec -T cron cat`. If `cron` is stopped or the anchor is
 missing, unreadable or empty, backup exits with code 1 and publishes no new
@@ -668,7 +668,7 @@ exclusively in `sudo crontab -e`.
 # Remove expired Django sessions (daily 05:00)
 0 5 * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance clearsessions >> /var/log/anlaufstelle-clearsessions.log 2>&1
 
-# Breach detection scan (hourly at minute 30, Refs #685)
+# Breach detection scan (hourly at minute 30, without webhook; Refs #685)
 30 * * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance detect_breaches >> /var/log/anlaufstelle-breach.log 2>&1
 
 # Materialized view refresh (hourly at minute 15, details see section 11)
@@ -3450,4 +3450,4 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.10 -->
 <!-- translation-date: 2026-11-12 -->
-<!-- source-hash: 2eb10e85542d0c656935e1f8886ac21f410dd4f2 -->
+<!-- source-hash: c248728c9d5d0f863513f1ef6f950ac6a45739aa -->
