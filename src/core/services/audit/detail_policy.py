@@ -27,7 +27,10 @@ class UnknownAuditDetailKeyError(ValueError):
 
 AUDIT_DETAIL_KEYS: dict[str, str] = {
     "run_id": "Random scan invocation UUID correlating webhook deliveries and the run marker (Refs #2719)",
-    "error_class": "Webhook delivery failure: exception class only, no message, URL or credentials (Refs #2719)",
+    "error_class": (
+        "Webhook failure exception class, including WebhookURLRejectedError; paired reason is a fixed code "
+        "(scheme/hostname/unresolvable/not_global/address/transport), never a message, URL or credentials (Refs #2719)"
+    ),
     "discarded_field_count": "Number of filled dynamic fields discarded by a confirmed type change; no values",
     "review_field": "Configured field key or fixed column name; never a text value",
     "reviewed_until": "Review expiry date in ISO format; no free text",
@@ -251,10 +254,10 @@ AUDIT_DETAIL_KEYS: dict[str, str] = {
     "artifact_released": "Kennzeichen, dass ein Artefakt das Haus verlassen hat (Refs #1770)",
     "system": "Kennzeichen eines nicht request-getriebenen Vorgangs (Refs #1369)",
     "reason": (
-        "Grund eines Sicherheitsverstosses/Legal Holds, Ausloeser eines "
-        "Credential-Widerrufs (Refs #1965: password_change/password_reset/invite_setup) "
-        "und Grund einer Kontingent-Ablehnung (Refs #2129: quota_exceeded) "
-        "— feste Slugs"
+        "Security violation/legal hold reason, credential revocation trigger "
+        "(Refs #1965: password_change/password_reset/invite_setup), quota rejection "
+        "(Refs #2129: quota_exceeded), or webhook failure "
+        "(Refs #2719: scheme/hostname/unresolvable/not_global/address/transport); fixed slugs"
     ),
     # -- Bewusst zugelassener Freitext ------------------------------------
     # Diese Schluessel tragen echten Freitext. Sie zu verbieten waere falsch —
