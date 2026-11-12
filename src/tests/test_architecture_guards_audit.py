@@ -278,6 +278,11 @@ class TestAuditDetailKeyInventory:
             "``target_event``/``target_client``/``target_case``, alle drei in "
             "AUDIT_DETAIL_KEYS deklariert (Refs #2040)",
         ),
+        "core/services/compliance/breach_detection.py": (
+            1,
+            "**error_details in webhook delivery metadata; _post_webhook writes only "
+            "error_class and reason, both declared in AUDIT_DETAIL_KEYS (Refs #2719)",
+        ),
         "core/services/config/conditions.py": (3, "**_condition_detail(...) der Feldbedingungen"),
         "core/services/events/crud.py": (1, "audit_detail-Variable mit optionalem source"),
         # ``log_attachment_violation`` bekommt sein ``**extra`` ueber die
