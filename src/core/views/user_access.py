@@ -128,7 +128,7 @@ class UserAccessUpdateView(FacilityAdminRequiredMixin, RequireSudoModeMixin, _No
     def post(self, request, pk):
         target = self._target(request, pk)
         # Read before validation: the form writes its cleaned values onto the instance.
-        stored_mfa_required = target.mfa_required
+        stored_access = {field: getattr(target, field) for field in ("mfa_required", "is_active", "role", "username")}
         form = UserAccessUpdateForm(
             request.POST,
             instance=target,
@@ -137,9 +137,10 @@ class UserAccessUpdateView(FacilityAdminRequiredMixin, RequireSudoModeMixin, _No
         )
         if not form.is_valid():
             return render(request, self.template_name, self._context(form, target))
-        # On the demo, requiring 2FA would send a shared account to a setup the
-        # demo refuses; the account stays locked until the hourly reset.
-        if refuse_demo_change(request, stored_mfa_required, form.cleaned_data["mfa_required"]):
+        # Keep shared demo accounts usable for other visitors, including our own account.
+        if any(
+            refuse_demo_change(request, stored, form.cleaned_data[field]) for field, stored in stored_access.items()
+        ):
             return redirect("core:user_access_update", pk=target.pk)
         try:
             updated = update_user_access(
