@@ -404,7 +404,7 @@ class TestNichtPostgresBackendsBleibenNoop:
     * ``core.services.system._db_admin.x_has_rls_bypass_context__mutmut_4``
       (Zeile 27: ``return True`` -> ``return False``) — mit ``False`` braeche auf
       einem Nicht-PostgreSQL-Backend **jeder** Wartungsbefehl
-      (``enforce_retention``, ``verify_audit_chain``, ``backfill_audit_chain``,
+      (``enforce_retention``, ``verify_audit_chain``,
       ``detect_breaches``, ``reencrypt_fields``, ``setup_facility``,
       ``load_package``, ...) sofort fail-loud ab.
     * ``core.services.system._db_admin.x_current_connection_owns__mutmut_4``

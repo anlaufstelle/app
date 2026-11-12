@@ -272,7 +272,7 @@ Repo **keine** `SECURITY DEFINER`-Funktion gibt und das Init-Skript der
 App-Rolle keine Ausführungsrechte auf Funktionen erteilt.
 
 Der legitime DSGVO-/Retention-Wartungspfad (`prune_auditlog`, `Client.anonymize()`,
-`backfill_audit_chain`, `reencrypt_fields`) umgeht die Trigger als Owner-Rolle
+`reencrypt_fields`) umgeht die Trigger als Owner-Rolle
 transaktional per `ALTER TABLE … DISABLE TRIGGER` + Re-`ENABLE ALWAYS` in **einem**
 `transaction.atomic()` — bei Prozessabbruch vor dem Commit rollt PostgreSQL das
 DDL (inkl. DISABLE) mit zurück, der Schutz bleibt aktiv

@@ -23,5 +23,5 @@ Person/case/episode/task standard fields are encrypted according to field config
 
 <!-- translation-source: docs/threat-model.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: fc7fd6560280eb6b8c9d7d73943807ea2e8458ec -->
-<!-- translation-date: 2026-10-26 -->
+<!-- source-hash: 5a1bace82faf4104176e205dad1ddd04f864c210 -->
+<!-- translation-date: 2026-11-12 -->

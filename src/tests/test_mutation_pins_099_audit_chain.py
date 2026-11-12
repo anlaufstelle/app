@@ -539,9 +539,9 @@ class TestVerifyChainUnhashedTailIsABreak:
         This pin used to assert ``ok`` for a chain whose newest row has no
         ``entry_hash`` -- exactly the gap through which a row inserted without a
         hash stayed undetected. ``__mutmut_20`` (the reset ``prev_entry = None``
-        in the skip branch) no longer exists: rows without a hash are only
-        skipped before the chain start, where ``prev_entry`` is ``None`` anyway.
-        The break carries the hash of the last verified row as its tail.
+        in the skip branch) no longer exists: no row without a hash is skipped
+        any more (Refs #2716). The break carries the hash of the last verified
+        row as its tail.
         """
         first = audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
         trailing = audit_event(AuditLog.Action.LOGOUT, user=staff_user, facility=facility)
@@ -557,50 +557,38 @@ class TestVerifyChainUnhashedTailIsABreak:
         assert result.last_entry_hash == first.entry_hash
 
 
-class TestVerifyChainLegacyRowDoesNotAbortTheScan:
+class TestVerifyChainUnhashedHeadIsABreak:
     def setup_method(self):
-        # Harte Assertion statt eines bedingten Auslassens (Pin-Dateien
-        # duerfen Tests nicht bedingt uebergehen): die Suite laeuft
-        # ausschliesslich auf PostgreSQL (AuditLog-Kette/Trigger/RLS sind
-        # Postgres-spezifisch) — ein anderer Vendor waere eine
-        # Fehlkonfiguration der Testumgebung und soll den Pin laut
-        # abbrechen statt ihn stumm zu deaktivieren.
-        assert connection.vendor == "postgresql", "AuditLog-Kette/Trigger/RLS erfordert PostgreSQL"
+        # Hard assertion instead of a conditional skip (pin files must not skip
+        # tests conditionally): the suite runs on PostgreSQL only.
+        assert connection.vendor == "postgresql", "AuditLog chain/trigger/RLS requires PostgreSQL"
 
-    def test_tampering_after_a_legacy_gap_is_still_detected(self, facility, staff_user):
-        """Killt ``__mutmut_21`` (KRITISCH): ``prev_entry = None; continue`` ->
-        ``prev_entry = None; break`` im Bestandszeilen-Zweig.
+    def test_unhashed_row_in_front_of_the_chain_is_the_first_break(self, facility, staff_user):
+        """An unhashed row before the first hashed row ends the scan as a break.
 
-        Original: eine unverkettete Bestandszeile wird uebersprungen, die
-        Pruefung setzt an der NAECHSTEN Zeile neu an ("Kette ab der naechsten
-        Zeile neu ansetzen", Docstring). Mutant: der komplette Scan bricht
-        SOFORT bei der ersten Bestandszeile ab — jede Manipulation an JEDER
-        Zeile DANACH bliebe unentdeckt. Aufbau: legacy (nachtraeglich entkettet)
-        -> restart (Kettenneustart, korrekt gebildet) -> victim (danach
-        In-Place manipuliert). Original erkennt die Manipulation an ``victim``;
-        der Mutant meldet faelschlich ``ok=True``, weil er nach ``legacy`` nie
-        mehr weiterliest.
+        Replaces the pin on ``__mutmut_21`` (``continue`` -> ``break`` in the
+        former skip branch for rows written before the chain existed): that
+        branch is gone (Refs #2716). The tampered row behind it does not hide
+        the break at the head, and the break names the unhashed row.
         """
-        legacy = audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
-        _tamper(legacy.pk, prev_hash="", entry_hash="")
-
-        restart = audit_event(AuditLog.Action.VIEW_QUALIFIED, user=staff_user, facility=facility)
+        head = audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
+        _tamper(head.pk, prev_hash="", entry_hash="")
+        audit_event(AuditLog.Action.VIEW_QUALIFIED, user=staff_user, facility=facility)
         victim = audit_event(
             AuditLog.Action.CLIENT_UPDATE,
             user=staff_user,
             facility=facility,
             detail={"changed_fields": ["notes"]},
         )
-        assert restart.pk  # nur zur Lesbarkeit der Aufbaureihenfolge
-
-        # Baseline: trotz Luecke intakt (kein echter Bruch vorhanden).
-        assert verify_chain(facility).ok
-
         _tamper(victim.pk, detail={"changed_fields": ["evil"]})
 
         result = verify_chain(facility)
+
         assert not result.ok
-        assert result.first_break_id == str(victim.pk)
+        assert result.first_break_id == str(head.pk)
+        assert result.reason == "unhashed row before chain start (inserted without hash)"
+        assert result.rows_checked == 0
+        assert result.last_entry_hash is None
 
 
 class TestVerifyChainHashMismatchBranch:

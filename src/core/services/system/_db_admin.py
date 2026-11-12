@@ -20,8 +20,8 @@ def has_rls_bypass_context() -> bool:
     auf Nicht-PostgreSQL (SQLite-Tests).
 
     Gemeinsame Quelle fuer ``enforce_retention`` (Refs #1016) sowie
-    ``verify_audit_chain`` / ``backfill_audit_chain`` (Refs #1070), damit die
-    Fail-Loud-Pruefung nicht dreifach driftet.
+    ``verify_audit_chain`` (Refs #1070), damit die Fail-Loud-Pruefung nicht
+    driftet.
     """
     if connection.vendor != "postgresql":
         return True
@@ -117,8 +117,8 @@ def bypass_replication_triggers(tables=None):
     ``pg_trigger.tgenabled`` gelesen und exakt wiederhergestellt.
 
     Aufrufer (alle laufen als Owner-/Admin-Wartungsrolle): ``prune_auditlog``,
-    ``Client.anonymize()`` (DSGVO Art. 17), ``backfill_audit_chain``
-    — alle drei ohne ``tables`` und damit unveraendert — sowie der
+    ``Client.anonymize()`` (DSGVO Art. 17) -- beide ohne ``tables`` und
+    damit unveraendert -- sowie der
     EventHistory-Sweep aus ADR-050 und die EventHistory-Rotation in
     ``reencrypt_fields``, die die Verengung auf ``core_eventhistory`` nutzen.
     Die Datenmigration 0174 nutzt dieselbe Verengung fuer ihren einmaligen

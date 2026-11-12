@@ -2284,7 +2284,7 @@ Refs #542,
 ### 9.5 Append-Only Trigger Bypass via Owner DDL (A1.4)
 
 GDPR Art. 17 anonymization (`Client.anonymize`), audit pruning
-(`prune_auditlog`), and `backfill_audit_chain`/`reencrypt_fields` need to briefly
+(`prune_auditlog`), and `reencrypt_fields` need to briefly
 bypass the append-only triggers (`auditlog_immutable`, `eventhistory_no_update`/`_no_delete`)
 for their legitimate writes. This does **not** go through
 `session_replication_role = replica` (`ENABLE ALWAYS` triggers still fire
@@ -2294,7 +2294,7 @@ and restores them via `ENABLE ALWAYS` — all inside **one**
 `transaction.atomic()` (SIGKILL-safe).
 
 Consequence for operations: The maintenance path needs **owner rights**. The
-management commands `enforce_retention`, `backfill_audit_chain`,
+management commands `enforce_retention`,
 `reencrypt_fields`, and `load_package` (M2, Refs
 #1058 — the RLS bypass guard
 otherwise aborts fail-loud) must therefore run as the **owner/admin role**
@@ -2410,8 +2410,8 @@ window:
 
 Operational rules that follow from this:
 
-- Run the bypass commands `enforce_retention` (retention job in the `cron` sidecar, § 3.2),
-  `backfill_audit_chain`, and `reencrypt_fields` during **maintenance/off-peak
+- Run the bypass commands `enforce_retention` (retention job in the `cron` sidecar, § 3.2)
+  and `reencrypt_fields` during **maintenance/off-peak
   hours** with low write load — not during peak time. This does not apply to the
   **interactive** Art. 17 action: it no longer takes any DDL lock in the web
   process (see above); its history redaction rides along with the nightly run.
@@ -3338,4 +3338,4 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.10 -->
 <!-- translation-date: 2026-11-12 -->
-<!-- source-hash: 342c8403221ab4820c42c883943555ad60a53e51 -->
+<!-- source-hash: 6e501e927affc0814ff317bd9e8459bdb0bc5143 -->

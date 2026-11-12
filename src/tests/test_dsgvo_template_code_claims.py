@@ -944,13 +944,8 @@ class TestAuditLoggingClaims:
     def test_premise_audit_pruning_deletes_through_the_application(self):
         _behaviour_test("test_retention_auditlog", "TestPruneAuditlog.test_prune_deletes_entries_older_than_cutoff")
 
-    def test_premise_chain_backfill_bypasses_the_trigger(self):
-        import inspect
-
-        from core.management.commands import backfill_audit_chain
-
-        _behaviour_test("test_audit_chain", "TestBackfill.test_backfill_recomputes_correct_hashes")
-        assert "bypass_replication_triggers()" in inspect.getsource(backfill_audit_chain)
+    def test_premise_no_chain_reseal_command_exists(self):
+        _behaviour_test("test_audit_chain", "TestNoChainResealCommand.test_reseal_command_is_unknown")
 
     def test_vvt_audit_log_names_every_trigger_bypass(self):
         bypass = [text for text in _vvt_texts("auditlog") if "umgeh" in text]
@@ -958,7 +953,9 @@ class TestAuditLoggingClaims:
         for text in bypass:
             assert "nur der Aufbewahrungslauf" not in text, text
             assert "Aufbewahrungslauf" in text, text
-            assert "Hash-Kette" in text, text
+            # Refs #2716: the resealing command is gone; the pruning run is the
+            # only path that bypasses the audit trigger.
+            assert "Hash-Kette" not in text, text
 
     def test_vvt_audit_log_entry_names_the_pruning_exception(self):
         for text in _vvt_texts("auditlog"):

@@ -29,7 +29,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         # Refs #1512: wie enforce_retention (Refs #1016 A1.1) und
-        # verify_audit_chain/backfill_audit_chain (Refs #1070) fail-loud, statt
+        # verify_audit_chain (Refs #1070) fail-loud, statt
         # RLS-blind 0 Facilities/Zeilen zu scannen und faelschlich "Keine neuen
         # Breach-Findings." zu melden. Der Compliance-Cron MUSS als Rolle mit
         # BYPASSRLS (Admin) laufen.

@@ -7,7 +7,7 @@ Deckt ab:
 - Tamper-Erkennung: direkte ``QuerySet.update()`` (Trigger via
   ``bypass_replication_triggers`` umgangen — modelliert den DB-/Owner-Vektor
   aus #1070) wird von ``verify_chain`` / ``verify_audit_chain`` gemeldet.
-- ``backfill_audit_chain`` berechnet korrekte Hashes fuer Bestandszeilen.
+- the removed chain resealing command stays unknown (Refs #2716).
 - ``prune_auditlog`` schreibt einen Checkpoint; ``verify_audit_chain`` bleibt
   danach gruen.
 """
@@ -316,44 +316,25 @@ class TestTamperDetection:
 
 
 # ---------------------------------------------------------------------------
-# Backfill
+# Removed resealing command
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.django_db
-class TestBackfill:
-    def setup_method(self):
-        if connection.vendor != "postgresql":
-            pytest.skip("Backfill nullt Hashes via Trigger-Bypass (PostgreSQL).")
+class TestNoChainResealCommand:
+    """Refs #2716: there is no command that recomputes and rewrites a chain.
 
-    def test_backfill_recomputes_correct_hashes(self, facility, second_facility, staff_user, second_facility_user):
-        rows = [
-            audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility),
-            audit_event(AuditLog.Action.VIEW_QUALIFIED, user=staff_user, facility=facility),
-            audit_event(AuditLog.Action.LOGIN, user=second_facility_user, facility=second_facility),
-            audit_event(AuditLog.Action.LOGOUT, user=staff_user, facility=facility),
-        ]
-        # Bestand simulieren: Hashes entfernen (wie vor der Migration).
-        with transaction.atomic(), bypass_replication_triggers():
-            AuditLog.objects.update(prev_hash="", entry_hash="")
+    The former resealing command restarted every chain with an empty predecessor and
+    resealed each row whose hashes differed. After a regular prune the oldest
+    survivor rightly points to a deleted row, so a run resealed the whole chain:
+    a tampered row got a valid seal and the external anchor no longer matched.
+    The database rejects new rows without a hash (migration 0184), so nothing is
+    left to seal.
+    """
 
-        call_command("backfill_audit_chain")
-
-        for r in rows:
-            r.refresh_from_db()
-            assert r.entry_hash, "Backfill hat keinen entry_hash gesetzt"
-            assert r.entry_hash == compute_entry_hash(r, r.prev_hash)
-        assert verify_chain(facility).ok
-        assert verify_chain(second_facility).ok
-
-    def test_backfill_is_idempotent(self, facility, staff_user):
-        audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
-        audit_event(AuditLog.Action.LOGOUT, user=staff_user, facility=facility)
-        before = {r.pk: r.entry_hash for r in AuditLog.objects.all()}
-        call_command("backfill_audit_chain")  # nichts zu tun
-        after = {r.pk: r.entry_hash for r in AuditLog.objects.all()}
-        assert before == after
-        assert verify_chain(facility).ok
+    def test_reseal_command_is_unknown(self):
+        with pytest.raises(CommandError, match="Unknown command"):
+            call_command("backfill_audit_chain")
 
 
 # ---------------------------------------------------------------------------
@@ -459,11 +440,10 @@ class TestTimestampNormalization:
 
 @pytest.mark.django_db
 class TestChainCommandRlsBypassGuard:
-    """Refs #1070: ``verify_audit_chain`` / ``backfill_audit_chain`` MUESSEN RLS
-    umgehen koennen — sonst liefern die Queries unter der NOBYPASSRLS-App-Rolle
-    0 Zeilen, ``verify`` meldet faelschlich „Alle Audit-Ketten intakt" und
-    ``backfill`` verkettet nichts. Ohne Bypass-Kontext: fail-loud (CommandError),
-    analog zu ``enforce_retention`` (Refs #1016 A1.1)."""
+    """Refs #1070: ``verify_audit_chain`` must be able to bypass RLS -- otherwise
+    the queries return 0 rows under the NOBYPASSRLS app role and the run wrongly
+    reports intact chains. Without a bypass context: fail loud (CommandError),
+    like ``enforce_retention`` (Refs #1016 A1.1)."""
 
     def test_verify_aborts_loud_without_bypass_context(self, monkeypatch, facility, staff_user):
         from core.management.commands import verify_audit_chain as cmd
@@ -472,14 +452,6 @@ class TestChainCommandRlsBypassGuard:
         monkeypatch.setattr(cmd, "_has_rls_bypass_context", lambda: False)
         with pytest.raises(CommandError, match="RLS"):
             call_command("verify_audit_chain")
-
-    def test_backfill_aborts_loud_without_bypass_context(self, monkeypatch, facility, staff_user):
-        from core.management.commands import backfill_audit_chain as cmd
-
-        audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
-        monkeypatch.setattr(cmd, "_has_rls_bypass_context", lambda: False)
-        with pytest.raises(CommandError, match="RLS"):
-            call_command("backfill_audit_chain")
 
 
 # ---------------------------------------------------------------------------

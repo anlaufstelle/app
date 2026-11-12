@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - **Kontakte-Liste: eine Filterzeile mit Chips und Sofort-Filter** (#2658) — Suche, Zeitraum-Schnellwahl und Filter-Knopf stehen in einer Zeile, aktive Filter als entfernbare Chips darunter; Änderungen wirken sofort, ohne JavaScript bleibt „Filtern“. Eine Schnellwahl überschreibt eigene Von/Bis-Daten nicht mehr still; neu: „Heute“, „Monat“, Erfassungsweg.
+- **Befehl `backfill_audit_chain` entfernt, Audit-Zeilen ohne Hash gelten als Bruch** (#2716) — Der Befehl konnte nach einer Bereinigung die ganze Audit-Kette neu versiegeln und so eine manipulierte Zeile beglaubigen; er entfällt ersatzlos, Betreiber rufen ihn nicht mehr auf. `verify_audit_chain` meldet jetzt auch eine Zeile ohne Hash vor dem Kettenanfang als Bruch.
 
 ### Changed
 

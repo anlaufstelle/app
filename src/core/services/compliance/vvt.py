@@ -303,10 +303,9 @@ PROCESSING_ACTIVITIES = [
             "Anonymisierung redigiert die Audit-Zeilen nicht."
         ),
         "toms": [
-            # Refs #2492: ``prune_auditlog`` deletes expired rows inside
-            # ``bypass_replication_triggers``; ``backfill_audit_chain`` uses the
-            # same bypass to rewrite ``prev_hash``/``entry_hash`` only. The
-            # promise names both paths.
+            # Refs #2492, #2716: ``prune_auditlog`` deletes expired rows inside
+            # ``bypass_replication_triggers``; it is the only path that opens
+            # the audit trigger since the chain resealing command was removed.
             _(
                 "Append-Only durch DB-Konvention und RLS-Policies; Ausnahme ist "
                 "das Löschen abgelaufener Einträge durch den Aufbewahrungslauf"
@@ -314,9 +313,8 @@ PROCESSING_ACTIVITIES = [
             _(
                 "Unveränderbarkeit per DB-Trigger erzwungen (UPDATE/DELETE "
                 "blockiert); der Aufbewahrungslauf umgeht den Trigger "
-                "transaktional, um abgelaufene Einträge zu löschen, die "
-                "Wartungsfunktion für die Hash-Kette, um nur deren Prüfwerte "
-                "neu zu setzen; fachliche Inhalte ändert keiner der beiden Wege"
+                "transaktional, um abgelaufene Einträge zu löschen; fachliche "
+                "Inhalte ändert er nicht"
             ),
             _("Zugriff nur für Anwendungsbetreuung und Systemadministration"),
             _("Cross-Facility-Auswertung bedingt eigenen SYSTEM_VIEW-Audit"),

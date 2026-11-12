@@ -97,7 +97,7 @@ class TestDetectBreachesCommand:
 class TestDetectBreachesCommandRlsBypassGuard:
     """Refs #1512: ``detect_breaches`` war das einzige Compliance-Command ohne
     ``has_rls_bypass_context()``-Guard (Schwestern ``enforce_retention`` Refs #1016,
-    ``verify_audit_chain``/``backfill_audit_chain`` Refs #1070). Ohne Bypass-Kontext
+    ``verify_audit_chain`` Refs #1070). Ohne Bypass-Kontext
     liefe der Cron RLS-blind auf 0 Zeilen und meldete faelschlich 'Keine neuen
     Breach-Findings.' — fail-loud statt dessen, analog zu den Schwester-Commands."""
 

@@ -330,11 +330,11 @@ def verify_chain(facility, *, hwm=None) -> ChainResult:
        *authentifizierten* Checkpoint protokollierte Prune-Grenze ist (siehe
        :func:`_checkpoint_boundaries`) — sonst wurde eine Zeile
        geloescht/eingeschoben.
-    3. **Completeness** -- a row without ``entry_hash`` is only accepted before
-       the first hashed row of the chain (written before the chain existed).
-       After the chain start it is a break of its own (Refs #2449): the
-       database refuses such an INSERT, so the row was slipped in past the
-       regular write path.
+    3. **Completeness** -- a row without ``entry_hash`` is a break wherever it
+       sits (Refs #2449, #2716): the database refuses such an INSERT
+       (migration 0184) and no command reseals rows any more, so the row was
+       slipped in past the regular write path. Before the first hashed row it
+       gets its own reason; skipping it there would let a backdated row pass.
 
     ``facility`` darf eine ``Facility``-Instanz, ein PK oder ``None`` (System-
     Kette) sein. Vergleich via :func:`hmac.compare_digest`.
@@ -363,18 +363,14 @@ def verify_chain(facility, *, hwm=None) -> ChainResult:
     checked = 0
     for row in rows:
         if not row.entry_hash:
-            if checked:
-                return ChainResult(
-                    False,
-                    checked,
-                    str(row.pk),
-                    "unhashed row after chain start (inserted without hash)",
-                    last_entry_hash=prev_entry,
-                )
-            # Row from before the chain existed (not yet sealed by
-            # ``backfill_audit_chain``) -- skip; the chain starts at the first
-            # hashed row with ``prev_hash=""``.
-            continue
+            where = "after" if checked else "before"
+            return ChainResult(
+                False,
+                checked,
+                str(row.pk),
+                f"unhashed row {where} chain start (inserted without hash)",
+                last_entry_hash=prev_entry,
+            )
         checked += 1
         expected = compute_entry_hash(row, row.prev_hash or "")
         if not hmac.compare_digest(expected, row.entry_hash):

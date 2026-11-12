@@ -20,8 +20,7 @@ Aenderungs-Checks in Triggern.
 Bewusst NICHT in ``core.services.system._db_admin._APPEND_ONLY_TRIGGERS`` /
 ``bypass_replication_triggers`` aufgenommen: die Slug-Immutabilitaet soll
 AUCH fuer Wartungs-/Import-Pfade gelten, die die Append-Only-Trigger
-umgehen (``prune_auditlog``, ``anonymize``, ``backfill_audit_chain``,
-``reencrypt_fields``) — neue Slugs entstehen dort ohnehin nur per INSERT,
+umgehen (``prune_auditlog``, ``anonymize``, ``reencrypt_fields``) — neue Slugs entstehen dort ohnehin nur per INSERT,
 nie per UPDATE.
 """
 

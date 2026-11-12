@@ -26,7 +26,7 @@ aushebeln, Audit-Zeilen ändern/löschen und den Trigger wieder aktivieren.
 `ENABLE ALWAYS` allein schließt das **nicht**: es adressiert nur den
 `session_replication_role = replica`-Vektor, nicht die Owner-DDL. Umgekehrt
 brechen die legitimen Wartungspfade (`prune_auditlog`, `Client.anonymize()`
-[DSGVO Art. 17], `backfill_audit_chain`, `reencrypt_fields`), wenn man den
+[DSGVO Art. 17], `reencrypt_fields`), wenn man den
 Trigger auf `ENABLE ALWAYS` setzt, ohne den Bypass-Mechanismus umzubauen — sie
 umgingen ihn bisher über `session_replication_role = replica`, was einen
 `ENABLE ALWAYS`-Trigger nicht mehr stilllegt.
@@ -79,8 +79,7 @@ umgingen ihn bisher über `session_replication_role = replica`, was einen
   [`ops-runbook.md` § 9.6](../ops-runbook.md)). Frische Cluster ziehen das
   Init-Script automatisch auf.
 - **−** Der Wartungs-Bypass erfordert Owner-Rechte; die entsprechenden
-  Management-Commands (`enforce_retention`, `backfill_audit_chain`,
-  `reencrypt_fields`) müssen als Admin-/Owner-Rolle laufen (Env-Override, wie
+  Management-Commands (`enforce_retention`, `reencrypt_fields`) müssen als Admin-/Owner-Rolle laufen (Env-Override, wie
   bisher der Retention-Cron).
 - **−** `SET CONSTRAINTS ALL IMMEDIATE` im Bypass stellt für den Rest der
   Transaktion Deferred-Constraints auf Immediate; für die betroffenen
@@ -98,7 +97,7 @@ umgingen ihn bisher über `session_replication_role = replica`, was einen
   umgekehrter Reihenfolge hält, kann PostgreSQL einen Deadlock erkennen und eine
   Seite abbrechen. **Konsequenz für den Betrieb** (Details
   [`ops-runbook.md` § 9.5](../ops-runbook.md)): Die Bypass-Commands
-  (`enforce_retention`/Retention-Cron, `backfill_audit_chain`, `reencrypt_fields`,
+  (`enforce_retention`/Retention-Cron, `reencrypt_fields`,
   `Client.anonymize()`) gehören in **Wartungs-/Nebenzeiten** mit wenig
   Schreiblast; ein `lock_timeout` (per Rollen-/Session-Default) begrenzt die
   Wartezeit eines blockierten `ALTER`.
@@ -143,6 +142,6 @@ umgingen ihn bisher über `session_replication_role = replica`, was einen
 
 Decision 3 und die Consequences beschreiben den Bypass als „immer alle drei Trigger“ und `Client.anonymize()` als Owner-Pfad. Beides hat [ADR-050](050-eventhistory-retention.md) (D5, M-6, M-8) fortgeschrieben. Der Ist-Stand in [`_db_admin.py`](../../src/core/services/system/_db_admin.py):
 
-- **Tabellenauswahl:** `bypass_replication_triggers(tables=None)` öffnet ohne Argument weiter alle drei Append-Only-Trigger. Mit `tables=("core_eventhistory",)` öffnet es nur die Trigger dieser Tabelle und nimmt auf `core_auditlog` keine DDL-Sperre. So arbeiten der EventHistory-Sweep, die Historien-Reparatur, die Schlüsselrotation der Historie und die Datenmigration 0174. Alle drei Trigger öffnen nur noch `prune_auditlog`, `Client.anonymize()` und `backfill_audit_chain`.
+- **Tabellenauswahl:** `bypass_replication_triggers(tables=None)` öffnet ohne Argument weiter alle drei Append-Only-Trigger. Mit `tables=("core_eventhistory",)` öffnet es nur die Trigger dieser Tabelle und nimmt auf `core_auditlog` keine DDL-Sperre. So arbeiten der EventHistory-Sweep, die Historien-Reparatur, die Schlüsselrotation der Historie und die Datenmigration 0174. Alle drei Trigger öffnen nur noch `prune_auditlog` und `Client.anonymize()`.
 - **Sperr-Reihenfolge:** `_APPEND_ONLY_TRIGGERS` steht in der Reihenfolge `core_eventhistory` vor `core_auditlog` und folgt damit der Schreibreihenfolge der Anwendung. Die frühere Reihenfolge (AuditLog zuerst) bildete mit einem gewöhnlichen Request einen ABBA-Zyklus, den PostgreSQL als Deadlock abbrach. Der Guard dazu ist `test_append_only_trigger_reihenfolge_ist_eventhistory_vor_auditlog`. Das in den Consequences beschriebene Lock-Upgrade-Risiko bei `Client.anonymize()` ist damit für diese Kollision geschlossen. Dass der Bypass die Tabellen bis zum Commit sperrt, bleibt; die Empfehlung für Wartungszeiten und `lock_timeout` gilt weiter.
 - **Anonymisierung im Webrequest:** Die Art.-17-Sofortaktion läuft im Webprozess unter der App-Rolle, die kein Owner ist. `_redact_event_history` in [`services/client/main.py`](../../src/core/services/client/main.py) prüft deshalb vorher `current_connection_owns("core_eventhistory")` (katalogbasiert über `pg_has_role`). Ohne Owner-Verbindung **überspringt** es die Redaktion der früheren Historien-Fassungen und protokolliert `eventhistory_redaction_deferred`. Pseudonym, Notizen, Zusatzfelder, Fall- und Live-Ereignisinhalte fallen im Request trotzdem, weil sie gewöhnliches DML sind. Die Historie holt der owner-seitige Lauf (`core.retention.eventhistory`) nach; er findet die Person über `Client.anonymized_at`. Regulär geschieht das beim nächsten Wartungslauf; eine Höchstdauer ist nicht garantiert. Der Lauf redigiert nur Ereignisse, die er sperren kann und die kein Legal Hold hält: `lock_and_partition_events` in [`retention/eventhistory.py`](../../src/core/retention/eventhistory.py) überspringt gesperrte Zeilen (`select_for_update(skip_locked=True)`) und stellt Ereignisse mit aktivem Ereignis-, Personen- oder Fall-Hold zurück (`_held_by_active_hold`); `_run_batch` kehrt dann ohne Redaktion zurück und meldet sie als `deferred`/`skipped`. Bis zur erfolgreichen Verarbeitung bleiben die früheren Klartext-Fassungen stehen. Das „bis zu einem Cron-Intervall“ aus ADR-050 M-8 ist der Regelfall ohne Sperre und Hold, keine Zusage. Die App-Rolle bekommt bewusst kein zusätzliches Recht; eine `SECURITY DEFINER`-Funktion wurde geprüft und verworfen.

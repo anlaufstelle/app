@@ -1,4 +1,4 @@
-"""Unhashed AuditLog rows after the chain start (Refs #2449, #1070).
+"""Unhashed AuditLog rows anywhere in a chain (Refs #2449, #2716, #1070).
 
 ``entry_hash``/``prev_hash`` are nullable so that rows written before the hash
 chain existed stay readable. That must not open a second write path: a role that
@@ -12,7 +12,9 @@ Covered here:
 - the database rejects an INSERT without a hash as the app role;
 - ``verify_chain`` reports an unhashed row after the first hashed row of the
   same chain (facility chain and system chain) with its own reason;
-- unhashed rows before the chain start stay accepted;
+- unhashed rows before the chain start are a break as well: the database has
+  rejected rows without a hash since migration 0184 and there is no resealing
+  command any more, so no legitimate source of such a row remains (Refs #2716);
 - the head lookup (``_latest_link`` / ``_system_chain_latest_link_raw``) only
   considers hashed rows.
 """
@@ -35,6 +37,7 @@ from tests.test_rls_functional import as_rls_role, rls_test_role  # noqa: F401
 pytestmark = pytest.mark.django_db
 
 UNHASHED_REASON = "unhashed row after chain start"
+UNHASHED_BEFORE_START_REASON = "unhashed row before chain start"
 
 
 def _require_postgres():
@@ -51,8 +54,8 @@ def _legit(facility, note):
 def _strip_hashes(pk):
     """Clear the hash fields of an existing row past the immutability trigger.
 
-    Models a row without a hash at a chosen position: a row from before the
-    chain existed, or one an owner-level attacker slipped in. The INSERT path
+    Models a row without a hash at a chosen position, as an owner-level
+    attacker would slip it in. The INSERT path
     itself is closed by the database (see ``TestAppRoleInsert``).
     """
     with transaction.atomic(), bypass_replication_triggers():
@@ -144,7 +147,7 @@ class TestAppRoleInsert:
 
 
 # ---------------------------------------------------------------------------
-# verify_chain: unhashed rows after the chain start are a break
+# verify_chain: every unhashed row is a break
 # ---------------------------------------------------------------------------
 
 
@@ -180,32 +183,40 @@ class TestVerifyChainUnhashedRows:
         assert result.reason.startswith(UNHASHED_REASON)
 
     @CHAINS
-    def test_unhashed_rows_before_the_chain_start_stay_accepted(self, request, chain):
-        fac = _chain_facility(request, chain)
-        # Only rows of this test may precede the chain start.
-        existing = AuditLog.objects.filter(facility=fac).values_list("pk", flat=True)
-        for pk in list(existing):
-            _strip_hashes(pk)
-        first_old = _legit(fac, "old-1")
-        second_old = _legit(fac, "old-2")
-        _strip_hashes(first_old.pk)
-        _strip_hashes(second_old.pk)
+    def test_unhashed_row_before_the_chain_start_is_reported(self, request, chain):
+        """A backdated row without a hash in front of the first hashed row.
 
+        Models an owner-level INSERT past the disabled insert trigger: the row
+        sorts before the chain start, where it used to be skipped silently.
+        """
+        fac = _chain_facility(request, chain)
         start = _legit(fac, "start")
         _legit(fac, "next")
+        backdated = _legit(fac, "backdated")
+        with transaction.atomic(), bypass_replication_triggers():
+            AuditLog.objects.filter(pk=backdated.pk).update(
+                prev_hash=None,
+                entry_hash=None,
+                timestamp=AuditLog.objects.filter(facility=fac).order_by("timestamp").first().timestamp
+                - timedelta(days=1),
+            )
 
-        assert start.prev_hash == ""
         result = verify_chain(fac)
-        assert result.ok, result
-        assert result.rows_checked == 2
 
-    def test_chain_of_only_unhashed_rows_is_ok_without_tail(self, facility):
+        assert start.entry_hash
+        assert not result.ok
+        assert result.first_break_id == str(backdated.pk)
+        assert result.rows_checked == 0
+        assert result.reason.startswith(UNHASHED_BEFORE_START_REASON)
+
+    def test_chain_of_only_unhashed_rows_is_a_break(self, facility):
         old = _legit(facility, "old")
         _strip_hashes(old.pk)
 
         result = verify_chain(facility)
 
-        assert result.ok
+        assert not result.ok
+        assert result.first_break_id == str(old.pk)
         assert result.rows_checked == 0
         assert result.last_entry_hash is None
 

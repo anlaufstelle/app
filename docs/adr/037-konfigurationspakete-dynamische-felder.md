@@ -44,7 +44,7 @@ Die Unveränderlichkeit ist **zweifach** verankert:
 - **Python:** `DocumentType.save()` weist eine Slug-Änderung an einer bestehenden Zeile mit `ValidationError` ab (gleiches Muster wie `system_type` und `entity_type`).
 - **Datenbank:** ein `BEFORE UPDATE`-Trigger mit `ENABLE ALWAYS` (Muster [`0116_slug_immutable_triggers`](../../src/core/migrations/0116_slug_immutable_triggers.py) für `FieldGroup`/`FieldTemplate`). Er schließt die ORM-Bypässe, die an `save()` vorbeigehen — `QuerySet.update()`, `bulk_update()`, Raw SQL, Admin-Bulk-Actions, künftige Migrationen — und gilt auch für die Replica-Rolle. `IS DISTINCT FROM` statt `!=`, damit ein UPDATE, das den Slug auf seinen bisherigen Wert setzt, durchgelassen wird.
 
-Bewusst **nicht** in `bypass_replication_triggers` aufgenommen: die Slug-Immutabilität soll auch für Wartungs-/Importpfade gelten, die die Append-Only-Trigger umgehen (`prune_auditlog`, `anonymize`, `backfill_audit_chain`, `reencrypt_fields`) — neue Slugs entstehen dort ohnehin nur per INSERT.
+Bewusst **nicht** in `bypass_replication_triggers` aufgenommen: die Slug-Immutabilität soll auch für Wartungs-/Importpfade gelten, die die Append-Only-Trigger umgehen (`prune_auditlog`, `anonymize`, `reencrypt_fields`) — neue Slugs entstehen dort ohnehin nur per INSERT.
 
 **Konsequenz für die Paketpflege:** der Slug ist der einzige Weg, einen Bestandstyp wiederzufinden. Ein geänderter Slug im Paket legt in **jeder** Bestands-Einrichtung einen Duplikat-Typ an, statt den vorhandenen zu aktualisieren. Slugs im Standardkatalog müssen deshalb exakt dem `0117`-Backfill entsprechen.
 

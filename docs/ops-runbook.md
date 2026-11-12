@@ -2303,7 +2303,7 @@ Refs #542,
 ### 9.5 Append-Only-Trigger-Bypass via Owner-DDL (A1.4)
 
 Die DSGVO-Art.-17-Anonymisierung (`Client.anonymize`), das Audit-Pruning
-(`prune_auditlog`) sowie `backfill_audit_chain`/`reencrypt_fields` müssen die
+(`prune_auditlog`) sowie `reencrypt_fields` müssen die
 Append-Only-Trigger (`auditlog_immutable`, `eventhistory_no_update`/`_no_delete`)
 für ihre legitimen Schreibzugriffe kurz umgehen. Das läuft (Refs
 #1026) **nicht**
@@ -2314,7 +2314,7 @@ und stellt sie per `ENABLE ALWAYS` wieder her — alles in **einem**
 `transaction.atomic()` (SIGKILL-sicher).
 
 Konsequenz für den Betrieb: Der Wartungspfad braucht **Owner-Rechte**. Die
-Management-Commands `enforce_retention`, `backfill_audit_chain`,
+Management-Commands `enforce_retention`,
 `reencrypt_fields` und `load_package` (M2, Refs
 #1058 — RLS-Bypass-Guard
 bricht sonst fail-loud ab) müssen daher als **Owner-/Admin-Rolle**
@@ -2435,8 +2435,8 @@ Wartungsfenster:
 
 Betriebsregeln daraus:
 
-- Die Bypass-Commands `enforce_retention` (Retention-Job im `cron`-Sidecar, § 3.2),
-  `backfill_audit_chain` und `reencrypt_fields` in **Wartungs-/Nebenzeiten** mit
+- Die Bypass-Commands `enforce_retention` (Retention-Job im `cron`-Sidecar, § 3.2)
+  und `reencrypt_fields` in **Wartungs-/Nebenzeiten** mit
   geringer Schreiblast fahren — nicht zur Stoßzeit. Für die **interaktive**
   Art.-17-Aktion gilt das nicht: sie nimmt im Webprozess gar keine DDL-Sperre
   mehr (s. o.), ihre Historien-Redaktion läuft im nächtlichen Lauf mit.
