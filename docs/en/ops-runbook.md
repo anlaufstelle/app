@@ -1657,11 +1657,15 @@ Do not let a new first run replace an existing anchor; retain the original.
 This is an operator step, not a database migration.
 
 **`seed --flush` resets the anchor** (#2708):
-The flush is only allowed outside production. It empties the AuditLog and
-replaces the anchor file at `DJANGO_AUDIT_HWM_PATH` with a signed empty state
-in the same transaction; if the file cannot be written, the flush aborts and
-the database stays unchanged. Without a flush, an anchor for a missing facility
-remains a reason for `verify_audit_chain` to abort.
+The flush is only allowed outside production. It empties the AuditLog and,
+as the last step of the flush transaction, replaces the anchor file at
+`DJANGO_AUDIT_HWM_PATH` with a signed empty state. The file itself is not part
+of the transaction: if it cannot be written, the flush aborts and the database
+stays unchanged; if the commit fails afterwards, the flush puts the previous
+anchor file back. Only a hard crash between the file replacement and the
+commit leaves an empty anchor file behind the full data; the next check run
+then anchors the chains like a first run. Without a flush, an anchor for a
+missing facility remains a reason for `verify_audit_chain` to abort.
 
 **Trust boundary:** The read-only mount prevents the web process from writing
 this volume. It does not protect against host/Docker access or the
@@ -3345,4 +3349,4 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.10 -->
 <!-- translation-date: 2026-11-12 -->
-<!-- source-hash: 266fd6fd29dc3d0c203e9901b2678cb15266f7db -->
+<!-- source-hash: 672060e8efd620cc226ccb7ce530386c31f04615 -->

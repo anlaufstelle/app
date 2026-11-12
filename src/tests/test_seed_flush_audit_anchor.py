@@ -24,7 +24,7 @@ import io
 import pytest
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.db import connection, transaction
+from django.db import DatabaseError, connection, transaction
 
 from core.models import AuditLog, Facility, Organization
 from core.seed.flush import flush_seed_data
@@ -106,6 +106,27 @@ class TestFlushResetsTheAnchor:
             flush_seed_data()
 
         assert Facility.objects.filter(pk=facility.pk).exists()
+
+    def test_failed_commit_puts_the_previous_anchor_back(self, settings, tmp_path, facility, monkeypatch):
+        settings.AUDIT_HWM_PATH = str(tmp_path / "audit_hwm.json")
+        audit_event(AuditLog.Action.LOGIN, user=None, facility=facility)
+        ok, out = _verify()
+        assert ok, out
+        anchor_before = (tmp_path / "audit_hwm.json").read_bytes()
+
+        def failing_commit():
+            raise DatabaseError("commit failed")
+
+        # The file is replaced before the commit; the commit then fails.
+        monkeypatch.setattr(connection, "commit", failing_commit)
+        with pytest.raises(DatabaseError):
+            flush_seed_data()
+        monkeypatch.undo()
+
+        assert Facility.objects.filter(pk=facility.pk).exists()
+        assert (tmp_path / "audit_hwm.json").read_bytes() == anchor_before
+        ok, out = _verify()
+        assert ok, out
 
     def test_flush_without_anchor_path_creates_no_file(self, settings, tmp_path):
         settings.AUDIT_HWM_PATH = ""

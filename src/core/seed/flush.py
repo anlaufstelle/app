@@ -1,5 +1,9 @@
 """Flush helper: deletes all seed-able data."""
 
+import contextlib
+import os
+import tempfile
+
 from django.conf import settings
 from django.db import connection, transaction
 
@@ -35,7 +39,33 @@ from core.services.audit.hwm import HighWaterMarkStore
 from core.services.dynamic_protection import lock_dynamic_protection_many
 
 
-def _reset_audit_anchor() -> None:
+def _read_anchor(path: str) -> bytes | None:
+    try:
+        with open(path, "rb") as handle:
+            return handle.read()
+    except FileNotFoundError:
+        return None
+
+
+def _restore_anchor(path: str, previous: bytes | None) -> None:
+    if previous is None:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(path)
+        return
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path) or ".", prefix=".audit_hwm-restore-")
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(previous)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(tmp)
+        raise
+
+
+class _AuditAnchorReset:
     """Replace the external audit anchor with a signed, empty store (Refs #2708).
 
     The flush empties the AuditLog and deletes every facility, but the anchor
@@ -43,10 +73,29 @@ def _reset_audit_anchor() -> None:
     to chains that were removed on purpose; ``verify_audit_chain`` would then
     abort on every following run (orphaned chain, Refs #2296). Only this path
     resets the anchor -- outside the flush the orphan check stays strict.
+
+    The file is not part of the database transaction. Entered before
+    ``transaction.atomic()``, this guard leaves its block only after the
+    commit: if the transaction fails once the file has been replaced, the
+    previous file is put back, so a failed commit never leaves the full audit
+    log behind an empty anchor.
     """
-    path = getattr(settings, "AUDIT_HWM_PATH", "") or ""
-    if path:
-        HighWaterMarkStore(path=path, chains={}).save()
+
+    def __enter__(self):
+        self.path = getattr(settings, "AUDIT_HWM_PATH", "") or ""
+        self.previous = _read_anchor(self.path) if self.path else None
+        self.replaced = False
+        return self
+
+    def reset(self) -> None:
+        if self.path:
+            HighWaterMarkStore(path=self.path, chains={}).save()
+            self.replaced = True
+
+    def __exit__(self, exc_type, exc, tb):
+        if exc_type is not None and self.replaced:
+            _restore_anchor(self.path, self.previous)
+        return False
 
 
 def flush_seed_data() -> None:
@@ -59,11 +108,16 @@ def flush_seed_data() -> None:
     fehl (z.B. ``ALTER TABLE`` mangels Rechten), bleiben die früheren Deletes
     nicht committed zurück. Refs #1040 (S1).
 
-    The external audit anchor is reset as the last step inside the same
-    transaction (Refs #2708): if it cannot be written, the whole flush rolls
-    back instead of leaving an empty AuditLog behind a stale anchor.
+    The external audit anchor is replaced as the last step inside the flush
+    transaction (Refs #2708); the file itself is written before the commit and
+    is not rolled back with it. If it cannot be written, the whole flush rolls
+    back instead of leaving an empty AuditLog behind a stale anchor; if the
+    commit fails afterwards, the previous file is put back. Only a hard crash
+    between the file replacement and the commit leaves an empty anchor behind
+    the full audit log; the next chain check then anchors it like a first run.
+    The seed command runs this flush as its outermost transaction.
     """
-    with transaction.atomic():
+    with _AuditAnchorReset() as anchor, transaction.atomic():
         lock_dynamic_protection_many(Facility.objects.values_list("pk", flat=True), exclusive=True)
         Attachment.objects.all().delete()
         Activity.objects.all().delete()
@@ -131,4 +185,4 @@ def flush_seed_data() -> None:
         User.objects.all().delete()
         Facility.objects.all().delete()
         Organization.objects.all().delete()
-        _reset_audit_anchor()
+        anchor.reset()
