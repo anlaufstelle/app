@@ -179,7 +179,8 @@ def test_demo_audit_service_uses_demo_admin_stack() -> None:
     assert "Requires=docker.service\n" in service
     assert "WorkingDirectory=/opt/anlaufstelle\n" in service
     expected = f"/usr/bin/{compose.group(1)} run --rm -T maintenance {command.split()[-1]}"
-    assert f"ExecStart={expected}\n" in service
+    lock = "/usr/bin/flock --wait 300 /run/lock/anlaufstelle-demo-maintenance.lock"
+    assert f"ExecStart={lock} {expected}\n" in service
 
 
 def test_demo_audit_timer_matches_shared_schedule() -> None:

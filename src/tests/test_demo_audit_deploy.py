@@ -1,7 +1,10 @@
 """Execute the demo audit installation with isolated command doubles."""
 
+import fcntl
 import json
 import os
+import re
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -30,8 +33,11 @@ case "$1" in
 esac
 """,
         "systemctl": """#!/usr/bin/env python3
+import fcntl
 import json
 import os
+import re
+import shlex
 import sys
 from pathlib import Path
 root = Path(os.environ["STUB_ROOT"])
@@ -175,3 +181,42 @@ def test_repeated_installation_overwrites_same_units_and_runs_again(audit_deploy
     assert calls.count("daemon-reload") == 2
     assert calls.count("enable --now anlaufstelle-audit-verify.timer") == 2
     assert calls.count("start anlaufstelle-audit-verify.service") == 2
+
+
+@pytest.mark.parametrize("blocked_service", ["audit", "reseed"])
+def test_reseed_and_audit_share_a_bounded_exclusive_lock(audit_deploy, tmp_path: Path, blocked_service: str) -> None:
+    result = audit_deploy()
+    assert result.returncode == 0, result.stderr
+    audit = (tmp_path / "anlaufstelle-audit-verify.service").read_text(encoding="utf-8")
+    assert "After=anlaufstelle-demo-reseed.service\n" in audit
+    deploy = Path("dev-ops/deploy/deploy-demo.sh").read_text(encoding="utf-8")
+    match = re.search(r"anlaufstelle-demo-reseed\.service >[^\n]*<<'UNIT'\n(.*?)^UNIT$", deploy, re.M | re.S)
+    assert match
+    units = {"audit": audit, "reseed": match.group(1)}
+    commands = {
+        name: shlex.split(
+            next(line.removeprefix("ExecStart=") for line in unit.splitlines() if line.startswith("ExecStart="))
+        )
+        for name, unit in units.items()
+    }
+    lock = "/run/lock/anlaufstelle-demo-maintenance.lock"
+    for command in commands.values():
+        assert command[:4] == ["/usr/bin/flock", "--wait", "300", lock]
+    marker = tmp_path / "executed"
+    payload = tmp_path / "payload.sh"
+    payload.write_text('#!/bin/sh\nprintf executed > "$MARKER_PATH"\n', encoding="utf-8")
+    payload.chmod(0o755)
+    command = commands[blocked_service][:4] + [str(payload)]
+    command[3] = str(tmp_path / "maintenance.lock")
+    with Path(command[3]).open("w") as held_lock:
+        fcntl.flock(held_lock, fcntl.LOCK_EX)
+        with subprocess.Popen(command, env={**os.environ, "MARKER_PATH": str(marker)}) as process:
+            try:
+                with pytest.raises(subprocess.TimeoutExpired):
+                    process.wait(timeout=0.2)
+                assert not marker.exists()
+            finally:
+                fcntl.flock(held_lock, fcntl.LOCK_UN)
+                process.wait(timeout=5)
+            assert process.returncode == 0
+    assert marker.read_text(encoding="utf-8") == "executed"
