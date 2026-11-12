@@ -6,6 +6,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token }}">
     <title>{% trans "Einrichtung archiviert" %} — Anlaufstelle</title>
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     {% include "components/_document_head.html" %}
@@ -13,10 +14,12 @@
 {# Refs #2067: standalone, ohne base.html — die Navigation dort liest #}
 {# Facility-gescopte Zaehler, die dieser Request per Definition nicht mehr #}
 {# sehen darf. #}
-<body class="min-h-screen bg-canvas flex items-center justify-center p-6">
+<body class="min-h-screen bg-canvas flex items-center justify-center p-6 pt-14"
+      {% include "partials/_quick_exit_body_attrs.html" %}>
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-accent focus:text-white focus:px-4 focus:py-2 focus:rounded-md">
         {% trans "Zum Inhalt springen" %}
     </a>
+    {% include "partials/_quick_exit_standalone.html" %}
     {# Refs #2067: ``data-facility-archived-purge`` startet das Purge-Modul. Der Marker #}
     {# sitzt im Markup, weil die CSP kein Inline-Script erlaubt. #}
     <main id="main-content" class="w-full max-w-[420px] bg-surface border border-subtle rounded-[10px] p-7"

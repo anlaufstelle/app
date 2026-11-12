@@ -847,7 +847,7 @@ class TestPrecachedShellBumpGuard:
     # this hash moves.
     # The included sign-in notice (_offline_auth_pending.html) now reports read
     # errors visibly; v67 is still unreleased, so only this hash moves.
-    _PINNED_SHELL_HASH = "92bc98a20acd5c5bee1e8ab64c5e4e61bbbc74548be592be66a57fa003fee934"
+    _PINNED_SHELL_HASH = "2dbd3e3f7e53f2b56e652549b5e0f4f915c70eab9692a05c0e2664e54ea61386"
     # Refs #1904: SHA-256 over the Content-Security-Policy headers the server
     # delivers with the precached offline home (see _policy_fingerprint). Every
     # precached shell and every runtime entry keeps the policy it was stored
@@ -855,7 +855,7 @@ class TestPrecachedShellBumpGuard:
     # CACHE_NAME. Pinned together with _PINNED_CACHE_NAME above.
     # The 503 page's inline style hash changed (link contrast); v67 is still
     # unreleased, so the fingerprint moves without a further bump.
-    _PINNED_POLICY_FINGERPRINT = "3fc42879106ecca42c59ba5b019c6ca845ef4234fbead3e7219a70152a18180a"
+    _PINNED_POLICY_FINGERPRINT = "6bf00e5a543d3b6098559ea2c31627680362cbc0af05b4df70009931b0b1c721"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:

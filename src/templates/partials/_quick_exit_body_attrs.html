@@ -1,0 +1,7 @@
+{# Refs #2660: body attributes of quick-exit.js for the standalone pages (no layout). #}
+{# Same values as the body of base.html. The sign-out address is always set; the #}
+{# target address and the privacy-screen switch only when the request knows its #}
+{# facility. Without them quick-exit.js reads its localStorage mirror instead of #}
+{# overwriting it with the default. #}
+{# NOTE: the output must stay on one line, it is spliced into the <body> tag. #}
+data-quick-exit-logout-url="{% url 'logout' %}"{% if request.current_facility %} data-quick-exit-url="{{ request.current_facility.settings.quick_exit_url }}" data-privacy-screen="{% if request.current_facility.settings.privacy_screen_on_blur %}1{% else %}0{% endif %}"{% endif %}

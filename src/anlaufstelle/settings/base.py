@@ -724,7 +724,7 @@ CONTENT_SECURITY_POLICY = {
             # src/templates/503.html
             "'sha256-aDkX2sDZwL0vhvAosNgwcDeJ2ZIZ5IofLqH3S7k5a90='",
             # src/templates/offline.html
-            "'sha256-kOi6gKgacK2jTjatd+U3zPCXFGrY3ICV4HgFmyjCabw='",
+            "'sha256-UibugDEnfgEPWIqkHBUQWDQsj8c417p7zXo/nj0JRHI='",
         ],
         "img-src": ["'self'", "data:"],
         "font-src": ["'self'"],

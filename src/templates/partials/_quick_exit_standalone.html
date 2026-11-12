@@ -1,0 +1,42 @@
+{% load i18n static %}
+{% comment %}Refs #2660: the quick-exit button for standalone pages (no layout).
+
+Included right after the skip link, so the button is the first focusable element
+of the page (WCAG 2.1.1), exactly as in base.html. The button markup is the same
+as there; the bar is ``fixed`` instead of ``sticky`` because these pages lay
+their card out in a flex body, where a sticky wrapper would become a flex item.
+The page keeps its content below the button with ``pt-14`` on the body. The
+privacy screen and the script belong to the button: without the overlay an armed
+privacy screen would leave a hidden page without a way back.
+
+Parameter ``csrf_script_loaded``: the page loads csrf.js itself. The sign-out on
+exit posts the CSRF token read from ``<meta name="csrf-token">``.
+{% endcomment %}
+<div class="fixed inset-x-0 top-0 z-40 h-0">
+    <div id="quick-exit-bar" class="flex h-0 items-start justify-end px-4 md:px-8">
+        <button type="button" id="quick-exit-button" data-testid="quick-exit-button"
+                aria-keyshortcuts="Control+Shift+X Shift+Escape"
+                aria-label="{% trans 'Schnell verlassen' %}"
+                title="{% trans 'Verdeckt den Inhalt sofort, beendet die Sitzung und öffnet eine neutrale Seite. Ungespeicherte Eingaben gehen dabei verloren. Tastenkürzel: Strg+Umschalt+X oder Umschalt+Esc.' %}"
+                class="mt-1 inline-flex items-center justify-center gap-1.5 min-h-[44px] min-w-[44px] px-3 rounded-md border border-red-200 bg-red-50 text-[13px] font-semibold text-red-700 hover:bg-red-100">
+            <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9"/></svg>
+            <span class="md:hidden">{% trans "Verlassen" %}</span>
+            <span class="hidden md:inline">{% trans "Schnell verlassen" %}</span>
+        </button>
+    </div>
+</div>
+<div id="privacy-screen" data-testid="privacy-screen" hidden
+     role="dialog" aria-modal="true" aria-labelledby="privacy-screen-title"
+     class="fixed inset-0 z-[70] bg-canvas">
+    <div id="privacy-screen-panel" class="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
+        <p id="privacy-screen-title" class="text-base font-semibold text-ink">
+            {% trans "Anlaufstelle — Zum Fortfahren klicken oder Taste drücken" %}
+        </p>
+        <button type="button" id="privacy-screen-resume" data-testid="privacy-screen-resume"
+                class="btn-primary inline-flex items-center justify-center min-h-[44px] px-5">
+            {% trans "Fortfahren" %}
+        </button>
+    </div>
+</div>
+{% if not csrf_script_loaded %}<script src="{% static 'js/csrf.js' %}" defer></script>{% endif %}
+<script src="{% static 'js/quick-exit.js' %}" defer></script>

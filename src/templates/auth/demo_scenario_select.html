@@ -24,7 +24,8 @@
 {# ist der Einstieg VOR der ersten Anmeldung, aber auch der Wechsel-Zielort   #}
 {# fuer bereits angemeldete Demo-Konten; beides bleibt ohne die facility-     #}
 {# gescopte Navigation lesbar). #}
-<body class="min-h-screen p-6" data-testid="demo-scenario-select"
+<body class="min-h-screen p-6{% if user.is_authenticated %} pt-14{% endif %}" data-testid="demo-scenario-select"
+      {% if user.is_authenticated %}{% include "partials/_quick_exit_body_attrs.html" %}{% endif %}
       data-i18n-demo-switch-confirm="{% trans '{count} Änderungen sind noch nicht übertragen und gehen beim Wechsel verloren. Trotzdem wechseln?' %}"
       {# Refs #2060: Diese Seite laedt offline-db.js — ohne das Attribut faellt der #}
       {# Versionskonflikt-Hinweis auf den deutschen Rueckfall zurueck. #}
@@ -32,6 +33,7 @@
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-accent focus:text-white focus:px-4 focus:py-2 focus:rounded-md">
         {% trans "Zum Inhalt springen" %}
     </a>
+    {% if user.is_authenticated %}{% include "partials/_quick_exit_standalone.html" %}{% endif %}
     <main id="main-content" class="w-full max-w-[880px] mx-auto">
         {% include "components/_public_language_switcher.html" %}
         <div class="text-center mb-8">

@@ -48,7 +48,8 @@
         min-height: 100dvh;
         display: grid;
         place-items: start center;
-        padding: 2rem 1rem;
+        /* 3.5rem on top: the quick-exit button reaches down to 48 px (Refs #2660). */
+        padding: 3.5rem 1rem 2rem;
     }
     .skip-link {
         position: absolute;
@@ -146,6 +147,70 @@
         background: var(--surface);
     }
     a.btn.primary { background: var(--accent); border-color: var(--accent); color: white; }
+    /* Refs #2660: quick-exit button and privacy screen of the session-less fallback. The
+       bar is fixed and 0 px high, so the page never lays out around it; the page's own
+       padding keeps its content below the button. Label: short below 48rem, full above. */
+    .quick-exit-bar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 0;
+        display: flex;
+        justify-content: flex-end;
+        align-items: flex-start;
+        padding: 0 1rem;
+    }
+    .quick-exit-button {
+        margin-top: .25rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: .375rem;
+        min-height: 44px;
+        min-width: 44px;
+        padding: 0 .75rem;
+        border: 1px solid #fecaca;
+        border-radius: .375rem;
+        background: #fef2f2;
+        color: #b91c1c;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .quick-exit-button:hover { background: #fee2e2; }
+    .quick-exit-button svg { width: 1rem; height: 1rem; }
+    .quick-exit-button .qe-full { display: none; }
+    @media (min-width: 48rem) {
+        .quick-exit-bar { padding: 0 2rem; }
+        .quick-exit-button .qe-short { display: none; }
+        .quick-exit-button .qe-full { display: inline; }
+    }
+    #privacy-screen { position: fixed; inset: 0; z-index: 70; background: var(--canvas); }
+    #privacy-screen[hidden] { display: none; }
+    #privacy-screen-panel {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1rem;
+        padding: 0 1.5rem;
+        text-align: center;
+    }
+    #privacy-screen-panel[hidden] { display: none; }
+    #privacy-screen-title { margin: 0; font-weight: 600; color: var(--ink); }
+    #privacy-screen-resume {
+        min-height: 44px;
+        padding: 0 1.25rem;
+        border: 1px solid var(--accent);
+        border-radius: 8px;
+        background: var(--accent);
+        color: white;
+        font: inherit;
+        cursor: pointer;
+    }
     .hint {
         margin-top: 1.5rem;
         padding-top: 1rem;
@@ -159,6 +224,27 @@
       data-i18n-db-update-dismiss="{% trans 'Schließen' %}">
     {% include "components/_offline_security_status.html" %}
     <a href="#main-content" class="skip-link">{% trans "Zum Inhalt springen" %}</a>
+    {# Refs #2660: same button and privacy screen as the layouts, spelled with inline CSS. The #}
+    {# page is rendered without a session (precached like the offline shells), so it carries #}
+    {# no sign-out address: quick-exit.js reads the target from its localStorage mirror. #}
+    <div class="quick-exit-bar">
+        <button type="button" id="quick-exit-button" data-testid="quick-exit-button"
+                aria-keyshortcuts="Control+Shift+X Shift+Escape"
+                aria-label="{% trans 'Schnell verlassen' %}"
+                title="{% trans 'Verdeckt den Inhalt sofort, beendet die Sitzung und öffnet eine neutrale Seite. Ungespeicherte Eingaben gehen dabei verloren. Tastenkürzel: Strg+Umschalt+X oder Umschalt+Esc.' %}"
+                class="quick-exit-button">
+            <svg aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9"/></svg>
+            <span class="qe-short">{% trans "Verlassen" %}</span>
+            <span class="qe-full">{% trans "Schnell verlassen" %}</span>
+        </button>
+    </div>
+    <div id="privacy-screen" data-testid="privacy-screen" hidden
+         role="dialog" aria-modal="true" aria-labelledby="privacy-screen-title">
+        <div id="privacy-screen-panel">
+            <p id="privacy-screen-title">{% trans "Anlaufstelle — Zum Fortfahren klicken oder Taste drücken" %}</p>
+            <button type="button" id="privacy-screen-resume" data-testid="privacy-screen-resume">{% trans "Fortfahren" %}</button>
+        </div>
+    </div>
     <!-- Refs #1494 (#1544, #1499): Rueckbau der /offline/-Sonderseite
          auf einen reinen, STATISCHEN Fallback. Seit dem SW-Flip (CACHE v22)
          rendern /clients/, /workitems/ und / offline IN-PLACE ihre eigenen
@@ -223,5 +309,6 @@
     <script src="{% static 'js/offline-revocations.min.js' %}"></script>
     <script src="{% static 'js/offline-store.min.js' %}"></script>
     <script src="{% static 'js/offline-home.js' %}"></script>
+    <script src="{% static 'js/quick-exit.js' %}" defer></script>
 </body>
 </html>
