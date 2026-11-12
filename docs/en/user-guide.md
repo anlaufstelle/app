@@ -205,7 +205,7 @@ Each type appears as a **tile** with a large counter, an action mark (`+1` or `+
 - **Undo:** After a tally, a fixed bar with **Undo** and the remaining time appears for 60 seconds, below the tally on desktop and above the bottom navigation on a phone. It always refers to the tally you counted last; it disappears when the time is up.
 - A type appears only when it is enabled for the tally and your role may see it as well as every required field. Types with other required field types do not appear in the tally.
 
-**Counted contacts in the feed.** Tally entries appear as one expandable row per hour, for example “18–19 · 15 counted · anonymous · 12 Contact · 3 Needle exchange · Team”. Even a single tally forms a group. Enter or Space on the row opens the counts by type; **Show counted contacts** opens the day's contact list filtered to tally entries. “+1” and “Undo” update the group on the next feed refresh, including in other open Timeline tabs. The group count includes all visible tally entries in the selected time window, including types that have since been disabled, so it may differ from the sum of the available tiles. Anonymous contacts created through the documentation form remain individual rows. Grouping also applies with the contacts or document-type filter; offline, local tallies remain individual entries.
+**Counted contacts in the feed.** Tally entries appear as one expandable row per hour, for example “18–19 · 15 counted · anonymous · 12 Contact · 3 Needle exchange · Team”. Even a single tally forms a group. Enter or Space on the row opens the counts by type; **Show counted contacts** opens the day's contact list filtered to tally entries. “+1” and “Undo” update the group on the next feed refresh, including in other open Timeline tabs. The group count includes visible tally entries in the selected time window; with an active document-type filter, only entries of that type are included. Entries of types that have since been disabled also count, so the group count may differ from the sum of the available tiles. Anonymous contacts created through the documentation form remain individual rows. Grouping also applies with the contacts or document-type filter; offline, local tallies remain individual entries.
 
 Entries share one list with aligned time, type and person columns; on a phone each entry occupies two rows. An additional kind badge identifies activities, tasks and entry bans; contacts show their document type without a “Contact” badge.
 
@@ -1207,5 +1207,5 @@ Phone, email, date and address patterns are detected heuristically and locally o
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: 5c52503e7b35d5b313c0617e5174a3796dfe5d5f -->
+<!-- source-hash: 17ddc1e1527280cc4875f4ed8e29a925274a4805 -->
 <!-- translation-date: 2026-11-12 -->
