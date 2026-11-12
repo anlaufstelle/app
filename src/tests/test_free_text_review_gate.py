@@ -128,7 +128,7 @@ def test_lower_roles_without_own_request_see_no_privacy_hub(request, client, rol
     assert not nav.section_is_visible(nav.DATENSCHUTZ, user)
     client.force_login(user)
     response = client.get(reverse("core:datenschutz_uebersicht"))
-    assert response.status_code in (302, 403)
+    assert response.status_code == 403
     assert b"/free-text-review/" not in response.content
 
 
