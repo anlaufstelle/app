@@ -1701,7 +1701,8 @@ def anonymize_eligible_soft_deleted_clients(facility, settings_obj, *, dry_run=F
 
     Returns: Anzahl anonymisierter Datensätze.
     """
-    cutoff = timezone.now() - timedelta(days=settings_obj.client_trash_days)
+    now = timezone.now()
+    cutoff = now - timedelta(days=settings_obj.client_trash_days)
     qs = exclude_clients_with_active_holds(
         Client.objects.for_facility(facility).filter(
             is_deleted=True, deleted_at__lt=cutoff, anonymized_at__isnull=True
@@ -1726,18 +1727,25 @@ def anonymize_eligible_soft_deleted_clients(facility, settings_obj, *, dry_run=F
     #
     # Die PK-Liste wird vorab materialisiert: der Lauf veraendert genau die
     # Spalte, nach der die Queryset-Bedingung filtert.
+    from core.services.system.settings import lock_current_settings
+
     count = 0
     for client_pk in list(qs.values_list("pk", flat=True)):
         with transaction.atomic():
             lock_dynamic_protection(facility.pk)
+            # The trash period in force now decides, not the one the run
+            # started with (Refs #2714): gate, Settings, then person, case and
+            # event rows. A writer that starts afterwards waits for this commit.
+            current_settings = lock_current_settings(facility) or settings_obj
+            current_cutoff = now - timedelta(days=current_settings.client_trash_days)
             client = (
                 Client.objects.select_for_update()
-                .filter(pk=client_pk, anonymized_at__isnull=True, is_deleted=True)
+                .filter(pk=client_pk, anonymized_at__isnull=True, is_deleted=True, deleted_at__lt=current_cutoff)
                 .first()
             )
             if client is None:
-                # Ein paralleler Lauf war schneller (oder die Person wurde
-                # zwischenzeitlich wiederhergestellt) — nichts zu tun.
+                # A parallel run was faster, the person was restored in the
+                # meantime, or the period in force still covers it.
                 continue
             # Refs #2108 (Sweep-Fund, gleiche Wurzel wie der Sofortpfad): Der
             # Hold-Ausschluss oben lief EINMAL beim Queryset-Bau, vor der

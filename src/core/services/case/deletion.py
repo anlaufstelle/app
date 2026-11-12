@@ -714,7 +714,8 @@ def anonymize_eligible_soft_deleted_cases(facility, settings_obj, *, dry_run=Fal
     protected case IDs to the optional set without changing the integer result.
     Already anonymized cases remain excluded to avoid repeated erasure/audits.
     """
-    cutoff = timezone.now() - timedelta(days=settings_obj.client_trash_days)
+    now = timezone.now()
+    cutoff = now - timedelta(days=settings_obj.client_trash_days)
     candidates = Case.objects.for_facility(facility).filter(
         is_deleted=True, deleted_at__lt=cutoff, anonymized_at__isnull=True
     )
@@ -725,14 +726,27 @@ def anonymize_eligible_soft_deleted_cases(facility, settings_obj, *, dry_run=Fal
     if dry_run:
         return qs.count()
 
+    from core.services.system.settings import lock_current_settings
+
     # Recheck on the locked rows: protection may change after selection (Refs #2524).
     count = 0
     for case_pk in list(qs.values_list("pk", flat=True)):
         with transaction.atomic():
             # Refs #2525: serialize each erasure before locking its data rows.
             lock_dynamic_protection_gate(facility.pk)
+            # The trash period in force now decides, not the one the run
+            # started with (Refs #2714): gate, Settings, then person, case and
+            # event rows. A writer that starts afterwards waits for this commit.
+            current_settings = lock_current_settings(facility) or settings_obj
+            current_cutoff = now - timedelta(days=current_settings.client_trash_days)
             locked = _lock_case_chain(facility.pk, case_pk)
-            if locked is None or not locked.is_deleted or locked.anonymized_at is not None:
+            if (
+                locked is None
+                or not locked.is_deleted
+                or locked.anonymized_at is not None
+                or locked.deleted_at is None
+                or locked.deleted_at >= current_cutoff
+            ):
                 continue
             if Client.objects.for_facility(facility).filter(
                 pk=locked.client_id, processing_restricted=True
