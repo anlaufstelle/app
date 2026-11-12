@@ -443,3 +443,138 @@ class TestAuditDurability:
         violation = AuditLog.objects.get(facility=setup.facility, action=AuditLog.Action.SECURITY_VIOLATION)
         assert violation.detail["reason"] == "virus_detected"
         _assert_untouched(setup, before)
+
+
+# ------------------------------------------------------- workflow service --
+
+
+def _service_input(setup, *, token=None, require_version_token=False, add=True, remove=False, **overrides):
+    from django.utils.datastructures import MultiValueDict
+
+    from core.services.events import merge_update_payload
+    from core.services.events.update_workflow import EventUpdateInput
+
+    uploads = MultiValueDict({replace_upload_key(setup.ft_file.slug, setup.attachment.entry_id): [_pdf("r.pdf")]})
+    file_fields = {setup.ft_file.slug: [_pdf("added.pdf")] if add else []}
+    data_json = merge_update_payload(setup.event, {setup.ft_text.slug: "after"}, [], setup.doc_type)
+    values = {
+        "data_json": data_json,
+        "file_fields": file_fields,
+        "uploads": uploads,
+        "removals": {f"{setup.ft_file.slug}__remove": str(setup.attachment.entry_id)} if remove else {},
+        "expected_updated_at": token,
+        "require_version_token": require_version_token,
+    }
+    values.update(overrides)
+    return EventUpdateInput(**values)
+
+
+def _no_scan(*args, **kwargs):
+    return None
+
+
+@pytest.mark.django_db
+class TestWorkflowService:
+    """The service owns staging, lock order, atomic persistence and cleanup."""
+
+    def _run(self, setup, user, update, scan=_no_scan):
+        """Run the service; ``scan=None`` keeps the real scan policy (scanner patched by the caller)."""
+        from core.services.events.update_workflow import update_event_with_attachments
+
+        event = Event.objects.select_related("document_type", "client").get(pk=setup.event.pk)
+        if scan is None:
+            return update_event_with_attachments(event, user, update)
+        with patch(NO_SCAN, scan):
+            return update_event_with_attachments(event, user, update)
+
+    def test_success_persists_event_and_files_together(self, staff_user, setup):
+        history_before = EventHistory.objects.filter(event=setup.event).count()
+
+        self._run(setup, staff_user, _service_input(setup, token=setup.token))
+
+        assert setup.text() == "after"
+        assert EventHistory.objects.filter(event=setup.event).count() == history_before + 1
+        setup.attachment.refresh_from_db()
+        assert not setup.attachment.is_current
+        assert Attachment.objects.filter(event=setup.event, is_current=True).count() == 2
+        assert setup.files_on_disk() == setup.files_in_db()
+        assert len(setup.files_on_disk()) == 3
+
+    def test_removal_is_an_explicit_action_parameter(self, staff_user, setup):
+        update = _service_input(setup, token=setup.token, add=False, remove=True, uploads={})
+
+        self._run(setup, staff_user, update)
+
+        setup.attachment.refresh_from_db()
+        assert setup.attachment.deleted_at is not None
+        assert setup.text() == "after"
+
+    def test_version_conflict_after_staging_raises_and_removes_prepared_files(self, staff_user, setup):
+        Event.objects.filter(pk=setup.event.pk).update(updated_at=timezone.now() + timezone.timedelta(seconds=5))
+        before = setup.snapshot()
+        staged_seen: list[set] = []
+
+        def scan(*args, **kwargs):
+            staged_seen.append(setup.files_on_disk())
+
+        with pytest.raises(ValidationError) as excinfo:
+            self._run(setup, staff_user, _service_input(setup, token=setup.token), scan=scan)
+
+        assert excinfo.value.code == "version_conflict"
+        assert staged_seen, "the files were prepared before the conflict was detected"
+        _assert_untouched(setup, before)
+
+    def test_missing_token_is_reported_when_required(self, staff_user, setup):
+        before = setup.snapshot()
+
+        with pytest.raises(ValidationError) as excinfo:
+            self._run(setup, staff_user, _service_input(setup, require_version_token=True))
+
+        assert excinfo.value.code == "missing_token"
+        _assert_untouched(setup, before)
+
+    def test_unexpected_exception_removes_prepared_files(self, staff_user, setup):
+        before = setup.snapshot()
+
+        with patch(COMMIT_STAGED, side_effect=RuntimeError("disk full")), pytest.raises(RuntimeError):
+            self._run(setup, staff_user, _service_input(setup, token=setup.token))
+
+        _assert_untouched(setup, before)
+
+    def test_quota_backstop_audit_is_written_after_the_rollback(self, staff_user, setup):
+        from core.services.file_vault.policy import StorageQuotaBackstopError
+        from core.services.file_vault.quota import StorageUsage
+
+        before = setup.snapshot()
+        error = StorageQuotaBackstopError(
+            facility=setup.facility,
+            user=staff_user,
+            owner=setup.event,
+            usage=StorageUsage(used_bytes=10, trash_bytes=0, limit_bytes=10),
+            requested_bytes=len(PDF_MINIMAL),
+        )
+
+        with patch(COMMIT_STAGED, side_effect=error), pytest.raises(StorageQuotaBackstopError):
+            self._run(setup, staff_user, _service_input(setup, token=setup.token))
+
+        assert error.audited
+        assert (
+            AuditLog.objects.filter(facility=setup.facility, action=AuditLog.Action.ATTACHMENT_QUOTA_EXCEEDED).count()
+            == 1
+        )
+        _assert_untouched(setup, before)
+
+    def test_staging_error_leaves_no_partial_file(self, staff_user, setup):
+        from core.services.file_vault.virus_scan import ScanResult
+
+        before = setup.snapshot()
+
+        def scan(uploaded_file):
+            infected = uploaded_file.name == "added.pdf"
+            return ScanResult(clean=not infected, infected=infected, signature="Probe-Signature")
+
+        with patch("core.services.file_vault.policy.scan_file", scan), pytest.raises(ValidationError):
+            self._run(setup, staff_user, _service_input(setup, token=setup.token), scan=None)
+
+        assert AuditLog.objects.filter(facility=setup.facility, action=AuditLog.Action.SECURITY_VIOLATION).count() == 1
+        _assert_untouched(setup, before)
