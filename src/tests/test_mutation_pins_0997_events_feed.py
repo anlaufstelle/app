@@ -1,7 +1,7 @@
 """Pins for public event preview enrichment.
 
 Source: mutation delta of the release-0.99.7 checkpoint, 3 mutants.
-Groups: encrypted selections without options (1); legacy list-valued
+Groups: selections without options, encrypted and plain (1); legacy list-valued
 single selections with and without options (2).
 """
 
@@ -40,17 +40,20 @@ def preview(facility, staff_user, field_type, options, value):
     return event
 
 
-def test_encrypted_selection_without_options_preserves_the_decrypted_list(facility, staff_user, settings):
-    """Enrichment preserves the typed decrypted fallback when no option labels exist.
+@pytest.mark.parametrize("encrypted", [True, False], ids=["encrypted", "plain"])
+def test_selection_without_options_renders_like_the_plain_value(facility, staff_user, settings, encrypted):
+    """An encrypted selection without option labels previews like the same plain value.
 
-    x__format_preview_value__mutmut_11.
+    Originally pinned x__format_preview_value__mutmut_11, which kept the typed
+    decrypted list. Since #2712 the preview decrypts before formatting, so an
+    encrypted value takes the same formatting path as the plain one.
     """
     settings.ENCRYPTION_KEYS = generate_key()
     value = ["a", "b"]
-    event = preview(facility, staff_user, FieldTemplate.FieldType.MULTI_SELECT, [], encrypt_field(value))
+    stored = encrypt_field(value) if encrypted else value
+    event = preview(facility, staff_user, FieldTemplate.FieldType.MULTI_SELECT, [], stored)
     for entries in (event.preview_fields, event.expanded_fields):
-        assert entries[0]["value"] == value
-        assert isinstance(entries[0]["value"], list)
+        assert entries[0]["value"] == str(value)
 
 
 @pytest.mark.parametrize("options", [[{"slug": "a", "label": "Alpha"}], []], ids=["with-options", "without-options"])
