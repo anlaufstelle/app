@@ -6,6 +6,8 @@ immediately (they carry their own triggers); without JavaScript the form submits
 Period rule: a preset (hidden ``range``) and the Von/Bis fields exclude each other; the segment
 links switch between them.
 Settle without a delay so visible OOB controls handle the next change immediately (#2658).
+This works because requests from inside the form inherit this hx-swap; a trigger outside the
+form must set settle:0 itself, or the replaced controls stay unbound for the settle delay.
 {% endcomment %}
 {% block filter_attributes %}id="event-filters" method="get" action="{% url 'core:event_list' %}"
     hx-get="{% url 'core:event_list' %}" hx-target="#event-table" hx-swap="innerHTML settle:0" hx-push-url="true" hx-indicator="#event-filters-spinner"
