@@ -240,6 +240,13 @@
                             // (Task 2/#1384), noch nicht per Retry/Verwerfen
                             // aufgelöst (Konflikt-Liste).
                             const isDead = ev.localStatus === "dead";
+                            // Refs #2720: a background-rejected edit of an existing
+                            // event (reason "invalid", not created offline) stays
+                            // correctable here, provided the server allowed the
+                            // person to edit it (``can_edit`` kept in the envelope).
+                            // Other dead entries stay read-only.
+                            const isRejectedEdit = isDead && ev.deadReason === "invalid" && ev.was_new !== true;
+                            const mayEdit = isDead ? isRejectedEdit && ev.can_edit === true : ev.can_edit || isUnsynced;
                             return Object.assign({}, ev, {
                                 occurred_at_fmt: this.formatTs(ev.occurred_at),
                                 data_fields_pairs: Object.keys(fields).map((slug) => ({
@@ -258,7 +265,7 @@
                                 // in x-if/x-show — daher Flags statt canEditEvent(event)/
                                 // isEditing(event). Edit nur wo der Replay durchginge
                                 // (can_edit bzw. bereits unsynced), nie bei Konflikt.
-                                can_edit_ui: Boolean((ev.can_edit || isUnsynced) && !isConflict),
+                                can_edit_ui: Boolean(mayEdit && !isConflict),
                                 editing: false,
                             });
                         });
@@ -514,7 +521,9 @@
             // verhaltensneutral). Refs #1828: auch der fileNote-Callback lebt
             // jetzt dort und wird als dritter Parameter durchgereicht.
             startEdit(ev) {
-                this.editError = "";
+                // Refs #2720: a rejected edit opens with the server's field
+                // errors (names + codes only, no values) above the form.
+                this.editError = ev.is_dead ? this._deadFieldErrorText(ev.last_error) : "";
                 this.lastSyncResult = "";
                 const dt = this._findDocType(ev.document_type_pk);
                 const fields = (dt && dt.fields) || [];
@@ -531,6 +540,29 @@
                 this.editFields = descriptors;
                 this.editValues = values;
                 this._setEditing(ev.pk);
+            },
+            // Refs #2720: lastError only ever holds the JSON the replay wrote
+            // (field name -> error codes). Anything else is ignored so neither
+            // input values nor server free text can show up here.
+            _deadFieldErrorText(lastError) {
+                if (typeof lastError !== "string" || !lastError) return "";
+                let parsed;
+                try {
+                    parsed = JSON.parse(lastError);
+                } catch (_e) {
+                    return "";
+                }
+                if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") return "";
+                const token = /^[A-Za-z_][A-Za-z0-9_-]*$/;
+                const parts = [];
+                for (const field of Object.keys(parsed)) {
+                    const codes = parsed[field];
+                    if (!token.test(field) || !Array.isArray(codes) || !codes.length) continue;
+                    if (codes.some((code) => typeof code !== "string" || !token.test(code))) continue;
+                    parts.push(field + " (" + codes.join(", ") + ")");
+                }
+                if (!parts.length) return "";
+                return "Vom Server abgelehnt: " + parts.join("; ");
             },
             cancelEdit() {
                 this._setEditing(null);

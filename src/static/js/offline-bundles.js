@@ -207,6 +207,12 @@
             // (deadReason-Mapping ueber data-*-Texte, siehe
             // offline-client-view.js).
             deadReason: data.deadReason || "",
+            // Refs #2720: Server edit permission kept in the envelope and the
+            // dead-letter detail, so a background-rejected edit of an existing
+            // event can be offered for correction on the person's view.
+            can_edit: data.canEdit === true,
+            was_new: data.wasNew === true,
+            last_error: data.lastError || "",
         };
     }
 

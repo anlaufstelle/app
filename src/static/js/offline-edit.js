@@ -461,9 +461,16 @@
         // landet ausserhalb des Falls und fehlt im Fallverlauf.
         const previous = (wasNew && existing.data) || {};
         const occurredAt = opts.occurredAt || previous.occurredAt || (wasNew ? existing.occurredAt || "" : "");
+        // Refs #2720: Keep the server's edit permission across the edit. The
+        // clean bundle record carries it as ``can_edit``; this envelope replaces
+        // that record, so without the copy a background-rejected edit could not
+        // be offered for correction (the flag is never invented client-side).
+        const existingData = (existing && existing.data) || {};
+        const canEdit = existingData.can_edit === true || existingData.canEdit === true;
         const data = {
             formData: formData,
             expectedUpdatedAt: token,
+            canEdit: canEdit,
             // Snapshot a few metadata fields so the list/review UI can
             // label the edit without cross-referencing the cache. Refs
             // #1111: ``documentTypePk`` + ``occurredAt`` let the offline

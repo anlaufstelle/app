@@ -169,14 +169,20 @@
                     item.noteText = this._buildNoteText(data.formData || {});
                     item.fieldErrors = this._deadFieldErrors(data.lastError);
                     item.hasFieldErrors = item.fieldErrors.length > 0;
-                    // Refs #2720: A rejected edit of an existing event cannot be
-                    // changed in this list; "Erneut versuchen" resends it
+                    // Refs #2720: A rejected edit of an existing event cannot
+                    // be changed in this list; "Erneut versuchen" resends it
                     // unchanged. The correction route is the person's offline view,
-                    // where the edit form replaces the failed entry. Not offered
-                    // for work items and for entries that were never created on the
-                    // server (re-editing those would target a missing event).
+                    // where the edit form replaces the failed entry. Not offered for
+                    // entries that were never created on the server (re-editing
+                    // those would target a missing event), nor for work items,
+                    // nor for an event whose
+                    // stored edit does not carry the server's edit permission (the
+                    // person's view would not offer "Bearbeiten" either).
                     item.showEditCorrectionHint =
-                        data.deadReason === "invalid" && data.wasNew !== true && !isWorkItem;
+                        data.deadReason === "invalid" &&
+                        data.wasNew !== true &&
+                        !isWorkItem &&
+                        data.canEdit === true;
                 }
                 return item;
             },
