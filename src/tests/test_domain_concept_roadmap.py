@@ -94,6 +94,14 @@ def test_kds_export_is_described_the_same_in_all_sections(concept):
             assert "3.0" not in line and "XML" not in line and "JSON" not in line, line
 
 
+def test_regulatory_section_names_current_bodies(concept):
+    body = _section(concept, "22. Regulatorische Landschaft")
+    assert "DBDD" not in body
+    assert "EBDD" not in body.replace("früher EBDD", "")
+    assert "IFT Institut für Therapieforschung" in body
+    assert "EUDA" in body
+
+
 def test_authentication_points_to_listed_roadmap_steps_only(concept):
     auth = _subsection(_section(concept, "25. Administration und Betrieb"), "Authentifizierung")
     roadmap = "\n".join(_roadmap_table(concept))
