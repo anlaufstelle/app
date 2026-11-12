@@ -174,3 +174,23 @@ def test_autumn_repeated_hour_keeps_both_real_hour_groups(facility, staff_user, 
     assert len(groups) == 2
     assert len({g["key"] for g in groups}) == 2
     assert sum(g["total"] for g in groups) == 2
+
+
+@pytest.mark.parametrize("feed_type", ["", "events", "bans"])
+def test_watch_ignores_tally_ban_minutes_only_when_the_feed_groups_them(client, facility, staff_user, feed_type):
+    day = timezone.localdate()
+    ban_type = DocumentType.objects.create(facility=facility, name="Ban", system_type="ban")
+    event = _event(facility, staff_user, ban_type, _at(day, 12, 15))
+    client.force_login(staff_user)
+    params = {"date": day.isoformat(), "time_filter": "all", "type": feed_type}
+    before_feed = client.get(reverse("core:zeitstrom_feed_partial"), params)
+    before_watch = _watch(client, params=params)
+    Event.objects.filter(pk=event.pk).update(occurred_at=_at(day, 12, 45))
+    after_feed = client.get(reverse("core:zeitstrom_feed_partial"), params)
+    after_watch = _watch(client, params=params)
+    assert before_feed.status_code == after_feed.status_code == 200
+    assert before_watch.status_code == after_watch.status_code == 200
+    feed_changed = before_feed.content != after_feed.content
+    watch_changed = before_watch.json()["validators"]["feed"] != after_watch.json()["validators"]["feed"]
+    assert feed_changed == (feed_type == "bans")
+    assert watch_changed == feed_changed

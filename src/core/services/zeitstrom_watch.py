@@ -329,9 +329,11 @@ def _feed_projection(facility, user, state: ZeitstromState):
         items.extend({"type": "workitem", "time": row["created_at"], "row": row} for row in rows)
 
     if state.feed_type == "bans" or include_all:
+        bans = events_for_feed_read(facility, user)
+        if include_all:
+            bans = bans.exclude(created_via=Event.CreatedVia.TALLY)
         rows = (
-            events_for_feed_read(facility, user)
-            .filter(
+            bans.filter(
                 document_type__system_type="ban",
                 occurred_at__gte=start_dt,
                 occurred_at__lte=end_dt,
