@@ -378,6 +378,63 @@ def test_public_run_takes_its_environment_at_run_time_with_the_test_settings(nig
     assert not (snapshot / ".env").exists()
 
 
+def public_skips_command(nightly, tmp_path, monkeypatch):
+    """The pytest command the ``public-skips`` guard runs, captured without starting a suite."""
+    args = argparse.Namespace(
+        python=sys.executable, state_dir=str(tmp_path), seed_max_age_days=7, perf_limit=2, perf_runs=1
+    )
+    runner = nightly.Runner(args)
+    commands = []
+
+    def fake_run(command, log, **kwargs):
+        commands.append(command)
+        log.write_text("")
+        return 0
+
+    strip_list = tmp_path / "build-release.sh"
+    strip_list.write_text("")
+    monkeypatch.setattr(nightly, "BUILD_RELEASE", strip_list)
+    monkeypatch.setattr(nightly, "maintenance_connection", MaintenanceConnectionStub)
+    monkeypatch.setattr(nightly, "public_run_env", lambda snapshot: {})
+    monkeypatch.setattr(runner, "build_public_snapshot", staticmethod(lambda snapshot: 0))
+    monkeypatch.setattr(runner, "commit_snapshot", staticmethod(lambda snapshot: None))
+    monkeypatch.setattr(runner, "run", fake_run)
+    monkeypatch.setattr(runner, "lock", contextlib.nullcontext)
+    runner.public_skips()
+    return next(command for command in commands if "pytest" in command)
+
+
+def test_the_public_skip_guard_does_not_stop_at_the_first_failure(nightly, tmp_path, monkeypatch):
+    """A run with two broken tests must name both, so one night shows every failure of the public profile."""
+    command = public_skips_command(nightly, tmp_path, monkeypatch)
+
+    assert "-x" not in command and "--exitfirst" not in command
+    assert not any(part.startswith("--maxfail") for part in command)
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "test_two_failures.py").write_text("def test_a():\n    assert 0\n\ndef test_b():\n    assert 0\n")
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "-p",
+            "no:django",
+            "--rootdir",
+            str(project),
+            str(project),
+        ]
+        + [part for part in command if part == "-rs"],
+        capture_output=True,
+        text=True,
+        cwd=project,
+    )
+    assert "2 failed" in result.stdout
+
+
 PACKAGE_FILES = [
     "Makefile",
     "scripts/nightly_guards.py",

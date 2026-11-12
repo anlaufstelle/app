@@ -490,7 +490,6 @@ class Runner:
             "pytest",
             "src/tests",
             "--ignore=src/tests/e2e",
-            "-x",
             "-q",
             "-rs",
             "-n",
