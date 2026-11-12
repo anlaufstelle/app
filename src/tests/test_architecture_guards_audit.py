@@ -482,7 +482,7 @@ class TestE2ESelectorStabilityGuard:
         # einer Schleife). Counter zieht den Ist-Stand nach; Stabilisierung
         # auf data-testid läuft separat.
         "test_goals_htmx.py": 5,
-        "test_handover.py": 2,
+        "test_handover.py": 1,
         "test_i18n_locale.py": 2,
         # 1b52bea7 (#1787): Wegwerf-Seed-Umbau entfernte 4 Vorkommen;
         # #1813: Hub-/Subnav-Umbau entfernte das letzte.

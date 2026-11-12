@@ -12,7 +12,10 @@ Prüft:
 Refs #661 — Plan Top 3.
 """
 
+from urllib.parse import parse_qs, urlsplit
+
 import pytest
+from playwright.sync_api import expect
 
 pytestmark = pytest.mark.e2e
 
@@ -40,12 +43,17 @@ class TestHandoverPage:
         assert heading.count() >= 1
 
     def test_shift_filter_switches_label(self, authenticated_page, base_url):
-        """Klick auf 'Frühdienst' setzt time_filter im URL und wechselt Schicht-Heading."""
+        """Selecting the early shift updates the URL and the visible handover heading."""
         page = authenticated_page
-        page.goto(f"{base_url}/?view=uebergabe", wait_until="domcontentloaded")
-        page.locator("a:has-text('Frühdienst')").first.click()
-        page.wait_for_url(lambda url: "time_filter=" in url, timeout=10000)
-        assert page.locator("h2:has-text('Frühdienst')").count() >= 1
+        page.goto(f"{base_url}/?view=uebergabe&date=2026-04-15&time_filter=all", wait_until="domcontentloaded")
+        shift = page.get_by_test_id("zeitstrom-shift-select")
+        shift_id = shift.locator("option[data-label='Frühdienst']").get_attribute("value")
+        assert shift_id and shift_id != "all"
+        shift.select_option(shift_id)
+        page.wait_for_url(lambda url: parse_qs(urlsplit(url).query).get("time_filter") == [shift_id], timeout=10000)
+        assert parse_qs(urlsplit(page.url).query)["view"] == ["uebergabe"]
+        expect(shift).to_have_value(shift_id)
+        expect(page.locator("h2:has-text('Frühdienst')")).to_be_visible()
 
     def test_statistics_section_visible(self, authenticated_page, base_url):
         """Statistiken-Sektion (Kontakte/Aufgaben/Personen) ist sichtbar."""
