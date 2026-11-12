@@ -71,3 +71,33 @@ def test_checklist_names_the_grace_period_of_the_third_party_image_scan():
     assert "grace until" in text
     assert "grace n (not blocking)" in text
     assert "Eine Ausnahme gibt es nur für Fremdimages, über einen Eintrag" not in text
+
+
+def _section(text: str, start: str, end: str) -> str:
+    """Text from the heading line starting with ``start`` up to the next heading starting with ``end``."""
+    begin = text.index(start)
+    return text[begin : text.index(end, begin + len(start))]
+
+
+def test_ops_gate_reads_the_audit_verify_timer_result_and_never_runs_the_check_itself():
+    section = _section(_checklist(), "## 4. Ops-Gate", "### 4.1 ")
+    items = [line for line in section.splitlines() if line.startswith("- [ ]") and "audit-verify" in line]
+    assert len(items) == 1, items
+    item = items[0]
+    command = "systemctl show anlaufstelle-audit-verify.service -p Result -p ExecMainStatus -p ActiveEnterTimestamp"
+    assert f"`{command}`" in item
+    assert "nicht geprüft" in item
+    assert "nicht grün" in item
+    assert "nicht von Hand" in item
+    # the unit named in the checklist is the one the timer installer creates
+    installer = (ROOT / "dev-ops/deploy/install-timers.sh").read_text(encoding="utf-8")
+    assert 'install_timer audit-verify "' in installer
+    assert '"$ADMIN_RUN verify_audit_chain"' in installer
+    # the read-only command is the only shell command of the line: no run of the management command
+    assert "manage.py verify_audit_chain" not in item
+
+
+def test_list_runner_section_says_the_tool_belongs_to_the_release_management_not_the_repo():
+    section = _section(_checklist(), "### 1.7 ", "## 2. ")
+    assert "Werkzeug der Wellenverwaltung, nicht Teil des Repos" in section
+    assert "`run-lane.sh`" in section
