@@ -10,8 +10,9 @@ up in:
   ``textarea``, ``summary``, ``label`` or ``[role=button]`` may overlap the
   button, and the button must be the topmost element at its own centre. Pages:
   the start page, a list with a "new" action, the configuration lists whose
-  title row carries action buttons, and the static offline shell with its
-  navigation.
+  title row carries action buttons, the forced-password-change page and the
+  session-less offline fallback (both standalone pages with their own copy of
+  the button), and the static offline shell with its navigation.
 * **Scrolled** (page scrolled away from the top): the button stays in its corner
   and covers only its own surface. Sampling the top band with
   ``elementFromPoint`` finds no point outside the button where the sticky
@@ -61,8 +62,12 @@ ONLINE_PATHS = [
     "/config/field-templates/",
     "/import/",
     "/verwaltung/zugaenge/",
+    # Standalone page (no layout) with its own copy of the button, see the module docstring.
+    "/password-change/",
 ]
 OFFLINE_SHELL_PATH = "/offline/client-shell/"
+# Session-less offline fallback: standalone page with inline CSS instead of Tailwind.
+OFFLINE_FALLBACK_PATH = "/offline/"
 
 _CONTROLS = "a, button, input, select, textarea, summary, label, [role='button']"
 
@@ -131,7 +136,7 @@ _TAP_TRAPS = """
 () => {
     const button = document.getElementById("quick-exit-button");
     const b = button.getBoundingClientRect();
-    const wrapper = button.closest(".sticky");
+    const wrapper = button.closest(".sticky, .fixed");
     const w = wrapper.getBoundingClientRect();
     const bottom = Math.min(Math.max(w.bottom, b.bottom) + 2, innerHeight - 1);
     const traps = [];
@@ -286,13 +291,14 @@ def _open_online(browser, base_url, storage_state, path, width):
     return context, page
 
 
-def _open_shell(browser, base_url, width):
+def _open_shell(browser, base_url, width, path=OFFLINE_SHELL_PATH):
     context = _context(browser, width)
     page = context.new_page()
     page.set_default_timeout(30000)
-    response = page.goto(f"{base_url}{OFFLINE_SHELL_PATH}", wait_until="load")
+    response = page.goto(f"{base_url}{path}", wait_until="load")
     assert response is not None and response.ok
-    page.locator("[data-testid='offline-nav']").wait_for(state="visible")
+    if path == OFFLINE_SHELL_PATH:
+        page.locator("[data-testid='offline-nav']").wait_for(state="visible")
     return context, page
 
 
@@ -308,10 +314,11 @@ class TestQuickExitGeometry:
             context.close()
 
     @pytest.mark.parametrize("width", WIDTHS)
-    def test_button_covers_no_control_in_the_offline_shell(self, browser, base_url, width):
-        context, page = _open_shell(browser, base_url, width)
+    @pytest.mark.parametrize("path", [OFFLINE_SHELL_PATH, OFFLINE_FALLBACK_PATH])
+    def test_button_covers_no_control_in_the_offline_pages(self, browser, base_url, path, width):
+        context, page = _open_shell(browser, base_url, width, path)
         try:
-            _measure(page, f"offline shell @ {width}px")
+            _measure(page, f"{path} @ {width}px")
         finally:
             context.close()
 
@@ -328,11 +335,12 @@ class TestQuickExitGeometry:
             context.close()
 
     @pytest.mark.parametrize("width", WIDTHS)
-    def test_scrolled_offline_shell_has_only_the_button_surface(self, browser, base_url, width):
-        context, page = _open_shell(browser, base_url, width)
+    @pytest.mark.parametrize("path", [OFFLINE_SHELL_PATH, OFFLINE_FALLBACK_PATH])
+    def test_scrolled_offline_pages_have_only_the_button_surface(self, browser, base_url, path, width):
+        context, page = _open_shell(browser, base_url, width, path)
         try:
             _scroll_away(page)
-            _measure_scrolled(page, f"offline shell scrolled @ {width}px")
+            _measure_scrolled(page, f"{path} scrolled @ {width}px")
         finally:
             context.close()
 
