@@ -25,10 +25,14 @@ umschreiben, ohne den Schluessel zu kennen. Die **betriebliche Verankerung**
 ist bewusst eine Deployment-Entscheidung und nicht Teil dieses Moduls.
 
 Der Anker wird nur nach einem **vollstaendig gruenen** ``verify_audit_chain``-Lauf
-monoton vorgeruckt (siehe Management-Command). Da der Anker damit stets sehr
-jung bleibt, entfernt ihn das retention-basierte Pruning (Monate spaeter) nicht,
-bevor er laengst weitergesetzt wurde — legitimes Wachstum + Pruning erzeugen
-keine False-Positives.
+monoton vorgeruckt (siehe Management-Command). In einer aktiven Kette ist er
+damit laengst weitergesetzt, bevor das retention-basierte Pruning ihn erreicht.
+Schreibt eine Kette laenger als ihre Frist keine Zeile, loescht das Pruning den
+verankerten Tail selbst (Refs #2717, finding no. 9). Dafuer haelt der Store den
+Zeitpunkt der verankerten Zeile mit fest (``last_entry_at``): :meth:`check`
+wertet den fehlenden Anker nur dann als legitim bereinigt, wenn ein
+authentifizierter Checkpoint ihn als Grenze fuehrt und dieser Zeitpunkt vor
+dessen Fristgrenze liegt.
 """
 
 from __future__ import annotations
@@ -39,6 +43,7 @@ import json
 import os
 import tempfile
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from core.services.audit.hash import _get_audit_hash_key
 
@@ -93,7 +98,8 @@ def _validate_chains(chains: object, path: str) -> dict:
 class HighWaterMarkStore:
     """Signierter, datei-basierter HWM-Store fuer die Audit-Ketten.
 
-    ``chains`` bildet ``chain_key -> {"count": int, "last_entry_hash": str}`` ab;
+    ``chains`` bildet ``chain_key -> {"count": int, "last_entry_hash": str,
+    "last_entry_at": str}`` ab (``last_entry_at``: ISO time of the anchored row);
     eine per :meth:`retire` stillgelegte Kette traegt stattdessen
     ``{"retired": <ISO-Zeitpunkt>, "reason": str, "count": int}`` und damit
     keinen Tail-Anker mehr (Refs #2296).
@@ -234,13 +240,19 @@ class HighWaterMarkStore:
             record["count"] = previous_count
         self.chains[_chain_key(facility_id)] = record
 
-    def check(self, facility_id, present_hashes: set[str]) -> str | None:
+    def check(self, facility_id, present_hashes: set[str], *, pruned_before: dict | None = None) -> str | None:
         """Prueft die aktuelle Kette gegen den gespeicherten Tail-Anker.
 
         ``present_hashes`` ist die Menge aller aktuell in der Kette physisch
         vorhandenen ``entry_hash``-Werte. Fehlt der zuletzt verankerte Tail
         darin, wurden die juengste(n) Zeile(n) abgeschnitten oder die Kette
         geleert. Ohne vorherigen Anker (Erst-Lauf / neue Facility) ⇒ ``None``.
+
+        ``pruned_before`` maps boundary hashes from authenticated prune
+        checkpoints to their cutoff (Refs #2717, finding no. 9). A missing
+        anchor listed there is accounted for only if the anchored row's time
+        stored in this signed file is older than that cutoff; without a stored
+        time the anchor stays a truncation (fail closed).
 
         Returns: sprechender Bruch-Reason oder ``None`` (unauffaellig).
         """
@@ -250,7 +262,7 @@ class HighWaterMarkStore:
         anchor = entry.get("last_entry_hash") or ""
         if not anchor:
             return None
-        if anchor not in present_hashes:
+        if anchor not in present_hashes and not self._pruned_legitimately(entry, anchor, pruned_before or {}):
             prior = entry.get("count")
             return (
                 "tail truncation / whole-chain wipe: verankerter High-Water-Mark "
@@ -258,6 +270,20 @@ class HighWaterMarkStore:
                 "(juengste Zeile[n] abgeschnitten oder Kette geleert)"
             )
         return None
+
+    @staticmethod
+    def _pruned_legitimately(entry: dict, anchor: str, pruned_before: dict) -> bool:
+        cutoff = pruned_before.get(anchor)
+        anchored_at = entry.get("last_entry_at")
+        if cutoff is None or not isinstance(anchored_at, str):
+            return False
+        try:
+            anchored = datetime.fromisoformat(anchored_at)
+        except ValueError:
+            return False
+        if anchored.utcoffset() is None:
+            return False
+        return anchored < cutoff
 
     def reactivate(self, facility_id) -> dict:
         """Nimmt den Stilllegungsnachweis einer Kette zurueck (Refs #2296).
@@ -271,7 +297,7 @@ class HighWaterMarkStore:
         """
         return self.chains.pop(_chain_key(facility_id), {}) or {}
 
-    def record(self, facility_id, count: int, last_entry_hash: str | None) -> None:
+    def record(self, facility_id, count: int, last_entry_hash: str | None, last_entry_at=None) -> None:
         """Setzt den Anker der Kette auf den aktuellen Tail (In-Memory).
 
         Nur nach einem vollstaendig gruenen Verify aufrufen — dann ist der neue
@@ -302,7 +328,10 @@ class HighWaterMarkStore:
         if not last_entry_hash:
             self.chains.pop(key, None)
             return
-        self.chains[key] = {
+        record: dict = {
             "count": int(count),
             "last_entry_hash": last_entry_hash,
         }
+        if last_entry_at is not None:
+            record["last_entry_at"] = last_entry_at.astimezone(UTC).isoformat()
+        self.chains[key] = record

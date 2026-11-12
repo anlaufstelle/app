@@ -391,7 +391,7 @@ class Command(BaseCommand):
             try:
                 for facility, result in results:
                     facility_id = None if facility is None else facility.pk
-                    hwm.record(facility_id, result.rows_checked, result.last_entry_hash)
+                    hwm.record(facility_id, result.rows_checked, result.last_entry_hash, result.last_entry_at)
             except HwmIntegrityError as exc:
                 # Refs #2296: ein zurueckgekehrter, zuvor stillgelegter Bestand.
                 # Abbruch VOR ``save`` und vor dem Erfolgsmarker — die Datei

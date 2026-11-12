@@ -230,7 +230,14 @@ def prune_auditlog(facility, settings_obj, now=None, dry_run=False):
         user=None,
         facility=facility,
         target_type="AuditLog",
-        detail={"pruned_count": count, "boundary_hash": newest_boundary, "boundary_hashes": boundary_hashes},
+        # ``cutoff`` lets ``verify_chain`` accept a pruned anchored tail only if
+        # the anchor file dates it before this cutoff (Refs #2717, finding no. 9).
+        detail={
+            "pruned_count": count,
+            "boundary_hash": newest_boundary,
+            "boundary_hashes": boundary_hashes,
+            "cutoff": cutoff.isoformat(),
+        },
     )
     return {"count": count}
 

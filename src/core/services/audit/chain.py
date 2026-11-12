@@ -24,7 +24,7 @@ import hmac
 import json
 import threading
 from dataclasses import dataclass
-from datetime import UTC, timedelta
+from datetime import UTC, datetime, timedelta
 
 from django.db import connection
 
@@ -274,6 +274,63 @@ class ChainResult:
     # (Tail) — der Anker, den der externe High-Water-Mark fortschreibt. ``None``
     # bei leerer Kette. Rein informativ; aeltere Aufrufer ignorieren das Feld.
     last_entry_hash: str | None = None
+    # Refs #2717 (finding no. 9): timestamp of that tail row. The external
+    # anchor stores it so that a later prune of the anchored row can be told
+    # apart from a truncation (see ``HighWaterMarkStore.check``).
+    last_entry_at: datetime | None = None
+
+
+def _authenticated_checkpoints(rows):
+    """Yield the ``AUDIT_PRUNE_CHECKPOINT`` rows whose own hash verifies.
+
+    See :func:`_checkpoint_boundaries` for why only these may legitimise a gap.
+    """
+    from core.models import AuditLog
+
+    for row in rows:
+        if row.action != AuditLog.Action.AUDIT_PRUNE_CHECKPOINT:
+            continue
+        if not row.entry_hash:
+            continue
+        expected = compute_entry_hash(row, row.prev_hash or "")
+        if not hmac.compare_digest(expected, row.entry_hash):
+            continue
+        yield row
+
+
+def _row_boundaries(row) -> list[str]:
+    detail = row.detail or {}
+    hashes = [detail.get("boundary_hash")] + list(detail.get("boundary_hashes") or [])
+    return [value for value in hashes if value]
+
+
+def _parse_aware(value) -> datetime | None:
+    """Parse an ISO timestamp; ``None`` for anything that is not an aware time."""
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return parsed if parsed.utcoffset() is not None else None
+
+
+def _pruned_before(rows) -> dict[str, datetime]:
+    """Map every pruned boundary hash to the latest cutoff that pruned it.
+
+    Refs #2717 (finding no. 9): only authenticated checkpoints count, and only
+    those that record their ``cutoff`` -- the cutoff is part of the hashed
+    detail, so a role without ``AUDIT_HASH_KEY`` cannot move it.
+    """
+    pruned: dict[str, datetime] = {}
+    for row in _authenticated_checkpoints(rows):
+        cutoff = _parse_aware((row.detail or {}).get("cutoff"))
+        if cutoff is None:
+            continue
+        for value in _row_boundaries(row):
+            if value not in pruned or pruned[value] < cutoff:
+                pruned[value] = cutoff
+    return pruned
 
 
 def _checkpoint_boundaries(rows) -> set[str]:
@@ -292,27 +349,12 @@ def _checkpoint_boundaries(rows) -> set[str]:
     ``entry_hash`` vorhanden ist UND ``compute_entry_hash(cp, cp.prev_hash)`` via
     :func:`hmac.compare_digest` exakt reproduziert. Refs #1070.
     """
-    from core.models import AuditLog
-
+    # Nur authentifizierte Checkpoints legitimieren Luecken — ein gefaelschter
+    # (NULL/falscher entry_hash) wird ignoriert, die maskierte Loeschung faellt
+    # dann beim Verkettungs-Check auf.
     boundaries: set[str] = set()
-    for row in rows:
-        if row.action != AuditLog.Action.AUDIT_PRUNE_CHECKPOINT:
-            continue
-        # Nur authentifizierte Checkpoints legitimieren Luecken — ein gefaelschter
-        # (NULL/falscher entry_hash) wird ignoriert, die maskierte Loeschung faellt
-        # dann beim Verkettungs-Check auf.
-        if not row.entry_hash:
-            continue
-        expected = compute_entry_hash(row, row.prev_hash or "")
-        if not hmac.compare_digest(expected, row.entry_hash):
-            continue
-        detail = row.detail or {}
-        single = detail.get("boundary_hash")
-        if single:
-            boundaries.add(single)
-        for bh in detail.get("boundary_hashes") or []:
-            if bh:
-                boundaries.add(bh)
+    for row in _authenticated_checkpoints(rows):
+        boundaries.update(_row_boundaries(row))
     return boundaries
 
 
@@ -349,6 +391,15 @@ def verify_chain(facility, *, hwm=None) -> ChainResult:
     Tail-``entry_hash`` noch physisch in der Kette liegt; fehlt er, wird der
     Abschnitt/die Leerung als Bruch gemeldet. Ohne ``hwm`` bleibt diese Grenze
     bestehen (Verhalten unveraendert).
+
+    **Pruned anchor (Refs #2717, finding no. 9).** A chain that stays silent
+    for longer than its retention period loses its anchored tail to the
+    regular prune. The anchor then counts as accounted for only if an
+    authenticated checkpoint of this chain records it as a boundary AND the
+    anchored row's time stored in the signed anchor file lies before that
+    checkpoint's cutoff. The database timestamp alone would not do: a role
+    that can bypass the trigger could backdate the tail and let the prune
+    remove it.
     """
     from core.models import AuditLog, Facility
 
@@ -360,6 +411,7 @@ def verify_chain(facility, *, hwm=None) -> ChainResult:
     present_hashes = {r.entry_hash for r in rows if r.entry_hash}
 
     prev_entry: str | None = None
+    prev_at = None
     checked = 0
     for row in rows:
         if not row.entry_hash:
@@ -370,6 +422,7 @@ def verify_chain(facility, *, hwm=None) -> ChainResult:
                 str(row.pk),
                 f"unhashed row {where} chain start (inserted without hash)",
                 last_entry_hash=prev_entry,
+                last_entry_at=prev_at,
             )
         checked += 1
         expected = compute_entry_hash(row, row.prev_hash or "")
@@ -381,10 +434,11 @@ def verify_chain(facility, *, hwm=None) -> ChainResult:
         if not linked and pv not in boundaries:
             return ChainResult(False, checked, str(row.pk), "prev_hash linkage break (row deleted/inserted)")
         prev_entry = row.entry_hash
+        prev_at = row.timestamp
 
     if hwm is not None:
-        reason = hwm.check(facility_id, present_hashes)
+        reason = hwm.check(facility_id, present_hashes, pruned_before=_pruned_before(rows))
         if reason:
-            return ChainResult(False, checked, None, reason, last_entry_hash=prev_entry)
+            return ChainResult(False, checked, None, reason, last_entry_hash=prev_entry, last_entry_at=prev_at)
 
-    return ChainResult(True, checked, last_entry_hash=prev_entry)
+    return ChainResult(True, checked, last_entry_hash=prev_entry, last_entry_at=prev_at)

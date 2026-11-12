@@ -46,6 +46,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Löschfreigaben neu geprüft** (#2714) — Ist das Ereignis nicht mehr fällig oder war es nach aktuellen Fristen bei der ersten Freigabe noch nicht fällig, verwirft der Lauf die Freigaben mit Audit und setzt den Vorschlag zurück. Es gilt die Frist bei der Löschentscheidung, auch für Aktivitäten, Übergabenotizen, Personen ohne Ereignis, Papierkorb und Historie.
 - **Schlüsselrotation verschiebt die Anonymisierung inaktiver Personen nicht mehr** (#2715) — Die Neuverschlüsselung lässt den Änderungszeitpunkt von Personen, Fällen und Aufgaben unverändert; eine gleichzeitige fachliche Änderung hat weiterhin Vorrang.
 
+### Fixed
+
+- **Kettenprüfung bleibt nach Bereinigung einer ruhenden Einrichtung grün** (#2717) — Schrieb eine Einrichtung länger als ihre Audit-Frist keinen Eintrag, löschte die Bereinigung den extern verankerten jüngsten Eintrag und `verify_audit_chain` meldete danach jede Nacht einen Kettenbruch. Der Anker gilt jetzt als bereinigt, wenn der signierte Prüfpunkt ihn führt und er laut Ankerdatei vor der Fristgrenze lag.
+
 ## [0.99.10] - 2026-11-11
 
 Weiterer Release-Kandidat vor 1.0: bündelt neue Basis-Image-Digests für PostgreSQL, Redis, ClamAV und Caddy (Betreiber-Aktion), einen Schwachstellen-Scan für App- und Fremdimages als Release-Gate mit befristeten Ausnahmen, die Advisory- und SBOM-Prüfung manuell vendorter JavaScript-Bibliotheken, ein offen bleibendes Offline-Bearbeitungsformular, Barrierefreiheits-Korrekturen, einen gehärteten Sprachcookie sowie Sicherheitsupdates für Entwicklungsabhängigkeiten.
