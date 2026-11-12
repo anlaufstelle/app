@@ -67,8 +67,15 @@ def _recovery_recipients(email: str) -> list[User]:
     link as before, so the confirmation text stays true.
     """
     accounts = list(User.objects.filter(email__iexact=email, is_active=True).order_by("pk"))
-    locked = [account for account in accounts if is_locked(account)]
+    locked = [account for account in accounts if _is_locked_in_own_context(account)]
     return locked or accounts
+
+
+def _is_locked_in_own_context(account: User) -> bool:
+    # The anonymous request starts without a facility context; the failed
+    # logins of the account are only visible in its own one (Refs #2111).
+    _set_session_vars(getattr(account, "facility", None), is_super_admin=False)
+    return is_locked(account)
 
 
 # Refs #2391: the request writes an audit row for the account of the entered
@@ -93,6 +100,8 @@ class LockoutRecoveryRequestView(FormView):
         return super().form_valid(form)
 
     def _send_recovery_mail(self, user, email: str) -> None:
+        # The token anchors on the latest failed login of this account.
+        _set_session_vars(getattr(user, "facility", None), is_super_admin=False)
         token = build_recovery_token(user)
         confirm_path = reverse_lazy("core:lockout_recovery_confirm", kwargs={"token": token})
         # Refs #1967: Schema und Host aus EXTERNAL_ORIGIN statt aus dem

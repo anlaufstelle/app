@@ -25,6 +25,10 @@ from django.utils.http import urlsafe_base64_encode
 
 from core.models import AuditLog
 from core.services.security import generate_backup_codes, is_locked
+from tests.test_rls_functional import (  # noqa: F401
+    as_rls_role,
+    rls_test_role,
+)
 
 
 class ExplodingEmailBackend(BaseEmailBackend):
@@ -455,3 +459,32 @@ class TestRecoveryMailForSharedAddress:
 
         assert response.status_code == 302
         assert _recovered_accounts_from_outbox() == [staff_user]
+
+
+@pytest.mark.django_db
+@pytest.mark.postgres
+class TestRecoveryMailForSharedAddressUnderAppRole:
+    """The anonymous request must see the lock under the row-level security of the app role."""
+
+    def test_only_the_locked_account_gets_a_link(
+        self,
+        client,
+        staff_user,
+        second_facility_user,
+        rls_test_role,  # noqa: F811
+    ):
+        unlocked, locked = sorted((staff_user, second_facility_user), key=lambda user: user.pk)
+        for user in (unlocked, locked):
+            user.email = "shared-rls@example.org"
+            user.save(update_fields=["email"])
+        _lock_account(locked)
+
+        with as_rls_role(rls_test_role, facility_id=""):
+            response = client.post(reverse("core:lockout_recovery_request"), {"email": "shared-rls@example.org"})
+
+        assert response.status_code == 302
+        assert _recovered_accounts_from_outbox() == [locked]
+        requested = AuditLog.objects.filter(
+            action=AuditLog.Action.PASSWORD_RESET_REQUESTED, detail__flow="lockout_recovery_token"
+        )
+        assert list(requested.values_list("user_id", "facility_id")) == [(locked.pk, locked.facility_id)]
