@@ -247,3 +247,185 @@ def test_unknown_path_passes_the_guard_in_the_demo():
         response = DemoGuardMiddleware(_passthrough)(request)
 
     assert response.content == b"passed"
+
+
+DEMO_REFUSAL = "Diese Aktion ist im Demo-Modus deaktiviert."
+
+
+def _messages(response):
+    return [str(message) for message in get_messages(response.wsgi_request)]
+
+
+@pytest.mark.django_db
+def test_demo_refuses_imposing_2fa_on_another_shared_account(client, admin_user, staff_user):
+    """Requiring 2FA would send the shared account to a setup the demo refuses."""
+    from django.test import Client
+
+    from core.models import AuditLog
+    from tests.test_user_access_hub import _update_data
+
+    target_session = Client()
+    target_session.force_login(staff_user)
+    update_url = reverse("core:user_access_update", kwargs={"pk": staff_user.pk})
+
+    with override_settings(DEMO_MODE=True, **_demo_guard_settings()):
+        client.force_login(admin_user)
+        response = client.post(
+            update_url,
+            _update_data(staff_user, mfa_required="on", display_name="Changed name"),
+            HTTP_REFERER=update_url,
+        )
+        target_landing = target_session.get("/")
+
+    staff_user.refresh_from_db()
+    assert response.status_code == 302
+    assert response.url == update_url
+    assert _messages(response) == [DEMO_REFUSAL]
+    assert staff_user.mfa_required is False
+    assert staff_user.display_name != "Changed name"
+    assert target_landing.status_code == 200
+    assert not AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.USER_ACCESS_UPDATED).exists()
+
+
+@pytest.mark.django_db
+def test_demo_keeps_editing_another_account_without_changing_its_2fa_requirement(client, admin_user, staff_user):
+    from tests.test_user_access_hub import _update_data
+
+    with override_settings(DEMO_MODE=True, **_demo_guard_settings()):
+        client.force_login(admin_user)
+        response = client.post(
+            reverse("core:user_access_update", kwargs={"pk": staff_user.pk}),
+            _update_data(staff_user, display_name="Changed name"),
+        )
+
+    staff_user.refresh_from_db()
+    assert response.status_code == 302
+    assert _messages(response) == ["Zugang wurde gespeichert."]
+    assert staff_user.display_name == "Changed name"
+    assert staff_user.mfa_required is False
+
+
+@pytest.mark.django_db
+def test_requiring_2fa_for_another_account_still_works_outside_the_demo(client, admin_user, staff_user):
+    from tests.test_user_access_hub import _update_data
+
+    with override_settings(DEMO_MODE=False, **_demo_guard_settings()):
+        client.force_login(admin_user)
+        response = client.post(
+            reverse("core:user_access_update", kwargs={"pk": staff_user.pk}),
+            _update_data(staff_user, mfa_required="on"),
+        )
+
+    staff_user.refresh_from_db()
+    assert response.status_code == 302
+    assert staff_user.mfa_required is True
+
+
+@pytest.mark.django_db
+def test_demo_refuses_facility_wide_2fa_requirement(client, admin_user, staff_user, settings_obj):
+    """Facility-wide 2FA would send every shared account, the admin included, to a refused setup."""
+    from django.test import Client
+
+    from core.models import AuditLog
+    from tests.test_facility_settings_hub import _post_data
+
+    target_session = Client()
+    target_session.force_login(staff_user)
+    settings_url = reverse("core:facility_settings")
+    data = _post_data(settings_obj)
+    data["mfa_enforced_facility_wide"] = "on"
+    data["facility_full_name"] = "Changed name"
+
+    with override_settings(DEMO_MODE=True, **_demo_guard_settings()):
+        client.force_login(admin_user)
+        response = client.post(settings_url, data, HTTP_REFERER=settings_url)
+        target_landing = target_session.get("/")
+        admin_landing = client.get("/")
+
+    settings_obj.refresh_from_db()
+    assert response.status_code == 302
+    assert response.url == settings_url
+    assert _messages(response) == [DEMO_REFUSAL]
+    assert settings_obj.mfa_enforced_facility_wide is False
+    assert settings_obj.facility_full_name != "Changed name"
+    assert target_landing.status_code == 200
+    assert admin_landing.status_code == 200
+    assert not AuditLog.objects.filter(action=AuditLog.Action.SETTINGS_CHANGE).exists()
+
+
+@pytest.mark.django_db
+def test_demo_keeps_saving_other_facility_settings(client, admin_user, settings_obj):
+    from tests.test_facility_settings_hub import _post_data
+
+    data = _post_data(settings_obj)
+    data["facility_full_name"] = "Changed name"
+
+    with override_settings(DEMO_MODE=True, **_demo_guard_settings()):
+        client.force_login(admin_user)
+        response = client.post(reverse("core:facility_settings"), data)
+
+    settings_obj.refresh_from_db()
+    assert response.status_code == 302
+    assert _messages(response) == ["Einstellungen wurden gespeichert."]
+    assert settings_obj.facility_full_name == "Changed name"
+    assert settings_obj.mfa_enforced_facility_wide is False
+
+
+@pytest.mark.django_db
+def test_facility_wide_2fa_requirement_still_works_outside_the_demo(client, admin_user, settings_obj):
+    from tests.test_facility_settings_hub import _post_data
+
+    data = _post_data(settings_obj)
+    data["mfa_enforced_facility_wide"] = "on"
+
+    with override_settings(DEMO_MODE=False, **_demo_guard_settings()):
+        client.force_login(admin_user)
+        response = client.post(reverse("core:facility_settings"), data)
+
+    settings_obj.refresh_from_db()
+    assert response.status_code == 302
+    assert settings_obj.mfa_enforced_facility_wide is True
+
+
+def _admin_settings_post_data(request, settings_obj):
+    """Every field of the admin change form with its stored value."""
+    from core.admin_site import anlaufstelle_admin_site
+    from core.models import Settings
+
+    form = anlaufstelle_admin_site._registry[Settings].get_form(request, settings_obj)(instance=settings_obj)
+    data = {}
+    for name in form.fields:
+        value = form[name].value()
+        if isinstance(value, bool):
+            if value:
+                data[name] = "on"
+        elif value is None:
+            data[name] = ""
+        elif isinstance(value, (list, tuple)):
+            data[name] = [str(item) for item in value]
+        else:
+            data[name] = str(value)
+    return data
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(("demo_mode", "stored"), ((True, False), (False, True)))
+def test_admin_settings_2fa_requirement_is_refused_only_on_the_demo(
+    client, admin_user, settings_obj, demo_mode, stored
+):
+    change_url = reverse("admin:core_settings_change", args=[settings_obj.pk])
+
+    with override_settings(DEMO_MODE=demo_mode, SUDO_MODE_ENABLED=False, **_demo_guard_settings()):
+        client.force_login(admin_user)
+        page = client.get(change_url)
+        data = _admin_settings_post_data(page.wsgi_request, settings_obj)
+        data["mfa_enforced_facility_wide"] = "on"
+        response = client.post(change_url, data, HTTP_REFERER=change_url)
+
+    settings_obj.refresh_from_db()
+    assert page.status_code == 200
+    assert response.status_code == 302
+    assert settings_obj.mfa_enforced_facility_wide is stored
+    if demo_mode:
+        assert response.url == change_url
+        assert _messages(response) == [DEMO_REFUSAL]

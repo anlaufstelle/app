@@ -12,6 +12,7 @@ from django_ratelimit import UNSAFE
 
 from core.constants import RATELIMIT_MUTATION
 from core.forms.facility_settings import FacilitySettingsForm
+from core.middleware.demo_guard import refuse_demo_change
 from core.models import Settings
 from core.services.facility import ensure_settings_for_facility
 from core.services.security import RequireSudoModeMixin
@@ -88,6 +89,8 @@ class FacilitySettingsView(FacilityAdminRequiredMixin, RequireSudoModeMixin, Vie
 
     def post(self, request):
         settings_obj = self._settings(request)
+        # Read before validation: the form writes its cleaned values onto the instance.
+        stored_mfa_enforced = settings_obj.mfa_enforced_facility_wide
         form = FacilitySettingsForm(request.POST, instance=settings_obj, facility=request.current_facility)
         if not form.is_valid():
             return self._render(
@@ -95,6 +98,10 @@ class FacilitySettingsView(FacilityAdminRequiredMixin, RequireSudoModeMixin, Vie
                 form,
                 expected_updated_at=request.POST.get("expected_updated_at", ""),
             )
+        # On the demo, facility-wide 2FA would send every shared account, the
+        # admin included, to a setup the demo refuses.
+        if refuse_demo_change(request, stored_mfa_enforced, form.cleaned_data["mfa_enforced_facility_wide"]):
+            return redirect("core:facility_settings")
 
         # Ohne Versions-Token liesse ``update_settings`` die Konfliktpruefung
         # aus. Auf diesem Formularweg ist der Token deshalb Pflicht: fehlt er,

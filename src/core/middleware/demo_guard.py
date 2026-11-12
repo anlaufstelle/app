@@ -27,6 +27,19 @@ from core.views.utils import safe_redirect_path
 DEFAULT_BLOCKED_PREFIXES = ("/system/maintenance/",)
 
 
+def refuse_demo_change(request, stored, submitted) -> bool:
+    """On the demo, refuse a form submission that changes a guarded value.
+
+    For fields that would lock a shared account until the hourly reset (the 2FA
+    requirement), while the rest of their form stays usable. Adds the demo
+    refusal message and returns True when the caller must not save anything.
+    """
+    if not getattr(settings, "DEMO_MODE", False) or stored == submitted:
+        return False
+    messages.error(request, _("Diese Aktion ist im Demo-Modus deaktiviert."))
+    return True
+
+
 def _view_name(request) -> str | None:
     """Return the URL name the request resolves to, or None for unknown paths."""
     try:

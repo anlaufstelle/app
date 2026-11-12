@@ -86,8 +86,10 @@ DEMO_LOGINS = [
 # reset: changing the second factor or the passkeys of an account (setup,
 # device change, passkey registration and removal, regenerating backup codes,
 # disabling 2FA), changing the password, deactivating, deleting or re-roling
-# users. Signing in with a second factor stays open. POST only — visitors can
-# still view every page.
+# users and changing facility settings in the admin. Signing in with a second
+# factor stays open. POST only — visitors can still view every page. The
+# account and facility settings forms refuse only a change of the 2FA
+# requirement (core.middleware.demo_guard.refuse_demo_change).
 DEMO_GUARD_BLOCKED_PREFIXES = (
     "/system/maintenance/",
     "/mfa/setup/",
@@ -98,6 +100,7 @@ DEMO_GUARD_BLOCKED_PREFIXES = (
     "/webauthn/registration/",
     "/password-change/",
     "/admin-mgmt/core/user/",
+    "/admin-mgmt/core/settings/",
 )
 
 # Demo guard by URL name, for routes whose path carries another account's pk:

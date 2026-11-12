@@ -15,6 +15,7 @@ from django_ratelimit import UNSAFE
 
 from core.constants import RATELIMIT_MUTATION
 from core.forms.user_access import UserAccessCreateForm, UserAccessUpdateForm
+from core.middleware.demo_guard import refuse_demo_change
 from core.models.user import SessionRevocationError
 from core.services.form_state import FormStateConflictError
 from core.services.security import RequireSudoModeMixin, is_locked
@@ -126,6 +127,8 @@ class UserAccessUpdateView(FacilityAdminRequiredMixin, RequireSudoModeMixin, _No
 
     def post(self, request, pk):
         target = self._target(request, pk)
+        # Read before validation: the form writes its cleaned values onto the instance.
+        stored_mfa_required = target.mfa_required
         form = UserAccessUpdateForm(
             request.POST,
             instance=target,
@@ -134,6 +137,10 @@ class UserAccessUpdateView(FacilityAdminRequiredMixin, RequireSudoModeMixin, _No
         )
         if not form.is_valid():
             return render(request, self.template_name, self._context(form, target))
+        # On the demo, requiring 2FA would send a shared account to a setup the
+        # demo refuses; the account stays locked until the hourly reset.
+        if refuse_demo_change(request, stored_mfa_required, form.cleaned_data["mfa_required"]):
+            return redirect("core:user_access_update", pk=target.pk)
         try:
             updated = update_user_access(
                 target,
