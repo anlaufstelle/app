@@ -1688,7 +1688,14 @@ exception, another exception occurred“); die Datenbank ist zurückgerollt. Der
 nächste Prüflauf verankert die Ketten dann wie ein Erstlauf und kann ein
 zwischenzeitliches Abschneiden nicht erkennen. Deshalb vor dem nächsten
 Prüflauf die Ankerdatei aus der Ankerkopie einer Sicherung zurücklegen, sofern
-vorhanden (`backups/daily/audit_hwm-<Zeitstempel>.json`, siehe unten). Ohne Flush
+vorhanden (`backups/daily/audit_hwm-<Zeitstempel>.json`, siehe unten). Den
+umgekehrten Fall kann ein abfangbarer Abbruch (etwa Strg+C) genau nach dem
+Commit auslösen, bevor der Flush seinen Block verlassen hat: Der Flush legt
+dann die vorherige Ankerdatei auf die bereits geleerte Datenbank zurück.
+Das bleibt sichtbar: `verify_audit_chain` bricht ab, weil die Ankerdatei
+Ketten verankert, die im Bestand fehlen; als vollständig gilt dabei keine
+Kette. Betreiberschritt: `seed --flush` erneut ausführen, das den Anker
+zurücksetzt. Ohne Flush
 bleibt ein Anker für eine fehlende Einrichtung ein Abbruchgrund von
 `verify_audit_chain`.
 

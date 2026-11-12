@@ -1673,7 +1673,13 @@ has been rolled back. The next check run then anchors the chains like a first
 run and cannot detect a truncation in the meantime. Therefore put the anchor
 file back from the anchor copy of a backup, if there is one
 (`backups/daily/audit_hwm-<timestamp>.json`, see below), before the next check
-run. Without a flush, an anchor for a
+run. The reverse case can follow from a catchable interrupt (for example
+Ctrl+C) right after the commit, before the flush has left its block: the
+flush then puts the previous anchor file back over the already emptied
+database. This stays visible: `verify_audit_chain` aborts because the anchor
+file anchors chains that are missing from the data; no chain passes as
+complete. Operator step: run `seed --flush` again, which resets the anchor.
+Without a flush, an anchor for a
 missing facility remains a reason for `verify_audit_chain` to abort.
 
 **Trust boundary:** The read-only mount prevents the web process from writing
@@ -3358,4 +3364,4 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.10 -->
 <!-- translation-date: 2026-11-12 -->
-<!-- source-hash: 8d4c1796910c87b2f37c0be94611f4df08066303 -->
+<!-- source-hash: 0a5d8629834e2bc0987402aa52b007bcf3c1e1ec -->
