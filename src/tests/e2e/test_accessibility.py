@@ -250,12 +250,12 @@ class TestAxeSeitenMatrix:
         Navigation, Sichtbarkeiten und Aktionsleisten haengen an der Rolle, das
         gerenderte Markup ist also ein anderes.
         """
-        _open(staff_page, base_url, "/start/", "[data-testid='zeitstrom-cockpit']")
+        _open(staff_page, base_url, "/start/", "[data-testid='zeitstrom-head']")
         _scan(staff_page, base_url, "start_staff", a11y_baseline, a11y_report_path)
 
     def test_assistant_zeitstrom(self, assistant_page, base_url, a11y_baseline, a11y_report_path):
         """Assistenz: dieselbe Seite mit der kleinsten Rechtemenge."""
-        _open(assistant_page, base_url, "/", "[data-testid='zeitstrom-cockpit']")
+        _open(assistant_page, base_url, "/", "[data-testid='zeitstrom-head']")
         _scan(assistant_page, base_url, "zeitstrom_assistant", a11y_baseline, a11y_report_path)
 
 

@@ -27,7 +27,7 @@ class TestRoleDashboardLanding:
         page = staff_page
         page.goto(f"{base_url}/start/")
         page.wait_for_url(f"{base_url}/")
-        expect(page.locator("[data-testid='zeitstrom-cockpit']")).to_be_visible()
+        expect(page.locator("[data-testid='zeitstrom-head']")).to_be_visible()
 
     @pytest.mark.smoke
     def test_assistant_start_redirects_to_cockpit(self, assistant_page, base_url):
@@ -35,7 +35,7 @@ class TestRoleDashboardLanding:
         page = assistant_page
         page.goto(f"{base_url}/start/")
         page.wait_for_url(f"{base_url}/")
-        expect(page.locator("[data-testid='zeitstrom-cockpit']")).to_be_visible()
+        expect(page.locator("[data-testid='zeitstrom-head']")).to_be_visible()
 
     @pytest.mark.smoke
     def test_lead_dashboard_renders(self, lead_page, base_url):
@@ -107,7 +107,7 @@ class TestNavLinkDashboard:
 
         nav = page.locator("nav[aria-label='Hauptnavigation']")
         expect(nav.locator("[data-testid='nav-dashboard']")).to_have_count(0)
-        expect(page.locator("[data-testid='zeitstrom-cockpit']")).to_be_visible()
+        expect(page.locator("[data-testid='zeitstrom-head']")).to_be_visible()
 
     @pytest.mark.smoke
     def test_facility_admin_has_no_arbeitszentrale_nav(self, authenticated_page, base_url):

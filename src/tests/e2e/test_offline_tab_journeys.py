@@ -244,8 +244,8 @@ def test_online_root_serves_real_zeitstrom_not_offline_shell(browser, base_url):
 
         # ONLINE (kein set_offline) die Wurzel ansteuern.
         page.goto(f"{base_url}/", wait_until="domcontentloaded")
-        # Der echte Zeitstrom rendert (Cockpit) — NICHT die Offline-Chronik-Shell.
-        page.locator("[data-testid='zeitstrom-cockpit']").wait_for(state="visible", timeout=10000)
+        # The online Zeitstrom header is absent from the offline chronology shell.
+        page.locator("[data-testid='zeitstrom-head']").wait_for(state="visible", timeout=10000)
         assert page.locator("[data-testid='offline-zeitstrom']").count() == 0, (
             "Online darf der SW / NICHT mit der Offline-Zeitstrom-Shell kapern"
         )
