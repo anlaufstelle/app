@@ -109,7 +109,7 @@
         const saveResult = await store.saveClientBundle(bundle, etag);
         await _emitCountEvent();
         // Refs #2730: the bundle is saved; do not hold its notice behind the
-        // exclusive revocation lock. The orchestrator still checks and reports
+        // exclusive revocation lock. The sync-orchestrator still checks and reports
         // pending revocations, and replay keeps its own mandatory check.
         window.syncOrchestrator?.requestRevocationCheck?.();
         // Refs #1356: Aufrufer (Badge/Listen-Toggle) haengen bei Verweigerung

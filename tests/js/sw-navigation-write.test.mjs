@@ -310,3 +310,36 @@ describe("offline POSTs that are not navigations keep the fragment", () => {
         expect(response.headers.get("X-Offline-Queued")).toBe("1");
     });
 });
+
+// MFA POSTs already use the browser network path. Their redirect documents
+// must use the same path across a worker takeover.
+// Refs #2730.
+describe("native MFA navigation ownership", () => {
+    it.each(["/mfa/settings/", "/mfa/verify/", "/mfa/settings/?from=passkey"])(
+        "leaves %s to the browser without a worker response or offline fallback",
+        (path) => {
+            const fetchImpl = vi.fn(async () => new Response("server"));
+            const { handlers, context } = workerContext();
+            context.fetch = fetchImpl;
+            const response = dispatchFetch(handlers.fetch, navigationGet(ORIGIN + path));
+            expect(response).toBeNull();
+            expect(fetchImpl).not.toHaveBeenCalled();
+        }
+    );
+
+    it("still handles ordinary navigation and MFA partial requests", async () => {
+        const fetchImpl = vi.fn(async () => new Response("server", { headers: { "Content-Type": "text/html" } }));
+        const { handlers, context } = workerContext();
+        context.fetch = fetchImpl;
+        for (const request of [
+            navigationGet(ORIGIN + "/clients/"),
+            navigationGet(ORIGIN + "/mfa-help/"),
+            navigationGet("https://elsewhere.test/mfa/settings/"),
+            new Request(ORIGIN + "/mfa/settings/", { headers: { "HX-Request": "true" } }),
+        ]) {
+            const response = await dispatchFetch(handlers.fetch, request);
+            expect(await response.text()).toBe("server");
+        }
+        expect(fetchImpl).toHaveBeenCalledTimes(4);
+    });
+});

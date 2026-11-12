@@ -1039,6 +1039,17 @@ self.addEventListener("fetch", (event) => {
     // Einfluss haben. /manifest.json wird aus PWA-Scope-Gruenden wie ein
     // statisches Asset behandelt.
     const requestUrl = new URL(request.url);
+    // Refs #2730: MFA POSTs are network-only. Keep their redirect documents
+    // in the same browser-owned navigation: taking the GET through respondWith
+    // can strand a valid session's response when the controller changes between
+    // the POST and its redirect. MFA pages have no usable offline equivalent.
+    if (
+        request.mode === "navigate" &&
+        requestUrl.origin === self.location.origin &&
+        requestUrl.pathname.startsWith("/mfa/")
+    ) {
+        return;
+    }
     const isStaticAsset =
         requestUrl.origin === self.location.origin &&
         (requestUrl.pathname.startsWith("/static/") || requestUrl.pathname === "/manifest.json");

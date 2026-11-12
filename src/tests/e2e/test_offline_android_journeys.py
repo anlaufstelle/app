@@ -681,7 +681,7 @@ class TestMidSessionCaptureRoundtrip:
             assert queued == 1, f"Queue-Zeile fehlt nach Offline-Submit: {queued!r}"
 
             # Refs #2730: the submit now lands on the full offline page, whose
-            # sync orchestrator would replay on the browser's 'online' event.
+            # sync-orchestrator would replay on the browser's 'online' event.
             # Leave it while still offline so only an inert page is open when
             # the network returns; the next page start must drain on its own.
             page.goto("about:blank")
