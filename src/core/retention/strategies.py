@@ -12,11 +12,16 @@ from core.models import Case, Client, DocumentType, Event
 
 @dataclass(frozen=True)
 class RetentionStrategy:
-    """Expired events with their individual deadline and audit category."""
+    """Expired events with their individual deadline and audit category.
+
+    ``deadlines`` holds every event the strategy applies to, due or not, with
+    the same ``retention_due_at`` annotation as ``queryset``.
+    """
 
     category: str
     cutoff: datetime
     queryset: QuerySet
+    deadlines: QuerySet
 
 
 def _with_deadline(queryset, anchor, days):
@@ -31,26 +36,22 @@ def iter_strategies(facility, settings_obj, now: datetime) -> Iterator[Retention
     if settings_obj.retention_anonymous_days >= 1:
         days = settings_obj.retention_anonymous_days
         cutoff = now - timedelta(days=days)
+        anonymous = events.filter(Q(is_anonymous=True) | Q(client__isnull=True))
         yield RetentionStrategy(
             "anonymous",
             cutoff,
-            _with_deadline(
-                events.filter(Q(is_anonymous=True) | Q(client__isnull=True), occurred_at__lt=cutoff),
-                F("occurred_at"),
-                days,
-            ),
+            _with_deadline(anonymous.filter(occurred_at__lt=cutoff), F("occurred_at"), days),
+            _with_deadline(anonymous, F("occurred_at"), days),
         )
     if settings_obj.retention_identified_days >= 1:
         days = settings_obj.retention_identified_days
         cutoff = now - timedelta(days=days)
+        identified = events.filter(client__contact_stage=Client.ContactStage.IDENTIFIED)
         yield RetentionStrategy(
             "identified",
             cutoff,
-            _with_deadline(
-                events.filter(client__contact_stage=Client.ContactStage.IDENTIFIED, occurred_at__lt=cutoff),
-                F("occurred_at"),
-                days,
-            ),
+            _with_deadline(identified.filter(occurred_at__lt=cutoff), F("occurred_at"), days),
+            _with_deadline(identified, F("occurred_at"), days),
         )
     if settings_obj.retention_qualified_days >= 1:
         days = settings_obj.retention_qualified_days
@@ -70,7 +71,10 @@ def iter_strategies(facility, settings_obj, now: datetime) -> Iterator[Retention
         )
         qualified = events.filter(client__contact_stage=Client.ContactStage.QUALIFIED).annotate(retention_anchor=anchor)
         yield RetentionStrategy(
-            "qualified", cutoff, _with_deadline(qualified.filter(retention_anchor__lt=cutoff), anchor, days)
+            "qualified",
+            cutoff,
+            _with_deadline(qualified.filter(retention_anchor__lt=cutoff), anchor, days),
+            _with_deadline(qualified, anchor, days),
         )
     for document_type in DocumentType.objects.filter(
         facility=facility,
@@ -80,8 +84,10 @@ def iter_strategies(facility, settings_obj, now: datetime) -> Iterator[Retention
         days = document_type.retention_days
         assert days is not None  # noqa: S101 — the database filter excludes NULL.
         cutoff = now - timedelta(days=days)
+        typed = events.filter(document_type=document_type)
         yield RetentionStrategy(
             "document_type",
             cutoff,
-            _with_deadline(events.filter(document_type=document_type, occurred_at__lt=cutoff), F("occurred_at"), days),
+            _with_deadline(typed.filter(occurred_at__lt=cutoff), F("occurred_at"), days),
+            _with_deadline(typed, F("occurred_at"), days),
         )

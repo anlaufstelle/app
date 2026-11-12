@@ -584,13 +584,32 @@ def _clear_first_approval(proposal, user, *, reason):
     )
 
 
-def _reopen_for_new_review(proposal, *, reason):
+def _current_deadline(facility, settings_obj, now, event_id):
+    """Return the event's earliest deadline as a date, due or not, or ``None``.
+
+    The same rule as at proposal creation (:func:`create_proposals_for_facility`):
+    the earliest ``retention_due_at`` across all strategies that apply.
+    """
+    deadlines = [
+        due_at
+        for strategy in iter_strategies(facility, settings_obj, now)
+        for due_at in strategy.deadlines.filter(pk=event_id).values_list("retention_due_at", flat=True)
+        if due_at is not None
+    ]
+    return timezone.localdate(min(deadlines)) if deadlines else None
+
+
+def _reopen_for_new_review(proposal, settings_obj, now, *, reason):
     """Return a proposal to review and discard every approval, with audit evidence.
 
     The caller holds the target and proposal locks. A two-person approval only
     covers the deadline it was given for, and so does a lone first approval
-    (Refs #2714).
+    (Refs #2714). The deletion date follows the current deadline, so the
+    dashboard does not show the proposal as overdue while the event is not due.
     """
+    deletion_due_at = _current_deadline(proposal.facility, settings_obj, now, proposal.target_id)
+    if deletion_due_at is not None:
+        proposal.deletion_due_at = deletion_due_at
     proposal.status = RetentionProposal.Status.PENDING
     proposal.first_approved_by = None
     proposal.first_approved_at = None
@@ -605,6 +624,7 @@ def _reopen_for_new_review(proposal, *, reason):
             "approved_by",
             "approved_at",
             "auto_approved_at",
+            "deletion_due_at",
         ]
     )
     audit_retention_decision(
@@ -615,6 +635,7 @@ def _reopen_for_new_review(proposal, *, reason):
         category="retention_proposal_approval_reset",
         retention_category=proposal.retention_category,
         reason=reason,
+        deletion_due_at=str(proposal.deletion_due_at),
     )
 
 
@@ -673,7 +694,7 @@ def reset_approval_if_deadline_moved(proposal, settings_obj, now):
         ):
             return False
         reason = "approved_before_current_deadline"
-    _reopen_for_new_review(proposal, reason=reason)
+    _reopen_for_new_review(proposal, settings_obj, now, reason=reason)
     return True
 
 

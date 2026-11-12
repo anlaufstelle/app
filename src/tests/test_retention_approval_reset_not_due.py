@@ -365,3 +365,32 @@ def test_legal_hold_discards_both_approvals_with_audit(approved, facility, lead_
     )
     assert row.user == lead_user
     assert row.detail["reason"] == "legal_hold"
+
+
+def test_reset_moves_the_deletion_date_to_the_current_deadline(
+    approved, facility, client_qualified, case, doc_type_contact, qualified_period, lead_user, admin_user
+):
+    """After a reset the dashboard shows the new deadline, not the old overdue date."""
+    from core.retention.proposals import annotate_urgency
+
+    event, proposal = approved
+    _new_case_activity(facility, client_qualified, case, doc_type_contact, qualified_period)
+    _run(facility)
+    _assert_reset(proposal)
+    case.refresh_from_db()
+    new_due = timezone.localdate(case.last_activity_at + timedelta(days=qualified_period.retention_qualified_days))
+    assert proposal.deletion_due_at == new_due
+    assert annotate_urgency(proposal).urgency != "red"
+
+    # Once that date has passed the event is due again and needs two new approvals.
+    later = timezone.now() + timedelta(days=qualified_period.retention_qualified_days + 1)
+    with patch("django.utils.timezone.now", return_value=later):
+        assert annotate_urgency(proposal).urgency == "red"
+        _run(facility)
+        assert not Event.objects.get(pk=event.pk).is_deleted
+        approve_proposal(proposal, lead_user)
+        _run(facility)
+        assert not Event.objects.get(pk=event.pk).is_deleted
+        approve_proposal(proposal, admin_user)
+        _run(facility)
+    assert Event.objects.get(pk=event.pk).is_deleted
