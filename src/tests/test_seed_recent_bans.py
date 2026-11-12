@@ -125,6 +125,7 @@ def test_reserved_bans_do_not_end_before_they_were_issued(facility):
     assert len(consistent) >= K_THRESHOLD + MARGIN  # random bans of the weighted draw may still be inconsistent
 
 
+@pytest.mark.architecture  # reads the Makefile, which is absent from the mutmut work tree
 @pytest.mark.django_db
 @pytest.mark.parametrize("scale", ["medium", "large"])
 def test_published_figures_survive_the_nightly_reuse_window(facility, scale):
@@ -147,6 +148,7 @@ def test_published_figures_survive_the_nightly_reuse_window(facility, scale):
             assert expired >= K_THRESHOLD, f"seed {seed}, {age} d old: only {expired} bans ended in the period"
 
 
+@pytest.mark.architecture  # reads the Makefile, which is absent from the mutmut work tree
 def test_the_reserve_window_outlasts_the_reuse_window():
     assert RECENT_BANS_WINDOW_DAYS + _reuse_window_days() <= 29  # inside the 30-day period when the seed is oldest
 
