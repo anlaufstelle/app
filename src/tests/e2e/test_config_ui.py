@@ -701,6 +701,12 @@ class TestFieldBoardKeepsFocusPlace:
                 boardTop: Math.round(document.getElementById('field-board').getBoundingClientRect().top),
                 inPreview: !!document.activeElement
                     && !!document.activeElement.closest('[data-testid="config-preview-pane"]'),
+                inConditionBoard: !!document.activeElement
+                    && !!document.activeElement.closest('#condition-board'),
+                inFieldBoard: !!document.activeElement
+                    && !!document.activeElement.closest('#field-board'),
+                conditionBoardTop: Math.round(document.getElementById('condition-board').getBoundingClientRect().top),
+                innerHeight: window.innerHeight,
             })"""
         )
 
@@ -746,8 +752,106 @@ class TestFieldBoardKeepsFocusPlace:
             # ... and must not scroll the board out of view.
             assert abs(after["scrollY"] - before["scrollY"]) <= 40, f"viewport jumped: {before} -> {after}"
             assert abs(after["boardTop"] - before["boardTop"]) <= 40, f"board moved: {before} -> {after}"
+            # ... nor hand it to the condition board that reloads itself in the background.
+            assert after["inConditionBoard"] is False, f"focus moved into the condition board: {after}"
         finally:
             _delete_doctype(page, base_url, pk)
+
+    @staticmethod
+    def _press_submit(form, page):
+        """Activate the form's submit button by keyboard (focus + Enter) instead of a mouse click."""
+        button = form.locator("button[type='submit']")
+        button.focus()
+        page.keyboard.press("Enter")
+
+    def _prepare_small_window(self, page, base_url):
+        """Create a type and shrink the window so that the condition section lies below the fold.
+
+        The earlier test measured only "focus not in the preview" and ran in a window tall enough to
+        show the condition section, so a focus move to ``#condition-board`` neither scrolled nor
+        counted as a failure. With the section below the fold the focus move scrolls the page.
+        """
+        page.set_viewport_size({"width": 1280, "height": 500})
+        pk = _create_doctype(page, base_url, _cfg_name("DT-FOCUS-SMALL"))
+        group = _cfg_name("GRP")
+        _add_group(page, group)
+        self._wait_for_preview_settled(page)
+        page.evaluate("document.getElementById('field-board').scrollIntoView({block: 'start'})")
+        before = self._state(page)
+        assert before["conditionBoardTop"] > before["innerHeight"], f"condition board is in the window: {before}"
+        return pk, group, before
+
+    def _assert_stays_at_field_board(self, before, after):
+        assert after["inConditionBoard"] is False, f"focus moved into the condition board: {after}"
+        assert after["inPreview"] is False, f"focus moved into the preview: {after}"
+        assert after["inFieldBoard"] is True, f"focus left the field board: {after}"
+        assert abs(after["scrollY"] - before["scrollY"]) <= 40, f"viewport jumped: {before} -> {after}"
+
+    def _settle_after_board_action(self, page):
+        # The condition board reloads itself after the board action; wait for that reload too.
+        page.wait_for_function(
+            "() => !document.querySelector('.htmx-request, .htmx-swapping, .htmx-settling')", timeout=30000
+        )
+        self._wait_for_preview_settled(page)
+        page.wait_for_timeout(300)
+
+    def test_assigning_a_field_by_mouse_keeps_focus_and_view_at_the_field_board(self, authenticated_page, base_url):
+        page = authenticated_page
+        pk = None
+        try:
+            pk, group, before = self._prepare_small_window(page, base_url)
+            _assign_field(page, "Notiz", group)
+            self._settle_after_board_action(page)
+            self._assert_stays_at_field_board(before, self._state(page))
+        finally:
+            if pk:
+                _delete_doctype(page, base_url, pk)
+
+    def test_assigning_a_field_by_keyboard_keeps_focus_and_view_at_the_field_board(self, authenticated_page, base_url):
+        page = authenticated_page
+        pk = None
+        try:
+            pk, group, before = self._prepare_small_window(page, base_url)
+            form = page.locator('[data-testid="field-add-form"]')
+            ft_val = form.locator('select[name="field_template"] option', has_text="Notiz").first.get_attribute("value")
+            fg_val = form.locator('select[name="field_group"] option', has_text=group).first.get_attribute("value")
+            form.locator('select[name="field_template"]').select_option(value=ft_val)
+            form.locator('select[name="field_group"]').select_option(value=fg_val)
+            self._press_submit(form, page)
+            expect(page.locator('[data-testid="field-row"]:has-text("Notiz")')).to_be_visible(timeout=10000)
+            self._settle_after_board_action(page)
+            self._assert_stays_at_field_board(before, self._state(page))
+        finally:
+            if pk:
+                _delete_doctype(page, base_url, pk)
+
+    def test_adding_a_group_by_mouse_keeps_focus_and_view_at_the_field_board(self, authenticated_page, base_url):
+        page = authenticated_page
+        pk = None
+        try:
+            pk, _group, before = self._prepare_small_window(page, base_url)
+            _add_group(page, _cfg_name("GRP2"))
+            self._settle_after_board_action(page)
+            self._assert_stays_at_field_board(before, self._state(page))
+        finally:
+            if pk:
+                _delete_doctype(page, base_url, pk)
+
+    def test_adding_a_group_by_keyboard_keeps_focus_and_view_at_the_field_board(self, authenticated_page, base_url):
+        page = authenticated_page
+        pk = None
+        try:
+            pk, _group, before = self._prepare_small_window(page, base_url)
+            name = _cfg_name("GRP3")
+            form = page.locator('form[data-testid="group-form"]:has(#id_group-new-name)')
+            form.locator("#id_group-new-name").fill(name)
+            self._press_submit(form, page)
+            expect(page.locator(f'[data-testid="field-group"]:has(h3:has-text("{name}"))')).to_be_visible(timeout=10000)
+            self._settle_after_board_action(page)
+            self._assert_stays_at_field_board(before, self._state(page))
+        finally:
+            if pk:
+                _delete_doctype(page, base_url, pk)
 
 
 # ---------------------------------------------------------------------------

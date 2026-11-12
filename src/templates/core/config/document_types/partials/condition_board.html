@@ -19,11 +19,19 @@ gerade offenes (ungespeichertes) Bedingungs-Formular, wenn parallel das
 Feld-Board mutiert wird. Akzeptiert: recoverable (erneut öffnen), der Gewinn
 (Board spiegelt die Feldlage sofort, Empty-State in beide Richtungen korrekt)
 überwiegt; ein Teil-Swap müsste Feldzähler UND Zeilen-Kontexte einzeln pflegen.
+
+#2709: `data-hx-no-focus-self-refresh` on the root div exempts ONLY the background
+reload (the request starts from the board itself) from the focus handling of
+`focus-management.js`; otherwise the focus (and, with the section out of view, the
+viewport) jumped here after every field-board action. Actions in this board
+(delete, create, change) start from an element inside it and keep their focus
+handling; a blanket `data-hx-no-focus` would be wrong here.
 {% endcomment %}
 <div id="condition-board" class="space-y-4"
      hx-get="{% url 'core:config_condition_board' doc_type.pk %}"
      hx-trigger="refresh-conditions from:body"
-     hx-swap="outerHTML">
+     hx-swap="outerHTML"
+     data-hx-no-focus-self-refresh>
     <p class="text-[12px] text-ink-muted">
         {% trans "Blende ein Feld nur ein, wenn ein anderes Feld eine Bedingung erfüllt. UND innerhalb einer Gruppe, ODER über Gruppen hinweg." %}
     </p>

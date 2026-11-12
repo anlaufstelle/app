@@ -165,6 +165,95 @@ describe("Die vorgelagerten Ausstiege bleiben unveraendert", () => {
     });
 });
 
+describe("Self-refresh in the background (condition board after a field board action)", () => {
+    const SELF_REFRESH_ATTR = "data-hx-no-focus-self-refresh";
+
+    /** Fires ``htmx:afterSwap`` with the request config htmx 2 reports (``requestConfig.elt``). */
+    function afterSwapFrom(target, requestElt) {
+        document.body.dispatchEvent(
+            new CustomEvent("htmx:afterSwap", {
+                bubbles: true,
+                detail: { target, requestConfig: { elt: requestElt } },
+            })
+        );
+    }
+
+    /** Builds the page state after an outerHTML swap: old node detached, new twin connected. */
+    function swappedBoard(attrs) {
+        const old = document.createElement("div");
+        old.id = "condition-board";
+        Object.entries(attrs).forEach(([key, value]) => old.setAttribute(key, value));
+        document.body.appendChild(old);
+        const twin = document.createElement("div");
+        twin.id = "condition-board";
+        Object.entries(attrs).forEach(([key, value]) => twin.setAttribute(key, value));
+        twin.innerHTML = '<button id="inside">Add</button>';
+        old.replaceWith(twin);
+        return { old, twin };
+    }
+
+    function fieldBoardWithFocus() {
+        const board = document.createElement("div");
+        board.id = "field-board";
+        board.setAttribute("tabindex", "-1");
+        board.innerHTML = '<button id="field-action">Assign</button>';
+        document.body.appendChild(board);
+        board.focus();
+        return board;
+    }
+
+    it("keeps the focus on the field board when the condition board reloads itself", () => {
+        const fieldBoard = fieldBoardWithFocus();
+        const { old, twin } = swappedBoard({ [SELF_REFRESH_ATTR]: "" });
+
+        afterSwapFrom(old, old);
+
+        expect(document.activeElement).toBe(fieldBoard);
+        expect(twin.hasAttribute("tabindex")).toBe(false);
+    });
+
+    it("keeps the focus on a control inside the field board as well", () => {
+        fieldBoardWithFocus();
+        const control = document.getElementById("field-action");
+        control.focus();
+        const { old } = swappedBoard({ [SELF_REFRESH_ATTR]: "" });
+
+        afterSwapFrom(old, old);
+
+        expect(document.activeElement).toBe(control);
+    });
+
+    it("still restores a focus that the reload took away from inside the board", () => {
+        const { old, twin } = swappedBoard({ [SELF_REFRESH_ATTR]: "" });
+
+        afterSwapFrom(old, old);
+
+        expect(document.activeElement).toBe(twin);
+    });
+
+    it("keeps guiding the focus for an action inside the condition board", () => {
+        const fieldBoard = fieldBoardWithFocus();
+        const { old, twin } = swappedBoard({ [SELF_REFRESH_ATTR]: "" });
+        const form = document.createElement("form");
+
+        afterSwapFrom(old, form);
+
+        expect(fieldBoard).not.toBe(document.activeElement);
+        expect(document.activeElement).toBe(twin);
+        expect(twin.getAttribute("tabindex")).toBe("-1");
+    });
+
+    it("only a target with the attribute is exempt from the reload rule", () => {
+        const fieldBoard = fieldBoardWithFocus();
+        const { old, twin } = swappedBoard({});
+
+        afterSwapFrom(old, old);
+
+        expect(fieldBoard).not.toBe(document.activeElement);
+        expect(document.activeElement).toBe(twin);
+    });
+});
+
 // Die vormalige "Trefferansage (A11Y-035/036)"-Testgruppe pinnte
 // ``_announceResultCount`` (DOM-Zeilenzaehlung ueber
 // ``data-hx-announce-*``-Attribute). Refs #2155: der Pfad ist entfernt — die

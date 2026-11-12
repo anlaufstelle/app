@@ -49,6 +49,14 @@
  * uebersprungen, weil ihr Ausloeser ein noch fokussiertes Texteingabefeld ist
  * (bleibt ausserhalb des Swap-Ziels erhalten). Zusaetzlich existiert das
  * explizite Opt-out-Attribut data-hx-no-focus fuer Sonderfaelle.
+ *
+ * Background reload (Refs #2709): ``data-hx-no-focus-self-refresh`` on the swap
+ * target (condition board) skips setting the focus only when the target reloaded
+ * itself (``requestConfig.elt`` is the replaced target) and the focus sits on an
+ * element other than ``<body>``. The field board triggers such a reload via
+ * ``refresh-conditions``; without this exception the focus (and, with the section
+ * out of view, the viewport) jumped there. Actions inside the board (delete,
+ * create) start from another element and keep their focus handling.
  */
 (function () {
     "use strict";
@@ -57,6 +65,11 @@
     // (bzw. einem ihrer Vorfahren) gesetzt, unterbindet das Fokus-Setzen fuer
     // diesen Swap komplett.
     var OPT_OUT_ATTR = "data-hx-no-focus";
+    // Opt-out for the background reload only (Refs #2709): a swap target that
+    // reloads itself (the request starts from the target, not from an element
+    // inside it) no longer pulls the focus. Actions INSIDE the target (other
+    // triggering elements) keep their focus handling.
+    var SELF_REFRESH_OPT_OUT_ATTR = "data-hx-no-focus-self-refresh";
     // Explizites Opt-in: markiert im getauschten Fragment das gewuenschte
     // Fokus-Ziel (hat Vorrang vor der generischen Heuristik).
     var OPT_IN_SELECTOR = "[autofocus], [data-hx-focus]";
@@ -148,7 +161,8 @@
 
     function _handleAfterSwap(event) {
         var detail = event && event.detail ? event.detail : {};
-        var target = _resolveConnectedContainer(detail.target || {});
+        var replaced = detail.target || {};
+        var target = _resolveConnectedContainer(replaced);
 
         if (!target || target.nodeType !== 1) {
             return;
@@ -161,6 +175,21 @@
             return;
         }
         if (active && active.closest && active.closest("[" + OPT_OUT_ATTR + "]")) {
+            return;
+        }
+
+        // Background reload (e.g. the condition board after "refresh-conditions"):
+        // the focus belongs to the area the person was using. Only when the
+        // reload took the focus away (the active element is <body>) does the
+        // normal target choice below apply.
+        var requestElt = detail.requestConfig ? detail.requestConfig.elt : null;
+        if (
+            requestElt &&
+            requestElt === replaced &&
+            target.hasAttribute(SELF_REFRESH_OPT_OUT_ATTR) &&
+            active &&
+            active !== document.body
+        ) {
             return;
         }
 

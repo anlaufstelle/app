@@ -12,6 +12,8 @@ Rollen-Gate und das typisierte Wert-Input-Partial.
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from django.urls import reverse
 
@@ -388,6 +390,24 @@ class TestConditionBoardRefresh:
         assert f'hx-get="{url}"' in body
         assert 'hx-trigger="refresh-conditions from:body"' in body
         assert 'hx-swap="outerHTML"' in body
+
+    def test_board_root_opts_out_of_focus_on_background_reload(self, client, admin_user, doc_type_contact):
+        """The board's own reload must not steal the focus from the field board (#2709)."""
+        client.force_login(admin_user)
+        url = reverse("core:config_condition_board", kwargs={"pk": doc_type_contact.pk})
+        body = client.get(url).content.decode()
+        root = re.search(r'<div id="condition-board"[^>]*>', body)
+        assert root, "condition board root not rendered"
+        assert "data-hx-no-focus-self-refresh" in root.group(0)
+        # The attribute is not a blanket opt-out: actions inside the board keep their focus handling.
+        assert "data-hx-no-focus" not in root.group(0).replace("data-hx-no-focus-self-refresh", "")
+
+    def test_actions_inside_board_do_not_opt_out_of_focus(self, client, admin_user, doc_type_contact, field_condition):
+        client.force_login(admin_user)
+        url = reverse("core:config_condition_board", kwargs={"pk": doc_type_contact.pk})
+        body = client.get(url).content.decode()
+        assert 'data-testid="condition-delete-btn"' in body
+        assert body.count("data-hx-no-focus-self-refresh") == 1
 
     def test_empty_state_when_fewer_than_two_fields(self, client, admin_user, facility):
         dt = DocumentType.objects.create(facility=facility, name="Einzelfeld-Typ")

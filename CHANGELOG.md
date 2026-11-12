@@ -39,6 +39,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Verschlüsseltes Ja/Nein-Feld in der Vorschau korrekt** (#2712) — Zeitstrom, Kontaktliste und Übergabe zeigten ein verschlüsseltes Ja/Nein-Feld wie „Krankenhaus“ aus dem Standardpaket immer als „Ja“, auch wenn kein Häkchen gesetzt war. Die Vorschau entschlüsselt den Wert jetzt vor der Prüfung; ein nicht lesbarer Wert erscheint als „[verschlüsselt]“.
 - **Dokumentationstyp-Filter im Zeitstrom findet auch an vollen Tagen alle Treffer** (#2717) — Der Filter griff erst nach der Grenze von 200 Einträgen; an einem Tag mit mehr Einträgen blieb er leer, obwohl es Treffer gab. Er filtert jetzt vor der Grenze, auch für die automatische Aktualisierung.
+- **Feld-Board behält den Fokus nach einer Aktion** (#2709) — Nach „Feld zuordnen“ oder „Neue Gruppe“ sprang Fokus (und bei kleinem Fenster die Ansicht) zum Abschnitt „Bedingte Sichtbarkeit“. Jetzt bleibt beides am Feld-Board.
 
 ## [0.99.10] - 2026-11-11
 
