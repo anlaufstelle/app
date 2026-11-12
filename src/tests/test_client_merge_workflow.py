@@ -741,8 +741,13 @@ class TestUnmerge:
         assert target.data_json["wohnsituation"] == "eigene Wohnung"
         assert "diagnose" in target.data_json
 
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError) as excinfo:
             unmerge_client(source, lead_user)
+
+        # The message names the way out: empty the kept person's own extra fields first.
+        message = " ".join(excinfo.value.messages)
+        assert "zuerst" in message
+        assert "leeren" in message
 
         target.refresh_from_db()
         source.refresh_from_db()

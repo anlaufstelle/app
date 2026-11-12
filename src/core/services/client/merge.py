@@ -906,8 +906,9 @@ def unmerge_client(source, user):
         if any(slug not in adopted and not _is_empty_value(value) for slug, value in (target.data_json or {}).items()):
             raise ValidationError(
                 _(
-                    "Die behaltene Person trägt Zusatzfelder, die nicht aus der Zusammenführung stammen — "
-                    "Aufheben der Zusammenführung nicht möglich, weil sie verloren gingen."
+                    "Die behaltene Person trägt eigene Zusatzfelder, die nicht aus der Zusammenführung stammen — "
+                    "Aufheben nicht möglich, weil sie verloren gingen. "
+                    "Die eigenen Zusatzfelder der behaltenen Person zuerst leeren, dann erneut aufheben."
                 )
             )
 
