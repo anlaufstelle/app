@@ -224,8 +224,13 @@ describe("other outcomes stay as before", () => {
     });
 });
 
-describe("two sync triggers at once", () => {
-    it("send every edit exactly once, also with a rejected one among them", async () => {
+// Covers two triggers in the SAME tab only: jsdom has no Web Locks API, so
+// runExclusive runs without a lock and sync-orchestrator.js coalesces the second
+// request into one rerun. Without the dead-letter handling that rerun would
+// resend the rejected edit (it would still be "modified"). Concurrency across
+// tabs rests on the exclusive Web Lock and is not exercised here.
+describe("two sync triggers coalesced in one tab", () => {
+    it("send every edit exactly once in the rerun, also with a rejected one among them", async () => {
         await saveEdit(PK_A, { dauer: "11" });
         await saveEdit(PK_B, { dauer: "5" });
         await saveEdit(PK_C, { dauer: "6" });
