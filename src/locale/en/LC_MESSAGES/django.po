@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-05 10:39+0100\n"
+"POT-Creation-Date: 2026-11-12 08:33+0100\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -13769,10 +13769,6 @@ msgstr "Downgrade"
 msgid "Dieses Ereignis gehört zu einer Person der Stufe „Mit Zusatzangaben“. Es wird ein Löschantrag erstellt, der von einer anderen Person mit dem Recht „Löschbestätigung“ genehmigt werden muss (Vier-Augen-Prinzip)."
 msgstr "This event belongs to a person at the \"With additional details\" level. A deletion request is created that must be approved by another person with the \"Deletion confirmation\" right (four-eyes principle)."
 
-#: src/templates/core/events/partials/filter_form.html:17
-msgid "Schnellwahl"
-msgstr "Quick select"
-
 #: src/templates/core/events/partials/filter_form.html:20
 msgid "Diese Woche"
 msgstr "This week"
@@ -14430,17 +14426,9 @@ msgstr "The regular run creates a deletion proposal for events with additional d
 msgid "Kontakte durchsuchen …"
 msgstr "Search contacts …"
 
-#: src/templates/core/events/partials/filter_form.html:21
-msgid "Alle Zeiträume"
-msgstr "All periods"
-
 #: src/templates/core/events/partials/filter_form.html:34
 msgid "Alle Personen"
 msgstr "All people"
-
-#: src/templates/core/events/partials/filter_form.html:40
-msgid "Weitere Filter"
-msgstr "More filters"
 
 #: src/templates/core/events/partials/filter_form.html:49
 msgid "Alle Fälle"
@@ -15060,3 +15048,119 @@ msgstr "Search field templates"
 #: src/templates/core/zeitstrom/tally_form.html:28
 msgid "Lokal wartende Kontakte konnten nicht gelesen werden. Angezeigt ist der letzte bestätigte Serverstand."
 msgstr "Contacts waiting locally could not be read. The last confirmed server state is shown."
+
+#: src/core/services/events/list_filters.py:255
+msgid "d.m."
+msgstr "d.m."
+
+#: src/core/services/events/list_filters.py:255
+msgid "d.m.Y"
+msgstr "d.m.Y"
+
+#: src/core/services/events/list_filters.py:263
+msgid "Dieser Monat"
+msgstr "This month"
+
+#: src/core/services/events/list_filters.py:272
+#, python-format
+msgid "ab %(date)s"
+msgstr "from %(date)s"
+
+#: src/core/services/events/list_filters.py:273
+#, python-format
+msgid "bis %(date)s"
+msgstr "until %(date)s"
+
+#: src/core/services/events/list_filters.py:297
+#, python-format
+msgid "Zeitraum: %(period)s"
+msgstr "Period: %(period)s"
+
+#: src/core/services/events/list_filters.py:313
+msgid "ja"
+msgstr "yes"
+
+#: src/core/services/events/list_filters.py:313
+msgid "nein"
+msgstr "no"
+
+#: src/core/services/events/list_filters.py:320
+#: src/templates/core/events/partials/filter_form.html:91
+msgid "Nur Strichliste"
+msgstr "Tally only"
+
+#: src/core/services/events/list_filters.py:320
+#: src/templates/core/events/partials/filter_form.html:90
+msgid "Ohne Strichliste"
+msgstr "Without tally"
+
+#: src/core/services/events/list_filters.py:349
+msgid "Woche"
+msgstr "Week"
+
+#: src/templates/base.html:154 src/templates/offline.html:237
+#: src/templates/offline_base.html:126
+#: src/templates/partials/_quick_exit_standalone.html:23
+msgid "Verlassen"
+msgstr "Leave"
+
+#: src/templates/base.html:257
+#, python-format
+msgid "Demo · synthetisch · Reset %(reset)s"
+msgstr "Demo · synthetic · Reset %(reset)s"
+
+#: src/templates/base.html:268
+msgid "E-Mails &amp; Admin-Funktionen deaktiviert."
+msgstr "Emails &amp; admin functions disabled."
+
+#: src/templates/components/_filter_bar.html:14
+#: src/templates/components/_filter_bar.html:16
+msgid "Filter"
+msgstr "Filters"
+
+#: src/templates/components/_filter_bar.html:26
+msgid "Aktive Filter"
+msgstr "Active filters"
+
+#: src/templates/components/_filter_bar.html:32
+#, python-format
+msgid "Filter entfernen: %(text)s"
+msgstr "Remove filter: %(text)s"
+
+#: src/templates/components/_filter_bar.html:36
+msgid "Alle zurücksetzen"
+msgstr "Reset all"
+
+#: src/templates/core/events/conflict_list.html:147
+msgid "Hier lässt sich der Eintrag nicht ändern: „Erneut versuchen“ sendet ihn unverändert. Zum Korrigieren die Person öffnen und den Eintrag dort erneut bearbeiten."
+msgstr "The entry cannot be changed here: “Retry” sends it unchanged. To correct it, open the person and edit the entry there again."
+
+#: src/templates/core/events/partials/filter_form.html:87
+msgid "Erfassungsweg"
+msgstr "Entry channel"
+
+#: src/templates/core/events/partials/filter_form.html:89
+msgid "Alle Wege"
+msgstr "All channels"
+
+#: src/templates/core/hubs/datenschutz.html:41
+msgid "Datenminimierung (Art. 5 Abs. 1 lit. c)"
+msgstr "Data minimisation (Art. 5(1)(c))"
+
+#: src/templates/core/hubs/datenschutz.html:42
+msgid "— im Reiter „Freitext-Review“: unverschlüsselte Ereignistexte auf Kontaktdaten prüfen."
+msgstr "— in the “Free text review” tab: check unencrypted event texts for contact details."
+
+#: src/templates/core/zeitstrom/partials/tally_panel.html:18
+msgid "tippen zählt +1 · anonym"
+msgstr "tap counts +1 · anonymous"
+
+#: src/templates/core/zeitstrom/partials/tally_undo_bar.html:9
+#, python-format
+msgid "+1 %(name)s gezählt"
+msgstr "+1 %(name)s counted"
+
+#: src/templates/core/zeitstrom/partials/tally_undo_bar.html:9
+#, python-format
+msgid "+1 %(name)s gezählt, Rückgängig möglich"
+msgstr "+1 %(name)s counted, undo available"
