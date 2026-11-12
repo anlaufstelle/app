@@ -2,7 +2,7 @@
 
 The roadmap in section 8 lists targets without commitment and without a date.
 It must therefore carry no priority column and no ticket numbers, and every
-section that mentions the KDS export must describe it the same way and
+mention of KDS must disclaim commitment in its paragraph or table row
 without anticipating format or scope. Section 22 names the bodies of the
 German addiction-help statistics, and section 25 only points to roadmap steps
 that section 8 actually lists.
@@ -19,8 +19,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 CONCEPT_DE = REPO_ROOT / "docs" / "fachkonzept-anlaufstelle.md"
 SUMMARY_EN = REPO_ROOT / "docs" / "en" / "domain-concept-summary.md"
 
-#: The one wording every mention of the KDS export has to carry.
-KDS_WORDING = "Export für die Deutsche Suchthilfestatistik; ohne Zusage zu Format und Umfang"
+KDS_MENTION_RE = re.compile(r"\bKDS\b", re.IGNORECASE)
+KDS_SCOPE_RE = re.compile(r"3\.0|XML|JSON|Aggregat|BASiS[-\s]+Schema", re.IGNORECASE)
+ACCOUNT_IMPORT_RE = re.compile(r"CSV[-\s]Import", re.IGNORECASE)
+ACCOUNT_RE = re.compile(r"Benutzer|Konten|Konto|Zugänge", re.IGNORECASE)
 
 
 def _section(text: str, heading: str) -> str:
@@ -80,18 +82,36 @@ def test_roadmap_lists_the_agreed_topics(concept):
         assert undecided not in table, undecided
 
 
-def test_kds_export_is_described_the_same_in_all_sections(concept):
-    mentions = {
-        "7": _section(concept, "7. Modulstruktur"),
-        "8": _subsection(_section(concept, "8. Aktueller Stand und Roadmap"), "Roadmap"),
-        "22": _section(concept, "22. Regulatorische Landschaft"),
-    }
-    for number, body in mentions.items():
-        kds_lines = [line for line in body.splitlines() if "KDS-Export" in line or "KDS (Kerndatensatz" in line]
-        assert kds_lines, f"section {number} no longer mentions the KDS export"
-        for line in kds_lines:
-            assert KDS_WORDING in line, f"section {number}: {line}"
-            assert "3.0" not in line and "XML" not in line and "JSON" not in line, line
+def _kds_violations(text: str) -> list[str]:
+    """Check each paragraph, list item and table row across the whole document."""
+    blocks = re.split(r"\n\s*\n|\n(?=\s*(?:\||[-*+] |\#{1,6} ))", text)
+    mentions = [block for block in blocks if KDS_MENTION_RE.search(block)]
+    assert mentions, "document no longer mentions KDS"
+    return [
+        block
+        for block in mentions
+        if "ohne zusage" not in " ".join(block.casefold().split()) or KDS_SCOPE_RE.search(block)
+    ]
+
+
+def test_kds_mentions_disclaim_commitment_without_format_or_scope(concept):
+    violations = _kds_violations(concept)
+    assert not violations, "KDS commitment or format/scope claim:\n" + "\n".join(violations)
+
+
+@pytest.mark.parametrize("scope", ["3.0", "XML", "JSON", "Aggregate", "BASiS-Schema"])
+def test_kds_guard_rejects_format_or_scope_in_any_section(concept, scope):
+    text = concept + f"\n\n## Additional section\n\nKDS-Export: ohne Zusage, {scope}.\n"
+    assert _kds_violations(text)
+
+
+@pytest.mark.parametrize("block", ["KDS-Export als Zielbild.", "| KDS | Export |"])
+def test_kds_guard_requires_disclaimer_in_the_same_block(concept, block):
+    assert _kds_violations(concept + f"\n\n{block}\n\nOhne Zusage.\n")
+
+
+def test_kds_guard_accepts_equivalent_wording():
+    assert not _kds_violations("Ein Zielbild ohne Zusage: KDS-Ausgabe für die Suchthilfestatistik.")
 
 
 def test_regulatory_section_names_current_bodies(concept):
@@ -102,14 +122,46 @@ def test_regulatory_section_names_current_bodies(concept):
     assert "EUDA" in body
 
 
-def test_authentication_points_to_listed_roadmap_steps_only(concept):
+def _authentication_violations(concept: str) -> list[str]:
+    """Require a listed target or an explicit disclaimer in each claim sentence."""
     auth = _subsection(_section(concept, "25. Administration und Betrieb"), "Authentifizierung")
     roadmap = "\n".join(_roadmap_table(concept))
-    if "Roadmap-Schritte" in auth:
-        assert "SAML" in roadmap, "section 25 points to roadmap steps that section 8 does not list"
-    # Current state: second factor, passkeys and invitations exist in the code.
-    for current in ("Passkey", "Einladung"):
-        assert current in auth, current
+    sentences = re.split(r"(?<=[.!?])\s+|\n(?=\s*[-*+] )", auth)
+    violations = []
+    for sentence in sentences:
+        unlisted = any(
+            re.search(rf"\b{protocol}\b", sentence, re.IGNORECASE)
+            and not re.search(rf"\b{protocol}\b", roadmap, re.IGNORECASE)
+            for protocol in ("SAML", "OIDC")
+        )
+        if ACCOUNT_IMPORT_RE.search(sentence) and ACCOUNT_RE.search(sentence):
+            unlisted |= not any(
+                ACCOUNT_IMPORT_RE.search(row) and ACCOUNT_RE.search(row) for row in _roadmap_table(concept)
+            )
+        if unlisted and "nicht implementiert" not in " ".join(sentence.casefold().split()):
+            violations.append(sentence)
+    return violations
+
+
+def test_authentication_points_to_listed_roadmap_steps_only(concept):
+    violations = _authentication_violations(concept)
+    assert not violations, "Unlisted authentication target without disclaimer:\n" + "\n".join(violations)
+
+
+@pytest.mark.parametrize("target", ["SAML", "OIDC", "CSV-Import von Benutzerlisten"])
+def test_authentication_guard_checks_each_claim_despite_another_disclaimer(concept, target):
+    text = concept.replace("### Authentifizierung\n", f"### Authentifizierung\n\n{target} ist vorgesehen.\n")
+    assert f"{target} ist vorgesehen." in [claim.strip() for claim in _authentication_violations(text)]
+
+
+@pytest.mark.parametrize("target", ["SAML", "OIDC", "CSV-Import von Benutzerlisten"])
+@pytest.mark.parametrize("listed", [False, True], ids=["explicit-disclaimer", "listed-target"])
+def test_authentication_guard_accepts_disclaimed_or_listed_targets(concept, target, listed):
+    sentence = f"{target} ist {'vorgesehen' if listed else 'nicht implementiert'}."
+    text = concept.replace("### Authentifizierung\n", f"### Authentifizierung\n\n{sentence}\n")
+    if listed:
+        text = text.replace("| Thema | Beschreibung |", f"| {target} | Zielbild |\n| Thema | Beschreibung |")
+    assert not _authentication_violations(text)
 
 
 def test_history_has_entry_1_11(concept):
