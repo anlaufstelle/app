@@ -36,6 +36,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Strichliste als Tap-Kacheln** (#2651) — Jeder Typ ist eine Kachel mit großem Zähler und `+1`-Marke; die ganze Kachel zählt, leuchtet kurz auf und zeigt den Offline-Status auf sich selbst. Typen mit Zahlenfeldern tragen `+ …`.
 - **Rückgängig der Strichliste als feste Leiste mit Countdown** (#2652) — Nach einem Strich erscheint 60 Sekunden lang eine feste Leiste mit „Rückgängig · 58 s“ unter der Strichliste, am Handy über der Navigation. Die Kacheln springen nicht mehr; die Leiste zeigt immer den letzten Strich.
 - **Zahleneingabe der Strichliste als Popover bzw. Bottom-Sheet** (#2653) — Die Werteingabe öffnet am Desktop als Popover an der Kachel, am Handy als Fenster von unten; die Liste verschiebt sich nicht. Escape, Abbrechen oder ein Klick außerhalb schließen, der Fokus kehrt zur Kachel zurück.
+- **Kettenprüfung mit geringerem Speicherbedarf und ohne Fehlalarm bei ruhenden Einrichtungen** (#2717) — `verify_audit_chain` liest Audit-Zeilen schrittweise, die Bereinigung ermittelt Kettengrenzen in der Datenbank. Ein bereinigter Anker einer ruhenden Einrichtung gilt nicht mehr als Bruch, wenn ein signierter Prüfpunkt ihn führt und er laut Ankerdatei vor der Fristgrenze lag.
 
 ### Fixed
 
@@ -45,12 +46,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Sammelfixes aus dem Code-Audit** (#2717) — Zeitstrom-Typfilter, Fotos mit Zweitbild, Fälle im Papierkorb, doppelte Pseudonyme, Fall-Suche und das Aufheben von Zusammenführungen arbeiten korrekt. Löschentscheidungen zählen nicht als Massenlöschung; bricht eine Einrichtung ab, laufen Lösch- und Vorschlagslauf für die übrigen weiter und enden mit Fehler.
 - **Löschfreigaben neu geprüft** (#2714) — Ist das Ereignis nicht mehr fällig oder war es nach aktuellen Fristen bei der ersten Freigabe noch nicht fällig, verwirft der Lauf die Freigaben mit Audit und setzt den Vorschlag zurück. Es gilt die Frist bei der Löschentscheidung, auch für Aktivitäten, Übergabenotizen, Personen ohne Ereignis, Papierkorb und Historie.
 - **Schlüsselrotation verschiebt die Anonymisierung inaktiver Personen nicht mehr** (#2715) — Die Neuverschlüsselung lässt den Änderungszeitpunkt von Personen, Fällen und Aufgaben unverändert; eine gleichzeitige fachliche Änderung hat weiterhin Vorrang.
-- **Kettenprüfung und Audit-Bereinigung mit begrenztem Speicherbedarf** (#2717) — `verify_audit_chain` liest das Audit-Protokoll einer Einrichtung zeilenweise statt am Stück, und die Bereinigung lässt die Datenbank die Kettengrenzen bestimmen. Der Speicherbedarf des nächtlichen Laufs wächst damit nicht mehr mit der Länge des Protokolls.
-- **Kettenprüfung und Audit-Bereinigung mit geringerem Speicherbedarf** (#2717) — `verify_audit_chain` liest Audit-Zeilen schrittweise; die Bereinigung ermittelt Kettengrenzen in der Datenbank. Damit müssen nicht mehr sämtliche Audit-Zeilen und Hashes zugleich im Anwendungsspeicher liegen.
-
-### Fixed
-
-- **Kettenprüfung bleibt nach Bereinigung ruhender Einrichtungen grün** (#2717) — Löschte die Bereinigung den verankerten jüngsten Eintrag einer ruhenden Einrichtung, meldete `verify_audit_chain` jede Nacht einen Bruch. Das gilt jetzt als bereinigt, wenn ein signierter Prüfpunkt den Anker führt und dieser laut Ankerdatei vor der Fristgrenze lag.
 - **Demo-Reset: Audit-Kettenprüfung bleibt nach `seed --flush` grün** (#2708) — `seed --flush` setzt die externe Audit-Ankerdatei jetzt zusammen mit dem Audit-Protokoll zurück. Bisher blieb `verify_audit_chain` dauerhaft rot, sobald ein Prüflauf eine Kette aus dem Seed-Fenster verankert hatte, etwa nach einer Anmeldung beim stündlichen Reset.
 
 ## [0.99.10] - 2026-11-11
