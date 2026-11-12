@@ -422,9 +422,9 @@ def verify_chain(facility, *, hwm=None) -> ChainResult:
     # the two reads would otherwise vouch for rows the stream no longer
     # contains (Refs #2717, finding no. 9).
     evidence = {row.pk: row.entry_hash for row in _authenticated_checkpoints(checkpoints)}
-    # R16: der HWM-Anker muss physisch in der Kette liegen, sonst wurde der
-    # Tail abgeschnitten / die Kette geleert. Only the anchor itself is looked
-    # for instead of collecting every hash of the chain.
+    # R16: the anchor must physically be in the chain; otherwise the tail was
+    # cut off or the chain emptied. Only the anchor itself is looked for
+    # instead of collecting every hash of the chain.
     anchor_entry = hwm.get(facility_id) if hwm is not None else None
     anchor = anchor_entry.get("last_entry_hash") if isinstance(anchor_entry, dict) else None
     anchor_seen = False

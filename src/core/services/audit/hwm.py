@@ -24,15 +24,14 @@ umschreiben, ohne den Schluessel zu kennen. Die **betriebliche Verankerung**
 (Offsite-Kopie/Backup des HWM, Cron-Frequenz des ``verify_audit_chain``-Laufs)
 ist bewusst eine Deployment-Entscheidung und nicht Teil dieses Moduls.
 
-Der Anker wird nur nach einem **vollstaendig gruenen** ``verify_audit_chain``-Lauf
-monoton vorgeruckt (siehe Management-Command). In einer aktiven Kette ist er
-damit laengst weitergesetzt, bevor das retention-basierte Pruning ihn erreicht.
-Schreibt eine Kette laenger als ihre Frist keine Zeile, loescht das Pruning den
-verankerten Tail selbst (Refs #2717, finding no. 9). Dafuer haelt der Store den
-Zeitpunkt der verankerten Zeile mit fest (``last_entry_at``): :meth:`check`
-wertet den fehlenden Anker nur dann als legitim bereinigt, wenn ein
-authentifizierter Checkpoint ihn als Grenze fuehrt und dieser Zeitpunkt vor
-dessen Fristgrenze liegt.
+The anchor only moves forward, monotonically, after a **fully green**
+``verify_audit_chain`` run (see the management command). In an active chain it
+has long moved on before the retention-based pruning reaches it. If a chain
+writes no row for longer than its retention period, the pruning deletes the
+anchored tail itself (Refs #2717, finding no. 9). For that case the store also
+keeps the time of the anchored row (``last_entry_at``): :meth:`check` counts
+the missing anchor as legitimately pruned only if an authenticated checkpoint
+lists it as a boundary and that time lies before the checkpoint's cutoff.
 """
 
 from __future__ import annotations
@@ -98,13 +97,13 @@ def _validate_chains(chains: object, path: str) -> dict:
 class HighWaterMarkStore:
     """Signierter, datei-basierter HWM-Store fuer die Audit-Ketten.
 
-    ``chains`` bildet ``chain_key -> {"count": int, "last_entry_hash": str,
-    "last_entry_at": str}`` ab (``last_entry_at``: ISO time of the anchored row);
-    eine per :meth:`retire` stillgelegte Kette traegt stattdessen
-    ``{"retired": <ISO-Zeitpunkt>, "reason": str, "count": int}`` und damit
-    keinen Tail-Anker mehr (Refs #2296).
-    In-Memory geladen; Aenderungen (:meth:`record`) werden erst mit
-    :meth:`save` atomar persistiert.
+    ``chains`` maps ``chain_key -> {"count": int, "last_entry_hash": str,
+    "last_entry_at": str}`` (``last_entry_at``: ISO time of the anchored row);
+    a chain retired via :meth:`retire` carries
+    ``{"retired": <ISO time>, "reason": str, "count": int}`` instead and thus
+    no tail anchor (Refs #2296).
+    Loaded into memory; changes (:meth:`record`) are persisted atomically only
+    by :meth:`save`.
     """
 
     path: str
@@ -243,12 +242,13 @@ class HighWaterMarkStore:
     def check(self, facility_id, present_hashes: set[str], *, pruned_before: dict | None = None) -> str | None:
         """Prueft die aktuelle Kette gegen den gespeicherten Tail-Anker.
 
-        ``present_hashes`` enthaelt die aktuell in der Kette physisch
-        vorhandenen ``entry_hash``-Werte -- mindestens den Anker, falls er da
-        ist; ``verify_chain`` reicht nur ihn durch, statt alle Hashes der
-        Kette zu sammeln (Refs #2717, finding no. 17). Fehlt der zuletzt verankerte Tail
-        darin, wurden die juengste(n) Zeile(n) abgeschnitten oder die Kette
-        geleert. Ohne vorherigen Anker (Erst-Lauf / neue Facility) ⇒ ``None``.
+        ``present_hashes`` holds the ``entry_hash`` values physically present
+        in the current chain -- at least the anchor, if it is there;
+        ``verify_chain`` passes only the anchor instead of collecting every
+        hash of the chain (Refs #2717, finding no. 17). If the last anchored
+        tail is missing from it, the newest row(s) were cut off or the chain
+        was emptied. Without a previous anchor (first run / new facility)
+        ⇒ ``None``.
 
         ``pruned_before`` maps boundary hashes from authenticated prune
         checkpoints to their cutoff (Refs #2717, finding no. 9). A missing

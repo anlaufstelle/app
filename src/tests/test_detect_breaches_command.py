@@ -95,11 +95,11 @@ class TestDetectBreachesCommand:
 
 @pytest.mark.django_db
 class TestDetectBreachesCommandRlsBypassGuard:
-    """Refs #1512: ``detect_breaches`` war das einzige Compliance-Command ohne
-    ``has_rls_bypass_context()``-Guard (Schwestern ``enforce_retention`` Refs #1016,
-    ``verify_audit_chain`` Refs #1070). Ohne Bypass-Kontext
-    liefe der Cron RLS-blind auf 0 Zeilen und meldete faelschlich 'Keine neuen
-    Breach-Findings.' — fail-loud statt dessen, analog zu den Schwester-Commands."""
+    """Refs #1512: ``detect_breaches`` was the only compliance command without a
+    ``has_rls_bypass_context()`` guard (siblings ``enforce_retention`` Refs #1016,
+    ``verify_audit_chain`` Refs #1070). Without the bypass context the cron
+    would run RLS-blind on 0 rows and wrongly report 'Keine neuen
+    Breach-Findings.' -- fail loud instead, like the sibling commands."""
 
     def test_aborts_loud_without_bypass_context(self, monkeypatch, facility):
         from core.management.commands import detect_breaches as cmd

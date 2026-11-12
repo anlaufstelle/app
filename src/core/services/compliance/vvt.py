@@ -304,8 +304,11 @@ PROCESSING_ACTIVITIES = [
         ),
         "toms": [
             # Refs #2492, #2716: ``prune_auditlog`` deletes expired rows inside
-            # ``bypass_replication_triggers``; it is the only path that opens
-            # the audit trigger since the chain resealing command was removed.
+            # ``bypass_replication_triggers``. Since the chain resealing
+            # command was removed it is the only regular path that deletes
+            # audit rows past the trigger; ``Client.anonymize`` opens the same
+            # bypass without deleting audit rows, and the seed flush (blocked
+            # in production) empties the table.
             _(
                 "Append-Only durch DB-Konvention und RLS-Policies; Ausnahme ist "
                 "das Löschen abgelaufener Einträge durch den Aufbewahrungslauf"

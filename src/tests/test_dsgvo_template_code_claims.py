@@ -954,7 +954,7 @@ class TestAuditLoggingClaims:
             assert "nur der Aufbewahrungslauf" not in text, text
             assert "Aufbewahrungslauf" in text, text
             # Refs #2716: the resealing command is gone; the pruning run is the
-            # only path that bypasses the audit trigger.
+            # only regular path that deletes audit rows past the trigger.
             assert "Hash-Kette" not in text, text
 
     def test_vvt_audit_log_entry_names_the_pruning_exception(self):

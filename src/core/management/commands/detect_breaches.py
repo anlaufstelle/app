@@ -28,11 +28,11 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        # Refs #1512: wie enforce_retention (Refs #1016 A1.1) und
-        # verify_audit_chain (Refs #1070) fail-loud, statt
-        # RLS-blind 0 Facilities/Zeilen zu scannen und faelschlich "Keine neuen
-        # Breach-Findings." zu melden. Der Compliance-Cron MUSS als Rolle mit
-        # BYPASSRLS (Admin) laufen.
+        # Refs #1512: like enforce_retention (Refs #1016 A1.1) and
+        # verify_audit_chain (Refs #1070), fail loud instead of scanning
+        # 0 facilities/rows RLS-blind and wrongly reporting "Keine neuen
+        # Breach-Findings.". The compliance cron MUST run as a role with
+        # BYPASSRLS (admin).
         if not _has_rls_bypass_context():
             raise CommandError(
                 "detect_breaches läuft als RLS-gefilterte App-Rolle ohne Bypass-Kontext "

@@ -17,11 +17,11 @@ Wert-aequivalent (kein NULL im Spiel, ``slug`` ist ``NOT NULL``), aber
 ``IS DISTINCT FROM`` ist der im Repo etablierte NULL-sichere Standard fuer
 Aenderungs-Checks in Triggern.
 
-Bewusst NICHT in ``core.services.system._db_admin._APPEND_ONLY_TRIGGERS`` /
-``bypass_replication_triggers`` aufgenommen: die Slug-Immutabilitaet soll
-AUCH fuer Wartungs-/Import-Pfade gelten, die die Append-Only-Trigger
-umgehen (``prune_auditlog``, ``anonymize``, ``reencrypt_fields``) — neue Slugs entstehen dort ohnehin nur per INSERT,
-nie per UPDATE.
+Deliberately NOT added to ``core.services.system._db_admin._APPEND_ONLY_TRIGGERS`` /
+``bypass_replication_triggers``: slug immutability is meant to hold ALSO for
+maintenance/import paths that bypass the append-only triggers
+(``prune_auditlog``, ``anonymize``, ``reencrypt_fields``) -- new slugs only
+ever arise there via INSERT, never via UPDATE.
 """
 
 from django.db import migrations

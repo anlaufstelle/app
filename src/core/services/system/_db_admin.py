@@ -19,9 +19,9 @@ def has_rls_bypass_context() -> bool:
     — er waere wirkungslos und wuerde faelschlich Erfolg melden. No-op (``True``)
     auf Nicht-PostgreSQL (SQLite-Tests).
 
-    Gemeinsame Quelle fuer ``enforce_retention`` (Refs #1016) sowie
-    ``verify_audit_chain`` (Refs #1070), damit die Fail-Loud-Pruefung nicht
-    driftet.
+    Shared source for ``enforce_retention`` (Refs #1016) and
+    ``verify_audit_chain`` (Refs #1070), so that the fail-loud check does not
+    drift.
     """
     if connection.vendor != "postgresql":
         return True
@@ -116,13 +116,12 @@ def bypass_replication_triggers(tables=None):
     genau dieser Fall jetzt abgedeckt. Der Vorzustand jedes Triggers wird aus
     ``pg_trigger.tgenabled`` gelesen und exakt wiederhergestellt.
 
-    Aufrufer (alle laufen als Owner-/Admin-Wartungsrolle): ``prune_auditlog``,
-    ``Client.anonymize()`` (DSGVO Art. 17) -- beide ohne ``tables`` und
-    damit unveraendert -- sowie der
-    EventHistory-Sweep aus ADR-050 und die EventHistory-Rotation in
-    ``reencrypt_fields``, die die Verengung auf ``core_eventhistory`` nutzen.
-    Die Datenmigration 0174 nutzt dieselbe Verengung fuer ihren einmaligen
-    Historien-Backfill.
+    Callers (all run as the owner/admin maintenance role): ``prune_auditlog``
+    and ``Client.anonymize()`` (GDPR Art. 17) -- both without ``tables`` and
+    therefore unchanged -- as well as the EventHistory sweep from ADR-050 and
+    the EventHistory rotation in ``reencrypt_fields``, which use the narrowing
+    to ``core_eventhistory``. Data migration 0174 uses the same narrowing for
+    its one-off history backfill.
 
     No-op on non-PostgreSQL backends (test SQLite) — callers must
     accept that behaviour.
