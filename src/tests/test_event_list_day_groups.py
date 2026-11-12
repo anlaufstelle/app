@@ -131,7 +131,10 @@ def test_page_query_budget_adds_one_grouped_query(client, staff_user, sample_eve
 def test_grouped_rows_have_time_only_and_accessible_columns(client, staff_user, sample_event):
     response = list_response(client, staff_user)
     html = Elements(response.content)
-    time_cell = re.search(r'data-feed-column="time"[^>]*>(.*?)</span>', response.content.decode(), re.S)[1]
+    card = re.search(
+        r'<button[^>]*data-testid="event-card-toggle"[^>]*>(.*?)</button>', response.content.decode(), re.S
+    )[1]
+    time_cell = re.search(r'data-feed-column="time"[^>]*>(.*?)</span>', card, re.S)[1]
     assert " ".join(strip_tags(time_cell).split()) == timezone.localtime(sample_event.occurred_at).strftime("%H:%M")
     labels = ["Zeit", "Typ", "Person", "Angaben", "Erfasst von"]
     toggle = html.find("button", **{"aria-controls": f"event-detail-{sample_event.pk}"})[0]

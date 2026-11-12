@@ -291,7 +291,7 @@ The search scope matches global search (#1862, [ADR-043](../adr/043-suchraum-vol
 
 **Visibility:** Assistant, Social worker, Manager and Application support see contacts within their own facility, including entries by other team members, with the same sensitivity limit as the Timeline: Assistant sees **Normal**, Social worker up to **Elevated**, Manager and Application support also **High**. Deleted contacts and contacts in the trash are absent. System administration has no access to this working list.
 
-**Results:** Newest contacts appear first, with 25 entries per page. The cards show timestamp, type, person or “Anonymous”, case from Social worker upwards, and “Created by”. Click the header or press Enter or Space there to expand and collapse the details. The visible field values follow the same role permissions as the Timeline. **Go to entry** still opens the detail view. Filters remain in the address when sharing, changing pages and using Back/Forward, including the form values.
+**Results:** Newest contacts appear first, with 25 entries per page. The total number of filtered results appears beside the heading and updates when filtering. Day headings show the date and the number of all filtered results for that day, even when the day spans several pages. The local calendar day of the contact timestamp in the application’s time zone applies, rather than the start of an overnight shift. Below it, rows show only the time, type, person or “Anonymous”, case from Social worker upwards, and “Created by”; a desktop header labels the columns, while mobile entries remain on two lines. Click the header or press Enter or Space there to expand and collapse the details. The visible field values follow the same role permissions as the Timeline. **Go to entry** still opens the detail view. Filters remain in the address when sharing, changing pages and using Back/Forward, including the form values.
 
 The list offers **no export or bulk actions**. Export options remain under [Statistics and Export](#7-statistics-and-export). List and filter requests create **no audit entry**; opening a detail view follows that view's access rules.
 
@@ -1207,5 +1207,5 @@ Phone, email, date and address patterns are detected heuristically and locally o
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: 17ddc1e1527280cc4875f4ed8e29a925274a4805 -->
+<!-- source-hash: f389d27f695c07dba7448cf967a59db127650292 -->
 <!-- translation-date: 2026-11-12 -->

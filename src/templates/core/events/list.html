@@ -3,7 +3,10 @@
 {% block title %}{% translate "Kontakte" %} – Anlaufstelle{% endblock %}
 {% block content %}
 {% back_link %}
-<h1 class="text-[22px] font-bold text-ink mb-6">{% translate "Kontakte" %}</h1>
+<div class="flex flex-wrap items-baseline gap-3 mb-6">
+    <h1 class="text-[22px] font-bold text-ink">{% translate "Kontakte" %}</h1>
+    {% include "core/events/partials/result_count.html" %}
+</div>
 {% include "core/events/partials/filter_form.html" %}
 <div id="event-table" data-hx-no-focus>
     {% include "core/events/partials/table.html" %}

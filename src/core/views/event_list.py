@@ -52,5 +52,6 @@ class EventListView(AssistantOrAboveRequiredMixin, PaginatedListMixin, HTMXParti
                 "period_segments": period_segments,
                 "period_extra": period_extra,
                 "filter_form_oob": self.is_htmx(),
+                "result_count_oob": self.is_htmx(),
             }
         )
