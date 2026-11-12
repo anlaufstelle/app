@@ -2049,6 +2049,12 @@ Der Endpunkt-Guard `TestRateLimitOnAllMutations` durchläuft zur Laufzeit rekurs
 
 ---
 
+## Demo-Modus: geteilte Konten
+
+**Öffentliche Demo:** Bei bestehenden Konten lehnt die Zugangsbearbeitung Änderungen an 2FA-Pflicht, Aktivstatus, Rolle und Benutzername ab, auch beim eigenen Konto; die gesamte Übermittlung bleibt ohne Speicherung und Änderungs-Audit. Unveränderte Werte dürfen zusammen mit Änderungen anderer Felder gespeichert werden. Passwortwechsel und Änderungen an zweiten Faktoren oder Passkeys sowie Benutzer- und Einstellungsänderungen im Django-Admin sind ebenfalls gesperrt (#2717).
+
+---
+
 ## MFA-Backup-Codes: Speicher- und Migrationsvertrag (Issues #2294, #2287, #2327)
 
 **Status:** umgesetzt. Der Abschnitt hält fest, was in der Datenbank wirklich steht, welche Eingaben überhaupt als Geheimnis in Frage kommen und warum kein Wert aus der Datenbank als Code gilt.
@@ -2064,8 +2070,6 @@ Der Endpunkt-Guard `TestRateLimitOnAllMutations` durchläuft zur Laufzeit rekurs
 Anonyme Fehlversuche auf `/account/recovery/backup-code/` erhöhen die Gerätedrossel nicht. Der Pfad begrenzt mit 5/min je IP und 10/h je normalisiertem Benutzernamen; das Benutzerlimit bleibt bei wechselnden IPs wirksam. Die authentifizierte Gerätedrossel bleibt erhalten. Ein eingelöster Code entsperrt das Konto bzw. bestätigt den zweiten Faktor, ersetzt aber kein TOTP-Gerät.
 
 **Neues Gerät einrichten** unter `/mfa/settings/` führt nach bereits bestätigter MFA und Sudo mit Passwort plus TOTP oder Backup-Code auf `/mfa/change-device/`. Erst die Quittung der neuen Backup-Codes entfernt die bisher bestätigten TOTP-Geräte; Passkeys bleiben. Der Abschluss schreibt `MFA_ENABLED` mit der Anzahl ersetzter TOTP-Geräte und `sessions_revoked: true`; auch `MFA_DISABLED` bestätigt den Widerruf mit diesem Wahrheitswert. Nach Sudo führt die freiwillige Deaktivierung auf eine GET-Bestätigungsseite, ihr POST deaktiviert den Faktor. Gerätewechsel und freiwillige Deaktivierung widerrufen alle anderen angemeldeten Sitzungen dieses Kontos ohne Sitzungsscan; diese werden bei ihrer nächsten Anfrage abgemeldet. Die ausführende Sitzung bleibt angemeldet und erhält eine neue Sitzungs-ID. Geräteänderung, Widerruf und Audit werden gemeinsam gespeichert; bei einem Fehler bleibt der bisherige Faktor gültig und der Vorgang kann erneut bestätigt werden. Das Passwort bleibt gültig; bereits ausgestellte Passwort-Reset- und Einladungslinks können durch die Hashänderung ungültig werden. Der Offline-Salt bleibt unverändert. Offline-Geräte ohne Verbindung sind nicht fernlöschbar; bei Wiederverbindung verlangt der bestehende Widerrufscheck eine neue Anmeldung und hält ausstehende Übertragungen zurück. Ohne nutzbaren zweiten Faktor bleibt der Admin-Reset der Rückfallweg.
-
-**Öffentliche Demo:** Bei bestehenden Konten lehnt die Zugangsbearbeitung Änderungen an 2FA-Pflicht, Aktivstatus, Rolle und Benutzername ab, auch beim eigenen Konto; die gesamte Übermittlung bleibt ohne Speicherung und Änderungs-Audit. Unveränderte Werte dürfen zusammen mit Änderungen anderer Felder gespeichert werden. Passwortwechsel und Änderungen an zweiten Faktoren oder Passkeys sowie Benutzer- und Einstellungsänderungen im Django-Admin sind ebenfalls gesperrt (#2717).
 
 ### Verifikation
 
