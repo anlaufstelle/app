@@ -965,21 +965,39 @@ class TestNothingScanned:
         assert "UTF-8" in result.stderr
 
 
-# Grace-period fixtures: the image was built before the identifier was published,
-# so the pinned image cannot carry the fix. The scan clock is set relative to them.
+# Grace-period fixtures: the image was built before the identifier was published.
+# The scan clock is set relative to them.
 BUILT_RAW = "2026-11-05T19:08:30.016975331Z"  # the form Trivy reports (nanoseconds, UTC)
 PUBLISHED_RAW = "2026-11-09T14:15:22.517Z"
-PUBLISHED = dt.datetime(2026, 11, 9, 14, 15, 22, tzinfo=dt.UTC)
+PUBLISHED = dt.datetime.fromisoformat(PUBLISHED_RAW)
+# A scan time at which an eligible finding is inside its grace period and every
+# fixture date is usable (after the build and the publication, before the end).
+SCAN_TIME = PUBLISHED + dt.timedelta(days=1)
 GRACE_END = "2026-11-23"  # publication date + 14 days, valid through that day
+GUARDED = "CVE-2026-0001"  # the finding a guard test withholds the grace period from
+CONTROL = "CVE-2026-0002"  # an eligible finding scanned under the same clock
 
 
 def _third_party_ref() -> str:
     return next(ref for ref in _compose_images() if ref.startswith("postgres"))
 
 
+def _other_third_party_ref() -> str:
+    return next(ref for ref in _compose_images() if ref.startswith("caddy"))
+
+
 def _fresh(severity: str = "HIGH", **kwargs) -> dict:
     """A finding with a fix whose identifier was published after the image build."""
     return _vuln(severity, **({"published": PUBLISHED_RAW} | kwargs))
+
+
+def _control() -> dict:
+    """An eligible finding; in a guard test it shows that only the guard withholds the grace period."""
+    return _fresh(cve=CONTROL, pkg="libxslt")
+
+
+def _scan_of(report: dict, ref: str) -> dict:
+    return next(s for s in report["scans"] if s["reference"] == ref and s["platform"] == "linux/amd64")
 
 
 class TestGracePeriodForThirdPartyFixes:
@@ -992,9 +1010,16 @@ class TestGracePeriodForThirdPartyFixes:
     when the image was built, or without usable dates still blocks unless an
     exception covers it."""
 
-    def _scan(self, tmp_path, monkeypatch, *vulns, now, created=BUILT_RAW, ref=None, exceptions=None, app=""):
+    def _scan(
+        self, tmp_path, monkeypatch, *vulns, now, created=BUILT_RAW, ref=None, exceptions=None, app="", control_ref=None
+    ):
+        """Scan ``vulns`` in ``ref``; with ``control_ref`` that image carries the eligible control finding."""
         ref = ref or _third_party_ref()
         scans = {f"{ref}|linux/amd64": _report(ref, "linux/amd64", vulns=list(vulns), created=created)}
+        if control_ref:
+            scans[f"{control_ref}|linux/amd64"] = _report(
+                control_ref, "linux/amd64", vulns=[_control()], created=BUILT_RAW
+            )
         env, exc_file = _stub_env(tmp_path, scans=scans, exceptions=exceptions)
         for key, value in env.items():
             monkeypatch.setenv(key, value)
@@ -1004,13 +1029,19 @@ class TestGracePeriodForThirdPartyFixes:
         argv = ["--app-image", app, "--out-dir", str(out), "--exceptions", str(exc_file)]
         code = module.main([*argv, *(["--require-app-image"] if app else [])])
         report = json.loads((out / "image-scan-report.json").read_text())
-        scan = next(s for s in report["scans"] if s["reference"] == ref and s["platform"] == "linux/amd64")
-        return code, scan, (out / "image-scan-summary.txt").read_text(), report
+        return code, _scan_of(report, ref), (out / "image-scan-summary.txt").read_text(), report
 
-    def _assert_blocks_without_grace(self, code, scan):
-        assert code == 1
-        assert scan["grace"] == [] and len(scan["blocking"]) == 1
+    def _assert_only_the_guard_withholds_grace(self, code, scan, control_scan=None):
+        """The guarded finding blocks without a grace period, while the eligible control
+        finding (in ``control_scan``, by default in the same scan) gets one under the same
+        clock: the dates allow a grace period, so only the condition under test withholds it."""
+        control_scan = control_scan or scan
+        assert CONTROL not in [f["id"] for f in control_scan["blocking"]]
+        assert [f["id"] for f in control_scan["grace"]] == [CONTROL]
+        assert [f["id"] for f in scan["blocking"]] == [GUARDED]
         assert "grace_ended" not in scan["blocking"][0]
+        assert GUARDED not in [f["id"] for f in scan["grace"]]
+        assert code == 1
 
     def test_fresh_fixable_high_finding_inside_the_grace_period_does_not_block(self, tmp_path, monkeypatch):
         now = PUBLISHED + dt.timedelta(days=3)
@@ -1040,56 +1071,64 @@ class TestGracePeriodForThirdPartyFixes:
         code, scan, summary, report = self._scan(tmp_path, monkeypatch, _fresh(), now=now)
         assert code == 1
         assert report["result"] == "fail"
-        assert scan["grace"] == []
-        assert [f["grace_ended"] for f in scan["blocking"]] == [GRACE_END]
         expected = f"BLOCKING CVE-2026-0001 [high] openssl 3.0.0 fixed in 3.0.1 — grace period ended {GRACE_END}"
         assert expected in summary
+        assert scan["grace"] == []
+        assert [f["grace_ended"] for f in scan["blocking"]] == [GRACE_END]
 
     def test_finding_known_when_the_image_was_built_gets_no_grace_period(self, tmp_path, monkeypatch):
         # The fix may well have existed at build time; a rebuild alone would not bring it.
-        now = PUBLISHED + dt.timedelta(days=1)
         old = _vuln("HIGH", published="2026-10-21T08:00:00Z")
-        code, scan, _, _ = self._scan(tmp_path, monkeypatch, old, now=now)
-        self._assert_blocks_without_grace(code, scan)
+        code, scan, _, _ = self._scan(tmp_path, monkeypatch, old, _control(), now=SCAN_TIME)
+        self._assert_only_the_guard_withholds_grace(code, scan)
 
     def test_critical_finding_gets_no_grace_period(self, tmp_path, monkeypatch):
-        code, scan, _, _ = self._scan(tmp_path, monkeypatch, _fresh("CRITICAL"), now=PUBLISHED)
-        self._assert_blocks_without_grace(code, scan)
+        code, scan, _, _ = self._scan(tmp_path, monkeypatch, _fresh("CRITICAL"), _control(), now=SCAN_TIME)
+        self._assert_only_the_guard_withholds_grace(code, scan)
 
     def test_finding_without_fix_still_needs_an_exception(self, tmp_path, monkeypatch):
-        code, scan, _, _ = self._scan(tmp_path, monkeypatch, _fresh(fixed=""), now=PUBLISHED)
-        self._assert_blocks_without_grace(code, scan)
+        code, scan, _, _ = self._scan(tmp_path, monkeypatch, _fresh(fixed=""), _control(), now=SCAN_TIME)
+        self._assert_only_the_guard_withholds_grace(code, scan)
 
     @pytest.mark.parametrize("fixed, status", [("", "fixed"), (ABSENT, ABSENT), (3, "fixed"), ("", "mystery")])
     def test_unclear_fix_status_gets_no_grace_period(self, tmp_path, monkeypatch, fixed, status):
-        code, scan, _, _ = self._scan(tmp_path, monkeypatch, _fresh(fixed=fixed, status=status), now=PUBLISHED)
-        self._assert_blocks_without_grace(code, scan)
+        vuln = _fresh(fixed=fixed, status=status)
+        code, scan, _, _ = self._scan(tmp_path, monkeypatch, vuln, _control(), now=SCAN_TIME)
+        self._assert_only_the_guard_withholds_grace(code, scan)
 
     def test_app_image_gets_no_grace_period(self, tmp_path, monkeypatch):
-        code, scan, summary, _ = self._scan(tmp_path, monkeypatch, _fresh(), now=PUBLISHED, ref=APP, app=APP)
+        # The control finding sits in a third-party image of the same run.
+        code, scan, summary, report = self._scan(
+            tmp_path, monkeypatch, _fresh(), now=SCAN_TIME, ref=APP, app=APP, control_ref=_third_party_ref()
+        )
         assert scan["role"] == "app"
-        self._assert_blocks_without_grace(code, scan)
-        assert "grace until" not in summary
+        self._assert_only_the_guard_withholds_grace(code, scan, _scan_of(report, _third_party_ref()))
+        assert [line for line in summary.splitlines() if "grace until" in line] == [
+            f"    grace until {GRACE_END}: {CONTROL} [high] libxslt 3.0.0 fixed in 3.0.1"
+        ]
 
     @pytest.mark.parametrize(
         "created",
-        [None, "yesterday", "2026-11-05T19:08:30", "2026-11-10T00:00:00Z", 1730000000],
+        [None, "yesterday", "2026-11-05T19:08:30", "2026-11-11T00:00:00Z", 1730000000],
         ids=["missing", "garbage", "without-offset", "after-the-scan", "not-a-string"],
     )
     def test_image_without_a_usable_build_date_gets_no_grace_period(self, tmp_path, monkeypatch, created):
-        now = dt.datetime(2026, 11, 9, 23, 0, tzinfo=dt.UTC)
-        code, scan, _, _ = self._scan(tmp_path, monkeypatch, _fresh(), now=now, created=created)
-        self._assert_blocks_without_grace(code, scan)
+        # The control finding sits in another third-party image with a usable build date.
+        other = _other_third_party_ref()
+        code, scan, _, report = self._scan(
+            tmp_path, monkeypatch, _fresh(), now=SCAN_TIME, created=created, control_ref=other
+        )
+        self._assert_only_the_guard_withholds_grace(code, scan, _scan_of(report, other))
 
     @pytest.mark.parametrize(
         "published",
-        [ABSENT, None, "", "soon", "2026-11-09T14:15:22", "2026-11-10T00:00:00Z", 1730000000],
+        [ABSENT, None, "", "soon", "2026-11-09T14:15:22", "2026-11-11T00:00:00Z", 1730000000],
         ids=["absent", "null", "empty", "garbage", "without-offset", "after-the-scan", "not-a-string"],
     )
     def test_finding_without_a_usable_publication_date_gets_no_grace_period(self, tmp_path, monkeypatch, published):
-        now = dt.datetime(2026, 11, 9, 23, 0, tzinfo=dt.UTC)
-        code, scan, _, _ = self._scan(tmp_path, monkeypatch, _vuln("HIGH", published=published), now=now)
-        self._assert_blocks_without_grace(code, scan)
+        vuln = _vuln("HIGH", published=published)
+        code, scan, _, _ = self._scan(tmp_path, monkeypatch, vuln, _control(), now=SCAN_TIME)
+        self._assert_only_the_guard_withholds_grace(code, scan)
 
     def test_publication_date_with_offset_counts_in_utc(self, tmp_path, monkeypatch):
         # 23:30 at UTC-02:00 is already 2026-11-10 in UTC: the grace period ends a day later.
@@ -1107,12 +1146,15 @@ class TestGracePeriodForThirdPartyFixes:
             "reason": "Decided case by case.",
             "expires": "2026-12-01",
         }
-        code, scan, _, _ = self._scan(tmp_path, monkeypatch, _fresh(), now=PUBLISHED, exceptions=[entry])
+        # Both findings are eligible for a grace period; only the covered one is excepted.
+        code, scan, _, _ = self._scan(tmp_path, monkeypatch, _fresh(), _control(), now=SCAN_TIME, exceptions=[entry])
+        assert scan["blocking"] == []
+        assert [f["id"] for f in scan["grace"]] == [CONTROL]
+        assert [f["id"] for f in scan["excepted"]] == [GUARDED]
         assert code == 0
-        assert scan["grace"] == [] and len(scan["excepted"]) == 1
 
     def test_scan_without_findings_has_an_empty_grace_class(self, tmp_path, monkeypatch):
-        code, scan, summary, _ = self._scan(tmp_path, monkeypatch, now=PUBLISHED)
+        code, scan, summary, _ = self._scan(tmp_path, monkeypatch, now=SCAN_TIME)
         assert code == 0
         assert scan["grace"] == []
         assert "grace 0 (not blocking)" in _scan_line(summary, _third_party_ref(), "linux/amd64")
