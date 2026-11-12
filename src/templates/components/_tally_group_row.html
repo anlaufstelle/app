@@ -10,8 +10,8 @@
             <span data-testid="feed-kind-badge" class="feed-kind-badge bg-[oklch(0.94_0.008_75)] text-ink-soft">{% trans "Strichliste" %}</span>
             {% for entry in group.types %}{{ entry.count }} {{ entry.name }}{% if not forloop.last %} · {% endif %}{% endfor %}
         </span>
-        <span data-feed-column="by" class="feed-row-by">{% trans "Team" %}
-            <span class="transition-transform duration-200" :class="rotateClass" aria-hidden="true">⌄</span>
+        <span data-feed-column="by" class="feed-row-by"><span>{% trans "Team" %}</span>
+            <span class="inline-flex h-4 w-4 shrink-0 items-center justify-center transition-transform duration-200" :class="rotateClass" aria-hidden="true">⌄</span>
         </span>
     </button>
     <div id="tally-group-{{ group.key }}" x-show="expanded" x-cloak class="mx-3.5 mb-3 bg-canvas rounded-md px-3 py-2 text-[13px] text-ink-soft">

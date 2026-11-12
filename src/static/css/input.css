@@ -184,7 +184,7 @@
     }
     .feed-row-header {
         @apply grid w-full min-w-0 min-h-[48px] items-center gap-x-3 text-left text-[13px] py-2 pr-3.5;
-        grid-template-columns: 3px 44px minmax(0,1fr) minmax(0,1fr);
+        grid-template-columns: 3px 44px minmax(0,1fr) minmax(0,1fr) 16px;
     }
     .feed-row-header:focus-visible {
         @apply ring-0 ring-offset-0;
@@ -207,7 +207,13 @@
         @apply col-start-2 col-span-3 row-start-2 min-w-0 truncate text-[12px] text-ink-muted;
     }
     .feed-row-by {
-        @apply hidden min-w-0 max-w-40 items-center justify-end gap-2 truncate text-[12px] text-ink-muted;
+        @apply col-start-5 row-start-1 row-span-2 hidden min-w-0 max-w-40 items-center justify-end gap-2 truncate text-[12px] text-ink-muted;
+    }
+    button.feed-row-header .feed-row-by {
+        @apply flex;
+    }
+    .feed-row-by > :not([aria-hidden="true"]) {
+        @apply hidden md:inline;
     }
     .feed-kind-badge {
         @apply inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold;
@@ -219,7 +225,7 @@
         .feed-row-edge { @apply row-span-1; }
         .feed-row-person { @apply text-left; }
         .feed-row-details { @apply col-start-5 col-span-1 row-start-1; }
-        .feed-row-by { @apply col-start-6 row-start-1 flex; }
+        .feed-row-by { @apply col-start-6 row-start-1 row-span-1 flex; }
     }
     .badge {
         @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;

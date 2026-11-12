@@ -9,6 +9,7 @@ there; a past day outside the seed window holds exactly the cards created here.
 """
 
 import json
+import re
 from datetime import date, timedelta
 from urllib.parse import parse_qs, urlparse
 
@@ -351,6 +352,29 @@ class TestFeedRowsAndGroups:
         assert values["style"] == "solid" and values["width"] >= 2, values
         assert values["offset"] <= -values["width"] and values["inside"], values
         assert min(values["contrasts"]) >= 3, values
+
+    def test_mobile_rows_keep_a_visible_expansion_indicator(self, authenticated_page, base_url, feed_fixture):
+        page = authenticated_page
+        page.set_viewport_size({"width": 390, "height": 844})
+        page.goto(f"{base_url}/?date={FEED_DAY}&time_filter=all", wait_until="domcontentloaded")
+        toggles = page.locator("#feed-list button.feed-row-header")
+        assert toggles.count() >= 4  # Contact, activity and both hourly groups.
+        for toggle in toggles.all():
+            indicator = toggle.locator('[data-feed-column="by"] > span[aria-hidden="true"]')
+            expect(indicator).to_be_visible()
+            bounds = toggle.bounding_box()
+            arrow = indicator.bounding_box()
+            assert bounds["height"] >= 44 and bounds["width"] >= 44, bounds
+            assert arrow["width"] >= 16 and arrow["height"] >= 16, arrow
+            assert bounds["x"] <= arrow["x"] < arrow["x"] + arrow["width"] <= bounds["x"] + bounds["width"]
+            assert bounds["y"] <= arrow["y"] < arrow["y"] + arrow["height"] <= bounds["y"] + bounds["height"]
+            expect(toggle).to_have_attribute("aria-expanded", "false")
+            toggle.click()
+            expect(toggle).to_have_attribute("aria-expanded", "true")
+            expect(indicator).to_have_class(re.compile(r"\brotate-180\b"))
+            toggle.click()
+            expect(toggle).to_have_attribute("aria-expanded", "false")
+            expect(indicator).not_to_have_class(re.compile(r"\brotate-180\b"))
 
     def test_hour_groups_expand_with_keyboard(self, authenticated_page, base_url, feed_fixture):
         page = authenticated_page
