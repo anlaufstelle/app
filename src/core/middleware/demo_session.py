@@ -7,9 +7,10 @@ neither clear the cookie nor save an unkeyed anonymous replacement (Refs #2736).
 An explicit login or a newly keyed anonymous session (such as a validated
 reset/invitation token handover) may publish its own cookie.
 
-Before and after saving an unchanged authenticated key, recheck its existence
-and auth revision: revocation can overlap the save. A response completed before
-revocation can still arrive late; its old key cannot authenticate after rotation.
+After saving an unchanged authenticated key, recheck its existence and auth
+revision: revocation can overlap the save. Backends that can recreate deleted
+keys also check before saving. A response completed before revocation can still
+arrive late; its old key cannot authenticate after rotation.
 Explicit logout, session clearing and absolute expiry retain Django's cookie
 behavior unless auth was already rejected: the key is then deleted server-side
 and its cookie stays inert. Explicitly created sessions (login, keyed token
@@ -19,12 +20,15 @@ browser expiry. Skipped cookie writes still retain Vary: Cookie for caches.
 """
 
 from django.conf import settings
-from django.contrib.auth import SESSION_KEY
+from django.contrib.auth import BACKEND_SESSION_KEY, HASH_SESSION_KEY, SESSION_KEY, get_user_model
 from django.contrib.auth import get_user as get_session_user
 from django.contrib.auth.middleware import get_user
+from django.contrib.sessions.backends.db import SessionStore as DatabaseSessionStore
 from django.contrib.sessions.exceptions import SessionInterrupted
 from django.contrib.sessions.middleware import SessionMiddleware
+from django.db.models import Exists
 from django.utils.cache import patch_vary_headers
+from django.utils.crypto import constant_time_compare
 
 
 class DemoSessionMiddleware(SessionMiddleware):
@@ -46,7 +50,13 @@ class DemoSessionMiddleware(SessionMiddleware):
         if (
             (rejected and not authenticated and request.session.session_key is None)
             or self._is_unknown_key_request(request)
-            or self._is_revoked_key_response(request)
+            or (
+                response.status_code < 500
+                # The DB backend uses force_update, so a deleted key cannot be
+                # recreated. Other backends still need the pre-save check.
+                and type(getattr(request, "session", None)) is not DatabaseSessionStore
+                and self._is_revoked_key_response(request)
+            )
         ):
             # Django varies on the cookie whenever it deletes it or the session
             # was accessed; keep that for caches.
@@ -55,7 +65,7 @@ class DemoSessionMiddleware(SessionMiddleware):
         try:
             response = super().process_response(request, response)
         except SessionInterrupted:
-            # A predecessor can disappear between the precheck and DB update.
+            # A predecessor can disappear between loading and the DB update.
             # Keep the view response without publishing the revoked cookie.
             if not self._is_revoked_key_response(request):
                 raise
@@ -76,9 +86,31 @@ class DemoSessionMiddleware(SessionMiddleware):
             return False
         if not (session.modified or settings.SESSION_SAVE_EVERY_REQUEST) or SESSION_KEY not in session:
             return False
-        # Do not recreate or refresh a predecessor removed by another request.
-        # A still-stored predecessor can already have a rejected auth revision;
-        # bypass the request's cached user for Django's current hash check.
+        backend = session.get(BACKEND_SESSION_KEY)
+        if (
+            type(session) is DatabaseSessionStore
+            and backend == "django.contrib.auth.backends.ModelBackend"
+            and backend in settings.AUTHENTICATION_BACKENDS
+        ):
+            # Read key existence and the current auth revision together, AFTER
+            # the save. Reusing the request's user would miss a concurrent commit.
+            user_model = get_user_model()
+            user_id = user_model._meta.pk.to_python(session[SESSION_KEY])
+            user = (
+                user_model._default_manager.filter(pk=user_id)
+                .annotate(session_exists=Exists(session.model.objects.filter(session_key=incoming_key)))
+                .only("password", "is_active")
+                .first()
+            )
+            if user is None or not user.session_exists:
+                return True
+            if user.is_active and constant_time_compare(
+                session.get(HASH_SESSION_KEY, ""), user.get_session_auth_hash()
+            ):
+                return False
+            # Let Django handle rejection/flush and secret-key fallback rotation.
+            return not get_session_user(request).is_authenticated
+        # Preserve other backends' lookup and authentication semantics.
         return not session.exists(incoming_key) or not get_session_user(request).is_authenticated
 
     @staticmethod

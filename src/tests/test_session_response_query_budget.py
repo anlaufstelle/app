@@ -13,14 +13,18 @@ from tests.test_mfa_session_revocation import _browser
 pytestmark = pytest.mark.django_db
 
 
+@pytest.mark.parametrize("auth_backend", ["ModelBackend", "AllowAllUsersModelBackend"])
 @pytest.mark.parametrize(
     ("modified", "save_every_request", "status", "expected_reads"),
     [(True, False, 200, 1), (False, True, 200, 1), (False, False, 200, 0), (True, False, 500, 0)],
 )
 def test_response_validation_uses_one_read_only_when_saving(
-    settings, staff_user, modified, save_every_request, status, expected_reads
+    settings, staff_user, auth_backend, modified, save_every_request, status, expected_reads
 ):
     settings.SESSION_SAVE_EVERY_REQUEST = save_every_request
+    settings.AUTHENTICATION_BACKENDS = [f"django.contrib.auth.backends.{auth_backend}"]
+    if expected_reads and auth_backend != "ModelBackend":
+        expected_reads = 2
     browser = _browser(staff_user)
     key = browser.session.session_key
     request = RequestFactory().get("/manifest.json", HTTP_COOKIE=f"{settings.SESSION_COOKIE_NAME}={key}")
@@ -39,3 +43,15 @@ def test_response_validation_uses_one_read_only_when_saving(
     assert (settings.SESSION_COOKIE_NAME in response.cookies) is bool(expected_reads)
     if expected_reads:
         assert response.cookies[settings.SESSION_COOKIE_NAME].value == key
+
+
+def test_response_without_session_is_unchanged():
+    request = RequestFactory().get("/manifest.json")
+    middleware = DemoSessionMiddleware(lambda request: HttpResponse())
+    response = HttpResponse()
+
+    with CaptureQueriesContext(connection) as captured:
+        assert middleware.process_response(request, response) is response
+
+    assert not captured
+    assert not response.cookies
