@@ -211,3 +211,19 @@ def test_demo_deploy_runs_audit_verification_synchronously_with_warning() -> Non
     assert text.count("systemctl start anlaufstelle-audit-verify.service") == 1
     assert "--no-block" not in text
     # Success, warning and infrastructure failure are exercised by command doubles.
+
+
+def test_demo_audit_service_and_client_wait_are_bounded() -> None:
+    service = _demo_audit_unit("service")
+    assert "TimeoutStartSec=30min\n" in service
+    text = _demo_deploy_text()
+    assert (
+        "/usr/bin/timeout --foreground --kill-after=30s 32m sudo systemctl start anlaufstelle-audit-verify.service"
+        in text
+    )
+
+
+def test_demo_audit_descriptions_match_shared_timer() -> None:
+    description = _shared_audit_timer()[3]
+    assert f"Description={description}\n" in _demo_audit_unit("service")
+    assert f"Description=Timer: {description}\n" in _demo_audit_unit("timer")
