@@ -19,7 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - **Kontakte-Liste: eine Filterzeile mit Chips und Sofort-Filter** (#2658) — Suche, Zeitraum-Schnellwahl und Filter-Knopf stehen in einer Zeile, aktive Filter als entfernbare Chips darunter; Änderungen wirken sofort, ohne JavaScript bleibt „Filtern“. Eine Schnellwahl überschreibt eigene Von/Bis-Daten nicht mehr still; neu: „Heute“, „Monat“, Erfassungsweg.
-- **Befehl `backfill_audit_chain` entfernt, Audit-Zeilen ohne Hash gelten als Bruch** (#2716) — Der Befehl konnte nach einer Bereinigung die ganze Audit-Kette neu versiegeln und so eine manipulierte Zeile beglaubigen; er entfällt ersatzlos, Betreiber rufen ihn nicht mehr auf. `verify_audit_chain` meldet jetzt auch eine Zeile ohne Hash vor dem Kettenanfang als Bruch.
+- **Befehl `backfill_audit_chain` entfernt, Audit-Zeilen ohne Hash gelten als Bruch** (#2716) — Der Befehl konnte nach einer Bereinigung die ganze Audit-Kette neu versiegeln und so eine manipulierte Zeile beglaubigen; er entfällt ersatzlos. `verify_audit_chain` meldet jetzt auch eine Zeile ohne Hash vor dem Kettenanfang als Bruch.
 
 ### Changed
 
@@ -50,8 +50,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- **Kettenprüfung bleibt nach Bereinigung einer ruhenden Einrichtung grün** (#2717) — Schrieb eine Einrichtung länger als ihre Audit-Frist keinen Eintrag, löschte die Bereinigung den extern verankerten jüngsten Eintrag und `verify_audit_chain` meldete danach jede Nacht einen Kettenbruch. Der Anker gilt jetzt als bereinigt, wenn der signierte Prüfpunkt ihn führt und er laut Ankerdatei vor der Fristgrenze lag.
-- **Demo-Reset: Audit-Kettenprüfung bleibt nach `seed --flush` grün** (#2708) — `seed --flush` setzt die externe Audit-Ankerdatei jetzt zusammen mit dem Audit-Protokoll zurück. Bisher blieb `verify_audit_chain` dauerhaft rot, sobald ein Prüflauf eine Kette aus dem Seed-Fenster verankert hatte, etwa nach einer Anmeldung während des stündlichen Resets.
+- **Kettenprüfung bleibt nach Bereinigung ruhender Einrichtungen grün** (#2717) — Löschte die Bereinigung den verankerten jüngsten Eintrag einer ruhenden Einrichtung, meldete `verify_audit_chain` jede Nacht einen Bruch. Das gilt jetzt als bereinigt, wenn ein signierter Prüfpunkt den Anker führt und dieser laut Ankerdatei vor der Fristgrenze lag.
+- **Demo-Reset: Audit-Kettenprüfung bleibt nach `seed --flush` grün** (#2708) — `seed --flush` setzt die externe Audit-Ankerdatei jetzt zusammen mit dem Audit-Protokoll zurück. Bisher blieb `verify_audit_chain` dauerhaft rot, sobald ein Prüflauf eine Kette aus dem Seed-Fenster verankert hatte, etwa nach einer Anmeldung beim stündlichen Reset.
 
 ## [0.99.10] - 2026-11-11
 
