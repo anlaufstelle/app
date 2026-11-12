@@ -43,7 +43,6 @@ _EXPECTED_DEMO_JOBS = [
     "create_statistics_snapshots",
     "cleanup_orphan_storage_files",
     "detect_breaches",
-    "refresh_statistics_view",
     "check_db_roles",
 ]
 

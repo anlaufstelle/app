@@ -54,7 +54,3 @@
 
 # Breach-Detection-Scan (DSGVO Art. 33) — stuendlich zur 30. Minute.
 30 * * * * python manage.py detect_breaches
-
-# Materialized-View-Refresh fuer das Statistik-Dashboard — stuendlich zur
-# 15. Minute. Laeuft CONCURRENTLY und blockiert keine Reader.
-15 * * * * python manage.py refresh_statistics_view

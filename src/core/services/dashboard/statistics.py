@@ -4,8 +4,6 @@ import logging
 from dataclasses import dataclass
 from datetime import date, timedelta
 
-from django.conf import settings
-from django.db import connection
 from django.db.models import Count, Q
 from django.utils.translation import gettext_lazy as _
 
@@ -14,8 +12,6 @@ from core.services.workitem_visibility import readable_person_filter
 from core.utils.formatting import parse_date
 
 logger = logging.getLogger(__name__)
-
-STATISTICS_MV_NAME = "core_statistics_event_flat"
 
 # Refs #1589: Obergrenze fuer den ``period=custom``-Zeitraum. Ohne Cap laeuft
 # ``_split_into_segments`` den Bereich Monat fuer Monat ohne Ende ab und loest
@@ -420,102 +416,3 @@ def get_statistics_for_events(events):
         "by_document_type": _aggregate_by_document_type(events),
         "by_age_cluster": _aggregate_by_age_cluster(events),
     }
-
-
-# ---------------------------------------------------------------------------
-# Materialized View Pfad (Refs #544)
-# ---------------------------------------------------------------------------
-
-
-def _flat_view_enabled() -> bool:
-    """Return True wenn die Materialized View genutzt werden darf.
-
-    Aktiviert wird der Pfad über ``settings.STATISTICS_USE_FLAT_VIEW = True``.
-    Zusätzlich muss das Backend Postgres sein — SQLite hat keine
-    Materialized Views (siehe Migration 0049).
-    """
-    return bool(getattr(settings, "STATISTICS_USE_FLAT_VIEW", False)) and connection.vendor == "postgresql"
-
-
-def _query_statistics_mv(
-    facility,
-    *,
-    select: str,
-    where_extra: str = "",
-    extra_params=(),
-    group_by: str = "",
-    order_by: str = "",
-) -> list[tuple]:
-    """Einziger erlaubter Lesezugriff auf die Statistik-Matview (Refs #1659).
-
-    Die Matview ``core_statistics_event_flat`` hat keine RLS (Migration
-    0049) — Zugriffsschutz ist reine Service-Schicht. Damit ein künftiger
-    zweiter Zugriffspfad den ``facility_id``-Filter nicht vergessen kann,
-    läuft JEDER lesende Zugriff auf die Matview durch diese Funktion:
-
-    - ``facility`` ist ein Pflichtparameter ohne Default — ein Aufruf ohne
-      Facility ist ein ``TypeError``, kein stiller Vollzugriff.
-    - Der ``WHERE facility_id = %s``-Filter ist fest verdrahtet und steht
-      vor jeder Zusatzbedingung; ``where_extra`` kann ihn per ``AND`` nur
-      ERGÄNZEN, nie ersetzen.
-
-    Ein Architecture-Guard
-    (``src/tests/test_architecture_guards_statistics_mv.py``) stellt sicher,
-    dass kein anderer Code in ``src/core`` den Matview-Namen referenziert —
-    jeder künftige Zugriffspfad muss durch diese Funktion.
-    """
-    if facility is None:
-        raise TypeError("facility ist Pflicht fuer einen Statistik-Matview-Zugriff (Refs #1659).")
-
-    # STATISTICS_MV_NAME ist eine Modul-Konstante, kein User-Input.
-    sql = f"SELECT {select} FROM {STATISTICS_MV_NAME} WHERE facility_id = %s"  # noqa: S608 — kein User-Input
-    params = [facility.pk]
-    if where_extra:
-        sql += f" AND {where_extra}"
-        params.extend(extra_params)
-    if group_by:
-        sql += f" GROUP BY {group_by}"
-    if order_by:
-        sql += f" ORDER BY {order_by}"
-
-    with connection.cursor() as cursor:
-        cursor.execute(sql, params)
-        return cursor.fetchall()
-
-
-def get_event_counts_by_month(facility, year):
-    """Gesamte Event-Anzahl pro Monat für ein Kalenderjahr.
-
-    Wählt je nach Feature-Flag den Pfad:
-    - ``STATISTICS_USE_FLAT_VIEW=True`` + Postgres → Materialized View
-      ``core_statistics_event_flat`` über ``_query_statistics_mv`` (dramatisch
-      schneller bei vielen Events).
-    - sonst → klassisches ``Event``-Queryset als Fallback.
-
-    Rückgabe: Liste von Dicts ``{"month": 1..12, "count": int}``, lückenlos
-    von Januar bis Dezember.
-    """
-    counts = {month: 0 for month in range(1, 13)}
-
-    if _flat_view_enabled():
-        rows = _query_statistics_mv(
-            facility,
-            select="EXTRACT(MONTH FROM month)::int AS m, COUNT(*)::bigint",
-            where_extra="EXTRACT(YEAR FROM month)::int = %s",
-            extra_params=[year],
-            group_by="m",
-            order_by="m",
-        )
-        for month, count in rows:
-            counts[int(month)] = int(count)
-    else:
-        rows = (
-            Event.objects.for_facility(facility)
-            .filter(is_deleted=False, occurred_at__year=year)
-            .values_list("occurred_at__month")
-            .annotate(count=Count("id"))
-        )
-        for month, count in rows:
-            counts[int(month)] = int(count)
-
-    return [{"month": month, "count": counts[month]} for month in range(1, 13)]

@@ -83,13 +83,10 @@ class ComplianceCheck:
 # MFA_FAILED ein seltener Re-Auth-Fehlversuch einer bereits
 # authentifizierten Session (Refs #1084).
 #
-# NICHT hier hinein gehoeren die Last-Run-Marker der Cron-Jobs
-# (``RETENTION_RUN_COMPLETED``, ``MV_REFRESH_COMPLETED``,
-# ``AUDIT_CHAIN_VERIFIED`` …, Refs #1872): sie melden einen **erfolgreichen**
-# Lauf. Auf dieser Liste wuerde jeder planmaessige Nachtlauf das Dashboard
-# gelb faerben. Ihre Ueberwachung ist der Last-Run-Check in
-# ``compliance/cron.py`` — dort ist das *Ausbleiben* das Signal, nicht das
-# Vorhandensein.
+# Active cron markers (``RETENTION_RUN_COMPLETED``,
+# ``AUDIT_CHAIN_VERIFIED`` …, Refs #1872) describe a successful run.
+# Counting them as incidents would flag every scheduled nightly run.
+# ``compliance/cron.py`` monitors their absence instead.
 #
 # Ebenfalls bewusst draussen (Refs #1818): die drei Fall-Loeschaktionen
 # (``CASE_SOFT_DELETED``/``CASE_RESTORED``/``CASE_ANONYMIZED``) — exakt aus dem

@@ -167,60 +167,6 @@ def _breach_scan_checks() -> list[ComplianceCheck]:
     ]
 
 
-def _mv_refresh_checks() -> list[ComplianceCheck]:
-    """Statistik-Materialized-View — stündlicher Refresh."""
-    key, label = "mv_refresh_last_run", _("Statistik-View-Refresh")
-    entry = _latest(AuditLog.Action.MV_REFRESH_COMPLETED)
-    if entry is None:
-        return [
-            ComplianceCheck(
-                key=key,
-                label=label,
-                category=_CATEGORY,
-                status=ComplianceStatus.UNKNOWN,
-                message=_("Noch kein View-Refresh — Cron lief vielleicht nie."),  # pragma: no mutate
-                action_hint=_cron_action_hint(),
-            )
-        ]
-    age = _age_hours(entry)
-    detail = _("Letzter Refresh: %(timestamp)s") % {"timestamp": f"{entry.timestamp:%Y-%m-%d %H:%M}"}
-    if age <= 2:
-        return [
-            ComplianceCheck(
-                key=key,
-                label=label,
-                category=_CATEGORY,
-                status=ComplianceStatus.OK,
-                message=_("Letzter Refresh vor %(age)sh.") % {"age": f"{age:.0f}"},  # pragma: no mutate
-                detail=detail,
-            )
-        ]
-    if age <= 6:
-        return [
-            ComplianceCheck(
-                key=key,
-                label=label,
-                category=_CATEGORY,
-                status=ComplianceStatus.WARNING,
-                message=_("Letzter Refresh vor %(age)sh — Dashboard evtl. veraltet.")
-                % {"age": f"{age:.0f}"},  # pragma: no mutate
-                detail=detail,
-                action_hint=_("Cron muss stündlich laufen."),  # pragma: no mutate
-            )
-        ]
-    return [
-        ComplianceCheck(
-            key=key,
-            label=label,
-            category=_CATEGORY,
-            status=ComplianceStatus.CRITICAL,
-            message=_("Letzter Refresh vor %(age)sh — Cron ausgefallen?") % {"age": f"{age:.0f}"},  # pragma: no mutate
-            detail=detail,
-            action_hint=_cron_action_hint(),
-        )
-    ]
-
-
 def _audit_chain_checks() -> list[ComplianceCheck]:
     """Audit-Ketten-Verifikation — taeglicher Cron 03:30 (Refs #1070, #1872).
 

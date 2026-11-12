@@ -33,7 +33,7 @@ This guide is intended for IT administrators of social service facilities who in
 7. [GDPR Notes](#7-gdpr-notes)
    - 7.8 [Optimistic Locking](#78-optimistic-locking)
    - 7.9 [Row Level Security (RLS)](#79-row-level-security-rls)
-8. [Statistics Snapshots & Materialized View](#8-statistics-snapshots--materialized-view)
+8. [Statistics Snapshots](#8-statistics-snapshots)
 
 ---
 
@@ -1732,7 +1732,7 @@ If CSP errors appear after an update: check the browser console for the **specif
 
 ### 5.5 Compliance Dashboard
 
-The super-admin area `/system/compliance/` (#919) consolidates typed health checks in a single dashboard: the three DB role checks (via `check_db_roles`, see the database variables in [§ 1](#1-installation-docker-compose)), the check that no application account carries Django's `is_superuser` flag (“App-User kein Django-Superuser”; it checks user accounts, not the database roles), backup age, restore-verified age, ClamAV ping and signature age, retention run age, audit log retention, background job freshness (audit chain check, statistics snapshot, breach scan, materialized view refresh), MFA quota (roles requiring MFA), pending Django migrations, app/Django/Python versions, and critical audit events from the last 24 hours.
+The super-admin area `/system/compliance/` (#919) consolidates typed health checks in a single dashboard: the three DB role checks (via `check_db_roles`, see the database variables in [§ 1](#1-installation-docker-compose)), the check that no application account carries Django's `is_superuser` flag (“App-User kein Django-Superuser”; it checks user accounts, not the database roles), backup age, restore-verified age, ClamAV ping and signature age, retention run age, audit log retention, background job freshness (audit chain check, statistics snapshot, breach scan), MFA quota (roles requiring MFA), pending Django migrations, app/Django/Python versions, and critical audit events from the last 24 hours.
 
 If AuditLog retention is set to `0` months in one or more facilities, the **Retention** category shows one aggregated warning with the affected facility names; resolve it under **Management → Settings → Data protection and retention periods**.
 
@@ -2471,50 +2471,17 @@ With the app role and without the variables set, the protected tables visibly re
 
 ---
 
-## 8. Statistics Snapshots & Materialized View
+<a id="8-statistics-snapshots--materialized-view"></a>
 
-### Overview: Two Layers
+## 8. Statistics Snapshots
 
-Statistics reporting in Anlaufstelle uses **two different acceleration layers**:
-
-1. **Materialized view** (`core_statistics_event_flat`) -- pre-aggregates current event data so the statistics page does not have to scan all events on every request. Refs #544.
-2. **Statistics snapshots** -- monthly, persisted aggregates that keep counting the events removed by automatic deletion. Historical reports therefore also count events the retention run has deleted.
-
-### Refresh the Materialized View
-
-The materialized view is **not updated live** on every `INSERT` -- it must be rebuilt periodically via a management command:
-
-```bash
-# Default (non-blocking, uses CONCURRENTLY when possible)
-docker compose -f docker-compose.prod.yml run --rm maintenance \
-  refresh_statistics_view
-
-# Blocking (if there is no UNIQUE index)
-docker compose -f docker-compose.prod.yml run --rm maintenance \
-  refresh_statistics_view --no-concurrent
-```
-
-Implementation: [`src/core/management/commands/refresh_statistics_view.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/refresh_statistics_view.py).
-
-> **Already automated (Refs #794):** The bundled `cron` sidecar in `docker-compose.prod.yml` runs this job out of the box. The crontab example below applies only if the `cron` service is not running; it starts the job through the `maintenance` service of the same compose file, the only service that receives the admin role (BYPASSRLS) (without Compose, reproduce it in your own orchestration: same image, entrypoint `python manage.py`, admin role). Setting up both makes the job run twice — details: [ops runbook § 3](ops-runbook.md#3-cron-jobs).
-
-**Recommended cron cadence:**
-
-```cron
-# Hourly (near real time) -- for heavily used statistics pages
-0 * * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance refresh_statistics_view >> /var/log/anlaufstelle-statistics.log 2>&1
-
-# Alternative: once a day at night (for one-off reports) -- pick one
-# 0 1 * * * …
-```
-
-> **Note:** `CONCURRENTLY` does not block reads but requires a UNIQUE index on the materialized view (created by migration). The command automatically falls back to a non-concurrent refresh on error.
+Statistics use live queries against events and monthly snapshots. Complete past months use an available snapshot; partial months, the current month and missing snapshots use live data. The full-period person terms remain live. There is no separate materialized statistics cache or hourly refresh job.
 
 ### What Are Statistics Snapshots?
 
-Anlaufstelle computes statistics (dashboard, half-year reports, example activity report PDFs) from the event table by default (aggregated via the materialized view). When automatic data deletion (`enforce_retention`) removes old events, those events would disappear from the statistics.
+Anlaufstelle computes statistics (dashboard, half-year reports, example activity report PDFs) from the event table and monthly snapshots. When automatic data deletion (`enforce_retention`) removes old events, those events would disappear from the statistics.
 
-**Statistics snapshots** persist monthly aggregates that keep counting events deleted by the retention run. Reports use hybrid logic: stored snapshots for past months, live data (from the materialized view) for the current month.
+**Statistics snapshots** persist monthly aggregates that keep counting events deleted by the retention run. Reports use hybrid logic: stored snapshots for past months, live event data for the current month.
 
 > **Important: snapshot protection does not cover every report.** The Overview reads event counts from monthly aggregates with live fallback; person metrics remain live. The Overview has no PDF export. On **Dataset reports**, only the **example activity report PDF** reads monthly aggregates with live fallback for missing snapshots and partial months; distinct persons are counted live across the entire period there too. Its preview and CSV/JSON/XML, and all formats of other reports, are live. After `enforce_retention` cleans up records, live figures can therefore be lower, down to zero. The effect depends on the population. **Retain released files yourself:** they cannot necessarily be reproduced identically later. Check the source for each format and the rules under [“Releasing Reports”](#releasing-reports-what-you-need-to-know).
 
@@ -2624,5 +2591,5 @@ Person anonymization clears these dynamic fields as well as related titles and g
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: cc57a48ada5614055b8f89d5c8f3401dd23b2d5b -->
+<!-- source-hash: 015fc89df37cef53656b486ff114b2cdffee6402 -->
 <!-- translation-date: 2026-11-12 -->

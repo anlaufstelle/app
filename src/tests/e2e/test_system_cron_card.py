@@ -1,11 +1,8 @@
-"""E2E: /system/-Uebersicht zeigt den Hintergrundjobs-/Cronjob-Status-Block (Refs #977).
+"""The system dashboard summarizes active background jobs (Refs #977).
 
-Aus manueller Verifikation abgeleitet: super_admin sieht auf der
-Systembereich-Startseite einen kompakten „Hintergrundjobs"-Block mit
-einer Status-Zeile je Job (Backup, Retention, Snapshots, Breach-Scan,
-MV-Refresh), einem Gesamt-Indikator und einem Link aufs
-Compliance-Dashboard. `/system/` nutzt `SuperAdminRequiredMixin` und
-braucht kein Sudo (wie `/system/compliance/`).
+Derived from manual verification: super admins see a status row per job
+(backup, retention, audit verification, snapshots and breach scans), a summary
+indicator and a link to the compliance dashboard. Access requires no sudo.
 """
 
 import pytest
@@ -32,7 +29,6 @@ class TestSystemCronCard:
             "retention_last_run",
             "snapshot_last_run",
             "breach_scan_last_run",
-            "mv_refresh_last_run",
         ):
             expect(page.locator(f"[data-testid='cron-check-{key}']")).to_be_visible()
 

@@ -36,10 +36,9 @@ Werte, es kommt **keine fuenfte** Schwelle hinzu. Insbesondere bleibt die
 ``/health/``-Degradierungsgrenze bei unveraenderten 48 h, damit externes
 Monitoring durch die Konsolidierung nicht laut wird.
 
-Die stuendlichen bzw. monatlichen Jobs (``detect_breaches``,
-``refresh_statistics_view``, ``create_statistics_snapshots``) behalten ihre
-eigenen, in ``compliance/cron.py`` dokumentierten Schwellen: sie haben ein
-anderes Intervall und teilen mit den drei Taeglichen keine Zahl.
+The hourly and monthly jobs (``detect_breaches``,
+``create_statistics_snapshots``) retain their own thresholds in
+``compliance/cron.py``: their intervals differ from the daily jobs.
 """
 
 from __future__ import annotations

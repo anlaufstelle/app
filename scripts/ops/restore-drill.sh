@@ -321,12 +321,7 @@ fi
 # Schritt 2: decrypten + restore in die Wegwerf-DB — Format-abhaengig
 # (prod: gunzip|psql, dev: pg_restore).
 #
-# Nur im Dev-Format kann das Dump beim ``REFRESH MATERIALIZED VIEW
-# core_statistics_event_flat`` an FORCE ROW LEVEL SECURITY auf core_event
-# scheitern; pg_restore endet dann mit rc=1 ("errors ignored on restore: 1").
-# Diesen reinen Statistik-Cache-Fehler toleriert der Dev-Zweig gezielt. Im
-# Prod-Format beendet jeder psql-Fehler den Restore; alle weiteren Fehler
-# bleiben in beiden Formaten ein FAIL.
+# Both dump formats fail on every restore error.
 RESTORE_ERR="$(mktemp)"
 if [[ "$DRILL_FORMAT" == "prod" ]]; then
     # Prod-Format: plain SQL (gzip) -> psql. A4.3-HMAC-Sidecar VOR dem
@@ -374,15 +369,12 @@ else
     OSSL_RC="${PIPE_RC[0]}"
     RESTORE_RC="${PIPE_RC[1]}"
     N_ERR=$(grep -c "pg_restore: error:" "$RESTORE_ERR" 2>/dev/null || true)
-    N_MV=$(grep -c "REFRESH MATERIALIZED VIEW" "$RESTORE_ERR" 2>/dev/null || true)
     if [[ "$OSSL_RC" -ne 0 ]]; then
         fail "Schritt 2: Entschluesselung fehlgeschlagen (openssl rc=$OSSL_RC) — BACKUP_ENCRYPTION_KEY falsch?"
         rm -f "$RESTORE_ERR"
         exit 1
     elif [[ "$RESTORE_RC" -eq 0 ]]; then
         ok "Schritt 2: DB-Backup wiederhergestellt (pg_restore, custom format)"
-    elif [[ "$N_ERR" -gt 0 && "$N_ERR" -eq "$N_MV" ]]; then
-        ok "Schritt 2: DB-Backup wiederhergestellt — ${N_MV} MV-Refresh(es) wg. FORCE-RLS uebersprungen (benigne)"
     else
         fail "Schritt 2: DB-Restore fehlgeschlagen (pg_restore rc=$RESTORE_RC, ${N_ERR} Fehler):"
         sed 's/^/       /' "$RESTORE_ERR" | head -15

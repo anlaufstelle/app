@@ -1,38 +1,15 @@
-"""Mutation regression tests for ``core.services.dashboard.statistics`` (Refs #2174, #2193).
-
-Quelle: ``welle-l-0.99/reports/m-scratch/batch-dashboard-2.json`` (Triage
-``reports/m-scratch/pins-dashboard-2/triage-099-dashboard-2.json``).
-
-**Warum das mehr als Kosmetik ist:** Zwei Aggregat-Helfer speisen die
-k-Anonymitaets-Suppression (K0-b, Refs #1770) — ``_aggregate_contact_stage``
-liefert die DISTINCT-Personenzahl je Kontaktstufe, gegen die der Export-/
-PDF-Pfad seine Schwelle prueft. Ein Filter- oder DISTINCT-Verlust dort
-zaehlt Personen falsch und kann eine zu kleine Gruppe faelschlich ueber der
-Schwelle erscheinen lassen — eine echte Datenschutzfrage, kein Anzeigefehler
-(Prio 1). ``get_event_counts_by_month`` mischt im Materialized-View-Pfad
-ohne den Jahres-Filter Ereignisse fremder Jahre in die Monatszahlen
-(Prio 2). Die uebrigen Survivors betreffen Grenzwerte (Top-5, Alterscluster-
-Label-Mapping) und Meldungstexte.
-
-``_encryption_key`` liegt modulweit an (Lehre 112): der Mutantenbaum hat
-keine ``.env`` und damit keinen ``ENCRYPTION_KEYS``.
-"""
+"""Regression tests for active statistics aggregates and range parsing."""
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
 import pytest
-from django.db import connection
-from django.test.utils import override_settings
 from django.utils import timezone
 
 from core.models import Client, Event
 from core.services.dashboard import (
-    STATISTICS_MV_NAME,
-    _query_statistics_mv,
     event_queryset_for_period,
-    get_event_counts_by_month,
     parse_statistics_view,
 )
 from core.services.dashboard.statistics import (
@@ -233,53 +210,3 @@ class TestAggregateTopClientsLimitIsExactlyFive:
 
 # ---------------------------------------------------------------------------
 # _query_statistics_mv
-# ---------------------------------------------------------------------------
-
-
-class TestQueryStatisticsMvRequiresFacilityWithExactMessage:
-    """Killt ``x__query_statistics_mv__mutmut_5`` (Meldungsverlust:
-    ``TypeError("...")`` → ``TypeError(None)``) sowie ``__mutmut_6``
-    (XX-Marker) und ``__mutmut_7``/``__mutmut_8`` (Groß-/Kleinschreibung) —
-    alle vier fallen unter dieselbe exakte Wortlaut-Assertion, daher kein
-    ``skip``."""
-
-    def test_missing_facility_raises_with_exact_message(self):
-        with pytest.raises(TypeError) as excinfo:
-            _query_statistics_mv(None, select="1")
-
-        assert str(excinfo.value) == "facility ist Pflicht fuer einen Statistik-Matview-Zugriff (Refs #1659)."
-
-
-# ---------------------------------------------------------------------------
-# get_event_counts_by_month — Materialized-View-Pfad
-# ---------------------------------------------------------------------------
-
-
-class TestGetEventCountsByMonthFlatViewFiltersByYear:
-    """Killt ``x_get_event_counts_by_month__mutmut_12`` (``where_extra=None``)
-    und ``__mutmut_18`` (``where_extra`` komplett weggelassen, dieselbe
-    Wirkung): ohne den ``EXTRACT(YEAR FROM month)::int = %s``-Filter zaehlt
-    der Matview-Pfad Ereignisse ALLER Jahre der Einrichtung in jeden
-    angefragten Monat mit hinein.
-
-    Kein ``pytest.skip``/Vendor-Guard (bindende Regel dieser Welle) — harter
-    Assert auf ``connection.vendor``, da Materialized Views nur unter
-    Postgres existieren und diese Pin-Datei ausschließlich gegen Postgres
-    faehrt.
-    """
-
-    def test_flat_view_path_excludes_events_from_other_years(self, facility, doc_type_contact):
-        assert connection.vendor == "postgresql", "Materialized-View-Pfad erfordert Postgres."
-
-        _make_event(facility, doc_type_contact, occurred_at=timezone.make_aware(datetime(2025, 3, 10, 9, 0)))
-        _make_event(facility, doc_type_contact, occurred_at=timezone.make_aware(datetime(2024, 3, 10, 9, 0)))
-
-        with connection.cursor() as cursor:
-            cursor.execute(f"REFRESH MATERIALIZED VIEW {STATISTICS_MV_NAME}")
-
-        with override_settings(STATISTICS_USE_FLAT_VIEW=True):
-            result = get_event_counts_by_month(facility, 2025)
-
-        counts = {row["month"]: row["count"] for row in result}
-        assert counts[3] == 1
-        assert counts[1] == 0

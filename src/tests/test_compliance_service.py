@@ -90,7 +90,7 @@ class TestCronJobChecks:
         assert isinstance(result, list)
         assert all(isinstance(c, compliance.ComplianceCheck) for c in result)
 
-    def test_contains_the_six_cron_job_keys(self):
+    def test_contains_the_five_cron_job_keys(self):
         keys = {c.key for c in compliance.cron_job_checks()}
         assert {
             "backup_age",
@@ -98,7 +98,6 @@ class TestCronJobChecks:
             "audit_chain_last_run",
             "snapshot_last_run",
             "breach_scan_last_run",
-            "mv_refresh_last_run",
         } <= keys
 
     def test_single_helper_failure_does_not_crash(self):
@@ -190,10 +189,10 @@ class TestOperationsJobChecks:
 
     def test_other_unknown_jobs_are_not_escalated(self):
         """Nur das Backup wird hochgestuft — ein nie gelaufener Sidecar-Job bleibt unknown."""
-        AuditLog.objects.filter(action=AuditLog.Action.MV_REFRESH_COMPLETED).delete()
+        AuditLog.objects.filter(action=AuditLog.Action.SNAPSHOT_RUN_COMPLETED).delete()
         checks = compliance.operations_job_checks()
-        mv = next(c for c in checks if c.key == "mv_refresh_last_run")
-        assert mv.status == compliance.ComplianceStatus.UNKNOWN
+        snapshot = next(c for c in checks if c.key == "snapshot_last_run")
+        assert snapshot.status == compliance.ComplianceStatus.UNKNOWN
 
 
 @pytest.mark.django_db
@@ -777,29 +776,3 @@ class TestCronChecks:
         )
         self._backdate(e, hours=30)
         assert compliance._breach_scan_checks()[0].status == compliance.ComplianceStatus.CRITICAL
-
-    # --- MV-Refresh (stündlich) ---
-    def test_mv_unknown_when_no_entry(self):
-        AuditLog.objects.filter(action=AuditLog.Action.MV_REFRESH_COMPLETED).delete()
-        assert compliance._mv_refresh_checks()[0].status == compliance.ComplianceStatus.UNKNOWN
-
-    def test_mv_ok_within_2h(self):
-        AuditLog.objects.filter(action=AuditLog.Action.MV_REFRESH_COMPLETED).delete()
-        AuditLog.objects.create(action=AuditLog.Action.MV_REFRESH_COMPLETED, facility=None, target_type="MVRefreshRun")
-        assert compliance._mv_refresh_checks()[0].status == compliance.ComplianceStatus.OK
-
-    def test_mv_warning_2_to_6h(self):
-        AuditLog.objects.filter(action=AuditLog.Action.MV_REFRESH_COMPLETED).delete()
-        e = AuditLog.objects.create(
-            action=AuditLog.Action.MV_REFRESH_COMPLETED, facility=None, target_type="MVRefreshRun"
-        )
-        self._backdate(e, hours=4)
-        assert compliance._mv_refresh_checks()[0].status == compliance.ComplianceStatus.WARNING
-
-    def test_mv_critical_over_6h(self):
-        AuditLog.objects.filter(action=AuditLog.Action.MV_REFRESH_COMPLETED).delete()
-        e = AuditLog.objects.create(
-            action=AuditLog.Action.MV_REFRESH_COMPLETED, facility=None, target_type="MVRefreshRun"
-        )
-        self._backdate(e, hours=10)
-        assert compliance._mv_refresh_checks()[0].status == compliance.ComplianceStatus.CRITICAL

@@ -1152,7 +1152,6 @@
   "src/tests/test_rectification_views.py": 2.57,
   "src/tests/test_redaction_repair_command.py": 17.19,
   "src/tests/test_reencrypt_fields.py": 3.36,
-  "src/tests/test_refresh_statistics_view.py": 0.22,
   "src/tests/test_reject_services_facility_boundary.py": 0.11,
   "src/tests/test_release_history_period_query.py": 5.14,
   "src/tests/test_release_workflow_package_visibility.py": 0.23,

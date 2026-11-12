@@ -1,17 +1,4 @@
-"""Follow-Up-Tests für Mutation-Survivors in
-``core.services.dashboard.statistics`` (Refs #1388).
-
-Fokus auf die in diesem Milestone geänderte DoS-/Limit-Logik (Refs #1589) und
-die Aggregations-Filter. Der Voll-Lauf 2026-07-16 liess echte Survivors an den
-Query-Filtern (``facility``, ``is_deleted``, ``occurred_at__year``), am
-Flat-View-Gate und an den Fehlermeldungen der Bereichsvalidierung stehen.
-
-Die Boundary-Operatoren selbst (``date_from > date_to``,
-``.days > STATISTICS_MAX_CUSTOM_RANGE_DAYS``) waren bereits durch Bestandstests
-gekillt — hier fehlten die Meldungs- und Filter-Survivors.
-
-Jeder Test benennt die konkret gekillte Mutation.
-"""
+"""Regression tests for active statistics range validation and event filters."""
 
 from __future__ import annotations
 
@@ -25,8 +12,7 @@ from core.models import DocumentType, Event
 from core.services.dashboard.statistics import (
     STATISTICS_MAX_CUSTOM_RANGE_DAYS,
     InvalidStatisticsPeriodError,
-    _flat_view_enabled,
-    get_event_counts_by_month,
+    get_statistics,
     validate_statistics_range,
 )
 
@@ -63,20 +49,17 @@ class TestValidateRangeMessages:
 
 
 @pytest.mark.django_db
-class TestEventCountsByMonthFilters:
-    """``get_event_counts_by_month`` — die drei Aggregations-Filter."""
+class TestLiveStatisticsFilters:
+    """The active statistics path keeps facility, deletion and year filters."""
 
     def setup_method(self):
         _requires_postgres()
 
     def _total(self, facility, year):
-        return sum(row["count"] for row in get_event_counts_by_month(facility, year))
+        return get_statistics(facility, date(year, 1, 1), date(year, 12, 31))["total_contacts"]
 
     def test_excludes_deleted_events(self, facility, doc_type_contact):
-        """Killt ``get_event_counts_by_month__mutmut_24``: entfernter
-        ``is_deleted=False``-Filter. Redigierte/gelöschte Events dürfen nicht in
-        die Träger-/Förderstatistik einfliessen.
-        """
+        """Deleted events must not contribute to published contact totals."""
         when = timezone.make_aware(datetime(2026, 3, 15, 12, 0))
         Event.objects.create(facility=facility, document_type=doc_type_contact, occurred_at=when, data_json={})
         Event.objects.create(
@@ -85,9 +68,7 @@ class TestEventCountsByMonthFilters:
         assert self._total(facility, 2026) == 1
 
     def test_excludes_other_facilities(self, facility, second_facility, doc_type_contact):
-        """Killt ``get_event_counts_by_month__mutmut_23``: entfernter
-        ``facility=facility``-Filter → Cross-Tenant-Leck in der Statistik.
-        """
+        """Contact totals must never include another facility."""
         when = timezone.make_aware(datetime(2026, 3, 15, 12, 0))
         # Refs #2066: Der Composite-FK pinnt document_type an die Facility des
         # Events — das Fremd-Event braucht seither einen eigenen Doctype seiner
@@ -101,9 +82,7 @@ class TestEventCountsByMonthFilters:
         assert self._total(facility, 2026) == 1
 
     def test_excludes_other_years(self, facility, doc_type_contact):
-        """Killt ``get_event_counts_by_month__mutmut_25``: entfernter
-        ``occurred_at__year=year``-Filter → Vermischung über Jahresgrenzen.
-        """
+        """Contact totals must stay inside the requested calendar year."""
         Event.objects.create(
             facility=facility,
             document_type=doc_type_contact,
@@ -117,30 +96,3 @@ class TestEventCountsByMonthFilters:
             data_json={},
         )
         assert self._total(facility, 2026) == 1
-
-
-class TestFlatViewGate:
-    """``_flat_view_enabled`` — Feature-Flag UND Postgres-Backend."""
-
-    def test_disabled_without_setting(self, settings):
-        """Killt ``_flat_view_enabled__mutmut_11``:
-        ``getattr(settings, "STATISTICS_USE_FLAT_VIEW", False)`` → ``…, True``.
-
-        Ohne gesetztes Flag (Default) darf der MV-Pfad NICHT aktiv sein — sonst
-        liefe eine Installation ohne materialisierte View ins Leere.
-        """
-        _requires_postgres()
-        # STATISTICS_USE_FLAT_VIEW ist in settings nicht definiert → Default greift.
-        assert not hasattr(settings, "STATISTICS_USE_FLAT_VIEW") or settings.STATISTICS_USE_FLAT_VIEW is False
-        assert _flat_view_enabled() is False
-
-    def test_requires_postgres_backend(self, settings):
-        """Killt ``_flat_view_enabled__mutmut_12``:
-        ``connection.vendor == "postgresql"`` → ``!= "postgresql"``.
-
-        Mit gesetztem Flag entscheidet allein das Backend. Auf Postgres MUSS
-        das Gate ``True`` liefern; die Mutation kehrt die Backend-Bedingung um.
-        """
-        _requires_postgres()
-        settings.STATISTICS_USE_FLAT_VIEW = True
-        assert _flat_view_enabled() is True

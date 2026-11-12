@@ -786,7 +786,7 @@ Weitere Einrichtungen werden über Django-Admin oder `setup_facility` angelegt. 
 
 **Wo EAV besser wäre:** Feldbezogene Abfragen (z.B. „alle Vermittlungen an die Wohnhilfe") sind mit JSONB möglich (`data_json->>'ziel' = 'Wohnhilfe'`), aber langsamer als ein B-Tree-Lookup in einer EAV-Wertetabelle. Feldbezogene Auswertung ist in den Berichts-Backends implementiert; deren Bindungen lösen Berichtsschlüssel auf Feld-Slugs auf.
 
-**Zielbild für weitere Performance-Evaluierung:** Wenn feldbezogene Statistik-Abfragen bei realen Datenmengen (50.000+ Ereignisse) unter 5 Sekunden bleiben, bleibt JSONB. Falls nicht, können zusätzliche denormalisierte Feldwert-Projektionen evaluiert werden; die vorhandene Materialized View `core_statistics_event_flat` bildet bereits Ereignis-Metadaten ab — bevor ein vollständiger EAV-Umbau in Betracht gezogen wird.
+**Zielbild für weitere Performance-Evaluierung:** Wenn feldbezogene Statistik-Abfragen bei realen Datenmengen (50.000+ Ereignisse) unter 5 Sekunden bleiben, bleibt JSONB. Falls nicht, können zusätzliche denormalisierte Feldwert-Projektionen evaluiert werden; bevor ein vollständiger EAV-Umbau in Betracht gezogen wird.
 
 **Migrationsgarantie:** Die Metadaten-Struktur (DocumentType, FieldTemplate) ist in beiden Ansätzen identisch. Eine spätere Migration auf EAV betrifft nur die Speicherschicht der Feldwerte, nicht die Konfigurationsebene.
 
@@ -1191,14 +1191,14 @@ Ergänzend zur Datenschutz-Architektur im Hauptdokument:
 - **Rate-Limiting.** Login-Versuche sind auf 5 pro Minute je IP und 10 pro Stunde je Benutzername begrenzt. Angemeldete Aktionen haben Limits je View und Nutzer, u. a.: Mutationen 60 pro Stunde, häufige Aktionen und Offline-Bundle-Abrufe jeweils 120 pro Stunde, Offline-Widerrufsabfragen 600 pro Stunde. Ein globales API-Nutzerlimit ist nicht implementiert; die externe API ist ein Zielbild (siehe § 7 und [ADR-026](adr/026-rate-limiting.md)).
 - **Zwei-Faktor-Authentifizierung (TOTP).** Nutzer:innen können einen zweiten Faktor auf Basis zeitbasierter Einmalpasswörter (TOTP, RFC 6238) einrichten. 2FA lässt sich wahlweise pro Nutzer:in aktivieren oder facility-weit erzwingen; im letzteren Fall wird der Login ohne eingerichteten zweiten Faktor zur Einrichtung zwangsweise umgeleitet. Recovery erfolgt über Einmal-Wiederherstellungscodes.
 - **Encrypted File Vault.** Hochgeladene Datei-Anhänge werden serverseitig mit Fernet (AES-128) verschlüsselt abgelegt; Uploads oberhalb von 2,5 MiB puffert Django vor dem Scan und der Verschlüsselung als Klartext-Tempdatei. Die mitgelieferten Compose-Dateien legen diesen Puffer mit `FILE_UPLOAD_TEMP_DIR=/tmp` auf tmpfs (RAM). Ohne explizites Temp-Verzeichnis verwendet Django `tempfile.gettempdir()`; dessen Speicherort ist vom Betrieb abhängig. Siehe [Ops-Runbook § 5.7a](ops-runbook.md#57a-upload-temp-verzeichnis-klartext-zwischenpuffer-refs-1661). Jeder Upload durchläuft ein **ClamAV-Malware-Scanning fail-closed**: Solange der Scanner keine saubere Rückmeldung liefert, wird die Datei nicht freigegeben; Scanner-Ausfälle führen zur Ablehnung, nicht zur Annahme.
-- **Row Level Security (RLS).** Als Defense-in-Depth ergänzend zum applikationsseitigen Facility-Scoping sind die facility-gescopten Tabellen mit PostgreSQL-RLS-Policies abgesichert. Welche Tabellen das sind, leitet `EXPECTED_TABLES` in `src/tests/test_rls.py` aus dem Modellbestand ab; ein Test erzwingt für jede davon eine Policy. Die Policies werten die Session-Variable `app.current_facility_id` aus, die pro Request auf die Facility der authentifizierten Nutzer:in gesetzt wird. Vergisst der Applikationscode auf einer dieser Tabellen den Facility-Filter, liefert die Datenbank trotzdem keine Zeilen fremder Einrichtungen. Nicht abgedeckt sind die Tabellen außerhalb von RLS (`core_user`, `core_facility`, `core_organization`), die Statistik-Materialized-View, Sitzungen der Systemadministration (`app.is_super_admin` lässt die Policies passieren), Wartungs- und Migrationsläufe unter der Admin-Rolle mit `BYPASSRLS` sowie ein falsch gesetzter Facility-Kontext.
+- **Row Level Security (RLS).** Als Defense-in-Depth ergänzend zum applikationsseitigen Facility-Scoping sind die facility-gescopten Tabellen mit PostgreSQL-RLS-Policies abgesichert. Welche Tabellen das sind, leitet `EXPECTED_TABLES` in `src/tests/test_rls.py` aus dem Modellbestand ab; ein Test erzwingt für jede davon eine Policy. Die Policies werten die Session-Variable `app.current_facility_id` aus, die pro Request auf die Facility der authentifizierten Nutzer:in gesetzt wird. Vergisst der Applikationscode auf einer dieser Tabellen den Facility-Filter, liefert die Datenbank trotzdem keine Zeilen fremder Einrichtungen. Nicht abgedeckt sind die Tabellen außerhalb von RLS (`core_user`, `core_facility`, `core_organization`), Sitzungen der Systemadministration (`app.is_super_admin` lässt die Policies passieren), Wartungs- und Migrationsläufe unter der Admin-Rolle mit `BYPASSRLS` sowie ein falsch gesetzter Facility-Kontext.
 - **Optimistic Locking.** Zentrale Fachentitäten (Client, Case, WorkItem, Settings, Event) tragen eine Versions- bzw. Zeitstempelspalte. Beim Speichern wird geprüft, ob der geladene Stand noch aktuell ist; bei gleichzeitiger Bearbeitung entsteht ein sichtbarer Konflikt statt eines stillen Überschreibens. Diese Integritätsmaßnahme ist auch die Grundlage der Side-by-Side-Konfliktauflösung im Streetwork-Offline-Modus (§ 16).
 
 ---
 
 ## 18. JSONB-Performance-Monitoring
 
-Feldwerte liegen in JSONB; Statistik und Berichts-Backends sind implementiert. Die Materialized View `core_statistics_event_flat` projiziert Ereignis-Metadaten für Aggregationen, keine beliebigen dynamischen Feldwerte. **Zielbild:** Weitere Messungen mit realen Betriebsdaten sollen prüfen, ob zusätzliche Feldwert-Projektionen sinnvoll sind. Die folgenden Kriterien und Alternativen sind Evaluierungsziele, keine Funktionszusagen.
+Feldwerte liegen in JSONB; Statistik und Berichts-Backends sind implementiert. **Zielbild:** Weitere Messungen mit realen Betriebsdaten sollen prüfen, ob zusätzliche Feldwert-Projektionen sinnvoll sind. Die folgenden Kriterien und Alternativen sind Evaluierungsziele, keine Funktionszusagen.
 
 ### Hintergrund
 
@@ -1422,7 +1422,7 @@ Die Architektur- und Strategieentscheidungen dieses Fachkonzepts:
 
 ### Einziger offener Monitoring-Punkt
 
-**Zielbild — weitere JSONB-Performance-Evaluierung:** Feldbezogene Statistik-Abfragen sollen mit realen Betriebsdaten gemessen werden. Zusätzliche Feldwert-Projektionen sind eine zu prüfende Option; die ereignisbezogene Materialized View ist bereits implementiert. Siehe Kapitel 18.
+**Zielbild — weitere JSONB-Performance-Evaluierung:** Feldbezogene Statistik-Abfragen sollen mit realen Betriebsdaten gemessen werden. Zusätzliche Feldwert-Projektionen sind eine zu prüfende Option. Siehe Kapitel 18.
 
 ---
 

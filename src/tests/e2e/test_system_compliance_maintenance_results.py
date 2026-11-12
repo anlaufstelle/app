@@ -3,8 +3,7 @@
 Derived from the manual check on the local E2E server:
 
 1. After the jobs the demo reset runs (``verify_audit_chain``,
-   ``create_statistics_snapshots``, ``detect_breaches``,
-   ``refresh_statistics_view``) the four job cards switch from ``unknown`` to
+   ``create_statistics_snapshots``, ``detect_breaches``) the three job cards switch from ``unknown`` to
    ``ok``; the retention card keeps the status and the last-run time it had
    before the jobs (the reset never runs ``enforce_retention``). Earlier tests
    of the same session may have run it, so the test compares against the card
@@ -34,8 +33,8 @@ from ._profiles import require_demo
 pytestmark = pytest.mark.e2e
 
 _COMPLIANCE = "/system/compliance/"
-_JOB_CARDS = ("audit_chain_last_run", "snapshot_last_run", "breach_scan_last_run", "mv_refresh_last_run")
-_JOBS = ("verify_audit_chain", "create_statistics_snapshots", "detect_breaches", "refresh_statistics_view")
+_JOB_CARDS = ("audit_chain_last_run", "snapshot_last_run", "breach_scan_last_run")
+_JOBS = ("verify_audit_chain", "create_statistics_snapshots", "detect_breaches")
 # Absolute timestamp of the retention card (``detail``); the relative message
 # ("vor 0h") could tick over between the two reads.
 _RETENTION_LAST_RUN = re.compile(r"Letzter Lauf: \d{4}-\d{2}-\d{2} \d{2}:\d{2}")

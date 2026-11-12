@@ -10,7 +10,6 @@ def test_missing_cron_markers_point_to_the_compose_sidecar() -> None:
         checks = [
             cron._snapshot_checks()[0],
             cron._breach_scan_checks()[0],
-            cron._mv_refresh_checks()[0],
             cron._audit_chain_checks()[0],
         ]
     for check in checks:

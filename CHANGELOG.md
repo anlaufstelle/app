@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Erforderliche Betreiber-Aktionen
 
+- **Eigenen Statistik-Refresh entfernen** (#2721) — Wer `refresh_statistics_view` über Host-Crontab oder Timer ausführt, entfernt diesen Zeitplan gemäß [Ops-Runbook § 11.1](docs/ops-runbook.md#111-selbst-eingerichteten-refresh-zeitplan-entfernen). Die ungenutzte Statistik-View und ihr Refresh-Job entfallen beim Update.
 - **Breach-Webhook: Ausgang gezielt aktivieren** (#2719) — Wer den Webhook nutzt, muss die Zusatz-Compose-Datei gemäß [Ops-Runbook § 6.5b](docs/ops-runbook.md#65b-dsgvo-art-3334--breach-notification-refs-685) einbinden und die Zustellung prüfen. Fehlgeschlagene Zustellungen lassen den Scan scheitern und werden bis 24 Stunden nach dem Fund erneut versucht.
 - **Neue Digests für PostgreSQL und Caddy übernehmen** (#2705) — Die Pins von `postgres:18-alpine` und `caddy:2-alpine` zeigen in allen Compose-Dateien auf die aktuellen Index-Digests. Vorher ein Backup anlegen, dann `docker compose -f docker-compose.prod.yml pull db caddy` und `docker compose -f docker-compose.prod.yml up -d` ausführen (Zusatzdateien wie im [Ops-Runbook § 1.2](https://github.com/anlaufstelle/app/blob/main/docs/ops-runbook.md) mit `-f` anhängen). Dev-, Demo- und Staging-Stack analog mit ihrer Datei und `--env-file` (Dienste `db caddy`), die lokale Entwicklungs-Compose mit `docker compose pull db`.
 

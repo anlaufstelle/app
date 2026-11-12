@@ -57,7 +57,6 @@ from core.services.compliance.clamav import _clamav_checks
 from core.services.compliance.cron import (
     _audit_chain_checks,
     _breach_scan_checks,
-    _mv_refresh_checks,
     _snapshot_checks,
 )
 from core.services.compliance.db_roles import (
@@ -156,7 +155,6 @@ def aggregate_checks() -> list[ComplianceCheck]:
             _audit_chain_checks,
             _snapshot_checks,
             _breach_scan_checks,
-            _mv_refresh_checks,
             _restore_checks,
             _mfa_checks,
             _deletion_approver_checks,
@@ -169,13 +167,11 @@ def aggregate_checks() -> list[ComplianceCheck]:
 
 
 def cron_job_checks() -> list[ComplianceCheck]:
-    """Gebuendelte Last-Run-Checks der Hintergrundjobs (Refs #977, #1872).
+    """Last-run checks for the five scheduled background jobs (Refs #977, #1872).
 
-    Teilmenge von :func:`aggregate_checks` — die sechs per Cron laufenden
-    Jobs (Backup, Retention, Audit-Ketten-Pruefung, Snapshots, Breach-Scan,
-    MV-Refresh). Der Restore-Test und reine Konfigurationswarnungen bleiben
-    bewusst aussen vor: Sie sind keine Cron-Jobs und gehoeren aufs
-    Compliance-Dashboard.
+    This subset of :func:`aggregate_checks` covers backup, retention, audit
+    verification, snapshots and breach scans. Restore drills and configuration
+    warnings belong on the compliance dashboard rather than the job summary.
 
     Das ist die **Monitoring-Sicht**: sie liefert die Status unveraendert,
     insbesondere ``unknown`` fuer „lief noch nie". ``/health/`` degradiert
@@ -194,7 +190,6 @@ def cron_job_checks() -> list[ComplianceCheck]:
             _audit_chain_checks,
             _snapshot_checks,
             _breach_scan_checks,
-            _mv_refresh_checks,
         )
     )
 
@@ -246,7 +241,6 @@ __all__ = [
     "_clamav_checks",
     "_deletion_approver_checks",
     "_retention_approver_checks",
-    "_mv_refresh_checks",
     "_db_role_admin_check",
     "_db_role_attribute_check",
     "_db_role_checks",

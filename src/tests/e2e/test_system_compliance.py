@@ -1,9 +1,7 @@
-"""E2E: Compliance-Dashboard zeigt die Cron-Job-Checks (Refs #794, #919).
+"""The compliance dashboard shows the active cron job checks (Refs #794, #919).
 
-Aus manueller Verifikation abgeleitet: die Kategorie „Hintergrundjobs"
-und ihre drei Last-Run-Checks (Snapshots, Breach-Scan, MV-Refresh) sind
-für super_admin sichtbar. `/system/compliance` braucht kein Sudo —
-`SystemAuditMixin` nutzt nur `SuperAdminRequiredMixin`.
+Derived from manual verification: super admins can see the background job
+category and its snapshot and breach scan checks. Access requires no sudo.
 """
 
 import pytest
@@ -25,5 +23,5 @@ class TestComplianceCronChecks:
         page = super_admin_page
         page.goto(f"{base_url}/system/compliance/")
         page.wait_for_load_state("domcontentloaded")
-        for key in ("snapshot_last_run", "breach_scan_last_run", "mv_refresh_last_run"):
+        for key in ("snapshot_last_run", "breach_scan_last_run"):
             expect(page.locator(f"[data-testid='compliance-check-{key}']")).to_be_visible()

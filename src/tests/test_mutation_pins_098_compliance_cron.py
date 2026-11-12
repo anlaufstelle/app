@@ -34,7 +34,6 @@ from core.services.compliance import (
     ComplianceStatus,
     _audit_chain_checks,
     _breach_scan_checks,
-    _mv_refresh_checks,
     _snapshot_checks,
 )
 from core.services.compliance._types import ComplianceCategory
@@ -113,7 +112,7 @@ class TestAgeHoursUsesFullSeconds:
         1.99944...`` — die ``==``-Zusicherung unterscheidet beide exakt,
         ganz ohne auf eine Ampelgrenze angewiesen zu sein.
         """
-        entry = _marker(AuditLog.Action.MV_REFRESH_COMPLETED)
+        entry = _marker(AuditLog.Action.BREACH_SCAN_COMPLETED)
 
         with _patch_compliance_now(entry.timestamp + timedelta(hours=2)):
             age = _age_hours(entry)
@@ -384,119 +383,7 @@ class TestBreachScanCriticalBranch:
 
 
 # ============================================================================
-# _mv_refresh_checks — stündlicher Cron, Schwellen 2 / 6 Stunden
 # ============================================================================
-
-
-class TestMvRefreshLabelIsVerbatim:
-    def test_label_is_exact(self):
-        """Pin: ``x__mv_refresh_checks__mutmut_4`` — Label
-        ``"Statistik-View-Refresh"`` -> ``"XXStatistik-View-RefreshXX"``.
-        """
-        _no_marker(AuditLog.Action.MV_REFRESH_COMPLETED)
-
-        checks = _mv_refresh_checks()
-
-        assert checks[0].label == "Statistik-View-Refresh"
-
-
-class TestMvRefreshUnknownBranch:
-    def test_unknown_branch_message(self):
-        """Pin: ``x__mv_refresh_checks__mutmut_14`` — ``message=None``."""
-        _no_marker(AuditLog.Action.MV_REFRESH_COMPLETED)
-
-        checks = _mv_refresh_checks()
-        check = checks[0]
-
-        assert check.status == ComplianceStatus.UNKNOWN
-        assert check.message == "Noch kein View-Refresh — Cron lief vielleicht nie."
-
-
-class TestMvRefreshOkBranch:
-    def test_ok_branch_at_2_hours_carries_every_field(self):
-        """Pin: ``x__mv_refresh_checks__mutmut_24`` (``detail``-Variable ->
-        ``None``), ``mutmut_25`` (``<= 2`` -> ``< 2``), ``mutmut_27``
-        (``key=None``), ``mutmut_28`` (``label=None``), ``mutmut_29``
-        (``category=None``), ``mutmut_31`` (``message=None``),
-        ``mutmut_32``/``mutmut_38`` (``detail=None``/Keyword gestrichen).
-        """
-        entry = _marker(AuditLog.Action.MV_REFRESH_COMPLETED)
-
-        with _patch_compliance_now(entry.timestamp + timedelta(hours=2)):
-            checks = _mv_refresh_checks()
-        check = checks[0]
-
-        assert check.status == ComplianceStatus.OK
-        assert check.key == "mv_refresh_last_run"
-        assert check.label == "Statistik-View-Refresh"
-        assert check.category == ComplianceCategory.BACKGROUND_JOBS
-        assert check.message == "Letzter Refresh vor 2h."
-        assert check.detail == f"Letzter Refresh: {entry.timestamp:%Y-%m-%d %H:%M}"
-
-    def test_two_and_a_half_hours_is_already_warning(self):
-        """Pin: ``x__mv_refresh_checks__mutmut_26`` — ``<= 2`` -> ``<= 3``."""
-        entry = _marker(AuditLog.Action.MV_REFRESH_COMPLETED)
-
-        with _patch_compliance_now(entry.timestamp + timedelta(hours=2, minutes=30)):
-            checks = _mv_refresh_checks()
-
-        assert checks[0].status == ComplianceStatus.WARNING
-
-
-class TestMvRefreshWarningBranch:
-    def test_warning_branch_at_6_hours_carries_every_field(self):
-        """Pin: ``x__mv_refresh_checks__mutmut_39`` (``<= 6`` -> ``< 6``),
-        ``mutmut_41`` (``key=None``), ``mutmut_42`` (``label=None``),
-        ``mutmut_43`` (``category=None``), ``mutmut_45`` (``message=None``),
-        ``mutmut_46``/``mutmut_53`` (``detail=None``/Keyword gestrichen),
-        ``mutmut_47``/``mutmut_54`` (``action_hint=None``/Keyword
-        gestrichen).
-        """
-        entry = _marker(AuditLog.Action.MV_REFRESH_COMPLETED)
-
-        with _patch_compliance_now(entry.timestamp + timedelta(hours=6)):
-            checks = _mv_refresh_checks()
-        check = checks[0]
-
-        assert check.status == ComplianceStatus.WARNING
-        assert check.key == "mv_refresh_last_run"
-        assert check.label == "Statistik-View-Refresh"
-        assert check.category == ComplianceCategory.BACKGROUND_JOBS
-        assert check.message == "Letzter Refresh vor 6h — Dashboard evtl. veraltet."
-        assert check.detail == f"Letzter Refresh: {entry.timestamp:%Y-%m-%d %H:%M}"
-        assert check.action_hint == "Cron muss stündlich laufen."
-
-    def test_six_and_a_half_hours_is_already_critical(self):
-        """Pin: ``x__mv_refresh_checks__mutmut_40`` — ``<= 6`` -> ``<= 7``."""
-        entry = _marker(AuditLog.Action.MV_REFRESH_COMPLETED)
-
-        with _patch_compliance_now(entry.timestamp + timedelta(hours=6, minutes=30)):
-            checks = _mv_refresh_checks()
-
-        assert checks[0].status == ComplianceStatus.CRITICAL
-
-
-class TestMvRefreshCriticalBranch:
-    def test_critical_branch_carries_every_field(self):
-        """Pin: ``x__mv_refresh_checks__mutmut_55`` (``key=None``),
-        ``mutmut_56`` (``label=None``), ``mutmut_57`` (``category=None``),
-        ``mutmut_59`` (``message=None``), ``mutmut_60``/``mutmut_67``
-        (``detail=None``/Keyword gestrichen), ``mutmut_61``/``mutmut_68``
-        (``action_hint=None``/Keyword gestrichen).
-        """
-        entry = _marker(AuditLog.Action.MV_REFRESH_COMPLETED)
-
-        with _patch_compliance_now(entry.timestamp + timedelta(hours=48)):
-            checks = _mv_refresh_checks()
-        check = checks[0]
-
-        assert check.status == ComplianceStatus.CRITICAL
-        assert check.key == "mv_refresh_last_run"
-        assert check.label == "Statistik-View-Refresh"
-        assert check.category == ComplianceCategory.BACKGROUND_JOBS
-        assert check.message == "Letzter Refresh vor 48h — Cron ausgefallen?"
-        assert check.detail == f"Letzter Refresh: {entry.timestamp:%Y-%m-%d %H:%M}"
-        assert check.action_hint == _cron_action_hint()
 
 
 # ============================================================================

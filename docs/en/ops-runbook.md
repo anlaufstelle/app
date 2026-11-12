@@ -21,7 +21,7 @@ Operations manual for Anlaufstelle. Complements the [Admin Guide](admin-guide.md
 8. [Updating Dependencies](#8-updating-dependencies)
 9. [Row Level Security (RLS)](#9-row-level-security-rls)
 10. [Invite Token Hygiene](#10-invite-token-hygiene)
-11. [Statistics Materialized View](#11-statistics-materialized-view)
+11. [Statistics: live queries and snapshots](#11-statistics-live-queries-and-snapshots)
 12. [Trust Boundary](#12-trust-boundary-refs-841)
 13. [PostgreSQL Major Upgrade](#13-postgresql-major-upgrade)
 
@@ -451,7 +451,6 @@ Column **Where**: `Sidecar` = runs out of the box in the `cron` container ([§3.
 | `cleanup_orphan_storage_files` | Daily 04:30 (after snapshots) | Sidecar | Delete orphaned `.enc` files with no `Attachment` **and no open `ImportJob` record** (owner-independent: event, person, and case attachments; CSV import uploads under `<facility>/imports/` are protected via `ImportJob.storage_filename` and count during quota enforcement while the run is open — `commit_import`/`abort_import` clear the field, finished runs do not protect it any longer). By default, each run checks at most 10,000 files; `--budget N` sets a positive custom limit, and the stored continuation point fairly resumes the next run. `--dry-run` only reports deletion candidates and changes neither files nor the continuation point. Output lists checked and separately skipped files, deletion candidates, actual deletions, errors, the continuation location, and either the next start or a complete tree traversal. MUST run as the admin DB role (BYPASSRLS), otherwise fail-loud — without the bypass the run would also see 0 `ImportJob` rows and would delete the open uploads of every facility (Refs #662, #1554, #1738, #1060, #2180, #2376) |
 | `clearsessions` | Daily 05:00 | Sidecar | Delete expired rows from `django_session` (storage limitation under Art. 5(1)(e) GDPR) |
 | `detect_breaches` | Hourly at :30 | Sidecar | Heuristics-based breach detection (eight kinds, [§ 6.5b](#65b-gdpr-art-3334--breach-notification-refs-685)) → AuditLog SECURITY_VIOLATION + optional webhook (Refs #685) |
-| `refresh_statistics_view` | Hourly at :15 | Sidecar | Refresh the materialized view `core_statistics_event_flat` (statistics dashboard) |
 | Invite token audit | Weekly, Sun 05:00 | Host | Track down orphaned invite user accounts (see [10](#10-invite-token-hygiene)); a plain `psql` query — the app container has no psql client |
 | Health check | Every 5 minutes | Host | Check availability (external monitoring, does not belong inside the monitored stack) |
 
@@ -465,7 +464,7 @@ inside it instead of Gunicorn, and works through the job definitions from
 (mounted read-only into the container). After starting the stack with the
 full Compose file list ([§ 1.2](#12-deploy-steps)),
 retention, audit chain verification, snapshots, orphan cleanup,
-session cleanup, breach detection, and MV refresh run without any further setup.
+session cleanup and breach detection run without any further setup.
 
 **Why supercronic and not `cron`/`crond`:** classic cron daemons
 daemonize themselves away (the container would have no foreground process), log to
@@ -499,7 +498,7 @@ docker compose -f docker-compose.prod.yml ps cron
 docker compose -f docker-compose.prod.yml logs --tail=100 cron
 
 # Trigger a job immediately, outside its schedule (same role as in the sidecar):
-docker compose -f docker-compose.prod.yml exec cron python manage.py refresh_statistics_view
+docker compose -f docker-compose.prod.yml exec cron python manage.py detect_breaches
 ```
 
 **Monitoring:** supercronic has no health endpoint — a running
@@ -509,8 +508,7 @@ compliance dashboard (`/system/compliance/`, category "Background jobs") and
 `stale_jobs` in the [`/health/` payload](../monitoring-guide.md) (German)
 evaluate: `RETENTION_RUN_COMPLETED` (`enforce_retention`),
 `AUDIT_CHAIN_VERIFIED` (`verify_audit_chain`), `SNAPSHOT_RUN_COMPLETED`
-(`create_statistics_snapshots`), `BREACH_SCAN_COMPLETED` (`detect_breaches`) and
-`MV_REFRESH_COMPLETED` (`refresh_statistics_view`). Django's standard
+(`create_statistics_snapshots`), `BREACH_SCAN_COMPLETED` (`detect_breaches`). Django's standard
 `clearsessions` command and `cleanup_orphan_storage_files` write no marker; only
 their start and exit code appear in the supercronic log. Host monitoring should therefore alert on
 failures in the `cron` logs — in particular on `verify_audit_chain`, which ends
@@ -671,8 +669,6 @@ exclusively in `sudo crontab -e`.
 # Breach detection scan (hourly at minute 30, without webhook; Refs #685)
 30 * * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance detect_breaches >> /var/log/anlaufstelle-breach.log 2>&1
 
-# Materialized view refresh (hourly at minute 15, details see section 11)
-15 * * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance refresh_statistics_view >> /var/log/anlaufstelle-mv.log 2>&1
 
 # Invite token audit (weekly Sun 05:00, details see section 10)
 # Role postgres over the local socket inside the db container (no password), database
@@ -686,14 +682,14 @@ exclusively in `sudo crontab -e`.
 
 </details>
 
-**Note the order:** Backup (02:00) → retention (03:00) → audit chain verification (03:30) → snapshots (04:00, monthly) → orphan cleanup (04:30) → session cleanup (05:00) → breach detection/MV refresh (hourly). The backup must run before retention, so that deleted data is included in the backup. The audit chain verification runs after retention, so that the checkpoint boundaries freshly written by `prune_auditlog` are already in the chain. The MV refresh uses `CONCURRENTLY` and does not block running readers. The sidecar schedule in `deploy/crontab` reflects exactly this order — which is why the `TZ` setting from [§3.2](#32-cron-sidecar-standard) is operationally relevant, not cosmetic.
+**Note the order:** Backup (02:00) → retention (03:00) → audit chain verification (03:30) → snapshots (04:00, monthly) → orphan cleanup (04:30) → session cleanup (05:00) → breach detection (hourly). The backup must run before retention, so that deleted data is included in the backup. The audit chain verification runs after retention, so that the checkpoint boundaries freshly written by `prune_auditlog` are already in the chain. The sidecar schedule in `deploy/crontab` reflects exactly this order — which is why the `TZ` setting from [§3.2](#32-cron-sidecar-standard) is operationally relevant, not cosmetic.
 
 
 ### 3.5 Manual Execution
 
 Recalculation requires the carry-over (`_deleted`) maintained by this version; data from versions before carry-over was introduced is not reconstructed.
 
-These commands run in the one-shot service `maintenance`, not via `exec web`: only `maintenance` receives the admin role (BYPASSRLS, schema owner). Under the app role of `web`, `enforce_retention` aborts, `create_statistics_snapshots` skips every facility ("No settings … skipping") and still ends with exit 0, and `refresh_statistics_view` fails for lack of owner permission. In cron lines and scripts without a TTY use `run --rm -T maintenance …`. Harmless commands (`showmigrations`, `check --deploy`, `printenv`) stay in `web`.
+These commands run in the one-shot service `maintenance`, not via `exec web`: only `maintenance` receives the admin role (BYPASSRLS, schema owner). Under the app role of `web`, `enforce_retention` aborts, `create_statistics_snapshots` skips every facility ("No settings … skipping") and still ends with exit 0. In cron lines and scripts without a TTY use `run --rm -T maintenance …`. Harmless commands (`showmigrations`, `check --deploy`, `printenv`) stay in `web`.
 
 ```bash
 # Retention dry run (no deletion)
@@ -1631,7 +1627,6 @@ sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --dev     # force the d
 
 Output: one `OK`, `FAIL`, `SKIP`, or `NICHT PRUEFBAR` entry per step. Exit codes: **0** = every mandatory step ran and is green; **1** = at least one `FAIL` or `NICHT PRUEFBAR`; **2** = every executed step is green but at least one mandatory step was skipped (closing line `DRILL MIT LUECKEN … kein vollstaendiger Nachweis`); such a run writes **no** compliance proof — the script uses the same code for usage errors (unknown option, invalid timestamp). Only exit code 0 is a complete proof, so the `exit != 0` alert rule also covers a missing anchor check (Refs #2316). On `FAIL`, check backup integrity immediately — a failed trigger check (step 5) is critical, because AuditLog immutability then no longer applies after a restore.
 
-> **Benign exception during the restore (step 2):** In dev mode, the dump may fail to `REFRESH MATERIALIZED VIEW core_statistics_event_flat` against `FORCE ROW LEVEL SECURITY` on `core_event` (`pg_restore: errors ignored on restore: 1`). This only affects the statistics cache. The `--dev` drill tolerates only this case. In prod mode, `psql -v ON_ERROR_STOP=1 --single-transaction` aborts on every SQL error. Completeness is additionally established there by the exact manifest comparison in step 3b.
 
 **Compliance marker** (Refs #919): On success, step 7 automatically writes a `RESTORE_VERIFIED` AuditLog entry (`manage.py mark_restore_verified`), which the compliance dashboard (`/system/compliance/`) uses as an age indicator:
 
@@ -3095,73 +3090,27 @@ Refs #528.
 
 ---
 
-## 11. Statistics Materialized View
+<a id="11-statistics-materialized-view"></a>
 
-The materialized view `core_statistics_event_flat`
-pre-aggregates all event facts for the statistics dashboard. The refresh runs via a
-management command and uses `REFRESH MATERIALIZED VIEW CONCURRENTLY`, so
-running readers are not blocked
-([`refresh_statistics_view.py`](../../src/core/management/commands/refresh_statistics_view.py)).
+## 11. Statistics: live queries and snapshots
 
-### 11.1 Manual Refresh
+Statistics read events live and use monthly snapshots for complete past months when available. Full-period person terms remain live. A document type filter uses live queries. The unused materialized statistics cache and its hourly refresh job have been removed (#2721); applying migrations drops the view if it exists.
 
-```bash
-# Concurrent refresh (default — non-blocking)
-docker compose -f docker-compose.prod.yml run --rm maintenance \
-  refresh_statistics_view
+### 11.1 Remove a separately configured refresh schedule
 
-# Force a blocking refresh (fallback without the UNIQUE index)
-docker compose -f docker-compose.prod.yml run --rm maintenance \
-  refresh_statistics_view --no-concurrent
-```
-
-If `CONCURRENTLY` fails (e.g. because the UNIQUE index is missing after
-a schema migration), the command logs a warning and repeats
-the refresh without `CONCURRENTLY` — the view stays consistent, but
-readers block for the duration of the refresh.
-
-### 11.2 Cron Recommendation
-
-Hourly at minute 15 (see [3.2](#32-cron-sidecar-standard)). With high
-event frequency, this can be tightened to every 15 minutes; with low
-traffic, every 6 hours is also sufficient. The dashboard tolerates slight staleness.
-
-### 11.3 Distinction from Snapshots
-
-| Artifact | Purpose | Command | Frequency |
-|----------|-------|--------|----------|
-| `core_statistics_event_flat` (MV) | Current runtime aggregates for the dashboard | `refresh_statistics_view` | Hourly |
-| `core_statisticssnapshot` (table) | Persistent monthly aggregates; events deleted by retention keep counting as a carry-over (`_deleted`) | `create_statistics_snapshots` | Monthly |
-
-Both jobs are independent — snapshots stay correct even without the MV,
-and the MV can be refreshed even without snapshots.
-
-### 11.4 Health Check
-
-PostgreSQL does not record a refresh time for materialized views. The last
-successful refresh is evidenced by the `MV_REFRESH_COMPLETED` marker that
-`refresh_statistics_view` writes to the audit log after every run. It appears in
-the compliance dashboard as the card "Statistik-View-Refresh"; in the `/health/`
-detail (token call), `stale_jobs` lists the key `mv_refresh_last_run` as soon as
-the last run is too long ago.
-
-Directly in the database (role `postgres` in the `db` container, see § 6.3;
-read-only):
+The shipped cron sidecar no longer schedules a statistics refresh. If you configured the old statistics refresh in a host crontab, remove that entry with `crontab -e` for the scheduling account. If you use systemd timers, disable the old timer and remove its unit files:
 
 ```bash
-docker compose -f docker-compose.prod.yml exec -T db \
-  sh -c 'psql -U postgres -d "$POSTGRES_DB"' <<'SQL'
--- Last refresh according to the marker
-SELECT max("timestamp") AS last_refresh
-FROM core_auditlog
-WHERE action = 'mv_refresh_completed';
-
--- Check the row count (should roughly match the core_event count)
-SELECT count(*) FROM core_statistics_event_flat;
-SQL
+sudo systemctl disable --now anlaufstelle-mv-refresh.timer
+sudo rm -f /etc/systemd/system/anlaufstelle-mv-refresh.timer /etc/systemd/system/anlaufstelle-mv-refresh.service
+sudo systemctl daemon-reload
 ```
 
-Refs #544.
+For the Barbara installation use the prefix `anlaufstelle-barbara-mv-refresh` instead. The timer installers no longer create these units. Historical audit entries remain readable and are included in chain verification; the retired job has no card in compliance or health diagnostics.
+
+### 11.2 Monthly snapshots
+
+`create_statistics_snapshots` still runs monthly through the cron sidecar. Retention carries deleted events into their monthly aggregates in the same transaction. This preserves event counts for snapshot-backed output; live reports and person counts can decrease after retention. See [Admin Guide § 8](admin-guide.md#8-statistics-snapshots).
 
 ---
 
@@ -3292,7 +3241,7 @@ docker compose "${compose_files[@]}" exec -T web touch /media/anlaufstelle.maint
 ./scripts/ops/backup.sh
 
 # 2. Shut down the write paths (the DB stays reachable) — web AND cron, since
-#    the cron sidecar would otherwise keep writing (retention, MV refresh,
+#    the cron sidecar would otherwise keep writing (retention,
 #    breach scan) and those writes would be missing from the dump. Then take
 #    the unencrypted working dump. It runs as the admin role (BYPASSRLS) over
 #    the container socket like backup.sh; inside the db container the variable
@@ -3386,7 +3335,6 @@ docker compose "${compose_files[@]}" exec -T web rm -f /media/anlaufstelle.maint
 rm -f "$dump"
 ```
 
-If `pg_restore` reports a warning at `REFRESH MATERIALIZED VIEW core_statistics_event_flat`, the data is complete anyway — run the MV refresh once afterwards ([§ 11](#11-statistics-materialized-view)).
 
 ### 13.2 Rollback
 
@@ -3439,7 +3387,6 @@ Migration status          docker compose -f docker-compose.prod.yml exec web pyt
 Django deploy check       docker compose -f docker-compose.prod.yml exec web python manage.py check --deploy
 Retention dry run         docker compose -f docker-compose.prod.yml run --rm maintenance enforce_retention --dry-run
 Snapshot dry run          docker compose -f docker-compose.prod.yml run --rm maintenance create_statistics_snapshots --dry-run
-MV refresh                docker compose -f docker-compose.prod.yml run --rm maintenance refresh_statistics_view
 Check DB roles/RLS        docker compose -f docker-compose.prod.yml run --rm maintenance check_db_roles
 Stop the stack            docker compose -f docker-compose.prod.yml down
 Start the stack           docker compose "${compose_files[@]}" up -d   (file list: § 1.2)
@@ -3450,4 +3397,4 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.10 -->
 <!-- translation-date: 2026-11-12 -->
-<!-- source-hash: b90f7612e3b0c1f691fb7b4397b374e75e80f3b5 -->
+<!-- source-hash: 253868f2268ae13adda40bb554e9c4434fceb1ac -->

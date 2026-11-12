@@ -31,7 +31,7 @@ Dieses Handbuch richtet sich an IT-Administratoren sozialer Einrichtungen, die A
 7. [DSGVO-Hinweise](#7-dsgvo-hinweise)
    - 7.8 [Optimistic Locking](#78-optimistic-locking)
    - 7.9 [Row Level Security (RLS)](#79-row-level-security-rls)
-8. [Statistik-Snapshots & Materialized View](#8-statistik-snapshots--materialized-view)
+8. [Statistik-Snapshots](#8-statistik-snapshots)
 
 ---
 
@@ -1731,7 +1731,7 @@ Bei CSP-Fehlern nach einem Update: Browser-Console auf **konkret blockierte URL/
 
 ### 5.5 Compliance-Dashboard
 
-Der Superadmin-Bereich `/system/compliance/` (#919) bündelt typisierte Health-Checks in einem Dashboard: die drei DB-Rollen-Checks (über `check_db_roles`, siehe Datenbank-Variablen in [§ 1](#1-installation-docker-compose)), die Prüfung, dass kein Anwendungskonto Djangos `is_superuser`-Flag trägt („App-User kein Django-Superuser“; geprüft werden Benutzerkonten, nicht die Datenbankrollen), Backup-Alter, Restore-Verified-Alter, ClamAV-Ping + Signaturalter, Retention-Run-Alter, Audit-Log-Aufbewahrung, Frische der Hintergrundjobs (Audit-Ketten-Prüfung, Statistik-Snapshot, Breach-Scan, Materialized-View-Refresh), MFA-Quote (MFA-pflichtige Rollen), ausstehende Django-Migrationen, App-/Django-/Python-Versionen sowie kritische Audit-Events der letzten 24 Stunden.
+Der Superadmin-Bereich `/system/compliance/` (#919) bündelt typisierte Health-Checks in einem Dashboard: die drei DB-Rollen-Checks (über `check_db_roles`, siehe Datenbank-Variablen in [§ 1](#1-installation-docker-compose)), die Prüfung, dass kein Anwendungskonto Djangos `is_superuser`-Flag trägt („App-User kein Django-Superuser“; geprüft werden Benutzerkonten, nicht die Datenbankrollen), Backup-Alter, Restore-Verified-Alter, ClamAV-Ping + Signaturalter, Retention-Run-Alter, Audit-Log-Aufbewahrung, Frische der Hintergrundjobs (Audit-Ketten-Prüfung, Statistik-Snapshot, Breach-Scan), MFA-Quote (MFA-pflichtige Rollen), ausstehende Django-Migrationen, App-/Django-/Python-Versionen sowie kritische Audit-Events der letzten 24 Stunden.
 
 Steht die AuditLog-Aufbewahrung in einer oder mehreren Einrichtungen auf `0` Monate, zeigt die Kategorie **Retention** eine aggregierte Warnung mit den betroffenen Einrichtungsnamen; beheben lässt sie sich unter **Verwaltung → Einstellungen → Datenschutz und Fristen**.
 
@@ -2471,50 +2471,17 @@ Mit der App-Rolle und ohne gesetzte Variablen liefern die geschützten Tabellen 
 
 ---
 
-## 8. Statistik-Snapshots & Materialized View
+<a id="8-statistik-snapshots--materialized-view"></a>
 
-### Überblick: zwei Ebenen
+## 8. Statistik-Snapshots
 
-Statistik-Auswertungen in der Anlaufstelle nutzen **zwei unterschiedliche Beschleunigungs-Ebenen**:
-
-1. **Materialized View** (`core_statistics_event_flat`) — aggregiert die aktuellen Event-Daten vor, damit die Statistik-Seite nicht bei jedem Aufruf alle Events neu scannen muss. Refs #544.
-2. **Statistik-Snapshots** — monatliche, persistierte Aggregate, die die von der automatischen Löschung erfassten Events weiter mitzählen. Dadurch zählen historische Auswertungen auch Events, die der Aufbewahrungslauf gelöscht hat.
-
-### Materialized View aktualisieren
-
-Die Materialized View wird **nicht live** mit jedem `INSERT` aktualisiert — sie muss periodisch via Management-Command neu aufgebaut werden:
-
-```bash
-# Standard (non-blocking, nutzt CONCURRENTLY wenn möglich)
-docker compose -f docker-compose.prod.yml run --rm maintenance \
-  refresh_statistics_view
-
-# Blockierend (falls kein UNIQUE-Index vorhanden)
-docker compose -f docker-compose.prod.yml run --rm maintenance \
-  refresh_statistics_view --no-concurrent
-```
-
-Implementierung: [`src/core/management/commands/refresh_statistics_view.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/refresh_statistics_view.py).
-
-> **Bereits automatisiert (Refs #794):** Der mitgelieferte `cron`-Sidecar aus `docker-compose.prod.yml` führt diesen Job ab Werk aus. Das folgende Crontab-Beispiel gilt nur, wenn der `cron`-Dienst nicht läuft; es startet den Job über den `maintenance`-Dienst derselben Compose-Datei, der als einziger die Admin-Rolle (BYPASSRLS) erhält (ohne Compose in der eigenen Orchestrierung nachbilden: gleiches Image, Entrypoint `python manage.py`, Admin-Rolle). Wer beides einrichtet, lässt den Job doppelt laufen — Details: [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs).
-
-**Empfohlener Cron-Rhythmus:**
-
-```cron
-# Stündlich (nahe-echtzeit) — für stark genutzte Statistik-Seiten
-0 * * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance refresh_statistics_view >> /var/log/anlaufstelle-statistics.log 2>&1
-
-# Alternativ: täglich nachts (für einmalige Berichte) — nur einmal umstellen
-# 0 1 * * * …
-```
-
-> **Hinweis:** `CONCURRENTLY` blockiert lesende Zugriffe nicht, setzt aber einen UNIQUE-Index auf der Materialized View voraus (wird per Migration angelegt). Der Command fällt bei Fehlern automatisch auf einen non-concurrent Refresh zurück.
+Statistiken nutzen Live-Abfragen auf Ereignisse und monatliche Snapshots. Vollständige vergangene Monate werden aus einem vorhandenen Snapshot gelesen; Teilmonate, der laufende Monat und Monate ohne Snapshot werden live berechnet. Die Personenkennzahlen über den Gesamtzeitraum bleiben live. Einen separaten materialisierten Statistik-Cache und einen stündlichen Refresh-Job gibt es nicht.
 
 ### Was sind Statistik-Snapshots?
 
-Anlaufstelle berechnet Statistiken (Dashboard, Halbjahresberichte, Beispiel-Sachbericht-PDFs) standardmäßig aus der Event-Tabelle (über die Materialized View aggregiert). Wenn die automatische Datenlöschung (`enforce_retention`) alte Events entfernt, würden diese aus den Statistiken verschwinden.
+Anlaufstelle berechnet Statistiken (Dashboard, Halbjahresberichte, Beispiel-Sachbericht-PDFs) aus der Event-Tabelle und monatlichen Snapshots. Wenn die automatische Datenlöschung (`enforce_retention`) alte Events entfernt, würden diese aus den Statistiken verschwinden.
 
-**Statistik-Snapshots** halten monatliche Aggregate fest, die auch vom Aufbewahrungslauf gelöschte Events weiter zählen. Die Auswertungen nutzen eine Hybrid-Logik: gespeicherte Snapshots für vergangene Monate, Live-Daten (aus der Materialized View) für den aktuellen Monat.
+**Statistik-Snapshots** halten monatliche Aggregate fest, die auch vom Aufbewahrungslauf gelöschte Events weiter zählen. Die Auswertungen nutzen eine Hybrid-Logik: gespeicherte Snapshots für vergangene Monate, Live-Daten aus der Event-Tabelle für den aktuellen Monat.
 
 > **Wichtig: Der Snapshot-Schutz gilt nicht für jeden Bericht.** Die Übersicht liest Ereigniszahlen hybrid aus Monats-Aggregaten mit Live-Fallback; Personenkennzahlen bleiben live. Die Übersicht hat keinen PDF-Export. Im Reiter **„Datensatz-Berichte“** liest nur das PDF des **Beispiel-Sachberichts** hybrid aus Monats-Aggregaten, mit Live-Fallback für fehlende Snapshots und Teilmonate; unterschiedliche Personen werden auch dort live über den Gesamtzeitraum gezählt. Vorschau, CSV/JSON/XML und alle Formate der anderen Berichte rechnen live. Nach einer Bereinigung durch `enforce_retention` können Live-Zahlen daher niedriger sein, bis auf null. Die Wirkung hängt an der jeweiligen Grundgesamtheit. **Bewahren Sie herausgegebene Dateien selbst auf:** Sie lassen sich später nicht notwendig identisch reproduzieren. Beachten Sie den Quellenausweis je Format und die Regeln unter [„Herausgabe von Berichten“](#herausgabe-von-berichten-was-sie-wissen-müssen).
 

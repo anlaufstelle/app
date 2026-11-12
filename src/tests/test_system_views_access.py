@@ -272,17 +272,16 @@ class TestSystemDashboardCronCard:
     """Refs #977: /system/-Uebersicht zeigt einen kompakten Hintergrundjobs-Block."""
 
     def test_cron_jobs_dict_in_context(self, client, super_admin_user):
-        """Context enthaelt ``cron_jobs`` mit Summary + Checks (6 Jobs)."""
+        """Context includes the summary and checks of the five active jobs."""
         client.force_login(super_admin_user)
         response = client.get(reverse("core:system_dashboard"))
         assert response.status_code == 200
         cron = response.context["cron_jobs"]
         for key in ("checks", "total", "ok", "overdue", "unknown", "worst"):
             assert key in cron, f"cron_jobs-Key {key!r} fehlt"
-        # Sechs Cron-Jobs: backup/retention/audit-chain/snapshot/breach/mv-refresh
-        # (Audit-Ketten-Pruefung seit Refs #1872).
-        assert cron["total"] == 6
-        assert cron["ok"] + cron["overdue"] + cron["unknown"] == 6
+        # Five active jobs: backup, retention, audit verification, snapshots and breach scans.
+        assert cron["total"] == 5
+        assert cron["ok"] + cron["overdue"] + cron["unknown"] == 5
 
     def test_missing_backup_counts_as_overdue_not_unknown(self, client, super_admin_user):
         """Refs #1872: „Kein Backup gefunden" ist in der Betriebsansicht eine Warnung."""
@@ -307,7 +306,7 @@ class TestSystemDashboardCronCard:
         response = client.get(reverse("core:system_dashboard"))
         content = response.content.decode("utf-8", errors="replace")
         assert "Breach-Detection-Scan" in content
-        assert "Statistik-View-Refresh" in content
+        assert "Statistik-View-Refresh" not in content
 
 
 class TestCronJobSummaryWorstStatus:

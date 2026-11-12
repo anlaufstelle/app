@@ -383,11 +383,10 @@ class HealthView(View):
     Refs #796 (C-28): Komponenten ``smtp``, ``encryption_key``,
     ``last_backup_age_hours``, ``disk_free_pct``.
 
-    Refs #1335: ``stale_jobs`` listet die Keys der fuenf ueberwachten
-    Hintergrundjobs (Backup, Retention, Statistik-Snapshots, Breach-Detection,
-    MV-Refresh — die Teilmenge aus ``cron_job_checks()``), deren letzter Lauf
-    laut Compliance-Dashboard ``critical`` ist — Indikator, dass der Scheduler
-    (``cron``-Sidecar bzw. Host-Cron, docs/ops-runbook.md § 3) nicht laeuft.
+    Refs #1335: ``stale_jobs`` lists active background jobs (backup,
+    retention, audit verification, statistics snapshots and breach scans)
+    whose last run is critical according to ``cron_job_checks()``. This
+    indicates a failed scheduler (cron sidecar or host cron, ops runbook § 3).
 
     Refs #795: ``cache`` nennt Backend und Erreichbarkeit des Shared Cache —
     seit der Stack einen Redis mitliefert, ist der stille Rueckfall auf den

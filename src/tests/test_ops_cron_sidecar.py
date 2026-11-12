@@ -71,7 +71,6 @@ EXPECTED_JOBS = {
     "cleanup_orphan_storage_files": "30 4 * * *",
     "clearsessions": "0 5 * * *",
     "detect_breaches": "30 * * * *",
-    "refresh_statistics_view": "15 * * * *",
 }
 
 

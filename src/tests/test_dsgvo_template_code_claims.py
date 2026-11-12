@@ -554,11 +554,11 @@ class TestDomainConceptRetentionAndRls:
             "core_user",
             "core_facility",
             "core_organization",
-            "Materialized-View",
             "app.is_super_admin",
             "BYPASSRLS",
         ):
             assert required in bullet, required
+        assert "Materialized-View" not in bullet
 
     def test_english_rls_bullet_names_its_limits(self):
         privacy = _section(
