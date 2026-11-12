@@ -109,14 +109,27 @@ _BULLET_RE = re.compile(r"^- (.*)$")
 _ISSUE_REF_RE = re.compile(r"#(\d+)")
 _LINK_RE = re.compile(r"\[([^\]]*)\]\([^)]*\)")
 _HEAD_SEPARATOR = " — "
+_BOLD_MARK = "**"
 
 
 def _split_entry(text: str) -> tuple[str, str]:
-    """Split an entry into its head (title and ticket links) and its text."""
-    head, separator, body = text.partition(_HEAD_SEPARATOR)
-    if not separator:
+    """Split an entry into its head (title and ticket links) and its text.
+
+    The head ends at the first dash that stands outside the bold title, so a
+    dash inside the title (``**Alpha — beta**``) neither hides the ticket
+    reference after it nor adds the rest of the title to the text. An entry
+    without a closing bold mark is split at its first dash.
+    """
+    title_end = 0
+    open_mark = text.find(_BOLD_MARK)
+    if open_mark != -1:
+        close_mark = text.find(_BOLD_MARK, open_mark + len(_BOLD_MARK))
+        if close_mark != -1:
+            title_end = close_mark + len(_BOLD_MARK)
+    split_at = text.find(_HEAD_SEPARATOR, title_end)
+    if split_at == -1:
         return "", text
-    return head, body
+    return text[:split_at], text[split_at + len(_HEAD_SEPARATOR) :]
 
 
 def entry_text_length(text: str) -> int:
