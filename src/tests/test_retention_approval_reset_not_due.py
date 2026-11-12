@@ -419,3 +419,38 @@ def test_reset_restarts_the_deferral_count(
     assert proposal.defer_count == 1
     assert proposal.status == RetentionProposal.Status.PENDING
     assert proposal.auto_approved_at is None
+
+
+def test_binding_change_in_the_reset_sweep_skips_only_that_proposal(
+    facility, client_qualified, case, doc_type_contact, lead_user, admin_user, qualified_period, monkeypatch, caplog
+):
+    """A concurrent merge on one target must not stop the rest of the facility run."""
+    from django.core.exceptions import ValidationError
+
+    from core.retention import proposals as proposal_service
+
+    events, proposals = _approved_events(
+        facility, client_qualified, case, doc_type_contact, lead_user, admin_user, count=2
+    )
+    blocked, other = proposals
+    _new_case_activity(facility, client_qualified, case, doc_type_contact, qualified_period)
+    real_lock = proposal_service._lock_target_rows_for_approval
+
+    def merge_in_progress(proposal):
+        if proposal.target_id == blocked.target_id:
+            raise ValidationError(proposal_service.TARGET_BINDING_CHANGED_MESSAGE)
+        return real_lock(proposal)
+
+    with monkeypatch.context() as merging:
+        merging.setattr(proposal_service, "_lock_target_rows_for_approval", merge_in_progress)
+        output = _run(facility)
+    assert "failed_facilities=0" in output
+    _assert_reset(other)
+    blocked.refresh_from_db()
+    assert blocked.status == RetentionProposal.Status.APPROVED
+    assert client_qualified.pseudonym not in caplog.text
+
+    # The next run checks the skipped proposal again.
+    _run(facility)
+    _assert_reset(blocked)
+    assert not any(Event.objects.get(pk=event.pk).is_deleted for event in events)

@@ -723,20 +723,26 @@ def reset_approvals_with_moved_deadline(facility, settings_obj, now):
     )
     reset = 0
     for pk, target_id in candidates:
-        with transaction.atomic():
-            _lock_target_rows_for_approval(
-                RetentionProposal(facility=facility, target_type="Event", target_id=target_id)
-            )
-            latest = (
-                RetentionProposal.objects.filter(facility=facility, target_type="Event", target_id=target_id)
-                .select_for_update()
-                .order_by("-proposed_at", "-pk")
-                .first()
-            )
-            # Historical decisions are never made active (Refs #2590).
-            if latest is None or latest.pk != pk:
-                continue
-            reset += int(reset_approval_if_deadline_moved(latest, settings_obj, now))
+        try:
+            with transaction.atomic():
+                _lock_target_rows_for_approval(
+                    RetentionProposal(facility=facility, target_type="Event", target_id=target_id)
+                )
+                latest = (
+                    RetentionProposal.objects.filter(facility=facility, target_type="Event", target_id=target_id)
+                    .select_for_update()
+                    .order_by("-proposed_at", "-pk")
+                    .first()
+                )
+                # Historical decisions are never made active (Refs #2590).
+                if latest is None or latest.pk != pk:
+                    continue
+                reset += int(reset_approval_if_deadline_moved(latest, settings_obj, now))
+        except ValidationError:
+            # A concurrent merge moved the event to another person. Skip this
+            # proposal; the next run decides it again. The deletion loop takes
+            # its own locks and checks the approval there before any deletion.
+            logger.warning("enforce_retention: approval check of proposal %s skipped, target binding changed", pk)
     return reset
 
 
