@@ -94,6 +94,7 @@ def _vuln(
     pkg: str = "openssl",
     fixed: object = "3.0.1",
     status: object = TRIVY_STATUS,
+    published: object = ABSENT,
 ) -> dict:
     """A Trivy finding in the form Trivy writes it.
 
@@ -108,10 +109,14 @@ def _vuln(
         status = "fixed" if "FixedVersion" in vuln else "affected"
     if status is not ABSENT:
         vuln["Status"] = status
+    if published is not ABSENT:
+        vuln["PublishedDate"] = published
     return vuln | {"Severity": severity, "Title": "controlled test finding"}
 
 
-def _report(ref: str, platform: str, *, vulns=(), go: bool = True, arch: str | None = None) -> str:
+def _report(
+    ref: str, platform: str, *, vulns=(), go: bool = True, arch: str | None = None, created: str | None = None
+) -> str:
     results = [
         {
             "Target": f"{ref} (debian 13.1)",
@@ -140,7 +145,8 @@ def _report(ref: str, platform: str, *, vulns=(), go: bool = True, arch: str | N
             "ArtifactType": "container_image",
             "Metadata": {
                 "OS": {"Family": "debian", "Name": "13.1"},
-                "ImageConfig": {"architecture": arch or platform.split("/")[1], "os": "linux"},
+                "ImageConfig": {"architecture": arch or platform.split("/")[1], "os": "linux"}
+                | ({"created": created} if created else {}),
             },
             "Results": results,
         }
@@ -152,7 +158,8 @@ def _compose_images() -> list[str]:
     return sorted({i for i in images if "anlaufstelle/app" not in i})
 
 
-def _run(tmp_path, *args, scans=None, env=None, app=APP, trivy=TRIVY, exceptions=None, indexes=None):
+def _stub_env(tmp_path, *, scans=None, env=None, trivy=TRIVY, exceptions=None, indexes=None):
+    """Stub ``docker`` and its input files; returns the environment and the exceptions file."""
     tools = tmp_path / "bin"
     tools.mkdir(exist_ok=True)
     stub = tools / "docker"
@@ -178,6 +185,12 @@ def _run(tmp_path, *args, scans=None, env=None, app=APP, trivy=TRIVY, exceptions
     }
     if not trivy:
         full_env.pop("IMAGE_SCAN_TRIVY_IMAGE", None)
+    return full_env, exc_file
+
+
+def _run(tmp_path, *args, scans=None, env=None, app=APP, trivy=TRIVY, exceptions=None, indexes=None):
+    full_env, exc_file = _stub_env(tmp_path, scans=scans, env=env, trivy=trivy, exceptions=exceptions, indexes=indexes)
+    log = Path(full_env["STUB_LOG"])
     out = tmp_path / "out"
     result = subprocess.run(  # noqa: S603
         [
@@ -391,11 +404,13 @@ class TestUnfixedFindingsInTheAppImage:
         summary = (out / "image-scan-summary.txt").read_text()
         line = _scan_line(summary, APP, "linux/amd64")
         assert line.endswith(
-            ": fail — blocking 1, excepted 0, unfixed 2 (not blocking), below threshold 1, unrated 1"
+            ": fail — blocking 1, excepted 0, grace 0 (not blocking), unfixed 2 (not blocking), "
+            "below threshold 1, unrated 1"
         ), line
         clean = _scan_line(summary, APP, "linux/arm64")
         assert clean.endswith(
-            ": pass — blocking 0, excepted 0, unfixed 0 (not blocking), below threshold 0, unrated 0"
+            ": pass — blocking 0, excepted 0, grace 0 (not blocking), unfixed 0 (not blocking), "
+            "below threshold 0, unrated 0"
         ), clean
         third = _scan_line(summary, _compose_images()[0], "linux/amd64")
         assert "unfixed 0 (not blocking)" in third
@@ -948,3 +963,163 @@ class TestNothingScanned:
         assert result.returncode == 2
         assert "Traceback" not in result.stderr
         assert "UTF-8" in result.stderr
+
+
+# Grace-period fixtures: the image was built before the identifier was published,
+# so the pinned image cannot carry the fix. The scan clock is set relative to them.
+BUILT_RAW = "2026-11-05T19:08:30.016975331Z"  # the form Trivy reports (nanoseconds, UTC)
+PUBLISHED_RAW = "2026-11-09T14:15:22.517Z"
+PUBLISHED = dt.datetime(2026, 11, 9, 14, 15, 22, tzinfo=dt.UTC)
+GRACE_END = "2026-11-23"  # publication date + 14 days, valid through that day
+
+
+def _third_party_ref() -> str:
+    return next(ref for ref in _compose_images() if ref.startswith("postgres"))
+
+
+def _fresh(severity: str = "HIGH", **kwargs) -> dict:
+    """A finding with a fix whose identifier was published after the image build."""
+    return _vuln(severity, **({"published": PUBLISHED_RAW} | kwargs))
+
+
+class TestGracePeriodForThirdPartyFixes:
+    """A third-party finding below ``critical`` with a published fix whose identifier
+    was published after the build of the scanned image does not block until 14 days
+    after its publication: the image cannot be patched here, and the upstream
+    maintainer needs time to rebuild it. It stays visible in its own class with the
+    end of the grace period. Everything else is unchanged: the app image has no grace
+    period; a finding without fix, with an unclear fix status, at ``critical``, known
+    when the image was built, or without usable dates still blocks unless an
+    exception covers it."""
+
+    def _scan(self, tmp_path, monkeypatch, *vulns, now, created=BUILT_RAW, ref=None, exceptions=None, app=""):
+        ref = ref or _third_party_ref()
+        scans = {f"{ref}|linux/amd64": _report(ref, "linux/amd64", vulns=list(vulns), created=created)}
+        env, exc_file = _stub_env(tmp_path, scans=scans, exceptions=exceptions)
+        for key, value in env.items():
+            monkeypatch.setenv(key, value)
+        module = _load_module()
+        monkeypatch.setattr(module, "_clock", lambda: now)
+        out = tmp_path / "out"
+        argv = ["--app-image", app, "--out-dir", str(out), "--exceptions", str(exc_file)]
+        code = module.main([*argv, *(["--require-app-image"] if app else [])])
+        report = json.loads((out / "image-scan-report.json").read_text())
+        scan = next(s for s in report["scans"] if s["reference"] == ref and s["platform"] == "linux/amd64")
+        return code, scan, (out / "image-scan-summary.txt").read_text(), report
+
+    def _assert_blocks_without_grace(self, code, scan):
+        assert code == 1
+        assert scan["grace"] == [] and len(scan["blocking"]) == 1
+        assert "grace_ended" not in scan["blocking"][0]
+
+    def test_fresh_fixable_high_finding_inside_the_grace_period_does_not_block(self, tmp_path, monkeypatch):
+        now = PUBLISHED + dt.timedelta(days=3)
+        code, scan, summary, report = self._scan(tmp_path, monkeypatch, _fresh(pkg="krb5-libs"), now=now)
+        assert code == 0, summary
+        assert report["result"] == "pass"
+        assert scan["blocking"] == []
+        assert [(f["id"], f["grace_until"]) for f in scan["grace"]] == [("CVE-2026-0001", GRACE_END)]
+        assert scan["grace"][0]["published"] == PUBLISHED_RAW
+        assert scan["image_created"] == BUILT_RAW
+        assert report["grace_days"] == 14
+        line = _scan_line(summary, _third_party_ref(), "linux/amd64")
+        assert line.endswith(
+            ": pass — blocking 0, excepted 0, grace 1 (not blocking), unfixed 0 (not blocking), "
+            "below threshold 0, unrated 0"
+        ), line
+        assert f"    grace until {GRACE_END}: CVE-2026-0001 [high] krb5-libs 3.0.0 fixed in 3.0.1" in summary
+
+    def test_grace_period_is_valid_through_its_last_day(self, tmp_path, monkeypatch):
+        now = dt.datetime(2026, 11, 23, 23, 59, tzinfo=dt.UTC)
+        code, scan, summary, _ = self._scan(tmp_path, monkeypatch, _fresh(), now=now)
+        assert code == 0, summary
+        assert len(scan["grace"]) == 1
+
+    def test_finding_blocks_once_the_grace_period_has_ended(self, tmp_path, monkeypatch):
+        now = dt.datetime(2026, 11, 24, 0, 1, tzinfo=dt.UTC)
+        code, scan, summary, report = self._scan(tmp_path, monkeypatch, _fresh(), now=now)
+        assert code == 1
+        assert report["result"] == "fail"
+        assert scan["grace"] == []
+        assert [f["grace_ended"] for f in scan["blocking"]] == [GRACE_END]
+        expected = f"BLOCKING CVE-2026-0001 [high] openssl 3.0.0 fixed in 3.0.1 — grace period ended {GRACE_END}"
+        assert expected in summary
+
+    def test_finding_known_when_the_image_was_built_gets_no_grace_period(self, tmp_path, monkeypatch):
+        # The fix may well have existed at build time; a rebuild alone would not bring it.
+        now = PUBLISHED + dt.timedelta(days=1)
+        old = _vuln("HIGH", published="2026-10-21T08:00:00Z")
+        code, scan, _, _ = self._scan(tmp_path, monkeypatch, old, now=now)
+        self._assert_blocks_without_grace(code, scan)
+
+    def test_critical_finding_gets_no_grace_period(self, tmp_path, monkeypatch):
+        code, scan, _, _ = self._scan(tmp_path, monkeypatch, _fresh("CRITICAL"), now=PUBLISHED)
+        self._assert_blocks_without_grace(code, scan)
+
+    def test_finding_without_fix_still_needs_an_exception(self, tmp_path, monkeypatch):
+        code, scan, _, _ = self._scan(tmp_path, monkeypatch, _fresh(fixed=""), now=PUBLISHED)
+        self._assert_blocks_without_grace(code, scan)
+
+    @pytest.mark.parametrize("fixed, status", [("", "fixed"), (ABSENT, ABSENT), (3, "fixed"), ("", "mystery")])
+    def test_unclear_fix_status_gets_no_grace_period(self, tmp_path, monkeypatch, fixed, status):
+        code, scan, _, _ = self._scan(tmp_path, monkeypatch, _fresh(fixed=fixed, status=status), now=PUBLISHED)
+        self._assert_blocks_without_grace(code, scan)
+
+    def test_app_image_gets_no_grace_period(self, tmp_path, monkeypatch):
+        code, scan, summary, _ = self._scan(tmp_path, monkeypatch, _fresh(), now=PUBLISHED, ref=APP, app=APP)
+        assert scan["role"] == "app"
+        self._assert_blocks_without_grace(code, scan)
+        assert "grace until" not in summary
+
+    @pytest.mark.parametrize(
+        "created",
+        [None, "yesterday", "2026-11-05T19:08:30", "2026-11-10T00:00:00Z", 1730000000],
+        ids=["missing", "garbage", "without-offset", "after-the-scan", "not-a-string"],
+    )
+    def test_image_without_a_usable_build_date_gets_no_grace_period(self, tmp_path, monkeypatch, created):
+        now = dt.datetime(2026, 11, 9, 23, 0, tzinfo=dt.UTC)
+        code, scan, _, _ = self._scan(tmp_path, monkeypatch, _fresh(), now=now, created=created)
+        self._assert_blocks_without_grace(code, scan)
+
+    @pytest.mark.parametrize(
+        "published",
+        [ABSENT, None, "", "soon", "2026-11-09T14:15:22", "2026-11-10T00:00:00Z", 1730000000],
+        ids=["absent", "null", "empty", "garbage", "without-offset", "after-the-scan", "not-a-string"],
+    )
+    def test_finding_without_a_usable_publication_date_gets_no_grace_period(self, tmp_path, monkeypatch, published):
+        now = dt.datetime(2026, 11, 9, 23, 0, tzinfo=dt.UTC)
+        code, scan, _, _ = self._scan(tmp_path, monkeypatch, _vuln("HIGH", published=published), now=now)
+        self._assert_blocks_without_grace(code, scan)
+
+    def test_publication_date_with_offset_counts_in_utc(self, tmp_path, monkeypatch):
+        # 23:30 at UTC-02:00 is already 2026-11-10 in UTC: the grace period ends a day later.
+        now = dt.datetime(2026, 11, 24, 12, 0, tzinfo=dt.UTC)
+        vuln = _vuln("HIGH", published="2026-11-09T23:30:00-02:00")
+        code, scan, _, _ = self._scan(tmp_path, monkeypatch, vuln, now=now)
+        assert code == 0
+        assert [f["grace_until"] for f in scan["grace"]] == ["2026-11-24"]
+
+    def test_valid_exception_takes_precedence_over_the_grace_period(self, tmp_path, monkeypatch):
+        entry = {
+            "vulnerability": "CVE-2026-0001",
+            "image": "postgres",
+            "package": "openssl",
+            "reason": "Decided case by case.",
+            "expires": "2026-12-01",
+        }
+        code, scan, _, _ = self._scan(tmp_path, monkeypatch, _fresh(), now=PUBLISHED, exceptions=[entry])
+        assert code == 0
+        assert scan["grace"] == [] and len(scan["excepted"]) == 1
+
+    def test_scan_without_findings_has_an_empty_grace_class(self, tmp_path, monkeypatch):
+        code, scan, summary, _ = self._scan(tmp_path, monkeypatch, now=PUBLISHED)
+        assert code == 0
+        assert scan["grace"] == []
+        assert "grace 0 (not blocking)" in _scan_line(summary, _third_party_ref(), "linux/amd64")
+        assert "grace until" not in summary
+
+    def test_grace_period_is_shorter_than_an_exception(self):
+        module = _load_module()
+        assert module.GRACE_DAYS == 14
+        assert module.GRACE_DAYS < module.MAX_EXCEPTION_DAYS
+        assert module.GRACE_MAX_SEVERITY == "high"

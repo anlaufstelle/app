@@ -14,6 +14,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Changelog-Einträge folgen einer festen Form** (#2704) — Für Mitwirkende: Ein Eintrag hat höchstens zwei Sätze (Redaktionsregel) und 350 Zeichen (Betreiber-Aktionen 600), je Ticket und Abschnitt einen Eintrag, die Abschnitte stehen in fester Folge. `make changelog-check` prüft Länge, Ticket-Dopplung, Folge und Leerzeilen; Nachrunden ändern den Eintrag, sie hängen nichts an.
 - **CI: apt-Schritte erreichen bei einem Spiegelausfall den Ausweichspiegel** (#2707) — Lint-, Test- und E2E-Workflow installieren Systempakete über ein gemeinsames Hilfsskript: Sind sie vorhanden, entfällt apt; sonst wechselt apt von einem toten ersten Spiegel sofort zum nächsten, und ein Teilausfall lässt den Lauf fehlschlagen statt mit veralteten Listen weiterzulaufen.
+### Security
+
+- **Schonfrist für frische Upstream-Fixes in Fremdimages** (#2705) — Ein Treffer unter `critical` mit Fix, dessen Kennung nach dem Build des Fremdimages veröffentlicht wurde, blockiert den Image-Scan erst 14 Tage nach der Veröffentlichung; bis dahin steht er mit Fristende als `grace` im Bericht. Ohne Fix, bei `critical`, ohne verwertbares Datum und im App-Image gilt die bisherige Regel.
 
 ## [0.99.10] - 2026-11-11
 

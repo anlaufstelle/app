@@ -42,8 +42,18 @@ Decision rule
   is not a string — blocks and is marked "fix status unknown". An app
   finding with a fix blocks; the versioned exceptions file carries no entry
   for the app image.
-  Third-party images keep the plain rule: every finding at or above the
-  threshold blocks unless an exception covers it.
+  In third-party images a finding at or above the threshold blocks unless an
+  exception covers it or it is in its grace period. A finding gets a grace
+  period when it is below ``critical`` (``GRACE_MAX_SEVERITY``), has a published
+  fix (a fixed version, the same test as for the app image) and its identifier
+  was published (``PublishedDate``) after the build of the scanned image
+  (``created`` of its image config): such an image cannot carry the fix, and it
+  cannot be patched here. The finding then does not block until ``GRACE_DAYS``
+  days after the publication (valid through that UTC day), which leaves the
+  upstream maintainer time to rebuild and us time to take over the new digest.
+  A finding without fix, with an unclear fix status, at ``critical``, known
+  when the image was built, or without usable dates (missing, without offset,
+  later than the scan) gets no grace period. The app image has none.
 * Exit 1: at least one blocking finding or an expired exception.
 * Exit 2: the check is incomplete — exceptions file unusable (see below),
   app image given without a valid digest or
@@ -55,9 +65,12 @@ Decision rule
   ``/usr/local/bin/supercronic`` in the app image. A coverage gap is never a
   clean result.
 * Findings with severity ``UNKNOWN`` are listed as unrated and do not block.
-* The summary line of every scan reads ``blocking n, excepted n, unfixed n
-  (not blocking), below threshold n, unrated n``; the JSON report carries the
-  same lists per scan (``unfixed`` is always empty for third-party images).
+* The summary line of every scan reads ``blocking n, excepted n, grace n (not
+  blocking), unfixed n (not blocking), below threshold n, unrated n``; the JSON
+  report carries the same lists per scan (``unfixed`` is always empty for
+  third-party images, ``grace`` for the app image). A finding in its grace
+  period carries ``grace_until``, a blocking one whose grace period has ended
+  ``grace_ended``.
 
 Exceptions live in ``scripts/image_scan_exceptions.json``: ``vulnerability``
 (CVE/GHSA id), ``image`` (repository without tag/digest) and ``package`` (both
@@ -99,6 +112,12 @@ COMPOSE_FILE = ROOT / "docker-compose.prod.yml"
 EXCEPTIONS_FILE = ROOT / "scripts" / "image_scan_exceptions.json"
 # An exception is a decision with a deadline, not a permanent waiver.
 MAX_EXCEPTION_DAYS = 90
+# Grace period for a third-party finding with a published fix whose identifier
+# appeared after the image build, counted from the publication of the
+# identifier: time for the upstream rebuild and the digest bump.
+GRACE_DAYS = 14
+# Highest severity that gets a grace period; ``critical`` always blocks.
+GRACE_MAX_SEVERITY = "high"
 DEFAULT_PLATFORMS = ("linux/amd64", "linux/arm64")
 SEVERITIES = ("low", "medium", "high", "critical")
 SUPERCRONIC = "usr/local/bin/supercronic"
@@ -109,6 +128,11 @@ NO_FIX_STATUSES = ("affected", "will_not_fix", "fix_deferred", "end_of_life", "u
 FIX_STATUS_UNKNOWN = "fix status unknown"
 DIGEST_REF_RE = re.compile(r"^(?P<repo>[a-z0-9][a-z0-9._/:-]*?)(?::[\w.-]+)?@(?P<digest>sha256:[0-9a-f]{64})$")
 IMAGE_LINE_RE = re.compile(r"^\s*image:\s*['\"]?(?P<ref>[^'\"\s#]+)", re.MULTILINE)
+
+
+def _clock() -> dt.datetime:
+    """Current time in UTC; the only clock of the gate."""
+    return dt.datetime.now(dt.UTC)
 
 
 class IncompleteScanError(Exception):
@@ -292,6 +316,7 @@ def analyse(raw: str, ref: str, role: str, platform: str) -> dict:
                     "severity": str(vuln.get("Severity", "UNKNOWN")).lower(),
                     "target": result.get("Target"),
                     "class": result.get("Class"),
+                    "published": vuln.get("PublishedDate"),
                 }
             )
     if role == "app":
@@ -300,7 +325,8 @@ def analyse(raw: str, ref: str, role: str, platform: str) -> dict:
             gaps.append(f"/{SUPERCRONIC}: no Go binary detected")
         elif not go_binaries[supercronic]:
             gaps.append(f"/{SUPERCRONIC}: Go binary detected without modules")
-    return {"findings": findings, "go_binaries": go_binaries, "coverage_gaps": gaps}
+    created = (data["Metadata"].get("ImageConfig") or {}).get("created")
+    return {"findings": findings, "go_binaries": go_binaries, "coverage_gaps": gaps, "image_created": created}
 
 
 def _covers(entry: dict, finding: dict, repository: str, today: dt.date) -> bool:
@@ -320,8 +346,8 @@ def _covers(entry: dict, finding: dict, repository: str, today: dt.date) -> bool
     return not target or target == str(finding.get("target") or "").lstrip("/")
 
 
-def _app_fix_state(finding: dict) -> str:
-    """``fixed``, ``unfixed`` or ``unknown`` for a finding in the app image (fail-closed).
+def _fix_state(finding: dict) -> str:
+    """``fixed``, ``unfixed`` or ``unknown`` for a finding (fail-closed).
 
     ``unfixed`` needs both signals Trivy gives for a missing fix: no fixed
     version and a status from ``NO_FIX_STATUSES``. A non-string fixed version,
@@ -336,19 +362,49 @@ def _app_fix_state(finding: dict) -> str:
     return "unfixed" if finding.get("status") in NO_FIX_STATUSES else "unknown"
 
 
-def decide(scan: dict, exceptions: list[dict], level: str, today: dt.date) -> None:
+def _timestamp(value: object, now: dt.datetime) -> dt.datetime | None:
+    """An ISO timestamp with offset that is not later than ``now``; otherwise ``None``."""
+    if not _is_set(value):
+        return None
+    try:
+        stamp = dt.datetime.fromisoformat(str(value))
+    except ValueError:
+        return None
+    if stamp.tzinfo is None or stamp > now:
+        return None
+    return stamp
+
+
+def grace_until(published: object, created: object, now: dt.datetime) -> dt.date | None:
+    """Last day of the grace period of a finding, or ``None`` when it has none.
+
+    Only an identifier published after the image was built gets one, ending
+    ``GRACE_DAYS`` days after the publication (UTC date). A missing or
+    implausible date gives none (fail-closed), so it never extends the window.
+    """
+    published_at, built_at = _timestamp(published, now), _timestamp(created, now)
+    if published_at is None or built_at is None or published_at <= built_at:
+        return None
+    return published_at.astimezone(dt.UTC).date() + dt.timedelta(days=GRACE_DAYS)
+
+
+def decide(scan: dict, exceptions: list[dict], level: str, now: dt.datetime) -> None:
     """Sort the findings of one scan into blocking, excepted, unfixed, below threshold and unrated.
 
     Only the app image (role ``app``) has the ``unfixed`` class: a finding at or
     above the threshold without a published fix (no fixed version and a no-fix
-    status, see ``_app_fix_state``) is listed there and does not block, because
+    status, see ``_fix_state``) is listed there and does not block, because
     no package update exists that a rebuild could pull in. An app finding whose
     fix status is unclear blocks with the reason "fix status unknown".
     Third-party images have no such class; there a finding without fix blocks
-    unless an exception covers it.
+    unless an exception covers it. Only third-party images have the ``grace``
+    class: a finding not covered by an exception, below ``critical``, with a
+    published fix and published after the image build waits there until the end
+    of its grace period (``grace_until``), after that it blocks with ``grace_ended``.
     """
+    today = now.date()
     threshold = SEVERITIES.index(level)
-    for key in ("blocking", "excepted", "unfixed", "below_threshold", "unrated"):
+    for key in ("blocking", "excepted", "grace", "unfixed", "below_threshold", "unrated"):
         scan[key] = []
     for finding in scan.pop("findings"):
         severity = finding["severity"]
@@ -359,7 +415,7 @@ def decide(scan: dict, exceptions: list[dict], level: str, today: dt.date) -> No
             scan["below_threshold"].append(finding)
             continue
         if scan["role"] == "app":
-            state = _app_fix_state(finding)
+            state = _fix_state(finding)
             if state == "unfixed":
                 scan["unfixed"].append(finding)
                 continue
@@ -367,10 +423,22 @@ def decide(scan: dict, exceptions: list[dict], level: str, today: dt.date) -> No
                 scan["blocking"].append(finding | {"blocking_reason": FIX_STATUS_UNKNOWN})
                 continue
         match = next((e for e in exceptions if _covers(e, finding, scan["repository"], today)), None)
-        if match is None:
-            scan["blocking"].append(finding)
-        else:
+        if match is not None:
             scan["excepted"].append(finding | {"reason": match["reason"], "expires": match["expires"].isoformat()})
+            continue
+        grace_end = None
+        if (
+            scan["role"] != "app"
+            and SEVERITIES.index(severity) <= SEVERITIES.index(GRACE_MAX_SEVERITY)
+            and _fix_state(finding) == "fixed"
+        ):
+            grace_end = grace_until(finding.get("published"), scan.get("image_created"), now)
+        if grace_end is None:
+            scan["blocking"].append(finding)
+        elif today <= grace_end:
+            scan["grace"].append(finding | {"grace_until": grace_end.isoformat()})
+        else:
+            scan["blocking"].append(finding | {"grace_ended": grace_end.isoformat()})
     if scan["coverage_gaps"]:
         scan["result"] = "incomplete"
     else:
@@ -385,6 +453,8 @@ def _line(finding: dict) -> str:
 
 def _blocking_line(finding: dict) -> str:
     """A blocking finding, with the reason when its fix status could not be trusted."""
+    if finding.get("grace_ended"):
+        return f"{_line(finding)} — grace period ended {finding['grace_ended']}"
     if finding.get("blocking_reason") != FIX_STATUS_UNKNOWN:
         return _line(finding)
     detail = f"status {finding.get('status')!r}, fixed version {finding['fixed']!r}"
@@ -399,6 +469,8 @@ def summary_text(report: dict) -> str:
         f"Database: updated {report['database']['updated_at']}, downloaded {report['database'].get('downloaded_at')}",
         f"Scan time: {report['started_at']} – {report['finished_at']}",
         f"Threshold: {report['threshold']}",
+        f"Grace period (third-party, up to {GRACE_MAX_SEVERITY}, with fix, published after the image build): "
+        f"{report['grace_days']} days after publication",
     ]
     if not report["app_image"]["scanned"]:
         lines.append(f"app image: {report['app_image']['note']}")
@@ -407,11 +479,12 @@ def summary_text(report: dict) -> str:
         lines.append(
             f"[{scan['role']}] {scan['reference']} {scan['platform']} ({scan['architecture']}): {scan['result']} — "
             f"blocking {len(scan['blocking'])}, excepted {len(scan['excepted'])}, "
-            f"unfixed {len(scan['unfixed'])} (not blocking), "
+            f"grace {len(scan['grace'])} (not blocking), unfixed {len(scan['unfixed'])} (not blocking), "
             f"below threshold {len(scan['below_threshold'])}, unrated {len(scan['unrated'])}"
         )
         lines += [f"    BLOCKING {_blocking_line(f)}" for f in scan["blocking"]]
         lines += [f"    excepted until {f['expires']}: {_line(f)} — {f['reason']}" for f in scan["excepted"]]
+        lines += [f"    grace until {f['grace_until']}: {_line(f)}" for f in scan["grace"]]
         if scan["unfixed"]:
             lines.append("    UNFIXED (no fix published, not blocking):")
             lines += [f"      {_line(f)}" for f in scan["unfixed"]]
@@ -437,8 +510,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--platform", action="append", dest="platforms", help="repeatable; default amd64 + arm64")
     args = parser.parse_args(argv)
     platforms = tuple(args.platforms or DEFAULT_PLATFORMS)
-    today = dt.datetime.now(dt.UTC).date()
-    started = dt.datetime.now(dt.UTC).isoformat(timespec="seconds")
+    now = _clock()
+    today = now.date()
+    started = now.isoformat(timespec="seconds")
 
     try:
         trivy_image = os.environ.get("IMAGE_SCAN_TRIVY_IMAGE") or TRIVY_IMAGE
@@ -493,7 +567,7 @@ def main(argv: list[str] | None = None) -> int:
                     "architecture": platform.split("/")[1],
                     "raw_report": raw_name,
                 } | analyse(raw, ref, role, platform)
-                decide(scan, exceptions, args.level, today)
+                decide(scan, exceptions, args.level, now)
                 scans.append(scan)
     except IncompleteScanError as exc:
         print(f"ERROR: image scan incomplete — {exc}", file=sys.stderr)
@@ -510,8 +584,9 @@ def main(argv: list[str] | None = None) -> int:
     report = {
         "result": overall,
         "threshold": args.level,
+        "grace_days": GRACE_DAYS,
         "started_at": started,
-        "finished_at": dt.datetime.now(dt.UTC).isoformat(timespec="seconds"),
+        "finished_at": _clock().isoformat(timespec="seconds"),
         "scanner": {"name": "trivy", "version": version["Version"], "image": trivy_image},
         "database": {
             "version": db.get("Version"),
