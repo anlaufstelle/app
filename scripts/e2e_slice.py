@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import argparse
 import ast
+import json
 import sys
+from collections import Counter
 from pathlib import Path
 from statistics import median
 
@@ -112,14 +114,26 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--base-dir", type=Path, default=DEFAULT_BASE_DIR, help="Spec directory (default: E2E suite)")
     parser.add_argument("--weights", type=Path, default=DEFAULT_WEIGHTS, help="Versioned spec durations")
+    parser.add_argument("--validate", type=Path, help="Validate a JSON manifest of selected paths per slice")
     args = parser.parse_args(argv)
 
-    if (args.index is None) == (not args.summary):
-        parser.error("Specify exactly one of --index and --summary")
+    if sum((args.index is not None, args.summary, args.validate is not None)) != 1:
+        parser.error("Specify exactly one of --index, --summary and --validate")
 
     try:
         weights, missing, stale = file_weights(args.base_dir, args.weights)
         buckets = distribute(weights, args.slices)
+        if args.validate:
+            manifest = json.loads(args.validate.read_text())
+            if (
+                not isinstance(manifest, list)
+                or len(manifest) != args.slices
+                or any(not isinstance(bucket, list) or not bucket for bucket in manifest)
+                or Counter(path for bucket in manifest for path in bucket)
+                != Counter(_display(path) for path in weights)
+            ):
+                raise ValueError("Invalid partition: missing, duplicate, unexpected files or empty slice")
+            return 0
     except (ValueError, OSError, TypeError) as exc:
         print(f"e2e_slice: {exc}", file=sys.stderr)
         return 2

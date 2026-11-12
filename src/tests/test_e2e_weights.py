@@ -300,3 +300,64 @@ def test_committed_weights_balance_slices_within_limits():
     setup_seconds = 6 * 60
     limit_seconds = job["timeout-minutes"] * 60 * 0.7
     assert max(loads) + setup_seconds <= limit_seconds
+
+
+@pytest.mark.parametrize("corruption", [None, "missing", "duplicate", "unexpected", "slice-count"])
+def test_partition_manifest_validation(tmp_path, corruption):
+    base = tmp_path / "specs"
+    base.mkdir()
+    for name in "abcd":
+        (base / f"test_{name}.py").write_text("def test_one(): pass\n")
+    weights = tmp_path / "weights.json"
+    weights.write_text('{"_meta": {}}')
+    args = ("--base-dir", base, "--weights", weights, "--slices", 2)
+    buckets = [run("scripts/e2e_slice.py", *args, "--index", index).stdout.splitlines() for index in (1, 2)]
+    assert all(buckets)
+    if corruption == "missing":
+        buckets[0].pop()
+    elif corruption == "duplicate":
+        buckets[1].append(buckets[0][0])
+    elif corruption == "unexpected":
+        buckets[0].append(str(base / "test_unknown.py"))
+    elif corruption == "slice-count":
+        buckets.append([])
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps(buckets))
+    result = run("scripts/e2e_slice.py", *args, "--validate", manifest)
+    assert result.stdout == ""
+    if corruption is None:
+        assert result.returncode == 0, result.stderr
+    else:
+        assert result.returncode == 2
+        assert "Invalid partition" in result.stderr
+
+
+def test_workflow_slices_cover_collected_e2e_nodes_exactly_once(tmp_path):
+    job = yaml.safe_load((ROOT / ".github/workflows/e2e.yml").read_text())["jobs"]["test-e2e"]
+    count = job["env"]["E2E_SLICES"]
+    assert job["strategy"]["matrix"]["slice"] == list(range(1, count + 1))
+    collected = subprocess.run(
+        [sys.executable, "-m", "pytest", "-m", "e2e", "--collect-only", "-q", "-p", "no:cacheprovider"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert collected.returncode == 0, collected.stdout + collected.stderr
+    nodes = [line for line in collected.stdout.splitlines() if ".py::" in line]
+    assert nodes
+    assert len(nodes) == len(set(nodes))
+    buckets = []
+    selected = []
+    for index in job["strategy"]["matrix"]["slice"]:
+        result = run("scripts/e2e_slice.py", "--slices", count, "--index", index)
+        assert result.returncode == 0, result.stderr
+        bucket = result.stdout.splitlines()
+        assert bucket
+        buckets.append(bucket)
+        selected.extend(node for node in nodes if node.split("::", 1)[0] in bucket)
+    assert Counter(selected) == Counter(nodes)
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps(buckets))
+    validated = run("scripts/e2e_slice.py", "--slices", count, "--validate", manifest)
+    assert validated.returncode == 0, validated.stderr

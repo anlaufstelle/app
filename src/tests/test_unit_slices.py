@@ -133,9 +133,15 @@ def test_real_collection_is_partitioned_exactly_once(tmp_path):
     collection.write_text(result.stdout)
     nodes = [line for line in result.stdout.splitlines() if ".py::" in line]
     expected = {node.split("::")[0] for node in nodes}
+    import yaml
+
+    job = yaml.safe_load((ROOT / ".github/workflows/test.yml").read_text())["jobs"]["test"]
+    indexes = job["strategy"]["matrix"]["slice"]
+    count = len(indexes)
+    assert indexes == list(range(1, count + 1))
     buckets = []
-    for index in range(1, 4):
-        sliced = invoke("--collection", collection, "--index", index)
+    for index in indexes:
+        sliced = invoke("--collection", collection, "--slices", count, "--index", index)
         assert sliced.returncode == 0, sliced.stderr
         buckets.append(sliced.stdout.splitlines())
     assert all(buckets)
@@ -143,6 +149,10 @@ def test_real_collection_is_partitioned_exactly_once(tmp_path):
     assert set().union(*map(set, buckets)) == expected
     assert all(set(left).isdisjoint(right) for i, left in enumerate(buckets) for right in buckets[i + 1 :])
     assert sum(sum(node.split("::")[0] in bucket for node in nodes) for bucket in buckets) == len(nodes)
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps(buckets))
+    validated = invoke("--collection", collection, "--slices", count, "--validate", manifest)
+    assert validated.returncode == 0, validated.stderr
 
 
 def test_combined_coverage_enforces_the_threshold_on_the_union(tmp_path):
