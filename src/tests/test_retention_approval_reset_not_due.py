@@ -394,3 +394,28 @@ def test_reset_moves_the_deletion_date_to_the_current_deadline(
         approve_proposal(proposal, admin_user)
         _run(facility)
     assert Event.objects.get(pk=event.pk).is_deleted
+
+
+def test_reset_restarts_the_deferral_count(
+    approved, facility, client_qualified, case, doc_type_contact, qualified_period, lead_user
+):
+    """After a reset a single deferral must not trigger the automatic approval."""
+    from core.retention.proposals import defer_proposal, reactivate_deferred_proposals
+
+    event, proposal = approved
+    qualified_period.retention_auto_approve_after_defer = True
+    qualified_period.retention_max_defer_count = 2
+    qualified_period.save(update_fields=["retention_auto_approve_after_defer", "retention_max_defer_count"])
+    RetentionProposal.objects.filter(pk=proposal.pk).update(defer_count=2)
+    _new_case_activity(facility, client_qualified, case, doc_type_contact, qualified_period)
+    _run(facility)
+    _assert_reset(proposal)
+    assert proposal.defer_count == 0
+
+    defer_proposal(proposal, lead_user, days=1)
+    RetentionProposal.objects.filter(pk=proposal.pk).update(deferred_until=timezone.localdate() - timedelta(days=1))
+    reactivate_deferred_proposals(facility)
+    proposal.refresh_from_db()
+    assert proposal.defer_count == 1
+    assert proposal.status == RetentionProposal.Status.PENDING
+    assert proposal.auto_approved_at is None

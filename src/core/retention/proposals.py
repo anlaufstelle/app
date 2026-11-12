@@ -606,6 +606,8 @@ def _reopen_for_new_review(proposal, settings_obj, now, *, reason):
     covers the deadline it was given for, and so does a lone first approval
     (Refs #2714). The deletion date follows the current deadline, so the
     dashboard does not show the proposal as overdue while the event is not due.
+    A new review starts a new deferral count: deferrals from before the reset
+    must not bring the automatic approval closer.
     """
     deletion_due_at = _current_deadline(proposal.facility, settings_obj, now, proposal.target_id)
     if deletion_due_at is not None:
@@ -616,6 +618,7 @@ def _reopen_for_new_review(proposal, settings_obj, now, *, reason):
     proposal.approved_by = None
     proposal.approved_at = None
     proposal.auto_approved_at = None
+    proposal.defer_count = 0
     proposal.save(
         update_fields=[
             "status",
@@ -625,6 +628,7 @@ def _reopen_for_new_review(proposal, settings_obj, now, *, reason):
             "approved_at",
             "auto_approved_at",
             "deletion_due_at",
+            "defer_count",
         ]
     )
     audit_retention_decision(
