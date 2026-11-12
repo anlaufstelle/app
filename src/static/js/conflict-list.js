@@ -176,13 +176,10 @@
                     // entries that were never created on the server (re-editing
                     // those would target a missing record), nor for an event whose
                     // stored edit does not carry the server's edit permission (the
-                    // person's view would not offer "Bearbeiten" either). A task
-                    // edit exists only because its form was offered, so no flag is
-                    // kept for tasks.
+                    // person's view would not offer "Bearbeiten" either). Events
+                    // and tasks both keep that permission in the stored edit.
                     item.showEditCorrectionHint =
-                        data.deadReason === "invalid" &&
-                        data.wasNew !== true &&
-                        (isWorkItem || data.canEdit === true);
+                        data.deadReason === "invalid" && data.wasNew !== true && data.canEdit === true;
                 }
                 return item;
             },

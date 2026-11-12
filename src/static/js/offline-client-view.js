@@ -883,6 +883,7 @@
                     const record = await window.offlineEdit.markWorkItemModified(wi.pk, window.offlineFormFields.workItemFormData(this.wiValues), {
                         clientPk: this._pk,
                         expectedUpdatedAt: wi.updated_at || "",
+                        canEdit: wi.can_edit === true,
                     });
                     this.lastSyncPk = wi.pk;
                     this._setEditingWorkItem(null);

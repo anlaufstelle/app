@@ -339,11 +339,12 @@ describe("a background-rejected edit of a task", () => {
     async function makeRejectedTaskEdit() {
         onLine(false);
         await openPerson();
-        await window.offlineEdit.markWorkItemModified(
-            PK_TASK,
-            { item_type: "task", title: "Call back tomorrow", priority: "normal", recurrence: "none" },
-            { clientPk: PK_CLIENT, expectedUpdatedAt: TOKEN },
-        );
+        // Through the form, like the person does it: the view hands the task's
+        // server permission to the store.
+        component.startEditWorkItem(taskByPk(PK_TASK));
+        component.wiValues.title = "Call back tomorrow";
+        component.validateWorkItem = () => true;
+        await component.saveEditWorkItem(taskByPk(PK_TASK));
         onLine(true);
         vi.stubGlobal(
             "fetch",
@@ -365,6 +366,14 @@ describe("a background-rejected edit of a task", () => {
         expect(component.wiError).toContain("title");
         expect(component.wiError).toContain("max_length");
         expect(component.wiError).not.toContain("Muster");
+    });
+
+    it("keeps the server's edit permission in the stored edit", async () => {
+        await makeRejectedTaskEdit();
+
+        const row = await store.getOfflineEvent(PK_TASK);
+        expect(row.localStatus).toBe("dead");
+        expect(row.data.canEdit).toBe(true);
     });
 
     it("turns into one sendable change on save, which is sent exactly once", async () => {

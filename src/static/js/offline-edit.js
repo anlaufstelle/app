@@ -783,10 +783,15 @@
         if (!token && existing && existing.data) {
             token = existing.data.expectedUpdatedAt || "";
         }
+        // Refs #2720: Keep the server's edit permission (handed over from the
+        // task's bundle record) across re-edits, so a background-rejected task
+        // edit is only pointed at the correction route when it is offered.
+        const canEdit = opts.canEdit === true || Boolean(existing && existing.data && existing.data.canEdit === true);
         const data = {
             kind: "workitem",
             formData: formData,
             expectedUpdatedAt: token,
+            canEdit: canEdit,
             lastEditedAt: Date.now(),
         };
         if (wasNew) {

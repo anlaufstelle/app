@@ -313,8 +313,13 @@ describe("#2720 — correction hint for a rejected edit", () => {
         ).toBe(true);
     });
 
-    it("is shown for a rejected edit of a task", () => {
-        expect(item({ deadReason: "invalid", kind: "workitem" }).showEditCorrectionHint).toBe(true);
+    it("is shown for a rejected edit of a task the person may edit", () => {
+        expect(item({ deadReason: "invalid", kind: "workitem", canEdit: true }).showEditCorrectionHint).toBe(true);
+    });
+
+    it("is not shown for a task whose stored edit does not carry the permission", () => {
+        expect(item({ deadReason: "invalid", kind: "workitem" }).showEditCorrectionHint).toBe(false);
+        expect(item({ deadReason: "invalid", kind: "workitem", canEdit: false }).showEditCorrectionHint).toBe(false);
     });
 
     it("is not shown for an event the person may not edit again", () => {
@@ -324,7 +329,7 @@ describe("#2720 — correction hint for a rejected edit", () => {
 
     it("is not shown for a rejected create or another reason", () => {
         expect(item({ deadReason: "invalid", canEdit: true, wasNew: true }).showEditCorrectionHint).toBe(false);
-        expect(item({ deadReason: "invalid", kind: "workitem", wasNew: true }).showEditCorrectionHint).toBe(false);
+        expect(item({ deadReason: "invalid", kind: "workitem", canEdit: true, wasNew: true }).showEditCorrectionHint).toBe(false);
         expect(item({ deadReason: "not-found", canEdit: true }).showEditCorrectionHint).toBe(false);
     });
 
