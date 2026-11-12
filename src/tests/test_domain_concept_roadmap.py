@@ -92,3 +92,13 @@ def test_kds_export_is_described_the_same_in_all_sections(concept):
         for line in kds_lines:
             assert KDS_WORDING in line, f"section {number}: {line}"
             assert "3.0" not in line and "XML" not in line and "JSON" not in line, line
+
+
+def test_authentication_points_to_listed_roadmap_steps_only(concept):
+    auth = _subsection(_section(concept, "25. Administration und Betrieb"), "Authentifizierung")
+    roadmap = "\n".join(_roadmap_table(concept))
+    if "Roadmap-Schritte" in auth:
+        assert "SAML" in roadmap, "section 25 points to roadmap steps that section 8 does not list"
+    # Current state: second factor, passkeys and invitations exist in the code.
+    for current in ("Passkey", "Einladung"):
+        assert current in auth, current

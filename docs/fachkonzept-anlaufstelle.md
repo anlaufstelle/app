@@ -1376,10 +1376,12 @@ Bevor das 30-Sekunden-Ziel zur harten Anforderung wird, sollte es empirisch gepr
 
 ### Authentifizierung
 
-Der aktuelle Stand setzt auf Django-eigene Authentifizierung (Benutzername + Passwort, Passwort-Hashing mit PBKDF2-SHA256 als Django-Standard). Für spätere Roadmap-Schritte werden folgende Optionen vorbereitet, aber aktuell nicht implementiert:
+Der aktuelle Stand setzt auf Django-eigene Authentifizierung: Benutzername und Passwort (Passwort-Hashing mit PBKDF2-SHA256 als Django-Standard), ergänzt durch einen zweiten Faktor per TOTP. Zusätzlich lassen sich Passkeys als weiterer zweiter Faktor hinterlegen; das setzt ein eingerichtetes TOTP-Gerät voraus und ersetzt das Passwort nicht. Neue Konten legt die Anwendungsbetreuung in der Fachoberfläche an; die Person erhält eine Einladungs-E-Mail, ein Anfangspasswort wird nicht vergeben.
 
-- **SAML 2.0 / OIDC:** Für Träger, die einen Identity Provider betreiben (selten in der Zielgruppe, aber bei größeren Verbänden möglich). Wird relevant, wenn die Organisationshierarchie auf Träger-Ebene ausgebaut wird.
-- **CSV-Import:** Für die initiale Übernahme von Benutzerlisten. Einfacher als LDAP, ausreichend für die Zielgruppe.
+Die folgenden Optionen sind nicht implementiert und stehen auch nicht in der Roadmap (§ 8):
+
+- **SAML 2.0 / OIDC:** Für Träger, die einen Identity Provider betreiben (selten in der Zielgruppe, aber bei größeren Verbänden möglich). Käme erst in Betracht, wenn die Organisationshierarchie auf Träger-Ebene ausgebaut wird.
+- **CSV-Import von Benutzerlisten:** Für die initiale Übernahme von Benutzerkonten. Der vorhandene CSV-Import-Assistent übernimmt Personen und Ereignisse, keine Benutzerkonten.
 - **LDAP:** Nicht im Scope. Die Zielgruppe betreibt kein Active Directory.
 
 ### Scope-Filter als Middleware
