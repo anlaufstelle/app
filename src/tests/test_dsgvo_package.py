@@ -676,7 +676,7 @@ class TestBackupDeletionBoundary:
 
     @pytest.mark.architecture
     def test_documented_rotation_matches_backup_script(self, facility):
-        from core.services.compliance import get_activity
+        from core.services.compliance import get_processing_activities
 
         days = _backup_rotation_days()
         assert days == [7, 28, 90], days
@@ -687,7 +687,13 @@ class TestBackupDeletionBoundary:
 
         toms = _flat(render_document("toms", facility)[0])
         deletion_concept, _ = render_document("loeschkonzept", facility)
-        vvt_backup = _flat(str(get_activity("backup")["retention_period"]))
+        vvt_backup = _flat(
+            str(
+                next((activity for activity in get_processing_activities() if activity["id"] == "backup"), None)[
+                    "retention_period"
+                ]
+            )
+        )
 
         assert f"mindestens {expected} vollen Tagen" in toms
         local_effect = _effect_cell(deletion_concept, "Backup-Sicherungsstände")
@@ -789,9 +795,13 @@ class TestRetentionRunRequiresQualifiedApproval:
         assert "k-Anonymitäts-Schwelle" in _flat(content)
 
     def test_vvt_view_names_period_start_per_stage(self):
-        from core.services.compliance import get_activity
+        from core.services.compliance import get_processing_activities
 
-        retention = str(get_activity("klienten_stammdaten")["retention_period"])
+        retention = str(
+            next(
+                (activity for activity in get_processing_activities() if activity["id"] == "klienten_stammdaten"), None
+            )["retention_period"]
+        )
 
         assert "letztem Kontakt" not in retention
         assert "Falllauf-Ende" not in retention
@@ -880,9 +890,13 @@ class TestQualifiedPeriodAnchors:
         assert "offener Fall ab letzter fachlicher" in content
 
     def test_vvt_view_names_case_anchors(self):
-        from core.services.compliance import get_activity
+        from core.services.compliance import get_processing_activities
 
-        retention = str(get_activity("klienten_stammdaten")["retention_period"])
+        retention = str(
+            next(
+                (activity for activity in get_processing_activities() if activity["id"] == "klienten_stammdaten"), None
+            )["retention_period"]
+        )
 
         assert "ohne Fall ab Ereignisdatum" in retention
         assert "offenen Fall ab letzter fachlicher Fallaktivität" in retention
@@ -945,9 +959,16 @@ class TestRetentionExceptionsAreNamed:
         assert "regulär mit dem nächsten Aufbewahrungslauf (Ausnahmen § 3.1)" in effect
 
     def test_vvt_view_names_conditions_of_client_anonymization(self):
-        from core.services.compliance import get_activity
+        from core.services.compliance import get_processing_activities
 
-        retention = _flat(str(get_activity("klienten_stammdaten")["retention_period"]))
+        retention = _flat(
+            str(
+                next(
+                    (activity for activity in get_processing_activities() if activity["id"] == "klienten_stammdaten"),
+                    None,
+                )["retention_period"]
+            )
+        )
 
         assert "die Person wird anonymisiert, sobald alle ihre Ereignisse gelöscht sind." not in retention
         assert "sobald alle Ereignisse gelöscht sind" in retention

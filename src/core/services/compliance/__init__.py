@@ -89,11 +89,7 @@ from core.services.compliance.sensitivity import (
     visible_attachments_for_user,
 )
 from core.services.compliance.system_info import _migration_checks, _version_checks
-from core.services.compliance.vvt import (
-    PROCESSING_ACTIVITIES,
-    get_activity,
-    get_processing_activities,
-)
+from core.services.compliance.vvt import PROCESSING_ACTIVITIES, get_processing_activities
 
 logger = logging.getLogger(__name__)
 
@@ -265,7 +261,6 @@ __all__ = [
     "detect_mass_export",
     "detect_mfa_failure_burst",
     "effective_sensitivity",
-    "get_activity",
     "get_processing_activities",
     "get_visible_attachment_for_owner_or_404",
     "get_visible_attachment_or_404",

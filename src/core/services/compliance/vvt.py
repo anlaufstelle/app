@@ -497,15 +497,3 @@ def get_processing_activities():
     nachfolgende Aufrufer aus.
     """
     return list(PROCESSING_ACTIVITIES)
-
-
-def get_activity(activity_id):
-    """Liefert die Verarbeitungstaetigkeit mit der gegebenen ``id``.
-
-    Rueckgabe: das Dict aus :data:`PROCESSING_ACTIVITIES` oder ``None``,
-    falls keine Taetigkeit mit dieser ID registriert ist.
-    """
-    for activity in PROCESSING_ACTIVITIES:
-        if activity["id"] == activity_id:
-            return activity
-    return None

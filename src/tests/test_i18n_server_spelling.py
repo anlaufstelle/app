@@ -12,7 +12,7 @@ from django.utils.translation import override
 
 from core.middleware.maintenance import MaintenanceModeMiddleware
 from core.models import Case, Client, User
-from core.services.compliance.vvt import get_activity
+from core.services.compliance.vvt import get_processing_activities
 from core.services.file_vault.quota import StorageUsage, storage_warning
 
 
@@ -81,7 +81,9 @@ def test_unlock_error_spelling():
 )
 def test_processing_activity_spelling(activity_id, field, index, expected):
     with override("de"):
-        value = get_activity(activity_id)[field]
+        value = next((activity for activity in get_processing_activities() if activity["id"] == activity_id), None)[
+            field
+        ]
         assert str(value if index is None else value[index]) == expected
 
 
