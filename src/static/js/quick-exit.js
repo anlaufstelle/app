@@ -555,7 +555,7 @@
         }
     }
 
-    /** Empty this tab's ``sessionStorage`` (Refs #2660).
+    /** Empty this tab's ``sessionStorage`` and keep it empty (Refs #2660).
      *
      * htmx keeps up to ten body snapshots of pushed pages under
      * ``htmx-history-cache`` and filter-persistence.js keeps ``filters:<path>``
@@ -565,10 +565,22 @@
      * as the IndexedDB key drop above.
      *
      * The whole storage is emptied rather than a key list, so keys added later
-     * cannot leak. Synchronous and fully guarded: reading ``sessionStorage``
-     * can throw (blocked storage), and that must never delay or block the exit.
+     * cannot leak. Emptying once is not enough while the document lives on:
+     * htmx also saves a snapshot from its own ``popstate`` handler (Back
+     * button), with no request that ``_exiting`` could block, so
+     * ``historyCacheSize = 0`` turns its snapshot writer into a no-op (vendored
+     * htmx 2.0.11 removes the key and returns). The document is being left, so
+     * the switch stays on for good.
+     *
+     * Synchronous and fully guarded: reading ``sessionStorage`` can throw
+     * (blocked storage), and that must never delay or block the exit.
      */
     function _wipeTabStorage() {
+        try {
+            if (window.htmx && window.htmx.config) window.htmx.config.historyCacheSize = 0;
+        } catch (_e) {
+            // best-effort — the clear below must still run.
+        }
         try {
             window.sessionStorage.clear();
         } catch (_e) {

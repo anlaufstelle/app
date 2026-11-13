@@ -96,11 +96,18 @@
 
     // Refs #2660: once a logout is under way the old document stays alive until
     // the logout response arrives. An htmx request finishing in that window
-    // (e.g. a response with ``hx-push-url``) would write a fresh
-    // ``htmx-history-cache`` right after the tab storage was cleared. Same
-    // capture-phase lock as the quick-exit path. Bound to the freshness mark,
-    // so a logout that never navigated releases the page again after
-    // ``_LOGOUT_NAV_GRACE_MS``.
+    // (e.g. a response with ``hx-push-url``) must not be processed: it could
+    // carry a redirect or a swap into a page that is being left. Same
+    // capture-phase lock as the quick-exit path.
+    //
+    // The lock is bound to the freshness mark on purpose (self-healing instead
+    // of a permanent lock): a logout that never navigated releases the page
+    // again after ``_LOGOUT_NAV_GRACE_MS``, so the "reload" toast button and
+    // the session-expiry navigation keep working. The price is that a very slow
+    // logout (> 10 s, or a throttled background tab) outlives the lock. That is
+    // why the lock is NOT what keeps ``htmx-history-cache`` empty: the history
+    // cache is switched off for the rest of the document in
+    // ``_wipeTabStorage`` and does not depend on this window.
     document.addEventListener(
         "htmx:beforeRequest",
         function (event) {
@@ -602,7 +609,24 @@
     // logout navigation unless the browser honours ``Clear-Site-Data``. Same
     // JS fallback as the IndexedDB wipe below. Never throws, so it can never
     // hold back the logout POST.
+    //
+    // Emptying the storage once is not enough, because the old document stays
+    // alive until the logout response replaces it and writes could follow:
+    // htmx saves a snapshot from its own ``popstate`` handler (Back button),
+    // without any request, so the request/response lock above does not see it.
+    // ``historyCacheSize = 0`` makes htmx's snapshot writer a no-op that
+    // removes the key instead (vendored htmx 2.0.11: the save function returns
+    // right after ``removeItem`` when the size is <= 0).
+    // The switch holds for the rest of this document and does NOT expire with
+    // the 10 s window of the request lock: it costs nothing if the logout
+    // fails (Back then reloads the page from the server instead of restoring
+    // a snapshot).
     function _wipeTabStorage() {
+        try {
+            if (window.htmx && window.htmx.config) window.htmx.config.historyCacheSize = 0;
+        } catch (_e) {
+            // best-effort — the clear below and the logout must still run.
+        }
         try {
             window.sessionStorage.clear();
         } catch (_e) {
