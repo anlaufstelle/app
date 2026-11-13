@@ -180,6 +180,8 @@ _SCROLL_AWAY = """
 
 # Raise the bars the way the page components do (their events), twice and with a
 # pause in between so a late counter event of the page itself cannot reset them.
+# Refs #2780: the key notice is also reset by the
+# page's own key check, so a check still in flight is settled before each raise.
 _RAISE_BARS = """
 async (state) => {
     const fire = (name, detail) => window.dispatchEvent(new CustomEvent(name, {detail}));
@@ -203,6 +205,33 @@ async (state) => {
             }
         }
     };
+    // The page re-evaluates the key notice itself (crypto.js, enforceIdleWipe: boot, tab visible,
+    // interval, any consumer awaiting the key) and hides it again when there is no key and no
+    // expiry marker; a check landing after the raise makes the notice vanish, most often on a
+    // busy machine. So the state is made consistent instead of raced: after the boot work has
+    // settled, the same marker the page writes on a real expiry is stored, and every later check
+    // of the page shows the notice itself.
+    const settle = async () => {
+        try {
+            await window.crypto_session?.awaitReady?.();
+            await window.crypto_session?.enforceIdleWipe?.();
+        } catch (e) { /* no crypto module */ }
+    };
+    const markKeyExpired = () => new Promise((resolve) => {
+        const open = indexedDB.open("anlaufstelle-crypto", 1);
+        open.onerror = () => resolve();
+        open.onsuccess = () => {
+            const db = open.result;
+            if (!db.objectStoreNames.contains("meta")) { db.close(); resolve(); return; }
+            const tx = db.transaction("meta", "readwrite");
+            tx.objectStore("meta").put({key: "keyExpired", expired: true});
+            tx.oncomplete = tx.onerror = tx.onabort = () => { db.close(); resolve(); };
+        };
+    });
+    if (state === "notices") {
+        await settle();
+        await markKeyExpired();
+    }
     raise();
     await new Promise((resolve) => setTimeout(resolve, 600));
     raise();
