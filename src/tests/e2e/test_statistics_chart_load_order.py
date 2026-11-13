@@ -21,7 +21,7 @@ def test_statistics_charts_render_once(base_url, browser, _lead_storage_state, a
         "request",
         lambda request: data_requests.append(request.url) if "/statistics/chart-data/" in request.url else None,
     )
-    page.route("**/static/js/chart.min.js*", lambda route: held_library.append(route))
+    page.route("**/static/js/chart.min*.js*", lambda route: held_library.append(route))
     if arrival_order == "library-first":
         page.route("**/statistics/chart-data/**", lambda route: held_data.append(route))
     try:
@@ -66,7 +66,7 @@ def test_statistics_charts_report_library_failure(base_url, browser, _lead_stora
         "request",
         lambda request: data_requests.append(request.url) if "/statistics/chart-data/" in request.url else None,
     )
-    page.route("**/static/js/chart.min.js*", lambda route: held_library.append(route))
+    page.route("**/static/js/chart.min*.js*", lambda route: held_library.append(route))
     try:
         with page.expect_response(lambda response: "/statistics/chart-data/" in response.url) as response:
             page.goto(f"{base_url}/statistics/?zeitraum=jahr", wait_until="commit")

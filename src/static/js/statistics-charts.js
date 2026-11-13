@@ -34,7 +34,8 @@ function waitForStatisticsChartLibrary() {
   if (typeof window.Chart === "function") return Promise.resolve();
 
   return new Promise(function (resolve, reject) {
-    const script = document.querySelector('script[src*="chart.min.js"]');
+    const script = document.querySelector("script[data-chart-library]");
+    // Deferred scripts finish before document load; a missing Chart cannot arrive later.
     if (!script || document.readyState === "complete") {
       reject(new Error("Chart.js is unavailable"));
       return;

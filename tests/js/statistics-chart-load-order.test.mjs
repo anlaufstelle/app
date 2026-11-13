@@ -55,7 +55,8 @@ beforeEach(() => {
     });
     ChartConstructor.getChart = (canvas) => chartInstances.get(canvas);
     script = document.createElement("script");
-    script.src = "/static/js/chart.min.js";
+    script.src = "/static/js/chart.min.aa284506853a.js";
+    script.dataset.chartLibrary = "";
     script.defer = true;
     document.head.appendChild(script);
     document.body.removeAttribute("data-charts-ready");
@@ -68,8 +69,12 @@ afterEach(() => {
     vi.unstubAllGlobals();
 });
 
-describe("statistics chart library loading", () => {
-    it("renders once when the library is already available", async () => {
+describe.each(["/static/js/chart.min.js", "/static/js/chart.min.aa284506853a.js"])("statistics chart library loading (%s)", (libraryPath) => {
+    beforeEach(() => {
+        script.src = libraryPath;
+    });
+    it.each(["interactive", "complete"])("renders once when the library is already available (%s)", async (readyState) => {
+        vi.spyOn(document, "readyState", "get").mockReturnValue(readyState);
         loadLibrary();
         const component = mountCharts();
         await component.fetchAndRender();
@@ -124,6 +129,17 @@ describe("statistics chart library loading", () => {
         expect(component.error).toBe("Request failed.");
         expect(component.loading).toBe(false);
         expect(fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("reports a missing library script without waiting", async () => {
+        script.remove();
+        const component = mountCharts();
+        await component.fetchAndRender();
+        expect(component.error).toBe("Request failed.");
+        expect(component.loading).toBe(false);
+        expect(ChartConstructor).not.toHaveBeenCalled();
+        expect(fetch).toHaveBeenCalledTimes(1);
+        expect(vi.getTimerCount()).toBe(0);
     });
 
     it("reports a library that failed before the data arrived", async () => {
