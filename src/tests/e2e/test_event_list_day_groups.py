@@ -11,6 +11,7 @@ from playwright.sync_api import expect
 
 from ._axe import run_axe
 from ._helpers import django_shell
+from ._selectors import wait_for_transition_end
 from .test_a11y_reach_and_contrast import _set_user_field
 from .test_event_list import filter_by, open_filter_panel
 
@@ -234,6 +235,7 @@ def test_grouped_row_layout_keyboard_expansion_and_detail_link(staff_page, base_
     page.keyboard.press("Enter")
     link = details.get_by_role("link", name="Zum Eintrag")
     expect(link).to_be_visible()
+    wait_for_transition_end(details)
     if width == 390:
         link_box = link.bounding_box()
         assert link_box and link_box["width"] >= 44 and link_box["height"] >= 44, link_box
@@ -250,6 +252,59 @@ def test_grouped_row_layout_keyboard_expansion_and_detail_link(staff_page, base_
     page.keyboard.press("Enter")
     expect(page).to_have_url(re.compile(rf"/events/{detail_id.removeprefix('event-detail-')}/$"))
     expect(page.locator("#main-content h1")).to_be_visible()
+
+
+# Stretches the 150 ms enter transition of the detail panel so that the in-flight state is
+# observable for a whole test step. Only the ``.transition`` class is slowed: Alpine removes it
+# when the transition ends, so no trailing transition runs on the resting panel.
+SLOW_DETAIL_TRANSITION = "[id^='event-detail-'].transition { transition-duration: 4s !important; }"
+
+
+def _expand_first_card_with_slow_transition(page, base_url):
+    """Open the first card with the detail transition stretched and return panel and link."""
+    page.set_viewport_size({"width": 390, "height": 900})
+    _open(page, base_url)
+    # Constructed stylesheets are CSSOM, so the page's inline-style CSP does not block them.
+    page.evaluate(
+        """css => {
+            const sheet = new CSSStyleSheet();
+            sheet.replaceSync(css);
+            document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+        }""",
+        SLOW_DETAIL_TRANSITION,
+    )
+    toggle = page.get_by_test_id("event-card-toggle").first
+    details = page.locator(f"#{toggle.get_attribute('aria-controls')}")
+    toggle.focus()
+    page.keyboard.press("Enter")
+    link = details.get_by_role("link", name="Zum Eintrag")
+    expect(link).to_be_visible()
+    # The slowed transition is still running here, which is the state the old measurement hit.
+    assert details.evaluate("el => el.getAnimations().length") > 0
+    return details, link
+
+
+def test_detail_link_target_is_measured_after_the_expand_transition(staff_page, base_url, grouped_contacts):
+    """A 44 px target must measure 44 px once the transition ended, not 43.99997 on the way."""
+    page = staff_page
+    details, link = _expand_first_card_with_slow_transition(page, base_url)
+    wait_for_transition_end(details)
+    assert details.evaluate("el => el.getAnimations().length") == 0
+    expect(details).to_have_css("opacity", "1")
+    link_box = link.bounding_box()
+    assert link_box and link_box["width"] >= 44 and link_box["height"] >= 44, link_box
+
+
+def test_resting_detail_link_below_44px_is_still_rejected(staff_page, base_url, grouped_contacts):
+    """Waiting for the end state adds no tolerance: a real 43 px target keeps failing."""
+    page = staff_page
+    details, link = _expand_first_card_with_slow_transition(page, base_url)
+    link.evaluate("el => el.style.setProperty('min-height', '43px', 'important')")
+    wait_for_transition_end(details)
+    link_box = link.bounding_box()
+    assert link_box and link_box["height"] == 43, link_box
+    with pytest.raises(AssertionError):
+        assert link_box["width"] >= 44 and link_box["height"] >= 44, link_box
 
 
 def test_english_day_heading_uses_locale_date_order(browser, base_url, _login_storage_state, e2e_env, grouped_contacts):

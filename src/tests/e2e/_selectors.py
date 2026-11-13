@@ -266,6 +266,30 @@ def wait_for_settled(locator: Locator, timeout: int = 5000) -> None:
     )
 
 
+def wait_for_transition_end(locator: Locator, timeout: int = 5000) -> None:
+    """Wait until the enter transition of a revealed panel has finished and it rests visibly.
+
+    While an ``x-transition`` runs, ``bounding_box()`` of a descendant is computed through a
+    fractional ``translate`` and can come out a few thousandths of a pixel short (a 44 px
+    target measures 43.99997). Size assertions must measure the state the user sees after the
+    transition: no running animation on the panel, full opacity and no remaining offset.
+    Tailwind 4 moves the offset into the individual ``translate`` property, so ``transform``
+    alone says nothing here. Call it after the panel is visible, never instead of that check.
+    """
+    locator.page.wait_for_function(
+        """el => {
+            const style = getComputedStyle(el);
+            const offset = style.translate;
+            return el.getAnimations().length === 0
+                && style.opacity === '1'
+                && style.transform === 'none'
+                && (offset === 'none' || offset.split(' ').every(part => parseFloat(part) === 0));
+        }""",
+        arg=locator.element_handle(),
+        timeout=timeout,
+    )
+
+
 # --- Forms, lists and demo entry (Refs #2561) -------------------------------
 
 
