@@ -60,11 +60,6 @@ OFFLINE_REPLAY_RESULT_SAVED = "saved"
 OFFLINE_REPLAY_PROTOCOL_CONFIRMED = "2"
 
 
-def is_offline_replay(request) -> bool:
-    """True, wenn der Request vom Offline-Replay stammt (beliebige Version)."""
-    return bool(request.headers.get(OFFLINE_REPLAY_HEADER))
-
-
 def wants_saved_confirmation(request) -> bool:
     """True nur für Replays, die die Bestätigung verstehen (Version ``2``)."""
     return request.headers.get(OFFLINE_REPLAY_HEADER) == OFFLINE_REPLAY_PROTOCOL_CONFIRMED

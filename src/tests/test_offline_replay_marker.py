@@ -26,7 +26,6 @@ from core.views._offline_replay import (
     OFFLINE_REPLAY_PROTOCOL_CONFIRMED,
     OFFLINE_REPLAY_RESULT_HEADER,
     OFFLINE_REPLAY_RESULT_SAVED,
-    is_offline_replay,
     saved_confirmation,
     wants_saved_confirmation,
 )
@@ -65,11 +64,6 @@ def _assert_saved(response, expected_pk=None):
 
 
 class TestMarkerHelper:
-    def test_is_offline_replay_reads_the_request_marker(self, rf):
-        assert is_offline_replay(rf.post("/events/new/", **{"HTTP_X_OFFLINE_REPLAY": "2"})) is True
-        assert is_offline_replay(rf.post("/events/new/", **{"HTTP_X_OFFLINE_REPLAY": "1"})) is True
-        assert is_offline_replay(rf.post("/events/new/")) is False
-
     def test_only_the_confirmed_protocol_version_wants_the_marker(self, rf):
         assert wants_saved_confirmation(rf.post("/events/new/", **{"HTTP_X_OFFLINE_REPLAY": "2"})) is True
         assert wants_saved_confirmation(rf.post("/events/new/", **{"HTTP_X_OFFLINE_REPLAY": "1"})) is False
