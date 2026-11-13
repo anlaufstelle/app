@@ -555,7 +555,19 @@
         }
     }
 
-    /** Empty this tab's ``sessionStorage`` and keep it empty (Refs #2660).
+    var HTMX_PATH_KEY = "htmx-current-path-for-history";
+    var HTMX_PATH_EVENTS = ["htmx:pushedIntoHistory", "htmx:replacedInHistory", "htmx:historyRestore"];
+
+    function _dropHtmxPathKey() {
+        try {
+            window.sessionStorage.removeItem(HTMX_PATH_KEY);
+        } catch (_e) {
+            // best-effort — blocked storage has nothing to remove.
+        }
+    }
+
+    /** Empty this tab's ``sessionStorage`` and keep the history cache and the
+     * filter keys out of it (Refs #2660).
      *
      * htmx keeps up to ten body snapshots of pushed pages under
      * ``htmx-history-cache`` and filter-persistence.js keeps ``filters:<path>``
@@ -573,11 +585,24 @@
      * writing once ``window.__tabStorageWiped`` is set. The document is being
      * left, so both stay on for good.
      *
+     * htmx also remembers the current path, query string included, under
+     * ``htmx-current-path-for-history``. That write sits in a private function
+     * of the vendored file (called on a push, a replace and when Back restores
+     * a page from the server) and cannot be switched off. The events htmx fires
+     * right after each of these writes remove the key again, so it is only
+     * there between the write and the event in the same task. If the swap of a
+     * restored page throws, htmx skips ``htmx:historyRestore`` and the key
+     * stays until the next page load overwrites it.
+     *
      * Synchronous and fully guarded: reading ``sessionStorage`` can throw
      * (blocked storage), and that must never delay or block the exit.
      */
     function _wipeTabStorage() {
         window.__tabStorageWiped = true;
+        // Same function object each time: repeated wipes add no second listener.
+        HTMX_PATH_EVENTS.forEach(function (name) {
+            document.addEventListener(name, _dropHtmxPathKey);
+        });
         try {
             if (window.htmx && window.htmx.config) window.htmx.config.historyCacheSize = 0;
         } catch (_e) {

@@ -604,6 +604,17 @@
     // bleibt (blockierte IndexedDB, klemmender Purge o.ae.).
     var _LOGOUT_WIPE_TIMEOUT_MS = 3000;
 
+    var _HTMX_PATH_KEY = "htmx-current-path-for-history";
+    var _HTMX_PATH_EVENTS = ["htmx:pushedIntoHistory", "htmx:replacedInHistory", "htmx:historyRestore"];
+
+    function _dropHtmxPathKey() {
+        try {
+            window.sessionStorage.removeItem(_HTMX_PATH_KEY);
+        } catch (_e) {
+            // best-effort — blocked storage has nothing to remove.
+        }
+    }
+
     // Refs #2660: htmx page snapshots (``htmx-history-cache``) and filter keys
     // (``filters:<path>``) live in the tab's sessionStorage and survive the
     // logout navigation unless the browser honours ``Clear-Site-Data``. Same
@@ -619,12 +630,28 @@
     //    returns right after ``removeItem`` when the size is <= 0).
     //  * filter-persistence.js writes ``filters:<path>`` on every change; it
     //    stops once ``window.__tabStorageWiped`` is set.
-    // Both switches hold for the rest of this document and do NOT expire with
+    //  * htmx also remembers the current path, query string included, under
+    //    ``htmx-current-path-for-history``. That write sits in a private
+    //    function of the vendored file (``_t``: called on a push, a replace and
+    //    when Back restores a page from the server) and cannot be switched off.
+    //    The events htmx fires right after each of these writes
+    //    (``htmx:pushedIntoHistory``, ``htmx:replacedInHistory``,
+    //    ``htmx:historyRestore``) remove the key again, so it is only there
+    //    between the write and the event in the same task. The reader (the
+    //    snapshot writer) falls back to the location when the key is missing and
+    //    is a no-op anyway at size 0. If the swap of a restored page throws,
+    //    htmx skips ``htmx:historyRestore`` and the key stays until the next
+    //    page load overwrites it.
+    // The switches hold for the rest of this document and do NOT expire with
     // the 10 s window of the request lock: they cost nothing if the logout
     // fails (Back then reloads the page from the server instead of restoring
     // a snapshot, and filters are no longer remembered in this tab).
     function _wipeTabStorage() {
         window.__tabStorageWiped = true;
+        // Same function object each time: repeated wipes add no second listener.
+        _HTMX_PATH_EVENTS.forEach(function (name) {
+            document.addEventListener(name, _dropHtmxPathKey);
+        });
         try {
             if (window.htmx && window.htmx.config) window.htmx.config.historyCacheSize = 0;
         } catch (_e) {
@@ -681,12 +708,12 @@
         var action = form.getAttribute("action") || "";
         if (action.indexOf("/logout/") === -1 && !action.endsWith("/logout/")) return;
 
-        // Re-Entrancy-Guard pro Form: der zweite Klick darf nicht am
-        // laufenden Wipe vorbei nativ abschicken. Refs #2660: nur solange die
-        // Abmeldung frisch ist (gleiche Frist wie die Anfragesperre). Ist die
-        // Frist abgelaufen, ohne dass navigiert wurde, ist der erste Versuch
-        // gescheitert — ein erneuter Klick startet die Abmeldung neu, statt
-        // fuer den Rest des Dokuments verschluckt zu werden.
+        // Re-Entrancy guard per form: a second click must not slip past the
+        // running wipe and submit natively. Refs #2660: only while the logout is
+        // fresh (same period as the request lock). Once the period has expired
+        // without a navigation the first attempt failed, and another click
+        // starts the logout again instead of being swallowed for the rest of
+        // the document.
         if (form._logoutWipeInFlight && _logoutNavInFlight()) {
             event.preventDefault();
             return;
