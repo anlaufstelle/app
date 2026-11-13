@@ -529,7 +529,7 @@ If the duplicate already exists:
 What happens:
 
 - **Events, cases, tasks and the recent-visits list move completely** to the target record. For the additional details, the target keeps its values; values from the source only fill empty fields. The contact stage rises to the higher of the two -- never the other way around.
-- The dissolved record disappears from list, search and selection fields and sits in the **trash** with the note "merged into ...". Until the trash period expires, the application support can use **Revert merge** there -- the moved entries return; entries newly documented since the merge stay with the target. After that, the empty shell is anonymized for good like any deleted person; the reference to the target remains. If a **legal hold** covers either record, reverting is not possible while it lasts -- the application support gets a corresponding message. Reverting is also refused if the kept person had no documentation type before the merge and holds extra fields with values of their own that did not come from the merge (including values entered since): empty those fields first, then revert again -- the message says so.
+- The dissolved record disappears from list, search and selection fields and sits in the **trash** with the note "merged into ...". Until the trash period expires, the application support can use **Revert merge** there -- the moved entries return; entries newly documented since the merge stay with the target. After that, the empty shell is anonymized for good like any deleted person; the reference to the target remains. If a **legal hold** covers either record, reverting is not possible while it lasts -- the application support gets a corresponding message. Reverting is also refused if the kept person had no documentation type before the merge and holds values in extra fields the merge did not fill (including fields first filled since): empty those fields first, then revert again -- the message says so.
 - In an **Art. 15 GDPR access record**, the target record states in its "Merges" section which record was merged into it and when; the access record of the dissolved record conversely states "Merged into". The access log of the dissolved record stays with its own dataset -- a request covering the full history of both predecessors is answered with **both** access records.
 
 > **Offline:** Data of the dissolved record cached on devices is discarded at the next sync. If an event for it was **already documented offline** but not yet transmitted, it is not silently rebooked to the target record -- as with a deletion, it goes to the **conflict list** (dead letter) for follow-up, so that nothing is rewritten in the documenting person's name without their knowledge.
@@ -1213,5 +1213,5 @@ Phone, email, date and address patterns are detected heuristically and locally o
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: 520ba0d569d296f8240cf929751fe68a1a9df440 -->
+<!-- source-hash: 9c8129c443722167c40df61964803375bbcdd0bf -->
 <!-- translation-date: 2026-11-13 -->
