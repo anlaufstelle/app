@@ -242,7 +242,11 @@ class TestSchnellVerlassen:
     def test_shortcut_leaves_while_the_tally_number_form_is_open(
         self, browser, base_url, e2e_env, default_quick_exit, shortcut
     ):
-        """The modal number form dims the page and covers the button, but the shortcut still leaves."""
+        """With the tally number form open, both shortcuts still leave the site and end the session.
+
+        Checks the keyboard path only (navigation away and the session ended); it does not assert
+        that the form covers the exit button.
+        """
         context = browser.new_context(locale="de-DE", viewport={"width": 390, "height": 844})
         page = context.new_page()
         page.set_default_timeout(30000)
