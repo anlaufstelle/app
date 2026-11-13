@@ -84,8 +84,20 @@ def test_ops_gate_reads_the_audit_verify_timer_result_and_never_runs_the_check_i
     items = [line for line in section.splitlines() if line.startswith("- [ ]") and "audit-verify" in line]
     assert len(items) == 1, items
     item = items[0]
-    command = "systemctl show anlaufstelle-audit-verify.service -p Result -p ExecMainStatus -p ActiveEnterTimestamp"
+    command = (
+        "systemctl show anlaufstelle-audit-verify.service "
+        "-p LoadState -p Result -p ExecMainStatus -p ExecMainExitTimestamp"
+    )
     assert f"`{command}`" in item
+    # a oneshot unit never sets ActiveEnterTimestamp after a successful run: it must not be a criterion
+    assert "-p ActiveEnterTimestamp" not in item
+    assert "`ActiveEnterTimestamp` zählt nicht" in item
+    # target values, fail-closed on a missing unit, an empty or stale timestamp and a disabled timer
+    for target in ("`LoadState=loaded`", "`Result=success`", "`ExecMainStatus=0`", "`ExecMainExitTimestamp`"):
+        assert target in item, target
+    assert "jünger als 26 h" in item
+    assert "`systemctl is-enabled anlaufstelle-audit-verify.timer`" in item
+    assert "`enabled`" in item
     assert "nicht geprüft" in item
     assert "nicht grün" in item
     assert "nicht von Hand" in item
