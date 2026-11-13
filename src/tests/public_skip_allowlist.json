@@ -2028,5 +2028,33 @@
     "reason": "Caddyfile.dev/Caddyfile.demo/Caddyfile.staging nicht im Public-Snapshot",
     "exclusion": "Caddyfile.staging",
     "rationale": "The release strip list excludes Caddyfile.staging; this node checks that excluded artifact."
+  },
+  {
+    "nodeid": "src/tests/test_docs_breach_webhook_commands.py::test_scan_entry_points_explain_webhook_service_selection[3.4-docs/ops-runbook.md]",
+    "profile": "public",
+    "reason": "docs/ops-runbook.md section 3.4 is stripped from the public tree",
+    "exclusion": "dev-ops",
+    "rationale": "Runbook section 3.4 (dev systemd timers) sits in a release:strip block and is removed together with dev-ops/ by the release build."
+  },
+  {
+    "nodeid": "src/tests/test_docs_breach_webhook_commands.py::test_scan_entry_points_explain_webhook_service_selection[3.4-docs/en/ops-runbook.md]",
+    "profile": "public",
+    "reason": "docs/en/ops-runbook.md section 3.4 is stripped from the public tree",
+    "exclusion": "dev-ops",
+    "rationale": "Runbook section 3.4 (dev systemd timers) sits in a release:strip block and is removed together with dev-ops/ by the release build."
+  },
+  {
+    "nodeid": "src/tests/test_docs_breach_webhook_commands.py::test_webhook_scheduler_guidance_matches_the_stack[3.4-docs/ops-runbook.md]",
+    "profile": "public",
+    "reason": "docs/ops-runbook.md section 3.4 is stripped from the public tree",
+    "exclusion": "dev-ops",
+    "rationale": "Runbook section 3.4 (dev systemd timers) sits in a release:strip block and is removed together with dev-ops/ by the release build."
+  },
+  {
+    "nodeid": "src/tests/test_docs_breach_webhook_commands.py::test_webhook_scheduler_guidance_matches_the_stack[3.4-docs/en/ops-runbook.md]",
+    "profile": "public",
+    "reason": "docs/en/ops-runbook.md section 3.4 is stripped from the public tree",
+    "exclusion": "dev-ops",
+    "rationale": "Runbook section 3.4 (dev systemd timers) sits in a release:strip block and is removed together with dev-ops/ by the release build."
   }
 ]
