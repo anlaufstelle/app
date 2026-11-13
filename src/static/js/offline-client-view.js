@@ -204,6 +204,14 @@
                 const generation = ++this._loadGeneration;
                 this.loading = true;
                 try {
+                    // Refs #2745: release the previous session's decrypted view
+                    // as soon as its epoch is lost or replaced, before waiting
+                    // for key hydration or the potentially slow cache read.
+                    if (window.crypto_session) {
+                        const initialEpoch = await this._readKeyEpoch();
+                        if (generation !== this._loadGeneration) return;
+                        if (initialEpoch === null || initialEpoch !== this._dataKeyEpoch) this._markUnavailable();
+                    }
                     await window.crypto_session?.awaitReady?.();
                     if (generation !== this._loadGeneration) return;
                     if (!window.offlineClient) {

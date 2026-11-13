@@ -76,6 +76,7 @@ afterEach(() => {
     root.remove();
     delete window.offlineClient;
     delete window.offlineEdit;
+    delete window.crypto_session;
 });
 
 function enterTitle(value) {
@@ -224,4 +225,23 @@ it("keeps loading true while the newest read is pending", async () => {
     second.resolve(bundle());
     await newLoad;
     expect(state.loading).toBe(false);
+});
+
+it.each([null, "replacement-key"])("hides the old record before a blocked read with epoch %s", async (epoch) => {
+    window.crypto_session = { keyEpoch: vi.fn(async () => "original-key") };
+    await state.load();
+    root.querySelector("#new-task").click();
+    await Alpine.nextTick();
+    enterTitle("Private draft");
+    let ready;
+    window.crypto_session.awaitReady = () => new Promise(resolve => { ready = resolve; });
+    window.crypto_session.keyEpoch.mockResolvedValue(epoch);
+    const loading = state.load();
+    await Alpine.nextTick();
+    expect.soft(root.querySelector("form")).toBeNull();
+    expect.soft(root.querySelector("#displayed-note")).toBeNull();
+    expect.soft(state.data).toBeNull();
+    expect.soft(state.wiValues).toEqual({});
+    ready();
+    await loading;
 });
