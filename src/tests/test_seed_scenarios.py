@@ -29,7 +29,7 @@ except Exception as _libmagic_exc:  # noqa: BLE001 — libmagic-Shared-Library f
 
 from core.models import Case, Client, DocumentType, Event, Facility, TimeFilter, User  # noqa: E402
 from core.packages.catalog import list_packages  # noqa: E402
-from core.seed.scenarios import SCENARIOS, DemoScenario, get_scenario, scenario_keys  # noqa: E402
+from core.seed.scenarios import SCENARIOS, DemoScenario, get_scenario  # noqa: E402
 from core.services.facility_bootstrap import PACKAGE_COMFORT  # noqa: E402
 
 EXPECTED_KEYS = {
@@ -49,12 +49,12 @@ EXPECTED_KEYS = {
 
 def test_scenario_catalog_has_exactly_the_six_ticket_areas():
     """Der Katalog deckt genau die sechs im Ticket genannten Bereiche ab."""
-    assert set(scenario_keys()) == EXPECTED_KEYS
+    assert set(tuple(scenario.key for scenario in SCENARIOS)) == EXPECTED_KEYS
     assert len(SCENARIOS) == 6
 
 
 def test_scenario_keys_are_unique():
-    assert len(scenario_keys()) == len(set(scenario_keys()))
+    assert len(tuple(scenario.key for scenario in SCENARIOS)) == len(set(tuple(scenario.key for scenario in SCENARIOS)))
 
 
 def test_scenario_facility_names_are_unique_and_not_the_legacy_zweigstelle_names():

@@ -186,8 +186,3 @@ def get_scenario(key: str) -> DemoScenario:
     Fallback (analog ``UnknownPackageError``-Fail-Loud-Stil im Paket-Katalog).
     """
     return _BY_KEY[key]
-
-
-def scenario_keys() -> tuple[str, ...]:
-    """Alle Katalog-Schlüssel in fester Katalogreihenfolge."""
-    return tuple(scenario.key for scenario in SCENARIOS)
