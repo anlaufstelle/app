@@ -238,6 +238,31 @@ class TestSchnellVerlassen:
         finally:
             context.close()
 
+    @pytest.mark.parametrize("shortcut", ["Control+Shift+X", "Shift+Escape"])
+    def test_shortcut_leaves_while_the_tally_number_form_is_open(
+        self, browser, base_url, e2e_env, default_quick_exit, shortcut
+    ):
+        """The modal number form dims the page and covers the button, but the shortcut still leaves."""
+        context = browser.new_context(locale="de-DE", viewport={"width": 390, "height": 844})
+        page = context.new_page()
+        page.set_default_timeout(30000)
+        try:
+            _do_real_login(page, base_url)
+            _stub_exit_target(page)
+            page.goto(f"{base_url}/", wait_until="domcontentloaded")
+            number_tile = page.locator("#tally-panel a[data-testid^='tally-increment-']").first
+            expect(number_tile).to_be_visible()
+            number_tile.click()
+            expect(page.locator("#tally-number-form-slot form")).to_be_visible()
+
+            with page.expect_navigation(url=re.compile(r"wikipedia\.org"), timeout=15000):
+                page.keyboard.press(shortcut)
+
+            assert STUB_MARKER in page.content()
+            _assert_session_ended(page, base_url)
+        finally:
+            context.close()
+
     def test_sprung_verraet_dem_sprungziel_die_herkunft_nicht(self, browser, base_url, e2e_env, default_quick_exit):
         """Die Anfrage an das Sprungziel traegt keine ``Referer``-Kopfzeile.
 
