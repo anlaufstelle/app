@@ -49,8 +49,10 @@ def _clear_health_cache():
 
 @pytest.fixture(autouse=True)
 def _measurable_media_root(settings, tmp_path):
-    """Health-Tests messen Disk auf einem existierenden, isolierten Pfad."""
+    """Use an isolated media path and a healthy measurement independent of the host."""
     settings.MEDIA_ROOT = tmp_path
+    with patch("core.views.health.shutil.disk_usage", return_value=(100, 50, 50)):
+        yield
 
 
 @pytest.fixture(autouse=True)
@@ -458,6 +460,20 @@ class TestHealthDetail:
         assert data["disk"] == "low"
         assert data["disk_free_pct"] == 5.0
         assert data["disk_required"] is True
+        assert data["status"] == "degraded"
+
+    def test_low_disk_space_degrades_when_not_required(self, detail_token, settings, monkeypatch):
+        """Optional disk checks tolerate missing measurements, never confirmed low space."""
+        settings.HEALTH_DISK_REQUIRED = False
+        monkeypatch.setattr("core.views.health.shutil.disk_usage", lambda _path: (100, 95, 5))
+
+        response = _detail_get()
+        data = response.json()
+
+        assert response.status_code == 200
+        assert data["disk"] == "low"
+        assert data["disk_free_pct"] == 5.0
+        assert data["disk_required"] is False
         assert data["status"] == "degraded"
 
     def test_normal_disk_space_is_ok(self, detail_token, tmp_path, settings, monkeypatch):
