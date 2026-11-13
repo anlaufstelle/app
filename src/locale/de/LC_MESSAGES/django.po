@@ -15326,3 +15326,7 @@ msgid "%(count)s Treffer"
 msgid_plural "%(count)s Treffer"
 msgstr[0] "%(count)s Treffer"
 msgstr[1] "%(count)s Treffer"
+
+#: src/templates/core/events/partials/day_heading.html:2
+msgid "D, j. M"
+msgstr "D, j. M"

@@ -252,8 +252,8 @@ def test_grouped_row_layout_keyboard_expansion_and_detail_link(staff_page, base_
     expect(page.locator("#main-content h1")).to_be_visible()
 
 
-def test_english_day_heading_observation(browser, base_url, _login_storage_state, e2e_env, grouped_contacts):
-    """Record the current English date presentation without prescribing a new format."""
+def test_english_day_heading_uses_locale_date_order(browser, base_url, _login_storage_state, e2e_env, grouped_contacts):
+    """Use English month-day order and preserve the full filtered day count."""
     previous = _set_user_field(e2e_env, "admin", "preferred_language", "en")
     context = browser.new_context(
         storage_state=_login_storage_state,
@@ -267,7 +267,7 @@ def test_english_day_heading_observation(browser, base_url, _login_storage_state
         expect(page.locator("html")).to_have_attribute("lang", "en")
         heading = page.get_by_role("heading", level=2).nth(1)
         expect(heading).to_be_visible()
-        print("EN_DAY_HEADING " + heading.inner_text())
+        expect(heading).to_have_text("Fri, Oct 23 — 28 contacts")
         directory = os.environ.get("E2E_EVIDENCE_DIR")
         if directory:
             target = Path(directory)
