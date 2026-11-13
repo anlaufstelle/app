@@ -7,7 +7,6 @@ und bleibt hier zentral — ein Bulk-Endpoint darf nicht feiner erlauben
 als die Single-Route.
 """
 
-import uuid
 from urllib.parse import urlencode
 
 from django.contrib import messages
@@ -31,6 +30,7 @@ from core.services.case import (
 from core.services.case.workitems import WorkItemBatchForbiddenError, workitems_for_read
 from core.utils.ratelimit import ratelimit
 from core.views.mixins import AssistantOrAboveRequiredMixin
+from core.views.utils import parse_uuid_list
 from core.views.workitems import can_user_mutate_workitem
 
 
@@ -43,19 +43,6 @@ class BulkValidationError(Exception):
     Antwort (Refs #1011, CodeQL py/stack-trace-exposure). Unerwartete
     Exceptions werden nicht gefangen und propagieren als 500.
     """
-
-
-def _parse_workitem_ids(raw_values) -> list[uuid.UUID]:
-    """POST-Liste von ID-Strings → Liste von ``uuid.UUID``.
-
-    Ein kaputter Wert wirft ``ValueError`` (``post()`` macht daraus HTTP 400).
-    Ohne diese Vorvalidierung landet der Rohstring in ``filter(pk__in=…)`` und
-    ``UUIDField`` wirft dort eine ``ValidationError`` — die faengt niemand, sie
-    schlaegt als 500 durch (``ValidationError`` ist **keine**
-    ``ValueError``-Unterklasse). Dasselbe Muster wie
-    ``core.views.config.reorder._parse_uuids`` (Refs #2035).
-    """
-    return [uuid.UUID(str(value)) for value in raw_values]
 
 
 @method_decorator(
@@ -204,7 +191,7 @@ class _BulkActionMixin(AssistantOrAboveRequiredMixin):
         # bewusst nur den Parse-Aufruf — unerwartete Fehler aus
         # ``perform_action`` muessen weiterhin als 500 propagieren (Refs #1011).
         try:
-            ids = _parse_workitem_ids(ids)
+            ids = parse_uuid_list(ids)
         except ValueError:
             messages.error(request, _("Ungültige ID im Payload."))
             return self._inbox_redirect(request)

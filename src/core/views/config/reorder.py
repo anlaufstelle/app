@@ -43,18 +43,9 @@ from core.services import config as config_service
 from core.utils.ratelimit import ratelimit
 from core.views.config.document_types import board_response
 from core.views.mixins import FacilityAdminRequiredMixin, htmx_absage
+from core.views.utils import parse_uuid_list
 
 logger = logging.getLogger(__name__)
-
-
-def _parse_uuids(raw_values) -> list[uuid.UUID]:
-    """POST-Liste von UUID-Strings → Liste von ``uuid.UUID``.
-
-    Ein kaputter Wert wirft ``ValueError`` (der View macht daraus HTTP 400).
-    Die kanonisierten ``UUID``-Objekte matchen im Service verlässlich gegen die
-    ``uuid.UUID``-Werte aus der DB (str-Vergleich in ``_validate_id_set``).
-    """
-    return [uuid.UUID(str(value)) for value in raw_values]
 
 
 def _parse_optional_group(raw) -> uuid.UUID | None:
@@ -113,7 +104,7 @@ class ConfigReorderFieldsView(FacilityAdminRequiredMixin, View):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
         try:
             group_id = _parse_optional_group(request.POST.get("group"))
-            ordered_ids = _parse_uuids(request.POST.getlist("order"))
+            ordered_ids = parse_uuid_list(request.POST.getlist("order"))
         except ValueError:
             return htmx_absage(_("Ungültige ID im Payload."), status=400)
         if not ordered_ids:
@@ -149,7 +140,7 @@ class ConfigMoveFieldView(FacilityAdminRequiredMixin, View):
         if target_group_id is not None:
             # Ziel = Gruppe: DTF-Innen-Reihenfolge über ``order``.
             try:
-                ordered_ids = _parse_uuids(request.POST.getlist("order"))
+                ordered_ids = parse_uuid_list(request.POST.getlist("order"))
             except ValueError:
                 return htmx_absage(_("Ungültige ID im Payload."), status=400)
             if not ordered_ids:

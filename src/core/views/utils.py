@@ -10,6 +10,7 @@ fehlerhaften URLs (Refs #733).
 Browser als protokoll-relativ interpretiert (Refs #770).
 """
 
+import uuid
 from urllib.parse import urlsplit
 
 from django.conf import settings
@@ -131,3 +132,8 @@ def safe_page_param(request, default=1, max_page=None):
     except (TypeError, ValueError):
         return default
     return max(1, min(page, cap))
+
+
+def parse_uuid_list(raw_values) -> list[uuid.UUID]:
+    """Parse submitted IDs before ORM lookups so malformed values raise ValueError."""
+    return [uuid.UUID(str(value)) for value in raw_values]
