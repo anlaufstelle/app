@@ -164,7 +164,42 @@ def _force_stale_csrf_meta(page):
     )
 
 
-def _go_offline(page):
+def _observe_view_revalidation(page):
+    """Observe complete revalidation promises, including work before fetch starts."""
+    page.add_init_script("""(() => {
+        const reads = window.__offlineReadState = {pending: 0, counts: new Set()};
+        for (const name of ['offline-unsynced-count', 'offline-conflict-count']) {
+            window.addEventListener(name, () => reads.counts.add(name));
+        }
+        let store;
+        Object.defineProperty(window, 'offlineStore', {
+            configurable: true,
+            get: () => store,
+            set(next) {
+                store = next;
+                const revalidate = next.revalidateCachedClient;
+                next.revalidateCachedClient = async function(...args) {
+                    reads.pending++;
+                    try { return await revalidate.apply(this, args); }
+                    finally { reads.pending--; }
+                };
+            },
+        });
+    })();""")
+
+
+def _go_offline(page, *, wait_for_revalidation=False):
+    if wait_for_revalidation:
+        # Refs #2745: the later console assertion concerns the key-loss rebuild.
+        # Finish boot revalidation before deliberately disconnecting its fetch.
+        page.wait_for_function(
+            """() => {
+            const reads = window.__offlineReadState;
+            const view = document.querySelector('[data-testid="offline-client-view"]');
+            return reads.counts.size === 2 && reads.pending === 0 && !Alpine.$data(view).loading;
+        }""",
+            timeout=10000,
+        )
     page.context.set_offline(True)
     page.evaluate("window.dispatchEvent(new Event('offline'))")
 
@@ -665,6 +700,7 @@ class TestOfflineEditReplay:
         context = browser.new_context(locale="de-DE")
         page = context.new_page()
         page.set_default_timeout(30000)
+        _observe_view_revalidation(page)
         try:
             _do_real_login(page, base_url)
             assert _cache_bundle(page, client_pk)["ok"]
@@ -684,7 +720,7 @@ class TestOfflineEditReplay:
             )
             assert isinstance(epoch, str) and epoch and epoch != "missing", epoch
 
-            _go_offline(page)
+            _go_offline(page, wait_for_revalidation=True)
 
             page.locator(f"[data-testid='offline-edit-btn-{event_pk}']").click()
             page.locator("[data-testid='offline-edit-form']").wait_for(state="visible", timeout=10000)
