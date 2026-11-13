@@ -25,7 +25,7 @@ from django.utils import timezone
 
 from core.models import Case, Client, DocumentType, Event, LegalHold
 from core.models.workitem import DeletionRequest
-from core.services.client.merge import merge_clients, request_client_merge
+from core.services.client.merge import create_or_get_client_merge_request, merge_clients
 
 pytestmark = pytest.mark.django_db
 
@@ -132,7 +132,7 @@ class TestMergeConfirmStep:
         assert 'data-testid="merge-stage-upgrade-hint"' in html
 
     def test_pending_request_replaces_form(self, client, lead_user, staff_user, source, target):
-        request_client_merge(source, target, staff_user, reason="Doppelt angelegt")
+        create_or_get_client_merge_request(source, target, staff_user, reason="Doppelt angelegt")[0]
         client.force_login(lead_user)
         html = client.get(_merge_url(source, target)).content.decode()
         assert 'data-testid="merge-already-pending"' in html
@@ -173,7 +173,7 @@ class TestMergePost:
     ):
         """Race aus #1818: Herabstufung waehrend eines offenen Antrags darf den
         Vier-Augen-Weg nicht auf den Direktweg umschalten."""
-        request_client_merge(client_qualified, target, staff_user, reason="Doppelt")
+        create_or_get_client_merge_request(client_qualified, target, staff_user, reason="Doppelt")[0]
         Client.objects.filter(pk=client_qualified.pk).update(contact_stage=Client.ContactStage.IDENTIFIED)
         client.force_login(lead_user)
         response = client.post(_merge_url(client_qualified), {"target": str(target.pk)})
@@ -210,7 +210,7 @@ class TestMergePost:
 class TestMergeReview:
     @pytest.fixture
     def merge_request(self, source, target, staff_user):
-        return request_client_merge(source, target, staff_user, reason="Doppelt angelegt")
+        return create_or_get_client_merge_request(source, target, staff_user, reason="Doppelt angelegt")[0]
 
     def test_review_page_shows_merge_context(self, client, admin_user, merge_request, source, target):
         client.force_login(admin_user)
@@ -239,7 +239,7 @@ class TestMergeReview:
         assert merge_request.status == DeletionRequest.Status.REJECTED
 
     def test_requester_cannot_approve_own_merge(self, client, lead_user, source, target):
-        dr = request_client_merge(source, target, lead_user, reason="Doppelt")
+        dr = create_or_get_client_merge_request(source, target, lead_user, reason="Doppelt")[0]
         client.force_login(lead_user)
         response = client.post(reverse("core:deletion_review", kwargs={"pk": dr.pk}), {"action": "approve"})
         assert response.status_code == 302
@@ -269,7 +269,7 @@ class TestMergeReview:
 
 class TestDetailSurfaces:
     def test_detail_banner_names_merge(self, client, staff_user, source, target):
-        request_client_merge(source, target, staff_user, reason="Doppelt")
+        create_or_get_client_merge_request(source, target, staff_user, reason="Doppelt")[0]
         client.force_login(staff_user)
         html = client.get(reverse("core:client_detail", kwargs={"pk": source.pk})).content.decode()
         assert 'data-testid="client-merge-pending-banner"' in html
@@ -404,7 +404,7 @@ class TestSimilarHintInCreatePath:
 
 class TestListBadge:
     def test_list_names_merge_request_not_deletion(self, client, staff_user, source, target):
-        request_client_merge(source, target, staff_user, reason="Doppelt")
+        create_or_get_client_merge_request(source, target, staff_user, reason="Doppelt")[0]
         client.force_login(staff_user)
         html = client.get(reverse("core:client_list")).content.decode()
         assert 'data-testid="client-row-merge-pending-badge"' in html

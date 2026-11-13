@@ -13,8 +13,8 @@ from core.models import AuditLog, Client, DeletionRequest, Event, EventHistory
 from core.services.client.restriction import PROCESSING_RESTRICTED_MESSAGE, restrict_processing
 from core.services.events import (
     approve_deletion,
+    create_or_get_event_deletion_request,
     reject_deletion,
-    request_deletion,
     soft_delete_event,
 )
 
@@ -65,7 +65,7 @@ def event_anonymous(facility, doc_type_contact, staff_user):
 @pytest.fixture
 def pending_request(event_qualified, staff_user):
     """A pending DeletionRequest for a qualified event."""
-    return request_deletion(event_qualified, staff_user, "DSGVO-Anfrage")
+    return create_or_get_event_deletion_request(event_qualified, staff_user, "DSGVO-Anfrage")[0]
 
 
 # ---------------------------------------------------------------------------
@@ -75,10 +75,10 @@ def pending_request(event_qualified, staff_user):
 
 @pytest.mark.django_db
 class TestRequestDeletion:
-    """Tests for request_deletion() service function."""
+    """Tests for create_or_get_event_deletion_request() service function."""
 
     def test_creates_deletion_request(self, event_qualified, staff_user):
-        dr = request_deletion(event_qualified, staff_user, "DSGVO-Anfrage")
+        dr = create_or_get_event_deletion_request(event_qualified, staff_user, "DSGVO-Anfrage")[0]
         assert dr.pk is not None
         assert dr.status == DeletionRequest.Status.PENDING
         assert dr.reason == "DSGVO-Anfrage"
@@ -89,17 +89,17 @@ class TestRequestDeletion:
 
     def test_event_not_deleted_after_request(self, event_qualified, staff_user):
         """Creating a request must not alter the event itself."""
-        request_deletion(event_qualified, staff_user, "Grund")
+        create_or_get_event_deletion_request(event_qualified, staff_user, "Grund")[0]
         event_qualified.refresh_from_db()
         assert event_qualified.is_deleted is False
         assert event_qualified.data_json == {"dauer": 20, "notiz": "Qualifiziert"}
 
     def test_idempotent_when_pending_request_exists(self, event_qualified, staff_user, lead_user):
-        """Issue #530: a second request_deletion() for the same event while a
+        """Issue #530: a second create_or_get_event_deletion_request() for the same event while a
         PENDING request exists must return the existing record, not create a
         duplicate. Different requesters get the same record."""
-        dr1 = request_deletion(event_qualified, staff_user, "Grund 1")
-        dr2 = request_deletion(event_qualified, lead_user, "Grund 2")
+        dr1 = create_or_get_event_deletion_request(event_qualified, staff_user, "Grund 1")[0]
+        dr2 = create_or_get_event_deletion_request(event_qualified, lead_user, "Grund 2")[0]
         assert dr1.pk == dr2.pk
         assert DeletionRequest.objects.filter(target_id=event_qualified.pk).count() == 1
         # The existing record's reason and requester are preserved
@@ -109,10 +109,10 @@ class TestRequestDeletion:
 
     def test_new_request_allowed_after_previous_was_rejected(self, event_qualified, staff_user, lead_user):
         """When the previous request was REJECTED, a fresh PENDING one is allowed."""
-        dr1 = request_deletion(event_qualified, staff_user, "Grund 1")
+        dr1 = create_or_get_event_deletion_request(event_qualified, staff_user, "Grund 1")[0]
         reject_deletion(dr1, lead_user)
 
-        dr2 = request_deletion(event_qualified, staff_user, "Grund 2")
+        dr2 = create_or_get_event_deletion_request(event_qualified, staff_user, "Grund 2")[0]
         assert dr2.pk != dr1.pk
         assert DeletionRequest.objects.filter(target_id=event_qualified.pk).count() == 2
 
@@ -122,7 +122,7 @@ class TestRequestDeletion:
         service must be rejected."""
         from django.db import IntegrityError, transaction
 
-        request_deletion(event_qualified, staff_user, "Grund 1")
+        create_or_get_event_deletion_request(event_qualified, staff_user, "Grund 1")[0]
         with pytest.raises(IntegrityError), transaction.atomic():
             DeletionRequest.objects.create(
                 facility=event_qualified.facility,
@@ -133,7 +133,7 @@ class TestRequestDeletion:
             )
 
     def test_reviewed_by_initially_null(self, event_qualified, staff_user):
-        dr = request_deletion(event_qualified, staff_user, "Grund")
+        dr = create_or_get_event_deletion_request(event_qualified, staff_user, "Grund")[0]
         assert dr.reviewed_by is None
         assert dr.reviewed_at is None
 
@@ -341,7 +341,7 @@ class TestFourEyesConstraint:
         """DB CHECK constraint prevents requester == reviewer."""
         from django.db import IntegrityError
 
-        dr = request_deletion(event_qualified, lead_user, "Selbst-Test")
+        dr = create_or_get_event_deletion_request(event_qualified, lead_user, "Selbst-Test")[0]
         dr.status = DeletionRequest.Status.APPROVED
         dr.reviewed_by = lead_user
         dr.reviewed_at = timezone.now()
@@ -358,7 +358,7 @@ class TestFourEyesConstraint:
         """
         from django.core.exceptions import ValidationError
 
-        dr = request_deletion(event_qualified, lead_user, "Selbst-Test")
+        dr = create_or_get_event_deletion_request(event_qualified, lead_user, "Selbst-Test")[0]
         with pytest.raises(ValidationError):
             approve_deletion(dr, lead_user)
         event_qualified.refresh_from_db()
@@ -583,9 +583,9 @@ class TestDeletionRequestReviewView:
 
     def test_client_approve_redirects_to_deletion_list(self, client, lead_user, staff_user, client_qualified):
         """Regression: Client-Anträge führen weiterhin zur Löschantragsliste (Konsistenz Event/Client)."""
-        from core.services.client import request_client_deletion
+        from core.services.client import create_or_get_client_deletion_request
 
-        dr = request_client_deletion(client_qualified, staff_user, "Widerruf")
+        dr = create_or_get_client_deletion_request(client_qualified, staff_user, "Widerruf")[0]
         client.force_login(lead_user)
         response = client.post(
             reverse("core:deletion_review", kwargs={"pk": dr.pk}),
@@ -824,7 +824,7 @@ class TestOwnDeletionRequestUI:
     @pytest.fixture
     def own_request(self, event_qualified, lead_user):
         """Pending Request, gestellt von lead_user (= eingeloggte Person)."""
-        return request_deletion(event_qualified, lead_user, "Eigener Antrag")
+        return create_or_get_event_deletion_request(event_qualified, lead_user, "Eigener Antrag")[0]
 
     def test_list_hides_review_link_for_own_request(self, client, lead_user, own_request):
         client.force_login(lead_user)
@@ -859,9 +859,9 @@ class TestOwnDeletionRequestUI:
         assert "deletion-own-request-hint" not in content
 
     def test_client_review_hides_buttons_for_requester(self, client, lead_user, client_qualified):
-        from core.services.client import request_client_deletion
+        from core.services.client import create_or_get_client_deletion_request
 
-        dr = request_client_deletion(client_qualified, lead_user, "Eigener Personen-Antrag")
+        dr = create_or_get_client_deletion_request(client_qualified, lead_user, "Eigener Personen-Antrag")[0]
         client.force_login(lead_user)
         response = client.get(reverse("core:deletion_review", kwargs={"pk": dr.pk}))
         content = response.content.decode()

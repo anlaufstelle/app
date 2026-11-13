@@ -10,7 +10,7 @@ from html.parser import HTMLParser
 import pytest
 from django.urls import reverse
 
-from core.services.client import request_client_deletion
+from core.services.client import create_or_get_client_deletion_request
 from core.views.help import HELP_PAGES
 
 
@@ -107,7 +107,7 @@ class TestFieldConditionsHelpLink:
 class TestPrivacyHelpLinks:
     def test_four_eyes_link_points_at_the_four_eyes_section(self, client, staff_user, client_identified):
         client.force_login(staff_user)
-        request_client_deletion(client_identified, staff_user, "Widerruf")
+        create_or_get_client_deletion_request(client_identified, staff_user, "Widerruf")[0]
 
         body = client.get(reverse("core:client_detail", kwargs={"pk": client_identified.pk})).content.decode()
         hrefs = _context_help_links(body)["four-eyes"]

@@ -16,7 +16,7 @@ Zieltreue der ``select_for_update``/``Event``-Lookups in ``approve_deletion``/
 Kein Produktivaufrufer wertet ``created`` heute aus (``views/events.py``
 verwirft es bewusst), der dokumentierte Vertrag der Funktion ist aber genau
 dieses Flag — ``create_or_get_event_deletion_request`` existiert nur wegen
-ihm (``request_deletion`` ist die Hülle ohne ihn).
+ihm (``create_or_get_event_deletion_request`` ist die Hülle ohne ihn).
 """
 
 from __future__ import annotations

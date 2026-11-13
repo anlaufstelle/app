@@ -34,7 +34,7 @@ from django.conf import settings
 from django.urls import reverse
 
 from core import nav
-from core.services.client import request_client_deletion
+from core.services.client import create_or_get_client_deletion_request
 from tests._authz_expectations import EXPECTATIONS, ROLES
 from tests._rbac_helpers import resolve_fixture_kwargs
 
@@ -309,7 +309,7 @@ class TestNoSecondWayHome:
     """
 
     def test_pending_delete_request_offers_exactly_one_way_back(self, client, staff_user, client_identified):
-        request_client_deletion(client_identified, staff_user, "Erster Grund")
+        create_or_get_client_deletion_request(client_identified, staff_user, "Erster Grund")[0]
         client.force_login(staff_user)
         url = reverse("core:client_delete_request", args=[client_identified.pk])
         html = client.get(url).content.decode()

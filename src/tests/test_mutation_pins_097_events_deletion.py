@@ -47,7 +47,7 @@ import pytest
 from django.utils import timezone
 
 from core.models import DeletionRequest, Event
-from core.services.events import approve_deletion, reject_deletion, request_deletion
+from core.services.events import approve_deletion, create_or_get_event_deletion_request, reject_deletion
 
 # ``_encryption_key`` ist Pflicht: ``approve_deletion`` laeuft ueber
 # ``soft_delete_event`` in den Anhang-/File-Vault-Pfad, und der Mutantenbaum
@@ -97,8 +97,8 @@ class TestApproveDeletionLookupZieltreue:
         es fliegt ``MultipleObjectsReturned`` statt der Genehmigung."""
         event_a = _event(facility, client_qualified, doc_type_contact, staff_user, note="Antrag A")
         event_b = _event(facility, client_qualified, doc_type_contact, staff_user, note="Antrag B")
-        dr_a = request_deletion(event_a, staff_user, "Bleibt offen")
-        dr_b = request_deletion(event_b, staff_user, "Wird genehmigt")
+        dr_a = create_or_get_event_deletion_request(event_a, staff_user, "Bleibt offen")[0]
+        dr_b = create_or_get_event_deletion_request(event_b, staff_user, "Wird genehmigt")[0]
         assert dr_a.pk != dr_b.pk
 
         approve_deletion(dr_b, lead_user)
@@ -125,7 +125,7 @@ class TestApproveDeletionLookupZieltreue:
         der fremden Einrichtung nichts und bricht mit ``DoesNotExist`` ab,
         bevor irgendetwas geschrieben wird."""
         event = _event(facility, client_qualified, doc_type_contact, staff_user, note="Mandantengrenze")
-        dr = request_deletion(event, staff_user, "Art.-17-Antrag")
+        dr = create_or_get_event_deletion_request(event, staff_user, "Art.-17-Antrag")[0]
         # Nur die IN-MEMORY-Instanz zeigt auf die fremde Einrichtung; die Zeile
         # in der DB bleibt unveraendert. Genau diese Instanz liefert dem Lookup
         # seinen ``facility``-Filter.
@@ -149,7 +149,7 @@ class TestApproveDeletionLookupZieltreue:
         (bei zweien: ``MultipleObjectsReturned``)."""
         event_a = _event(facility, client_qualified, doc_type_contact, staff_user, note="Bleibt stehen")
         event_b = _event(facility, client_qualified, doc_type_contact, staff_user, note="Wird geloescht")
-        dr = request_deletion(event_b, staff_user, "Art.-17-Antrag")
+        dr = create_or_get_event_deletion_request(event_b, staff_user, "Art.-17-Antrag")[0]
 
         approve_deletion(dr, lead_user)
 
@@ -190,8 +190,8 @@ class TestRejectDeletionLookupZieltreue:
         verhindern sollen."""
         event_a = _event(facility, client_qualified, doc_type_contact, staff_user, note="Antrag A")
         event_b = _event(facility, client_qualified, doc_type_contact, staff_user, note="Antrag B")
-        dr_a = request_deletion(event_a, staff_user, "Bleibt offen")
-        dr_b = request_deletion(event_b, staff_user, "Wird abgelehnt")
+        dr_a = create_or_get_event_deletion_request(event_a, staff_user, "Bleibt offen")[0]
+        dr_b = create_or_get_event_deletion_request(event_b, staff_user, "Wird abgelehnt")[0]
         assert dr_a.pk != dr_b.pk
 
         reject_deletion(dr_b, lead_user)
@@ -212,7 +212,7 @@ class TestRejectDeletionLookupZieltreue:
         weg, laesst sich ein Antrag sperren und ablehnen, dessen Einrichtung
         nicht die des uebergebenen Objekts ist."""
         event = _event(facility, client_qualified, doc_type_contact, staff_user, note="Mandantengrenze")
-        dr = request_deletion(event, staff_user, "Art.-17-Antrag")
+        dr = create_or_get_event_deletion_request(event, staff_user, "Art.-17-Antrag")[0]
         dr.facility = other_facility
 
         with pytest.raises(DeletionRequest.DoesNotExist):

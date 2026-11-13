@@ -1501,7 +1501,7 @@ class EventDeleteView(StaffRequiredMixin, View):
 
         # Four-eyes principle: qualified clients require a deletion request
         if event.client and event.client.contact_stage == Client.ContactStage.QUALIFIED:
-            # Refs #2015: ``request_deletion`` ist get-then-create (die
+            # Refs #2015: ``create_or_get_event_deletion_request`` ist get-then-create (die
             # Idempotenz sitzt im Service, diese View hat keinen Vorab-Check).
             # Ein Doppelklick/Doppel-POST kann beide Aufrufe durch den Lookup
             # bringen; der partielle Unique-Index macht den Verlierer sicher.

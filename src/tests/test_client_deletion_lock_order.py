@@ -27,8 +27,8 @@ from django.db import connection, connections, transaction
 
 from core.models import Client, Facility, Organization, User
 from core.models.workitem import DeletionRequest
-from core.services.client import approve_client_deletion, request_client_deletion
-from core.services.client.merge import approve_client_merge, request_client_merge
+from core.services.client import approve_client_deletion, create_or_get_client_deletion_request
+from core.services.client.merge import approve_client_merge, create_or_get_client_merge_request
 from tests._row_lock_helpers import mitschnitt
 
 CLIENT_TABLE = Client._meta.db_table
@@ -156,7 +156,7 @@ class TestApprovalWaitsAtThePersonWithoutHoldingTheRequest:
     def test_deletion_approval_leaves_the_request_row_free_while_waiting(self, committed):
         facility, requester, reviewer = committed
         person = _person(facility, requester, "Deletion-Lock-01")
-        dr = request_client_deletion(person, requester, "No longer needed")
+        dr = create_or_get_client_deletion_request(person, requester, "No longer needed")[0]
 
         returned = self._run_while_person_is_held(person.pk, dr.pk, lambda: approve_client_deletion(dr, reviewer))
 
@@ -172,7 +172,7 @@ class TestApprovalWaitsAtThePersonWithoutHoldingTheRequest:
         facility, requester, reviewer = committed
         source = _person(facility, requester, "Merge-Lock-Source")
         target = _person(facility, requester, "Merge-Lock-Target")
-        dr = request_client_merge(source, target, requester, "Duplicate")
+        dr = create_or_get_client_merge_request(source, target, requester, "Duplicate")[0]
         held = source if held_side == "source" else target
 
         returned = self._run_while_person_is_held(held.pk, dr.pk, lambda: approve_client_merge(dr, reviewer))
@@ -189,7 +189,7 @@ class TestApprovalWaitsAtThePersonWithoutHoldingTheRequest:
 @pytest.mark.django_db
 class TestLockOrder:
     def test_deletion_approval_locks_the_person_before_the_request(self, client_identified, staff_user, lead_user):
-        dr = request_client_deletion(client_identified, staff_user, "No longer needed")
+        dr = create_or_get_client_deletion_request(client_identified, staff_user, "No longer needed")[0]
 
         with mitschnitt() as log:
             approve_client_deletion(dr, lead_user)
@@ -206,7 +206,7 @@ class TestLockOrder:
         self, facility, client_identified, staff_user, lead_user
     ):
         target = _person(facility, staff_user, "Merge-Lock-Order-Target")
-        dr = request_client_merge(client_identified, target, staff_user, "Duplicate")
+        dr = create_or_get_client_merge_request(client_identified, target, staff_user, "Duplicate")[0]
 
         with mitschnitt() as log:
             approve_client_merge(dr, lead_user)
@@ -231,11 +231,11 @@ class TestLockOrder:
             can_confirm_deletion=True,
         )
         if kind == "deletion":
-            dr = request_client_deletion(client_identified, staff_user, "No longer needed")
+            dr = create_or_get_client_deletion_request(client_identified, staff_user, "No longer needed")[0]
             call = approve_client_deletion
         else:
             target = _person(facility, staff_user, "Merge-Lock-Foreign-Target")
-            dr = request_client_merge(client_identified, target, staff_user, "Duplicate")
+            dr = create_or_get_client_merge_request(client_identified, target, staff_user, "Duplicate")[0]
             call = approve_client_merge
 
         with mitschnitt() as log, pytest.raises(ValidationError) as excinfo:

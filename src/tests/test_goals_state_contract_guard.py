@@ -55,10 +55,10 @@ class TestZielanlageAnGetilgterAkte:
         assert _spuren() == spuren
 
     def test_create_goal_an_akte_einer_person_im_papierkorb(self, case_open, client_identified, staff_user, admin_user):
-        from core.services.client import approve_client_deletion, request_client_deletion
+        from core.services.client import approve_client_deletion, create_or_get_client_deletion_request
 
         alter_fall = Case.objects.get(pk=case_open.pk)
-        antrag = request_client_deletion(client_identified, staff_user, reason="Widerruf")
+        antrag = create_or_get_client_deletion_request(client_identified, staff_user, reason="Widerruf")[0]
         approve_client_deletion(antrag, admin_user)
         spuren = _spuren()
 
@@ -119,10 +119,10 @@ class TestZielbearbeitungAnGetilgterAkte:
     def test_update_goal_an_akte_einer_person_im_papierkorb(
         self, outcome_goal, client_identified, staff_user, admin_user
     ):
-        from core.services.client import approve_client_deletion, request_client_deletion
+        from core.services.client import approve_client_deletion, create_or_get_client_deletion_request
 
         alte_instanz = OutcomeGoal.objects.get(pk=outcome_goal.pk)
-        antrag = request_client_deletion(client_identified, staff_user, reason="Widerruf")
+        antrag = create_or_get_client_deletion_request(client_identified, staff_user, reason="Widerruf")[0]
         approve_client_deletion(antrag, admin_user)
         spuren = _spuren()
 

@@ -12,8 +12,8 @@ import pytest
 from django.urls import reverse
 
 from core.models import User
-from core.services.client import request_client_deletion
-from core.services.events import request_deletion
+from core.services.client import create_or_get_client_deletion_request
+from core.services.events import create_or_get_event_deletion_request
 
 pytestmark = pytest.mark.django_db
 
@@ -40,7 +40,7 @@ class TestListGateMatchesNavigation:
         assert client.get(reverse(LIST_URL_NAME)).status_code == 403
 
     def test_staff_with_own_pending_request_may_open_list(self, client, staff_user, client_identified):
-        request_client_deletion(client_identified, staff_user, "Widerruf")
+        create_or_get_client_deletion_request(client_identified, staff_user, "Widerruf")[0]
         client.force_login(staff_user)
         assert client.get(reverse(LIST_URL_NAME)).status_code == 200
 
@@ -49,8 +49,8 @@ class TestListGateMatchesNavigation:
         assert client.get(reverse(LIST_URL_NAME)).status_code == 200
 
     def test_requester_sees_only_own_requests(self, client, staff_user, lead_user, client_identified, sample_event):
-        own = request_client_deletion(client_identified, staff_user, "Eigener Grund")
-        foreign = request_deletion(sample_event, lead_user, "Fremder Grund")
+        own = create_or_get_client_deletion_request(client_identified, staff_user, "Eigener Grund")[0]
+        foreign = create_or_get_event_deletion_request(sample_event, lead_user, "Fremder Grund")[0]
         client.force_login(staff_user)
         response = client.get(reverse(LIST_URL_NAME))
         pending = list(response.context["pending_requests"])
@@ -58,8 +58,8 @@ class TestListGateMatchesNavigation:
         assert foreign not in pending
 
     def test_lead_still_sees_all_requests(self, client, staff_user, lead_user, client_identified, sample_event):
-        own = request_client_deletion(client_identified, staff_user, "Eigener Grund")
-        foreign = request_deletion(sample_event, lead_user, "Fremder Grund")
+        own = create_or_get_client_deletion_request(client_identified, staff_user, "Eigener Grund")[0]
+        foreign = create_or_get_event_deletion_request(sample_event, lead_user, "Fremder Grund")[0]
         client.force_login(lead_user)
         pending = list(client.get(reverse(LIST_URL_NAME)).context["pending_requests"])
         assert own in pending
@@ -100,7 +100,7 @@ class TestNavigationEntry:
         assert reverse(LIST_URL_NAME) not in body
 
     def test_visible_for_staff_with_own_request(self, client, staff_user, client_identified):
-        request_client_deletion(client_identified, staff_user, "Widerruf")
+        create_or_get_client_deletion_request(client_identified, staff_user, "Widerruf")[0]
         assert reverse(self.HUB_URL_NAME) in self._nav_body(client, staff_user)
         assert self._lands_on_the_list(client, staff_user)
 
@@ -118,14 +118,14 @@ class TestNavigationEntry:
 
 class TestDetailBannerLinksBack:
     def test_banner_links_to_list_for_requester(self, client, staff_user, client_identified):
-        request_client_deletion(client_identified, staff_user, "Widerruf")
+        create_or_get_client_deletion_request(client_identified, staff_user, "Widerruf")[0]
         client.force_login(staff_user)
         body = client.get(reverse("core:client_detail", args=[client_identified.pk])).content.decode()
         assert "client-deletion-pending-banner" in body
         assert reverse(LIST_URL_NAME) in body
 
     def test_banner_without_link_for_assistant(self, client, staff_user, assistant_user, client_identified):
-        request_client_deletion(client_identified, staff_user, "Widerruf")
+        create_or_get_client_deletion_request(client_identified, staff_user, "Widerruf")[0]
         client.force_login(assistant_user)
         body = client.get(reverse("core:client_detail", args=[client_identified.pk])).content.decode()
         assert "client-deletion-pending-banner" in body

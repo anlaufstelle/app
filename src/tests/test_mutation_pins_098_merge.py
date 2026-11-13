@@ -45,9 +45,9 @@ from core.models import AuditLog, BanRevision, Client, DocumentType, DocumentTyp
 from core.models.attachment import Attachment
 from core.models.workitem import DeletionRequest
 from core.services.client.merge import (
+    create_or_get_client_merge_request,
     merge_clients,
     reject_client_merge,
-    request_client_merge,
     unmerge_client,
 )
 from core.services.events import create_event
@@ -147,7 +147,7 @@ class TestRejectAccountabilityAndAttribution:
         und ``detail`` mit beiden UUIDs als Strings. Abweichung je Mutant: genau
         eines dieser vier Felder ist falsch oder fehlt.
         """
-        dr = request_client_merge(source, target, staff_user, reason="Doppelt angelegt")
+        dr = create_or_get_client_merge_request(source, target, staff_user, reason="Doppelt angelegt")[0]
 
         reject_client_merge(dr, admin_user)
 

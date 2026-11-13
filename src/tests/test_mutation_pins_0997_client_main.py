@@ -109,7 +109,7 @@ def test_deletion_decision_rechecks_facility_message(
     """A reviewer moved after locking gets the facility refusal before writes:
     x_approve_client_deletion__mutmut_21, x_reject_client_deletion__mutmut_24.
     """
-    request = main.request_client_deletion(client_identified, staff_user, "Review required")
+    request = main.create_or_get_client_deletion_request(client_identified, staff_user, "Review required")[0]
     audits = AuditLog.objects.count()
     with capture_locks() as captured:
         captured.nach_sperre(

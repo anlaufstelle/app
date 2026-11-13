@@ -15,7 +15,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import AuditLog, DeletionRequest, Event, LegalHold, User
-from core.services.events import approve_deletion, reject_deletion, request_deletion
+from core.services.events import approve_deletion, create_or_get_event_deletion_request, reject_deletion
 
 
 @pytest.fixture
@@ -52,7 +52,7 @@ class TestSingleLeadDeadlockResolved:
     Anwendungsbetreuung ab."""
 
     def test_staff_with_right_approves_leads_request(self, lead_user, confirmer_staff, event_qualified):
-        dr = request_deletion(event_qualified, lead_user, "Art.-17-Antrag")
+        dr = create_or_get_event_deletion_request(event_qualified, lead_user, "Art.-17-Antrag")[0]
         approve_deletion(dr, confirmer_staff)
         dr.refresh_from_db()
         event_qualified.refresh_from_db()
@@ -60,7 +60,7 @@ class TestSingleLeadDeadlockResolved:
         assert event_qualified.is_deleted is True
 
     def test_view_flow_for_confirmer(self, client, lead_user, confirmer_staff, event_qualified):
-        dr = request_deletion(event_qualified, lead_user, "Art.-17-Antrag")
+        dr = create_or_get_event_deletion_request(event_qualified, lead_user, "Art.-17-Antrag")[0]
         client.force_login(confirmer_staff)
         assert client.get(reverse("core:deletion_request_list")).status_code == 200
         assert client.get(reverse("core:deletion_review", kwargs={"pk": dr.pk})).status_code == 200
@@ -76,12 +76,12 @@ class TestSingleLeadDeadlockResolved:
 @pytest.mark.django_db
 class TestRightEnforcement:
     def test_service_rejects_reviewer_without_right(self, staff_user, lead_user, event_qualified):
-        dr = request_deletion(event_qualified, lead_user, "Antrag")
+        dr = create_or_get_event_deletion_request(event_qualified, lead_user, "Antrag")[0]
         with pytest.raises(ValidationError, match="Löschbestätigung"):
             approve_deletion(dr, staff_user)
 
     def test_reject_service_rejects_distinct_reviewer_without_right(self, staff_user, lead_user, event_qualified):
-        dr = request_deletion(event_qualified, lead_user, "Antrag")
+        dr = create_or_get_event_deletion_request(event_qualified, lead_user, "Antrag")[0]
 
         with pytest.raises(ValidationError) as exc_info:
             reject_deletion(dr, staff_user)
@@ -105,7 +105,7 @@ class TestRightEnforcement:
             is_staff=True,
             can_confirm_deletion=has_right,
         )
-        dr = request_deletion(event_qualified, lead_user, "Antrag")
+        dr = create_or_get_event_deletion_request(event_qualified, lead_user, "Antrag")[0]
 
         if not has_right:
             with pytest.raises(ValidationError, match="Löschbestätigung"):
@@ -128,7 +128,7 @@ class TestRightEnforcement:
             reason="Ermittlungsverfahren",
             created_by=lead_user,
         )
-        dr = request_deletion(event_qualified, lead_user, "Antrag")
+        dr = create_or_get_event_deletion_request(event_qualified, lead_user, "Antrag")[0]
 
         reject_deletion(dr, confirmer_staff)
 
@@ -149,7 +149,7 @@ class TestRightEnforcement:
     def test_authorized_distinct_reviewer_cannot_reject_decided_request(
         self, lead_user, confirmer_staff, event_qualified, status
     ):
-        dr = request_deletion(event_qualified, lead_user, "Antrag")
+        dr = create_or_get_event_deletion_request(event_qualified, lead_user, "Antrag")[0]
         DeletionRequest.objects.filter(pk=dr.pk).update(
             status=status,
             reviewed_by=confirmer_staff if status != DeletionRequest.Status.WITHDRAWN else None,
@@ -166,7 +166,7 @@ class TestRightEnforcement:
         ).exists()
 
     def test_lead_without_right_gets_403_on_review(self, client, lead_user, staff_user, event_qualified):
-        dr = request_deletion(event_qualified, staff_user, "Antrag")
+        dr = create_or_get_event_deletion_request(event_qualified, staff_user, "Antrag")[0]
         lead_user.can_confirm_deletion = False
         lead_user.save()
         client.force_login(lead_user)
@@ -199,14 +199,14 @@ class TestRejectServiceEnforcesFourEyes:
     """
 
     def test_service_rejects_self_review(self, lead_user, event_qualified):
-        dr = request_deletion(event_qualified, lead_user, "Antrag")
+        dr = create_or_get_event_deletion_request(event_qualified, lead_user, "Antrag")[0]
         with pytest.raises(ValidationError, match="Vier-Augen"):
             reject_deletion(dr, lead_user)
 
     def test_self_review_leaves_request_event_and_audit_untouched(self, lead_user, event_qualified):
         """Kein Zustandswechsel, kein Reviewer-Stempel, keine Audit-Zeile —
         der Guard sitzt VOR der Sperre und damit vor jedem Schreibzugriff."""
-        dr = request_deletion(event_qualified, lead_user, "Antrag")
+        dr = create_or_get_event_deletion_request(event_qualified, lead_user, "Antrag")[0]
         with pytest.raises(ValidationError, match="Vier-Augen"):
             reject_deletion(dr, lead_user)
         dr.refresh_from_db()
@@ -223,7 +223,7 @@ class TestRejectServiceEnforcesFourEyes:
     def test_foreign_reviewer_still_rejects(self, lead_user, confirmer_staff, event_qualified):
         """Positivkontrolle: der zulaessige Fremd-Reviewer lehnt weiterhin ab
         — der Guard verengt den Weg nicht ueber das Vier-Augen-Prinzip hinaus."""
-        dr = request_deletion(event_qualified, lead_user, "Antrag")
+        dr = create_or_get_event_deletion_request(event_qualified, lead_user, "Antrag")[0]
         reject_deletion(dr, confirmer_staff)
         dr.refresh_from_db()
         event_qualified.refresh_from_db()
@@ -239,7 +239,7 @@ class TestRejectServiceEnforcesFourEyes:
 @pytest.mark.django_db
 class TestListUI:
     def test_review_link_only_for_right_holders(self, client, lead_user, staff_user, confirmer_staff, event_qualified):
-        request_deletion(event_qualified, staff_user, "Antrag")
+        create_or_get_event_deletion_request(event_qualified, staff_user, "Antrag")[0]
         # Leitung ohne Recht: Liste ja (Transparenz), aber kein Prüfen-Link.
         lead_user.can_confirm_deletion = False
         lead_user.save()
@@ -254,7 +254,7 @@ class TestListUI:
     def test_setup_guard_warns_when_no_eligible_reviewer(self, client, lead_user, event_qualified):
         # Einzige Person mit Recht ist die Antragstellerin selbst →
         # kein möglicher Genehmiger; der Antrag darf nicht still blocken.
-        dr = request_deletion(event_qualified, lead_user, "Antrag")
+        dr = create_or_get_event_deletion_request(event_qualified, lead_user, "Antrag")[0]
         User.objects.exclude(pk=lead_user.pk).update(can_confirm_deletion=False)
         client.force_login(lead_user)
         content = client.get(reverse("core:deletion_request_list")).content.decode()

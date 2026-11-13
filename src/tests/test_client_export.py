@@ -451,7 +451,7 @@ class TestClientTargetQueries:
     ):
         """Refs #2071: Auskunft und Redaktion muessen dieselben Antrags-Ziele fassen.
 
-        Dieselbe Drift wie #1990, hier aber **live**: ``request_case_deletion``
+        Dieselbe Drift wie #1990, hier aber **live**: ``create_or_get_case_deletion_request``
         (``core/services/case/deletion.py``) legt seit ADR-044 Antraege mit
         ``target_type="Case"`` an, die Art.-17-Kaskade redigiert sie
         (``_redact_case_deletion_requests``) — die Art.-15-Auskunft zog nur
@@ -2907,7 +2907,7 @@ class TestClientExportMergeProvenance:
     def test_merge_request_row_is_marked(self, facility, sample_client, admin_user, staff_user):
         """Ein Merge-Antrag darf in der Auskunft nicht als Loeschantrag durchgehen
         (dasselbe Prinzip wie in der Antragsliste: die Antragsart beim Namen nennen)."""
-        from core.services.client import request_client_merge
+        from core.services.client import create_or_get_client_merge_request
 
         source = make_client(
             facility=facility,
@@ -2915,7 +2915,7 @@ class TestClientExportMergeProvenance:
             contact_stage=Client.ContactStage.QUALIFIED,
             created_by=admin_user,
         )
-        request_client_merge(source, sample_client, staff_user, "Doppelt angelegt")
+        create_or_get_client_merge_request(source, sample_client, staff_user, "Doppelt angelegt")[0]
         data = export_client_data(source, facility, admin_user)
         (row,) = data["deletion_requests"]
         assert row["merge_request"] is True
@@ -2951,10 +2951,10 @@ class TestAnonymizationRedactsOnlyOwnCaseRequests:
     """
 
     def test_foreign_case_request_survives_person_anonymization(self, sample_client, sample_case, facility, admin_user):
-        from core.services.case import request_case_deletion
+        from core.services.case import create_or_get_case_deletion_request
         from core.services.client import anonymize_client_now
 
-        own_dr = request_case_deletion(sample_case, admin_user, "Eigener Antrag")
+        own_dr = create_or_get_case_deletion_request(sample_case, admin_user, "Eigener Antrag")[0]
 
         fremd_org = Organization.objects.create(name="Fremd-Org")
         fremd_facility = Facility.objects.create(organization=fremd_org, name="Fremd-Einrichtung")
@@ -2969,7 +2969,7 @@ class TestAnonymizationRedactsOnlyOwnCaseRequests:
         fremd_case = CaseModel.objects.create(
             facility=fremd_facility, client=fremd_client, title="Fremder Fall", created_by=fremd_user
         )
-        fremd_dr = request_case_deletion(fremd_case, fremd_user, "Fremder Antrag")
+        fremd_dr = create_or_get_case_deletion_request(fremd_case, fremd_user, "Fremder Antrag")[0]
 
         sample_client.soft_delete(user=admin_user)
         anonymize_client_now(sample_client, admin_user)

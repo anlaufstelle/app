@@ -45,11 +45,11 @@ from django.utils import timezone, translation
 
 from core.models import Client, LegalHold
 from core.models.workitem import DeletionRequest
-from core.services.client import request_client_deletion
+from core.services.client import create_or_get_client_deletion_request
 from core.services.client.merge import (
+    create_or_get_client_merge_request,
     get_pending_merge_request,
     merge_clients,
-    request_client_merge,
 )
 
 pytestmark = pytest.mark.django_db
@@ -226,7 +226,7 @@ class TestValidateMergePendingRequest:
     """
 
     def test_pending_request_message_is_exact(self, merge_source, merge_target, staff_user, lead_user):
-        request_client_deletion(merge_source, staff_user, reason="Antrag laeuft")
+        create_or_get_client_deletion_request(merge_source, staff_user, reason="Antrag laeuft")[0]
         with translation.override("de"):
             with pytest.raises(ValidationError) as exc:
                 merge_clients(merge_source, merge_target, lead_user)
@@ -297,7 +297,7 @@ class TestGetPendingMergeRequestLookup:
         ``.merge_into`` per zusaetzlicher Lazy-Query nach — der
         ``django_assert_num_queries(1)``-Block schlaegt mit 2 Queries fehl.
         """
-        dr = request_client_merge(merge_source, merge_target, staff_user, reason="Doppelt")
+        dr = create_or_get_client_merge_request(merge_source, merge_target, staff_user, reason="Doppelt")[0]
 
         with django_assert_num_queries(1):
             found = get_pending_merge_request(merge_source)
@@ -400,8 +400,8 @@ class TestGetPendingMergeRequestLookup:
         zweite_quelle = _identified(facility, staff_user, "Pin-Merge-Quelle-B")
         zweites_ziel = _identified(facility, staff_user, "Pin-Merge-Ziel-B")
 
-        dr_a = request_client_merge(merge_source, merge_target, staff_user, reason="Antrag A")
-        dr_b = request_client_merge(zweite_quelle, zweites_ziel, staff_user, reason="Antrag B")
+        dr_a = create_or_get_client_merge_request(merge_source, merge_target, staff_user, reason="Antrag A")[0]
+        dr_b = create_or_get_client_merge_request(zweite_quelle, zweites_ziel, staff_user, reason="Antrag B")[0]
         DeletionRequest.objects.filter(pk=dr_b.pk).update(created_at=timezone.now() + timedelta(minutes=5))
 
         assert get_pending_merge_request(merge_source) == dr_a

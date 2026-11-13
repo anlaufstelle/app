@@ -111,10 +111,10 @@ class TestFallstatusSchreibtGetilgtesNichtZurueck:
         Person (``cases_with_live_client`` zieht sie in der View, der Service
         muss sie selbst ziehen).
         """
-        from core.services.client import approve_client_deletion, request_client_deletion
+        from core.services.client import approve_client_deletion, create_or_get_client_deletion_request
 
         alte_instanz = _zweite_instanz(case_open)
-        antrag = request_client_deletion(client_identified, staff_user, reason="Widerruf")
+        antrag = create_or_get_client_deletion_request(client_identified, staff_user, reason="Widerruf")[0]
         approve_client_deletion(antrag, admin_user)
         client_identified.refresh_from_db()
         assert client_identified.is_deleted is True, "Aufbau kaputt: die Person liegt nicht im Papierkorb"

@@ -74,7 +74,7 @@ from django.utils import timezone
 
 from core.models import DeletionRequest, Event
 from core.services.deletion import withdraw_deletion_request
-from core.services.events import request_deletion
+from core.services.events import create_or_get_event_deletion_request
 
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
@@ -94,7 +94,7 @@ def event_qualified(facility, client_qualified, doc_type_contact, staff_user):
 @pytest.fixture
 def own_request(event_qualified, staff_user):
     """PENDING-Antrag, gestellt von ``staff_user``."""
-    return request_deletion(event_qualified, staff_user, "Versehentlich gestellt")
+    return create_or_get_event_deletion_request(event_qualified, staff_user, "Versehentlich gestellt")[0]
 
 
 class TestWithdrawForeignRequesterGuardMessage:

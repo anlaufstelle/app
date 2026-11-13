@@ -22,7 +22,7 @@ import pytest
 from django.urls import reverse
 
 from core.models import Client, DocumentType
-from core.services.client import anonymize_client, approve_client_deletion, request_client_deletion
+from core.services.client import anonymize_client, approve_client_deletion, create_or_get_client_deletion_request
 from core.services.client.restriction import restrict_processing
 
 
@@ -91,7 +91,7 @@ class TestInvalidMetaFormPrefill:
 
     def test_trashed_person_is_not_prefilled(self, client, staff_user, lead_user, person, doc_type_plain):
         pseudonym = person.pseudonym
-        deletion = request_client_deletion(person, staff_user, "Doppelt angelegt")
+        deletion = create_or_get_client_deletion_request(person, staff_user, "Doppelt angelegt")[0]
         approve_client_deletion(deletion, lead_user)
         person.refresh_from_db()
         assert person.is_deleted is True

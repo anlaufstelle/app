@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils.translation import gettext, override
 
 from core import nav
-from core.services.client import request_client_deletion
+from core.services.client import create_or_get_client_deletion_request
 
 HELP_SLUGS = (
     "arbeitszentrale",
@@ -198,7 +198,7 @@ class TestContextHelpPlacements:
 
         assert 'data-context-help="four-eyes"' not in body_without_request
 
-        request_client_deletion(client_identified, staff_user, "Widerruf")
+        create_or_get_client_deletion_request(client_identified, staff_user, "Widerruf")[0]
 
         body = client.get(reverse("core:client_detail", kwargs={"pk": client_identified.pk})).content.decode()
 

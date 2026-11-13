@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import User
-from core.services.client import approve_client_deletion, request_client_deletion, restore_client
+from core.services.client import approve_client_deletion, create_or_get_client_deletion_request, restore_client
 from core.services.system import build_client_offline_bundle
 from tests._factories import make_client, make_document_type, make_event
 
@@ -20,7 +20,7 @@ def subject(request, facility, staff_user, lead_user):
 
     def revoke():
         if request.param == "trash":
-            pending = request_client_deletion(person, staff_user, "Consent withdrawn")
+            pending = create_or_get_client_deletion_request(person, staff_user, "Consent withdrawn")[0]
             approve_client_deletion(pending, lead_user)
         else:
             person.is_active = False

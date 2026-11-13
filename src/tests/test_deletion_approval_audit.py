@@ -5,7 +5,7 @@ Refs Matrix DEV-DEL-06 (Master #922) + DSGVO-Lift #932.
 Der DSGVO-Loeschungs-Workflow auf Events durchlaeuft drei Service-
 Funktionen aus :mod:`core.services.events.deletion`:
 
-- :func:`request_deletion` (legt ``DeletionRequest`` an)
+- :func:`create_or_get_event_deletion_request` (legt ``DeletionRequest`` an)
 - :func:`approve_deletion` (genehmigt + ruft :func:`soft_delete_event`)
 - :func:`reject_deletion` (lehnt ab)
 
@@ -22,7 +22,7 @@ SOLL-Verhalten der AuditLog-Spur nach #932:
   ``target_type='DeletionRequest'``. Es entsteht KEIN
   ``Action.DELETE``-Eintrag auf das Event (nur Approve loescht).
 
-Das gleiche Audit-Pattern gilt fuer ``request_client_deletion`` aus
+Das gleiche Audit-Pattern gilt fuer ``create_or_get_client_deletion_request`` aus
 :mod:`core.services.client.main` (vgl. ``TestClientDeletionAudit``).
 """
 
@@ -34,8 +34,8 @@ from django.utils import timezone
 from core.models import AuditLog, DeletionRequest, Event
 from core.services.events.deletion import (
     approve_deletion,
+    create_or_get_event_deletion_request,
     reject_deletion,
-    request_deletion,
 )
 
 
@@ -61,7 +61,7 @@ class TestDeletionApprovalAudit:
         mit Action.DELETION_REQUESTED und target_type='DeletionRequest'.
         DSGVO Art. 5(2) Rechenschaftspflicht. Refs #932.
         """
-        dr = request_deletion(event_qualified, staff_user, "DSGVO-Anfrage")
+        dr = create_or_get_event_deletion_request(event_qualified, staff_user, "DSGVO-Anfrage")[0]
 
         audit = AuditLog.objects.get(
             action=AuditLog.Action.DELETION_REQUESTED,
@@ -75,16 +75,16 @@ class TestDeletionApprovalAudit:
         assert audit.detail == {"target_event": str(event_qualified.pk)}
 
     def test_request_deletion_is_idempotent_no_duplicate_audit(self, event_qualified, staff_user):
-        """Zweiter request_deletion-Aufruf fuer dasselbe Event darf KEIN
+        """Zweiter create_or_get_event_deletion_request-Aufruf fuer dasselbe Event darf KEIN
         zweites Audit-Event erzeugen (Idempotenz-Schutz, Refs #932).
         """
-        dr1 = request_deletion(event_qualified, staff_user, "Erster Antrag")
+        dr1 = create_or_get_event_deletion_request(event_qualified, staff_user, "Erster Antrag")[0]
         count_after_first = AuditLog.objects.filter(
             action=AuditLog.Action.DELETION_REQUESTED,
             target_type="DeletionRequest",
         ).count()
 
-        dr2 = request_deletion(event_qualified, staff_user, "Zweiter Versuch")
+        dr2 = create_or_get_event_deletion_request(event_qualified, staff_user, "Zweiter Versuch")[0]
 
         assert dr2.pk == dr1.pk, "Idempotenz: gleicher DeletionRequest erwartet"
         count_after_second = AuditLog.objects.filter(
@@ -92,7 +92,7 @@ class TestDeletionApprovalAudit:
             target_type="DeletionRequest",
         ).count()
         assert count_after_second == count_after_first, (
-            "Zweiter request_deletion-Aufruf darf kein neues Audit-Event erzeugen"
+            "Zweiter create_or_get_event_deletion_request-Aufruf darf kein neues Audit-Event erzeugen"
         )
 
     def test_approve_deletion_writes_audit(self, event_qualified, staff_user, lead_user):
@@ -101,7 +101,7 @@ class TestDeletionApprovalAudit:
         (b) Action.DELETION_APPROVED mit target_type='DeletionRequest' (Refs #932)
         """
         # Setup: PENDING DeletionRequest existiert.
-        dr = request_deletion(event_qualified, staff_user, "Klient bittet um Loeschung")
+        dr = create_or_get_event_deletion_request(event_qualified, staff_user, "Klient bittet um Loeschung")[0]
         assert dr.status == DeletionRequest.Status.PENDING
 
         before_delete = AuditLog.objects.filter(
@@ -145,7 +145,7 @@ class TestDeletionApprovalAudit:
         (Refs #932). Wichtig: KEIN Action.DELETE-Eintrag fuer das Event —
         nur Approve loescht das Event.
         """
-        dr = request_deletion(event_qualified, staff_user, "Antrag wird abgelehnt")
+        dr = create_or_get_event_deletion_request(event_qualified, staff_user, "Antrag wird abgelehnt")[0]
 
         reject_deletion(dr, lead_user)
 
@@ -178,12 +178,12 @@ class TestClientDeletionAudit:
     """Tests fuer AuditLog-Spur des 4-Augen-Client-Loesch-Antrags (#932)."""
 
     def test_request_client_deletion_writes_audit(self, client_qualified, staff_user):
-        """request_client_deletion schreibt einen Action.DELETION_REQUESTED
+        """create_or_get_client_deletion_request schreibt einen Action.DELETION_REQUESTED
         mit target_type='DeletionRequest' (Refs #932).
         """
-        from core.services.client import request_client_deletion
+        from core.services.client import create_or_get_client_deletion_request
 
-        dr = request_client_deletion(client_qualified, staff_user, "DSGVO-Antrag Klient")
+        dr = create_or_get_client_deletion_request(client_qualified, staff_user, "DSGVO-Antrag Klient")[0]
 
         audit = AuditLog.objects.get(
             action=AuditLog.Action.DELETION_REQUESTED,
@@ -196,16 +196,16 @@ class TestClientDeletionAudit:
         assert audit.detail == {"target_client": str(client_qualified.pk)}
 
     def test_request_client_deletion_is_idempotent(self, client_qualified, staff_user):
-        """Zweiter request_client_deletion-Aufruf erzeugt kein zweites Audit-Event."""
-        from core.services.client import request_client_deletion
+        """Zweiter create_or_get_client_deletion_request-Aufruf erzeugt kein zweites Audit-Event."""
+        from core.services.client import create_or_get_client_deletion_request
 
-        dr1 = request_client_deletion(client_qualified, staff_user, "Erst")
+        dr1 = create_or_get_client_deletion_request(client_qualified, staff_user, "Erst")[0]
         count_after_first = AuditLog.objects.filter(
             action=AuditLog.Action.DELETION_REQUESTED,
             target_type="DeletionRequest",
         ).count()
 
-        dr2 = request_client_deletion(client_qualified, staff_user, "Zweit")
+        dr2 = create_or_get_client_deletion_request(client_qualified, staff_user, "Zweit")[0]
 
         assert dr2.pk == dr1.pk
         assert (

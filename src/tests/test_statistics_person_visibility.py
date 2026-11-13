@@ -9,7 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import StatisticsSnapshot, User
-from core.services.client import approve_client_deletion, request_client_deletion, restore_client
+from core.services.client import approve_client_deletion, create_or_get_client_deletion_request, restore_client
 from core.services.dashboard import get_statistics, get_statistics_hybrid
 from tests._factories import make_client, make_document_type, make_event
 
@@ -61,7 +61,7 @@ def test_statistics_person_ranking_hides_revoked_people(
     aggregates = {key: baseline.context["stats"][key] for key in AGGREGATE_KEYS}
 
     if state == "trash":
-        pending = request_client_deletion(person, staff_user, "Consent withdrawn")
+        pending = create_or_get_client_deletion_request(person, staff_user, "Consent withdrawn")[0]
         response = client.get(url, params, **headers)
         assert response.status_code == 200
         assert response.context["stats"]["top_clients"] == baseline.context["stats"]["top_clients"]
@@ -153,7 +153,7 @@ def test_snapshot_statistics_refresh_person_ranking_without_changing_snapshot(fa
     assert baseline["snapshot_as_of"] == snapshot.updated_at
     assert baseline["top_clients"][0] == {"pseudonym": person.pseudonym, "count": 3}
     if state == "trash":
-        pending = request_client_deletion(person, staff_user, "Consent withdrawn")
+        pending = create_or_get_client_deletion_request(person, staff_user, "Consent withdrawn")[0]
         approve_client_deletion(pending, lead_user)
     else:
         person.is_active = False

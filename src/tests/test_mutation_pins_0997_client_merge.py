@@ -38,7 +38,7 @@ def test_preliminary_person_lock_excludes_moved_person(people, staff_user, lead_
     x__lock_persons_then_merge_request__mutmut_16.
     """
     source, target = people
-    request = merge.request_client_merge(source, target, staff_user, "Duplicate")
+    request = merge.create_or_get_client_merge_request(source, target, staff_user, "Duplicate")[0]
     Client.objects.filter(pk=target.pk).update(facility=second_facility)
     audits = AuditLog.objects.count()
 
@@ -66,7 +66,7 @@ def test_request_moved_after_person_lock_is_not_locked(people, staff_user, lead_
     x__lock_persons_then_merge_request__mutmut_21.
     """
     source, target = people
-    request = merge.request_client_merge(source, target, staff_user, "Duplicate")
+    request = merge.create_or_get_client_merge_request(source, target, staff_user, "Duplicate")[0]
     audits = AuditLog.objects.count()
     with capture_locks() as captured:
         captured.nach_sperre(
@@ -100,7 +100,7 @@ def test_reviewer_moved_after_request_lock_keeps_refusal_message(
     x_reject_client_merge__mutmut_27, x_reject_client_merge__mutmut_28.
     """
     source, target = people
-    request = merge.request_client_merge(source, target, staff_user, "Duplicate")
+    request = merge.create_or_get_client_merge_request(source, target, staff_user, "Duplicate")[0]
     audits = AuditLog.objects.count()
     with capture_locks() as captured:
         captured.nach_sperre(

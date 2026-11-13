@@ -238,7 +238,7 @@ def restrict_processing(client: Client, user: Any, *, reason: str) -> Client:
 
     **Idempotent statt Fehler:** der Auto-Vorschlag am Berichtigungsantrag darf
     nicht daran scheitern, dass jemand die Einschraenkung schon von Hand gesetzt
-    hat — das Ziel ist identisch (Muster ``request_deletion``, Refs #1834). Eine
+    hat — das Ziel ist identisch (Muster ``create_or_get_event_deletion_request``, Refs #1834). Eine
     zweite Audit-Zeile entstuende dabei ohne neuen Sachverhalt und verwaesserte
     den Nachweis, wann die Einschraenkung tatsaechlich begann; der frueheste
     Zeitpunkt ist der rechtlich relevante.

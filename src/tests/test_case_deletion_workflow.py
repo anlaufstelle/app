@@ -25,10 +25,10 @@ from core.services.case.deletion import (
     anonymize_eligible_soft_deleted_cases,
     approve_case_deletion,
     case_requires_four_eyes,
+    create_or_get_case_deletion_request,
     get_pending_case_deletion_request,
     pending_deletion_case_ids,
     reject_case_deletion,
-    request_case_deletion,
     restore_case,
     soft_delete_case,
 )
@@ -79,7 +79,7 @@ class TestPendingRequestSurvivesADowngrade:
         case = Case.objects.create(
             facility=facility, client=client_qualified, title="Fall mit Antrag", created_by=staff_user
         )
-        dr = request_case_deletion(case, staff_user, reason="Antrag vor der Herabstufung")
+        dr = create_or_get_case_deletion_request(case, staff_user, reason="Antrag vor der Herabstufung")[0]
         assert dr.status == DeletionRequest.Status.PENDING
 
         # Herabstufung waehrend des laufenden Antrags — ein erlaubter Vorgang.
@@ -98,20 +98,20 @@ class TestPendingRequestSurvivesADowngrade:
 
 class TestRequestCaseDeletion:
     def test_creates_pending_request(self, case_open, staff_user):
-        dr = request_case_deletion(case_open, staff_user, "Fall irrtuemlich angelegt")
+        dr = create_or_get_case_deletion_request(case_open, staff_user, "Fall irrtuemlich angelegt")[0]
         assert dr.status == DeletionRequest.Status.PENDING
         assert dr.target_type == DeletionRequest.TargetType.CASE
         assert dr.target_id == case_open.pk
         assert dr.requested_by == staff_user
 
     def test_idempotent_returns_existing_pending(self, case_open, staff_user):
-        first = request_case_deletion(case_open, staff_user, "Grund 1")
-        second = request_case_deletion(case_open, staff_user, "Grund 2 (ignoriert)")
+        first = create_or_get_case_deletion_request(case_open, staff_user, "Grund 1")[0]
+        second = create_or_get_case_deletion_request(case_open, staff_user, "Grund 2 (ignoriert)")[0]
         assert first.pk == second.pk
         assert DeletionRequest.objects.filter(target_id=case_open.pk).count() == 1
 
     def test_audit_detail_carries_only_the_case_uuid(self, case_open, staff_user):
-        dr = request_case_deletion(case_open, staff_user, "Grund")
+        dr = create_or_get_case_deletion_request(case_open, staff_user, "Grund")[0]
         audit = AuditLog.objects.get(action=AuditLog.Action.DELETION_REQUESTED, target_id=str(dr.pk))
         assert audit.detail == {"target_case": str(case_open.pk)}
 
@@ -125,7 +125,7 @@ class TestRequestCaseDeletion:
         dokumentierte Rueckweg zum Antrag samt ``reason`` (Muster #932, wie im
         Ereignis-Pfad per ``test_deletion_approval_audit`` gepinnt).
         """
-        dr = request_case_deletion(case_open, staff_user, "Grund")
+        dr = create_or_get_case_deletion_request(case_open, staff_user, "Grund")[0]
         audit = AuditLog.objects.get(action=AuditLog.Action.DELETION_REQUESTED, target_id=str(dr.pk))
         assert audit.user == staff_user
         assert audit.facility == case_open.facility
@@ -134,7 +134,7 @@ class TestRequestCaseDeletion:
     def test_pending_lookup_and_id_set(self, case_open, staff_user, facility):
         assert get_pending_case_deletion_request(case_open) is None
         assert pending_deletion_case_ids(facility, [case_open]) == set()
-        dr = request_case_deletion(case_open, staff_user, "Grund")
+        dr = create_or_get_case_deletion_request(case_open, staff_user, "Grund")[0]
         assert get_pending_case_deletion_request(case_open).pk == dr.pk
         assert pending_deletion_case_ids(facility, [case_open]) == {case_open.pk}
 
@@ -183,7 +183,7 @@ class TestSoftDeleteCase:
 
 class TestApproveCaseDeletion:
     def test_approve_soft_deletes_and_closes_request(self, case_open, staff_user, lead_user):
-        dr = request_case_deletion(case_open, staff_user, "Grund")
+        dr = create_or_get_case_deletion_request(case_open, staff_user, "Grund")[0]
         approve_case_deletion(dr, lead_user)
 
         case_open.refresh_from_db()
@@ -203,18 +203,18 @@ class TestApproveCaseDeletion:
         """``DELETION_APPROVED`` macht die Antrags-Entscheidung als eigenen
         Schritt sichtbar — und ist die Zeile, die die Massen-Destruktions-
         Erkennung zaehlt."""
-        dr = request_case_deletion(case_open, staff_user, "Grund")
+        dr = create_or_get_case_deletion_request(case_open, staff_user, "Grund")[0]
         approve_case_deletion(dr, lead_user)
         audit = AuditLog.objects.get(action=AuditLog.Action.DELETION_APPROVED, target_id=str(dr.pk))
         assert audit.detail == {"target_case": str(case_open.pk)}
 
     def test_self_review_blocked(self, case_open, staff_user):
-        dr = request_case_deletion(case_open, staff_user, "Grund")
+        dr = create_or_get_case_deletion_request(case_open, staff_user, "Grund")[0]
         with pytest.raises(ValidationError):
             approve_case_deletion(dr, staff_user)
 
     def test_reviewer_without_confirm_right_blocked(self, case_open, staff_user, assistant_user):
-        dr = request_case_deletion(case_open, staff_user, "Grund")
+        dr = create_or_get_case_deletion_request(case_open, staff_user, "Grund")[0]
         assert assistant_user.can_confirm_deletion is False
         with pytest.raises(ValidationError):
             approve_case_deletion(dr, assistant_user)
@@ -224,7 +224,7 @@ class TestApproveCaseDeletion:
     def test_double_approve_rejected_after_status_change(self, case_open, staff_user, lead_user, admin_user):
         """TOCTOU (Muster #1376 I9): der zweite Aufruf sieht den bereits
         fortgeschrittenen Status und bricht sauber ab."""
-        dr = request_case_deletion(case_open, staff_user, "Grund")
+        dr = create_or_get_case_deletion_request(case_open, staff_user, "Grund")[0]
         approve_case_deletion(dr, lead_user)
         with pytest.raises(ValidationError):
             approve_case_deletion(dr, admin_user)
@@ -248,7 +248,7 @@ class TestApproveCaseDeletion:
         keinen zweiten Guard, der einspringen koennte, und die Meldung sagt
         auch, welcher gegriffen hat.
         """
-        dr = request_case_deletion(case_open, staff_user, "Grund")
+        dr = create_or_get_case_deletion_request(case_open, staff_user, "Grund")[0]
         DeletionRequest.objects.filter(pk=dr.pk).update(status=DeletionRequest.Status.APPROVED)
         case_open.refresh_from_db()
         assert case_open.is_deleted is False
@@ -266,7 +266,7 @@ class TestApproveCaseDeletion:
 
 class TestRejectCaseDeletion:
     def test_service_rejects_distinct_reviewer_without_confirmation_right(self, case_open, staff_user, lead_user):
-        dr = request_case_deletion(case_open, lead_user, "Grund")
+        dr = create_or_get_case_deletion_request(case_open, lead_user, "Grund")[0]
 
         with pytest.raises(ValidationError) as exc_info:
             reject_case_deletion(dr, staff_user)
@@ -290,7 +290,7 @@ class TestRejectCaseDeletion:
             is_staff=True,
             can_confirm_deletion=has_right,
         )
-        dr = request_case_deletion(case_open, lead_user, "Grund")
+        dr = create_or_get_case_deletion_request(case_open, lead_user, "Grund")[0]
 
         if has_right:
             reject_case_deletion(dr, reviewer)
@@ -304,7 +304,7 @@ class TestRejectCaseDeletion:
         assert dr.reviewed_by_id == (reviewer.pk if has_right else None)
 
     def test_reject_sets_status_only(self, case_open, staff_user, lead_user):
-        dr = request_case_deletion(case_open, staff_user, "Grund")
+        dr = create_or_get_case_deletion_request(case_open, staff_user, "Grund")[0]
         reject_case_deletion(dr, lead_user)
 
         case_open.refresh_from_db()
@@ -315,13 +315,13 @@ class TestRejectCaseDeletion:
 
     def test_reject_is_audited(self, case_open, staff_user, lead_user):
         """Rechenschaft ueber abgelehnte Loeschversuche (Art. 5 Abs. 2)."""
-        dr = request_case_deletion(case_open, staff_user, "Grund")
+        dr = create_or_get_case_deletion_request(case_open, staff_user, "Grund")[0]
         reject_case_deletion(dr, lead_user)
         audit = AuditLog.objects.get(action=AuditLog.Action.DELETION_REJECTED, target_id=str(dr.pk))
         assert audit.detail == {"target_case": str(case_open.pk)}
 
     def test_self_review_blocked(self, case_open, staff_user):
-        dr = request_case_deletion(case_open, staff_user, "Grund")
+        dr = create_or_get_case_deletion_request(case_open, staff_user, "Grund")[0]
         with pytest.raises(ValidationError):
             reject_case_deletion(dr, staff_user)
 
@@ -333,7 +333,7 @@ class TestRejectCaseDeletion:
         der widerspruechliche Zustand waere damit dauerhaft protokolliert statt
         transient.
         """
-        dr = request_case_deletion(case_open, staff_user, "Grund")
+        dr = create_or_get_case_deletion_request(case_open, staff_user, "Grund")[0]
         approve_case_deletion(dr, lead_user)
 
         with pytest.raises(ValidationError) as exc:
@@ -345,9 +345,9 @@ class TestRejectCaseDeletion:
         assert not AuditLog.objects.filter(action=AuditLog.Action.DELETION_REJECTED, target_id=str(dr.pk)).exists()
 
     def test_rerequest_after_reject_is_possible(self, case_open, staff_user, lead_user):
-        first = request_case_deletion(case_open, staff_user, "Grund")
+        first = create_or_get_case_deletion_request(case_open, staff_user, "Grund")[0]
         reject_case_deletion(first, lead_user)
-        second = request_case_deletion(case_open, staff_user, "Zweiter Anlauf")
+        second = create_or_get_case_deletion_request(case_open, staff_user, "Zweiter Anlauf")[0]
         assert second.pk != first.pk
         assert second.status == DeletionRequest.Status.PENDING
 
@@ -473,7 +473,7 @@ class TestTrashExpiryRedaction:
         assert set(context["action"] for context in contexts) == {Activity.Action.REDACTED}
 
     def test_deletion_request_reason_is_redacted(self, facility, settings_obj, case_open, staff_user, lead_user):
-        dr = request_case_deletion(case_open, staff_user, "Begruendung mit Klartext")
+        dr = create_or_get_case_deletion_request(case_open, staff_user, "Begruendung mit Klartext")[0]
         approve_case_deletion(dr, lead_user)
         case_open.refresh_from_db()
         _expire(case_open, settings_obj)

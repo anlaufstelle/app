@@ -144,7 +144,7 @@ class CaseDeleteRequestView(StaffRequiredMixin, View):
             )
             return redirect("core:case_list")
 
-        # Refs #1736 (A): ``request_case_deletion`` ist idempotent — ein zweiter
+        # Refs #1736 (A): ``create_or_get_case_deletion_request`` ist idempotent — ein zweiter
         # Antrag legt nichts an und verwirft die neu eingegebene Begruendung.
         # Ohne diese Meldung meldete die View trotzdem Erfolg (stiller
         # Fake-Erfolg).

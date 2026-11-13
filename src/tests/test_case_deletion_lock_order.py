@@ -29,7 +29,7 @@ from django.db import connections, transaction
 
 from core.models import AuditLog, Case, Client, Facility, Organization, User
 from core.models.workitem import DeletionRequest
-from core.services.case import approve_case_deletion, request_case_deletion
+from core.services.case import approve_case_deletion, create_or_get_case_deletion_request
 from tests._row_lock_helpers import mitschnitt
 from tests.test_client_deletion_lock_order import (
     _JOIN_TIMEOUT,
@@ -142,7 +142,7 @@ class TestApprovalWaitsWithoutHoldingTheRequest:
         facility, requester, reviewer = committed
         person = _person(facility, requester, f"Case-Lock-{held}")
         case = _case(facility, person, requester, "Case lock order")
-        dr = request_case_deletion(case, requester, "Recorded twice")
+        dr = create_or_get_case_deletion_request(case, requester, "Recorded twice")[0]
         held_pk = person.pk if held == "person" else case.pk
 
         returned = self._run_while_row_is_held(
@@ -161,7 +161,7 @@ class TestApprovalWaitsWithoutHoldingTheRequest:
 @pytest.mark.django_db
 class TestLockOrder:
     def test_approval_locks_person_then_case_then_request(self, case_open, staff_user, lead_user):
-        dr = request_case_deletion(case_open, staff_user, "Recorded twice")
+        dr = create_or_get_case_deletion_request(case_open, staff_user, "Recorded twice")[0]
 
         with mitschnitt() as log:
             returned = approve_case_deletion(dr, lead_user)
@@ -179,7 +179,7 @@ class TestLockOrder:
     def test_case_moved_to_another_person_during_the_locks_is_refused(self, facility, case_open, staff_user, lead_user):
         original_person_id = case_open.client_id
         other_person = _person(facility, staff_user, "Case-Lock-Other")
-        dr = request_case_deletion(case_open, staff_user, "Recorded twice")
+        dr = create_or_get_case_deletion_request(case_open, staff_user, "Recorded twice")[0]
         approvals = AuditLog.objects.filter(action=AuditLog.Action.DELETION_APPROVED).count()
 
         with mitschnitt() as log, pytest.raises(ValidationError) as excinfo:
@@ -211,7 +211,7 @@ class TestLockOrder:
             facility=second_facility if reviewer_kind == "foreign" else None,
             can_confirm_deletion=True,
         )
-        dr = request_case_deletion(case_open, staff_user, "Recorded twice")
+        dr = create_or_get_case_deletion_request(case_open, staff_user, "Recorded twice")[0]
 
         with mitschnitt() as log, pytest.raises(ValidationError) as excinfo:
             approve_case_deletion(dr, reviewer)

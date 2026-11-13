@@ -46,9 +46,9 @@ def _audit_categories(data):
 @pytest.mark.django_db
 class TestCaseDeletionRequestInExport:
     def test_json_contains_the_case_request_with_reason(self, facility, client_identified, case_open, staff_user):
-        from core.services.case.deletion import request_case_deletion
+        from core.services.case.deletion import create_or_get_case_deletion_request
 
-        request_case_deletion(case_open, staff_user, CASE_REASON)
+        create_or_get_case_deletion_request(case_open, staff_user, CASE_REASON)[0]
         data = export_client_data(client_identified, facility, staff_user)
         reasons = [row["reason"] for row in data["deletion_requests"]]
         assert CASE_REASON in reasons
@@ -62,10 +62,10 @@ class TestCaseDeletionRequestInExport:
         Template-Regression entsteht; das Byte-Ergebnis wird zusaetzlich auf
         seinen Vertrag geprueft.
         """
-        from core.services.case.deletion import request_case_deletion
+        from core.services.case.deletion import create_or_get_case_deletion_request
         from core.services.client import render_client_export_html
 
-        request_case_deletion(case_open, admin_user, CASE_REASON)
+        create_or_get_case_deletion_request(case_open, admin_user, CASE_REASON)[0]
         html = render_client_export_html(client_identified, facility, admin_user)
         assert "Löschanträge" in html
         assert CASE_REASON in html
@@ -101,23 +101,23 @@ class TestCaseDeletionRequestInExport:
 @pytest.mark.django_db
 class TestDeletionAuditRowsInExport:
     def test_case_deletion_requested_row_appears(self, facility, client_identified, case_open, staff_user):
-        from core.services.case.deletion import request_case_deletion
+        from core.services.case.deletion import create_or_get_case_deletion_request
 
-        request_case_deletion(case_open, staff_user, CASE_REASON)
+        create_or_get_case_deletion_request(case_open, staff_user, CASE_REASON)[0]
         data = export_client_data(client_identified, facility, staff_user)
         assert AuditLog.Action.DELETION_REQUESTED.label in _audit_actions(data)
 
     def test_client_deletion_requested_row_appears(self, facility, client_identified, staff_user):
-        from core.services.client import request_client_deletion
+        from core.services.client import create_or_get_client_deletion_request
 
-        request_client_deletion(client_identified, staff_user, CLIENT_REASON)
+        create_or_get_client_deletion_request(client_identified, staff_user, CLIENT_REASON)[0]
         data = export_client_data(client_identified, facility, staff_user)
         assert AuditLog.Action.DELETION_REQUESTED.label in _audit_actions(data)
 
     def test_rejected_row_appears(self, facility, client_identified, case_open, staff_user, lead_user):
-        from core.services.case.deletion import reject_case_deletion, request_case_deletion
+        from core.services.case.deletion import create_or_get_case_deletion_request, reject_case_deletion
 
-        dr = request_case_deletion(case_open, staff_user, CASE_REASON)
+        dr = create_or_get_case_deletion_request(case_open, staff_user, CASE_REASON)[0]
         reject_case_deletion(dr, lead_user)
         data = export_client_data(client_identified, facility, staff_user)
         actions = _audit_actions(data)
@@ -127,9 +127,9 @@ class TestDeletionAuditRowsInExport:
     def test_approved_row_appears(self, facility, client_identified, case_open, staff_user, admin_user):
         """Der dritte Workflow-Schritt — bis hierher deckten die Tests nur
         REQUESTED und REJECTED ab (Cross-Review-Befund 6)."""
-        from core.services.case.deletion import approve_case_deletion, request_case_deletion
+        from core.services.case.deletion import approve_case_deletion, create_or_get_case_deletion_request
 
-        dr = request_case_deletion(case_open, staff_user, CASE_REASON)
+        dr = create_or_get_case_deletion_request(case_open, staff_user, CASE_REASON)[0]
         approve_case_deletion(dr, admin_user)
         data = export_client_data(client_identified, facility, staff_user)
         actions = _audit_actions(data)
@@ -137,18 +137,18 @@ class TestDeletionAuditRowsInExport:
         assert AuditLog.Action.DELETION_APPROVED.label in actions
 
     def test_rows_carry_a_readable_category(self, facility, client_identified, case_open, staff_user):
-        from core.services.case.deletion import request_case_deletion
+        from core.services.case.deletion import create_or_get_case_deletion_request
 
-        request_case_deletion(case_open, staff_user, CASE_REASON)
+        create_or_get_case_deletion_request(case_open, staff_user, CASE_REASON)[0]
         data = export_client_data(client_identified, facility, staff_user)
         assert "Löschantrag" in _audit_categories(data)
 
     def test_foreign_deletion_audit_row_stays_out(self, facility, client_identified, staff_user):
         """Der PK-Zweig darf nur Antraege dieser Person ziehen."""
         from core.models import Client
-        from core.services.client import request_client_deletion
+        from core.services.client import create_or_get_client_deletion_request
 
         other = Client.objects.create(facility=facility, pseudonym="Fremd-02", created_by=staff_user)
-        request_client_deletion(other, staff_user, "Fremder Antrag")
+        create_or_get_client_deletion_request(other, staff_user, "Fremder Antrag")[0]
         data = export_client_data(client_identified, facility, staff_user)
         assert AuditLog.Action.DELETION_REQUESTED.label not in _audit_actions(data)

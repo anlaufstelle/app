@@ -10,14 +10,14 @@ import pytest
 from django.urls import reverse
 
 from core.models.workitem import DeletionRequest
-from core.services.client import request_client_deletion
+from core.services.client import create_or_get_client_deletion_request
 
 pytestmark = pytest.mark.django_db
 
 
 class TestClientDetailPendingBanner:
     def test_context_carries_pending_request(self, client, staff_user, client_identified):
-        dr = request_client_deletion(client_identified, staff_user, "Widerruf")
+        dr = create_or_get_client_deletion_request(client_identified, staff_user, "Widerruf")[0]
         client.force_login(staff_user)
         response = client.get(reverse("core:client_detail", args=[client_identified.pk]))
         assert response.status_code == 200
@@ -29,14 +29,14 @@ class TestClientDetailPendingBanner:
         assert response.context["pending_deletion_request"] is None
 
     def test_banner_names_requester_and_is_rendered(self, client, staff_user, client_identified):
-        request_client_deletion(client_identified, staff_user, "Widerruf")
+        create_or_get_client_deletion_request(client_identified, staff_user, "Widerruf")[0]
         client.force_login(staff_user)
         body = client.get(reverse("core:client_detail", args=[client_identified.pk])).content.decode()
         assert "client-deletion-pending-banner" in body
         assert staff_user.username in body
 
     def test_badge_shown_in_header(self, client, staff_user, client_identified):
-        request_client_deletion(client_identified, staff_user, "Widerruf")
+        create_or_get_client_deletion_request(client_identified, staff_user, "Widerruf")[0]
         client.force_login(staff_user)
         body = client.get(reverse("core:client_detail", args=[client_identified.pk])).content.decode()
         assert "client-deletion-pending-badge" in body
@@ -49,7 +49,7 @@ class TestClientDetailPendingBanner:
     def test_rejected_request_does_not_count_as_pending(self, client, staff_user, lead_user, client_identified):
         from core.services.client import reject_client_deletion
 
-        dr = request_client_deletion(client_identified, staff_user, "Widerruf")
+        dr = create_or_get_client_deletion_request(client_identified, staff_user, "Widerruf")[0]
         reject_client_deletion(dr, lead_user)
         client.force_login(staff_user)
         response = client.get(reverse("core:client_detail", args=[client_identified.pk]))
@@ -64,7 +64,7 @@ class TestClientDetailDeleteAction:
         assert "client-delete-request-pending" not in body
 
     def test_request_link_replaced_while_pending(self, client, staff_user, client_identified):
-        request_client_deletion(client_identified, staff_user, "Widerruf")
+        create_or_get_client_deletion_request(client_identified, staff_user, "Widerruf")[0]
         client.force_login(staff_user)
         body = client.get(reverse("core:client_detail", args=[client_identified.pk])).content.decode()
         assert "client-delete-request-btn" not in body
@@ -73,7 +73,7 @@ class TestClientDetailDeleteAction:
 
 class TestClientListBadge:
     def test_list_marks_client_with_pending_request(self, client, staff_user, client_identified):
-        request_client_deletion(client_identified, staff_user, "Widerruf")
+        create_or_get_client_deletion_request(client_identified, staff_user, "Widerruf")[0]
         client.force_login(staff_user)
         body = client.get(reverse("core:client_list")).content.decode()
         assert "client-row-deletion-pending-badge" in body
@@ -88,7 +88,7 @@ class TestSecondRequestIsHonest:
     """Zweiter Klick auf „Löschen beantragen": kein Fake-Erfolg mehr."""
 
     def test_get_shows_pending_state_instead_of_form(self, client, staff_user, client_identified):
-        request_client_deletion(client_identified, staff_user, "Erster Grund")
+        create_or_get_client_deletion_request(client_identified, staff_user, "Erster Grund")[0]
         client.force_login(staff_user)
         response = client.get(reverse("core:client_delete_request", args=[client_identified.pk]))
         assert response.status_code == 200
@@ -97,7 +97,7 @@ class TestSecondRequestIsHonest:
         assert 'name="reason"' not in body
 
     def test_post_does_not_report_success_again(self, client, staff_user, client_identified):
-        request_client_deletion(client_identified, staff_user, "Erster Grund")
+        create_or_get_client_deletion_request(client_identified, staff_user, "Erster Grund")[0]
         client.force_login(staff_user)
         response = client.post(
             reverse("core:client_delete_request", args=[client_identified.pk]),
@@ -109,7 +109,7 @@ class TestSecondRequestIsHonest:
         assert any("läuft bereits" in str(m) for m in msgs)
 
     def test_post_keeps_the_original_request_and_reason(self, client, staff_user, client_identified):
-        dr = request_client_deletion(client_identified, staff_user, "Erster Grund")
+        dr = create_or_get_client_deletion_request(client_identified, staff_user, "Erster Grund")[0]
         client.force_login(staff_user)
         client.post(
             reverse("core:client_delete_request", args=[client_identified.pk]),

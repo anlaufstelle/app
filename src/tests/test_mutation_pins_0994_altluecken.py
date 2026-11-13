@@ -10,7 +10,7 @@ from django.db.models.query import QuerySet
 from django.utils import timezone
 
 from core.models import FieldCondition, FieldTemplate, User, WorkItem
-from core.services.client.merge import reject_client_merge, request_client_merge
+from core.services.client.merge import create_or_get_client_merge_request, reject_client_merge
 from core.services.conditions import build_conditions_payload
 from core.services.dashboard import build_focus_box
 
@@ -30,12 +30,12 @@ def test_reject_merge_reports_foreign_facility_exactly(
         facility=second_facility,
         can_confirm_deletion=True,
     )
-    deletion_request = request_client_merge(
+    deletion_request = create_or_get_client_merge_request(
         client_identified,
         client_qualified,
         staff_user,
         reason="Doppelt angelegt",
-    )
+    )[0]
 
     with pytest.raises(ValidationError) as excinfo:
         reject_client_merge(deletion_request, reviewer)

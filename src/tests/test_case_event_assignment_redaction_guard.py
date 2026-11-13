@@ -123,10 +123,10 @@ class TestZuordnungAnGetilgterAkteWirdAbgelehnt:
         self._abgelehnt(lambda: remove_event_from_case(alte_instanz, staff_user), sample_event.pk)
 
     def test_assign_an_person_im_papierkorb(self, case_open, sample_event, staff_user, admin_user):
-        from core.services.client import approve_client_deletion, request_client_deletion
+        from core.services.client import approve_client_deletion, create_or_get_client_deletion_request
 
         alte_instanz = _alte_instanz(sample_event)
-        antrag = request_client_deletion(sample_event.client, staff_user, reason="Widerruf")
+        antrag = create_or_get_client_deletion_request(sample_event.client, staff_user, reason="Widerruf")[0]
         approve_client_deletion(antrag, admin_user)
         assert Client.objects.get(pk=sample_event.client_id).is_deleted, "Aufbau kaputt: Person nicht im Papierkorb"
 

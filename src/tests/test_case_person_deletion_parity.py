@@ -39,7 +39,7 @@ from core.retention.legal_holds import (
     exclude_cases_with_active_holds,
     exclude_clients_with_active_holds,
 )
-from core.services.case import request_case_deletion
+from core.services.case import create_or_get_case_deletion_request
 from core.services.client import anonymize_client_now, anonymize_eligible_soft_deleted_clients
 
 pytestmark = pytest.mark.django_db
@@ -138,7 +138,9 @@ class TestCaseFreetextDiesWithThePerson:
     """Refs #1091/#1751 auf der Fall-Achse."""
 
     def test_case_deletion_request_reason_is_redacted(self, case_open, client_identified, staff_user, admin_user):
-        dr = request_case_deletion(case_open, staff_user, "Fall doppelt angelegt, Betreuung laeuft bei Frau Meier")
+        dr = create_or_get_case_deletion_request(
+            case_open, staff_user, "Fall doppelt angelegt, Betreuung laeuft bei Frau Meier"
+        )[0]
         client_identified.soft_delete(user=admin_user)
         anonymize_client_now(client_identified, admin_user)
 

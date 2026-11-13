@@ -613,12 +613,12 @@ def _gather_deletion_requests(facility, client, event_ids):
     """Serialize DeletionRequest entries for the client and the given event IDs.
 
     Refs #1752: der Filter war hart auf ``target_type="Event"`` verdrahtet,
-    obwohl ``request_client_deletion`` (``core.services.client.main``) Antraege
+    obwohl ``create_or_get_client_deletion_request`` (``core.services.client.main``) Antraege
     mit ``target_type="Client"`` schreibt. Der Vier-Augen-Antrag auf Loeschung
     der eigenen Person fehlte damit ausgerechnet in der Auskunft, waehrend der
     PDF-Abschnitt „Loeschantraege" Vollstaendigkeit suggerierte.
 
-    Refs #2071: derselbe Befund eine Stufe weiter — ``request_case_deletion``
+    Refs #2071: derselbe Befund eine Stufe weiter — ``create_or_get_case_deletion_request``
     (``core.services.case.deletion``) schreibt seit ADR-044 Antraege mit
     ``target_type="Case"``, und die Art.-17-Kaskade redigiert sie bereits
     (``_redact_case_deletion_requests``). Die Auskunft zog nur Client- und

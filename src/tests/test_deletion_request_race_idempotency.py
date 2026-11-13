@@ -32,9 +32,9 @@ from django.utils import timezone
 from core.models import Case, Client, DeletionRequest, Event
 from core.services import case as core_case_services
 from core.services import client as core_client_services
-from core.services.case import request_case_deletion
-from core.services.client import request_client_deletion, request_client_merge
-from core.services.events import request_deletion
+from core.services.case import create_or_get_case_deletion_request
+from core.services.client import create_or_get_client_deletion_request, create_or_get_client_merge_request
+from core.services.events import create_or_get_event_deletion_request
 
 pytestmark = pytest.mark.django_db
 
@@ -70,7 +70,7 @@ def _messages(response):
 class TestClientDeletionRequestRace:
     def test_second_parallel_request_is_answered_idempotently(self, client, staff_user, client_qualified):
         """Refs #2015: der Verlierer sieht die „läuft bereits"-Meldung, kein 500."""
-        request_client_deletion(client_qualified, staff_user, "Erster Antrag")
+        create_or_get_client_deletion_request(client_qualified, staff_user, "Erster Antrag")[0]
         client.force_login(staff_user)
 
         with (
@@ -101,7 +101,7 @@ class TestCaseDeletionRequestRace:
             status=Case.Status.OPEN,
             created_by=staff_user,
         )
-        request_case_deletion(case_open, staff_user, "Erster Antrag")
+        create_or_get_case_deletion_request(case_open, staff_user, "Erster Antrag")[0]
         client.force_login(staff_user)
 
         with (
@@ -133,7 +133,7 @@ class TestClientMergeRequestRace:
             pseudonym="P-Merge-Ziel",
             contact_stage=Client.ContactStage.QUALIFIED,
         )
-        request_client_merge(source, target, lead_user, "Erster Antrag")
+        create_or_get_client_merge_request(source, target, lead_user, "Erster Antrag")[0]
         client.force_login(lead_user)
 
         with (
@@ -166,7 +166,7 @@ class TestEventDeletionRequestRace:
             data_json={"dauer": 10, "notiz": "Test"},
             created_by=staff_user,
         )
-        request_deletion(event, staff_user, "Erster Antrag")
+        create_or_get_event_deletion_request(event, staff_user, "Erster Antrag")[0]
         client.force_login(staff_user)
 
         # Refs #2015 (Cross-Review): seit ``get_pending_event_deletion_request``
@@ -202,7 +202,7 @@ class TestWinnerIsReloadedBeforeClaimingItExists:
     """
 
     def test_client_path_reraises_when_the_winner_is_already_decided(self, client, staff_user, client_qualified):
-        request_client_deletion(client_qualified, staff_user, "Erster Antrag")
+        create_or_get_client_deletion_request(client_qualified, staff_user, "Erster Antrag")[0]
         client.force_login(staff_user)
 
         with (
@@ -242,7 +242,7 @@ class TestTrulyConcurrentClientDeletionRequest:
 
     Die konstruierten Tests oben beweisen das Catch-/Reload-Verhalten, aber
     nicht den realen Ablauf. Der ist seit dem Zeilenlock in
-    ``request_client_deletion`` (Refs #2017) ein anderer: Der Verlierer laeuft
+    ``create_or_get_client_deletion_request`` (Refs #2017) ein anderer: Der Verlierer laeuft
     nicht mehr in den ``IntegrityError``, sondern wartet auf der Sperre und
     bekommt danach vom Service den bestehenden Antrag **regulaer
     zurueckgeliefert**. Ohne ein Unterscheidungsmerkmal meldete die View ihm

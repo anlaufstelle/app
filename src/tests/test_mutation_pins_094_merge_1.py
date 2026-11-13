@@ -60,8 +60,8 @@ from core.models import (
 )
 from core.services.client.merge import (
     approve_client_merge,
+    create_or_get_client_merge_request,
     merge_clients,
-    request_client_merge,
     unmerge_client,
 )
 from tests.conftest import _make_attachment
@@ -546,7 +546,7 @@ class TestMergeAuditProvenance:
         ``old_stage`` ist ``None``; Mutant 70: ``new_stage`` ist ``None``;
         Mutant 71: die Zeile hat keinen Taeter.
         """
-        dr = request_client_merge(client_qualified, target, staff_user, reason="Doppelt angelegt")
+        dr = create_or_get_client_merge_request(client_qualified, target, staff_user, reason="Doppelt angelegt")[0]
 
         approve_client_merge(dr, admin_user)
 
@@ -585,7 +585,7 @@ class TestMergePartialSaves:
         Vergleich mit ``{"diagnose": "F32"}`` schlaegt fehl.
         """
         Client.objects.filter(pk=target.pk).update(document_type=doc_type_client_profile, data_json={"diagnose": "F32"})
-        dr = request_client_merge(client_qualified, target, staff_user, reason="Doppelt angelegt")
+        dr = create_or_get_client_merge_request(client_qualified, target, staff_user, reason="Doppelt angelegt")[0]
 
         approve_client_merge(dr, admin_user)
 

@@ -1,7 +1,7 @@
 """Loeschworkflow fuer Faelle — Papierkorb, Frist, Tilgung (Refs #1818, ADR-044).
 
 Spiegelt den Personen-Workflow aus :mod:`core.services.client.main`
-(``request_client_deletion`` … ``anonymize_eligible_soft_deleted_clients``).
+(``create_or_get_client_deletion_request`` … ``anonymize_eligible_soft_deleted_clients``).
 Die Produktentscheide der ADR bestimmen die Abweichungen:
 
 * **P1c** — Vier-Augen nur, wenn die Person auf der Stufe ``QUALIFIED`` steht
@@ -97,37 +97,12 @@ def pending_deletion_case_ids(facility, cases) -> set:
     )
 
 
-def request_case_deletion(case, user, reason):
-    """Stellt einen Vier-Augen-Loeschantrag fuer einen Fall — nur der Antrag.
-
-    Duenne Huelle um :func:`create_or_get_case_deletion_request` fuer alle
-    Aufrufer, die den Unterschied „neu angelegt" vs. „lief schon" nicht
-    brauchen.
-    """
-    return create_or_get_case_deletion_request(case, user, reason)[0]
-
-
 def create_or_get_case_deletion_request(case, user, reason):
-    """Wie :func:`request_case_deletion`, aber ``(antrag, created)``.
+    """Create a case deletion request or return the pending request and a created flag.
 
-    Refs #2015 (Re-Review): Muster ``create_or_get_client_deletion_request``.
-    Zwischen dem Vorab-Check der View und diesem Aufruf kann ein paralleler
-    Request denselben Antrag anlegen; der Zweite faellt dann in den
-    Idempotenz-Zweig unten und braucht die Idempotenz-Antwort statt einer
-    Erfolgsmeldung fuer etwas, das nie passiert ist.
-
-    Idempotent: laeuft bereits ein PENDING-Antrag, wird dieser zurueckgegeben
-    und **kein** zweites Audit-Event geschrieben (Muster #932) — die
-    ``DELETION_REQUESTED``-Zeile existiert vom ersten Aufruf.
-
-    Refs #2374: Die Einrichtungsgrenze der handelnden Person wird vor jeder
-    Sperre geprueft (fail-closed ohne Einrichtung). Danach sperrt der Dienst
-    Person -> Fall (-> Ereignisse) ueber dieselbe Kette wie Wiederherstellen
-    und Sofort-Tilgung und liest den Zustand an der GESPERRTEN Fallzeile
-    (Muster ``create_or_get_client_deletion_request``): ein Fall, der seit dem
-    Laden in den Papierkorb gelegt oder endgueltig anonymisiert wurde, bekommt
-    keinen Antrag mehr. Eine Einschraenkung nach Art. 18 DSGVO steht dem
-    Antrag bewusst NICHT entgegen — er schreibt nichts am Fall.
+    Refs #2015: concurrent retries must be distinguishable from a new request.
+    The requesting actor is checked before writing; the case row is locked
+    before checking whether another request has already been created.
     """
     actor_facility_id = getattr(user, "facility_id", None)
     if actor_facility_id is None or actor_facility_id != case.facility_id:

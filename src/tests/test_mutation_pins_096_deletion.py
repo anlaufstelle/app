@@ -16,7 +16,7 @@ from django.utils import timezone
 
 from core.models import AuditLog, Client, DeletionRequest, DocumentType, Event
 from core.services.deletion import WITHDRAW_NOT_PENDING_MESSAGE, withdraw_deletion_request
-from core.services.events import request_deletion
+from core.services.events import create_or_get_event_deletion_request
 
 pytestmark = pytest.mark.django_db
 
@@ -50,8 +50,8 @@ class TestWithdrawLockLookup:
         traefe es irgendeine (bzw. ``MultipleObjectsReturned``)."""
         event_a = _event(facility, client_qualified, doc_type_contact, staff_user, note="Antrag A")
         event_b = _event(facility, client_qualified, doc_type_contact, staff_user, note="Antrag B")
-        request_a = request_deletion(event_a, staff_user, "Versehentlich gestellt")
-        request_b = request_deletion(event_b, lead_user, "Bleibt offen")
+        request_a = create_or_get_event_deletion_request(event_a, staff_user, "Versehentlich gestellt")[0]
+        request_b = create_or_get_event_deletion_request(event_b, lead_user, "Bleibt offen")[0]
         assert request_a.pk != request_b.pk
 
         withdrawn = withdraw_deletion_request(request_a, staff_user)
@@ -82,7 +82,7 @@ class TestWithdrawLockLookup:
         foreign_event = _event(
             second_facility, foreign_client, foreign_type, second_facility_user, note="Fremder Antrag"
         )
-        foreign_request = request_deletion(foreign_event, second_facility_user, "Fremd gestellt")
+        foreign_request = create_or_get_event_deletion_request(foreign_event, second_facility_user, "Fremd gestellt")[0]
 
         # Aufrufer-Sicht einer anderen Einrichtung auf dieselbe PK: der Lookup
         # muss an der Einrichtungsgrenze scheitern, nicht an der PK vorbeigehen.

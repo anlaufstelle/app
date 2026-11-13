@@ -311,11 +311,11 @@ class TestMergeBlocked:
         Betroffenenrecht, sondern eine Aktenführungs-Entscheidung — sie darf
         während einer bestrittenen Richtigkeit nicht einmal beantragt werden.
         """
-        from core.services.client import request_client_merge
+        from core.services.client import create_or_get_client_merge_request
 
         target = Client.objects.create(facility=facility, pseudonym="Ziel-02", created_by=staff_user)
         with pytest.raises(ValidationError):
-            request_client_merge(restricted_client, target, staff_user, "Duplikat")
+            create_or_get_client_merge_request(restricted_client, target, staff_user, "Duplikat")[0]
 
     def test_restricted_target_also_blocked(self, facility, restricted_client, staff_user, lead_user):
         """Beide Seiten: eine eingeschraenkte ZIELakte darf nicht befuellt werden."""
@@ -336,23 +336,23 @@ class TestDataSubjectRightsStayOpen:
     def test_client_deletion_request_allowed(self, restricted_client, staff_user):
         """Art. 17 gilt waehrend der Einschraenkung weiter — der gepruefte
         Loeschantrag ist gerade der Weg, der offen bleiben MUSS."""
-        from core.services.client import request_client_deletion
+        from core.services.client import create_or_get_client_deletion_request
 
-        dr = request_client_deletion(restricted_client, staff_user, "Betroffene verlangt Löschung")
+        dr = create_or_get_client_deletion_request(restricted_client, staff_user, "Betroffene verlangt Löschung")[0]
         assert dr.pk is not None
 
     def test_client_deletion_approval_allowed(self, restricted_client, staff_user, admin_user):
-        from core.services.client import approve_client_deletion, request_client_deletion
+        from core.services.client import approve_client_deletion, create_or_get_client_deletion_request
 
-        dr = request_client_deletion(restricted_client, staff_user, "Löschung")
+        dr = create_or_get_client_deletion_request(restricted_client, staff_user, "Löschung")[0]
         approve_client_deletion(dr, admin_user)
         restricted_client.refresh_from_db()
         assert restricted_client.is_deleted is True
 
     def test_case_deletion_request_allowed(self, case_open, restricted_client, staff_user):
-        from core.services.case.deletion import request_case_deletion
+        from core.services.case.deletion import create_or_get_case_deletion_request
 
-        dr = request_case_deletion(case_open, staff_user, "Fall irrtümlich angelegt")
+        dr = create_or_get_case_deletion_request(case_open, staff_user, "Fall irrtümlich angelegt")[0]
         assert dr.pk is not None
 
     def test_export_allowed(self, facility, restricted_client, admin_user):

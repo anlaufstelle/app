@@ -28,8 +28,8 @@ from core.services.case import (
     anonymize_case_now,
     approve_case_deletion,
     close_case,
+    create_or_get_case_deletion_request,
     reopen_case,
-    request_case_deletion,
     soft_delete_case,
     update_case,
 )
@@ -397,7 +397,7 @@ def _trash(case, staff_user, lead_user, route):
     if route == "direct":
         soft_delete_case(fresh, staff_user)
     else:
-        approve_case_deletion(request_case_deletion(fresh, staff_user, "Doppelt angelegt"), lead_user)
+        approve_case_deletion(create_or_get_case_deletion_request(fresh, staff_user, "Doppelt angelegt")[0], lead_user)
     assert Case._base_manager.get(pk=case.pk).is_deleted
 
 

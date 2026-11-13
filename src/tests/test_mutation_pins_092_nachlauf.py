@@ -968,7 +968,7 @@ class TestPendingDeletionRequestLookupIsPersonBound:
     """Der laufende Loeschantrag gehoert zu GENAU dieser Person.
 
     Die Funktion ist seit Refs #1736 (A) die eine Quelle fuer Detail-Banner,
-    Antragsseite, Idempotenz-Zweig von ``request_client_deletion`` und den
+    Antragsseite, Idempotenz-Zweig von ``create_or_get_client_deletion_request`` und den
     Merge-Blocker.
     """
 

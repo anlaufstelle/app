@@ -164,12 +164,12 @@ class TestCanonicalLockOrder:
         """Der Merge-ANTRAG sperrte Quelle und Ziel einzeln in semantischer
         Reihenfolge — zwei invertierte Antraege konnten Client<->Client
         deadlocken (Re-Review 2)."""
-        from core.services.client import request_client_merge
+        from core.services.client import create_or_get_client_merge_request
 
         source = Client.objects.create(facility=facility, pseudonym="Antrag-Quelle", created_by=staff_user)
         target = Client.objects.create(facility=facility, pseudonym="Antrag-Ziel", created_by=staff_user)
         with CaptureQueriesContext(connection) as captured:
-            request_client_merge(source, target, staff_user, "Duplikat")
+            create_or_get_client_merge_request(source, target, staff_user, "Duplikat")[0]
         client_locks = [
             q["sql"]
             for q in captured.captured_queries
@@ -368,11 +368,11 @@ class TestAutocommitEntryPoints:
     """
 
     def test_merge_request_brings_its_own_transaction(self, facility, staff_user):
-        from core.services.client import request_client_merge
+        from core.services.client import create_or_get_client_merge_request
 
         source = Client.objects.create(facility=facility, pseudonym="Direkt-Quelle", created_by=staff_user)
         target = Client.objects.create(facility=facility, pseudonym="Direkt-Ziel", created_by=staff_user)
-        request = request_client_merge(source, target, staff_user, "Duplikat")
+        request = create_or_get_client_merge_request(source, target, staff_user, "Duplikat")[0]
         assert request.pk is not None
 
     def test_merge_request_is_idempotent_on_a_second_call(self, facility, staff_user):

@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import User
-from core.services.client import approve_client_deletion, request_client_deletion, restore_client
+from core.services.client import approve_client_deletion, create_or_get_client_deletion_request, restore_client
 from core.services.system import build_client_offline_bundle
 from tests._factories import make_document_type, make_event
 
@@ -24,7 +24,7 @@ def test_bundle_denies_approved_deletion_before_serialization(
     client.force_login(reader)
     url = reverse("core:offline_bundle", kwargs={"pk": client_identified.pk})
     assert client.get(url).status_code == 200
-    pending = request_client_deletion(client_identified, staff_user, "Consent withdrawn")
+    pending = create_or_get_client_deletion_request(client_identified, staff_user, "Consent withdrawn")[0]
     assert client.get(url).status_code == 200
     approve_client_deletion(pending, lead_user)
     headers = {"HTTP_IF_NONE_MATCH": validator} if validator else {}

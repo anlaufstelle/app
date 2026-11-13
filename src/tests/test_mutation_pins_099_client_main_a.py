@@ -93,10 +93,10 @@ from core.retention.proposals import build_proposal_details, create_proposal
 from core.services.client.main import (
     anonymize_client,
     approve_client_deletion,
-    request_client_deletion,
+    create_or_get_client_deletion_request,
     update_client,
 )
-from core.services.client.merge import request_client_merge
+from core.services.client.merge import create_or_get_client_merge_request
 from tests._standard_text import record_text, text_fields
 
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
@@ -111,7 +111,7 @@ class TestApproveClientDeletionGuardMessages:
     def test_reviewer_ist_antragsteller_meldet_den_exakten_wortlaut(self, client_identified, lead_user):
         """Pins ``x_approve_client_deletion__mutmut_2`` (``ValidationError(None)``),
         ``…_3`` (XX-Marker), ``…_4`` (kleingeschrieben), ``…_5`` (grossgeschrieben)."""
-        dr = request_client_deletion(client_identified, lead_user, "Pin099-MainA-Grund")
+        dr = create_or_get_client_deletion_request(client_identified, lead_user, "Pin099-MainA-Grund")[0]
 
         with pytest.raises(ValidationError) as exc:
             approve_client_deletion(dr, lead_user)
@@ -123,7 +123,7 @@ class TestApproveClientDeletionGuardMessages:
     ):
         """Pins ``x_approve_client_deletion__mutmut_7`` (``ValidationError(None)``),
         ``…_8`` (XX-Marker), ``…_9`` (kleingeschrieben), ``…_10`` (grossgeschrieben)."""
-        dr = request_client_deletion(client_identified, staff_user, "Pin099-MainA-Grund")
+        dr = create_or_get_client_deletion_request(client_identified, staff_user, "Pin099-MainA-Grund")[0]
 
         with pytest.raises(ValidationError) as exc:
             approve_client_deletion(dr, assistant_user)
@@ -139,7 +139,7 @@ class TestApproveClientDeletionGuardMessages:
         (``merge_into`` gesetzt) darf nicht ueber den blossen Loeschweg
         genehmigt werden."""
         ziel = Client.objects.create(facility=facility, pseudonym="Pin099-MainA-Mergeziel", created_by=staff_user)
-        dr = request_client_merge(client_identified, ziel, staff_user, "Pin099-MainA-Doppelt")
+        dr = create_or_get_client_merge_request(client_identified, ziel, staff_user, "Pin099-MainA-Doppelt")[0]
 
         with pytest.raises(ValidationError) as exc:
             approve_client_deletion(dr, lead_user)
@@ -151,7 +151,7 @@ class TestApproveClientDeletionGuardMessages:
     def test_bereits_bearbeiteter_antrag_meldet_den_exakten_wortlaut(self, client_identified, staff_user, lead_user):
         """Pins ``x_approve_client_deletion__mutmut_23`` (``ValidationError(None)``),
         ``…_24`` (XX-Marker), ``…_25`` (kleingeschrieben), ``…_26`` (grossgeschrieben)."""
-        dr = request_client_deletion(client_identified, staff_user, "Pin099-MainA-Grund")
+        dr = create_or_get_client_deletion_request(client_identified, staff_user, "Pin099-MainA-Grund")[0]
         approve_client_deletion(dr, lead_user)
         dr.refresh_from_db()
 
@@ -167,7 +167,7 @@ class TestApproveClientDeletionGuardMessages:
         (kleingeschrieben). Das Zielobjekt wird per Direct-Update als bereits
         zusammengefuehrt markiert (Simulation eines Merge zwischen Antrag und
         Genehmigung)."""
-        dr = request_client_deletion(client_identified, staff_user, "Pin099-MainA-Grund")
+        dr = create_or_get_client_deletion_request(client_identified, staff_user, "Pin099-MainA-Grund")[0]
         anderer = Client.objects.create(facility=facility, pseudonym="Pin099-MainA-Mergeziel2", created_by=staff_user)
         Client.objects.filter(pk=client_identified.pk).update(merged_into=anderer)
 
@@ -178,7 +178,7 @@ class TestApproveClientDeletionGuardMessages:
 
     def test_bereits_im_papierkorb_meldet_den_exakten_wortlaut(self, client_identified, staff_user, lead_user):
         """Pins ``x_approve_client_deletion__mutmut_40`` (XX-Marker)."""
-        dr = request_client_deletion(client_identified, staff_user, "Pin099-MainA-Grund")
+        dr = create_or_get_client_deletion_request(client_identified, staff_user, "Pin099-MainA-Grund")[0]
         client_identified.soft_delete(user=staff_user)
 
         with pytest.raises(ValidationError) as exc:
@@ -219,7 +219,7 @@ class TestApproveClientDeletionReloadTiesToItsOwnFacility:
             facility=second_facility,
             can_confirm_deletion=True,
         )
-        dr = request_client_deletion(client_identified, staff_user, "Pin099-MainA-Grund")
+        dr = create_or_get_client_deletion_request(client_identified, staff_user, "Pin099-MainA-Grund")[0]
         dr.facility = second_facility
 
         with pytest.raises(DeletionRequest.DoesNotExist):
@@ -242,7 +242,7 @@ class TestApproveClientDeletionReloadTiesToItsOwnFacility:
         mehr (facility passt nicht mehr zum bereits neu geladenen Antrag) —
         ``DoesNotExist``. Mutant: der Reload ignoriert die Divergenz und
         genehmigt den Soft-Delete ueber die Einrichtungsgrenze hinweg."""
-        dr = request_client_deletion(client_identified, staff_user, "Pin099-MainA-Grund")
+        dr = create_or_get_client_deletion_request(client_identified, staff_user, "Pin099-MainA-Grund")[0]
         Client.objects.filter(pk=client_identified.pk).update(facility=second_facility)
 
         with pytest.raises(Client.DoesNotExist):
@@ -263,7 +263,7 @@ class TestApproveClientDeletionAudit:
         reviewed_at = timezone.now()`` -> ``= None``. Nachweisluecke im
         Vier-Augen-Loeschpfad: der Antrag traegt reviewed_by/status, aber
         keinen Pruefzeitpunkt mehr."""
-        dr = request_client_deletion(client_identified, staff_user, "Pin099-MainA-Grund")
+        dr = create_or_get_client_deletion_request(client_identified, staff_user, "Pin099-MainA-Grund")[0]
 
         approve_client_deletion(dr, lead_user)
 
@@ -275,7 +275,7 @@ class TestApproveClientDeletionAudit:
         client, reviewer, ...)`` -> ``audit_client_event(client, None, ...)``.
         Der AuditLog-Eintrag CLIENT_SOFT_DELETED verliert sonst die
         genehmigende Person — Kernzusage des Vier-Augen-Loeschpfads."""
-        dr = request_client_deletion(client_identified, staff_user, "Pin099-MainA-Grund")
+        dr = create_or_get_client_deletion_request(client_identified, staff_user, "Pin099-MainA-Grund")[0]
 
         approve_client_deletion(dr, lead_user)
 
@@ -289,7 +289,7 @@ class TestApproveClientDeletionAudit:
     def test_papierkorb_aktivitaet_traegt_die_genehmigende_person(self, client_identified, staff_user, lead_user):
         """Pin: ``x_approve_client_deletion__mutmut_57`` — ``log_activity(...,
         actor=reviewer, ...)`` -> ``actor=None``."""
-        dr = request_client_deletion(client_identified, staff_user, "Pin099-MainA-Grund")
+        dr = create_or_get_client_deletion_request(client_identified, staff_user, "Pin099-MainA-Grund")[0]
 
         approve_client_deletion(dr, lead_user)
 

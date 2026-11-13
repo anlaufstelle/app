@@ -30,7 +30,7 @@ from django.db import connections, transaction
 from core.models import Client, Facility, Organization, User
 from core.models.workitem import DeletionRequest
 from core.services.client import merge as merge_service
-from core.services.client.merge import approve_client_merge, request_client_merge
+from core.services.client.merge import approve_client_merge, create_or_get_client_merge_request
 from tests.test_client_deletion_lock_order import (
     _JOIN_TIMEOUT,
     _backend_pid,
@@ -119,7 +119,7 @@ def committed(django_db_setup):
     source = _person(facility, requester, "Merge-Retarget-Source")
     old_target = _person(facility, requester, "Merge-Retarget-Old")
     new_target = _person(facility, requester, "Merge-Retarget-New")
-    dr = request_client_merge(source, old_target, requester, "Duplicate")
+    dr = create_or_get_client_merge_request(source, old_target, requester, "Duplicate")[0]
     yield dr, reviewer, source, old_target, new_target
     connections.close_all()
 

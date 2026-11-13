@@ -9,7 +9,7 @@ Quelle: Vollmutations-Lauf auf main@80aba384 (frischer Mutantenbaum), Batch
 ``x_soft_delete_case`` 9, ``x_restore_case`` 9). Batch ``deletion-b`` (die
 restlichen Funktionen desselben Moduls: ``case_requires_four_eyes``,
 ``get_pending_case_deletion_request``, ``pending_deletion_case_ids``,
-``request_case_deletion``, ``create_or_get_case_deletion_request``,
+``create_or_get_case_deletion_request``,
 ``redact_case_content``, ``redact_case_goals``, ``_redact_case_activities``,
 ``_redact_case_deletion_request``, ``_detach_events``, ``anonymize_case``,
 ``_lock_case_chain``, ``anonymize_case_now``) gehoert einem anderen

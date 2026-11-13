@@ -10,8 +10,8 @@ import pytest
 from django.urls import reverse
 
 from core.models import DocumentType
-from core.services.client import approve_client_deletion, request_client_deletion
-from core.services.events import request_deletion
+from core.services.client import approve_client_deletion, create_or_get_client_deletion_request
+from core.services.events import create_or_get_event_deletion_request
 from tests._sensitivity_helpers import make_inherited_fields_explicit
 
 pytestmark = pytest.mark.django_db
@@ -25,19 +25,19 @@ def _pending(response):
 
 class TestClientTargets:
     def test_label_is_pseudonym(self, client, staff_user, lead_user, client_identified):
-        request_client_deletion(client_identified, staff_user, "Grund")
+        create_or_get_client_deletion_request(client_identified, staff_user, "Grund")[0]
         client.force_login(lead_user)
         dr = _pending(client.get(reverse(LIST_URL_NAME)))[0]
         assert dr.target_label == client_identified.pseudonym
 
     def test_links_to_client_detail(self, client, staff_user, lead_user, client_identified):
-        request_client_deletion(client_identified, staff_user, "Grund")
+        create_or_get_client_deletion_request(client_identified, staff_user, "Grund")[0]
         client.force_login(lead_user)
         dr = _pending(client.get(reverse(LIST_URL_NAME)))[0]
         assert dr.target_url == reverse("core:client_detail", args=[client_identified.pk])
 
     def test_pseudonym_rendered_in_page(self, client, staff_user, lead_user, client_identified):
-        request_client_deletion(client_identified, staff_user, "Grund")
+        create_or_get_client_deletion_request(client_identified, staff_user, "Grund")[0]
         client.force_login(lead_user)
         body = client.get(reverse(LIST_URL_NAME)).content.decode()
         assert client_identified.pseudonym in body
@@ -46,7 +46,7 @@ class TestClientTargets:
     def test_soft_deleted_client_has_label_but_no_link(
         self, client, staff_user, lead_user, admin_user, client_identified
     ):
-        dr = request_client_deletion(client_identified, staff_user, "Grund")
+        dr = create_or_get_client_deletion_request(client_identified, staff_user, "Grund")[0]
         approve_client_deletion(dr, lead_user)
         client.force_login(admin_user)
         approved = list(client.get(reverse(LIST_URL_NAME)).context["approved_requests"])[0]
@@ -56,7 +56,7 @@ class TestClientTargets:
 
 class TestEventTargets:
     def test_label_names_document_type(self, client, staff_user, lead_user, sample_event):
-        request_deletion(sample_event, staff_user, "Grund")
+        create_or_get_event_deletion_request(sample_event, staff_user, "Grund")[0]
         client.force_login(lead_user)
         dr = _pending(client.get(reverse(LIST_URL_NAME)))[0]
         assert sample_event.document_type.name in dr.target_label
@@ -68,7 +68,7 @@ class TestEventTargets:
         make_inherited_fields_explicit(sample_event.document_type)
         sample_event.document_type.sensitivity = DocumentType.Sensitivity.HIGH
         sample_event.document_type.save(update_fields=["sensitivity"])
-        request_deletion(sample_event, staff_user, "Grund")
+        create_or_get_event_deletion_request(sample_event, staff_user, "Grund")[0]
         assistant_user.can_confirm_deletion = True
         assistant_user.save(update_fields=["can_confirm_deletion"])
         client.force_login(assistant_user)

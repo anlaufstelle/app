@@ -73,13 +73,12 @@ from django.utils import timezone
 import core.services.client.merge as merge_module
 from core.models import AuditLog, Client, Event
 from core.models.workitem import DeletionRequest
-from core.services.client.main import request_client_deletion
+from core.services.client.main import create_or_get_client_deletion_request
 from core.services.client.merge import (
     approve_client_merge,
     create_or_get_client_merge_request,
     merge_clients,
     reject_client_merge,
-    request_client_merge,
 )
 
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
@@ -150,7 +149,7 @@ class TestApproveClientMergeGuardMessages:
         Vier-Augen-Texts (Zeile 260). Toetet im selben Zug (exakter
         ``==``-Vergleich) ``_4`` (XX-Marker), ``_5``/``_6`` (Klein-/
         Grossschreibung) desselben Wortlauts — mitgetoetet, kein eigener Pin."""
-        dr = request_client_merge(source, target, staff_user, reason="Doppelt angelegt")
+        dr = create_or_get_client_merge_request(source, target, staff_user, reason="Doppelt angelegt")[0]
 
         with pytest.raises(ValidationError) as exc:
             approve_client_merge(dr, staff_user)
@@ -160,7 +159,7 @@ class TestApproveClientMergeGuardMessages:
     def test_reviewer_ohne_recht_meldet_den_richtigen_text(self, facility, source, target, staff_user, assistant_user):
         """Pins ``x_approve_client_merge__mutmut_8``/``_9`` (Zeile 262); toetet
         mit ``_10``/``_11``/``_12`` (XX/Klein/Gross) — mitgetoetet."""
-        dr = request_client_merge(source, target, staff_user, reason="Doppelt angelegt")
+        dr = create_or_get_client_merge_request(source, target, staff_user, reason="Doppelt angelegt")[0]
         assert assistant_user.can_confirm_deletion is False
 
         with pytest.raises(ValidationError) as exc:
@@ -172,7 +171,7 @@ class TestApproveClientMergeGuardMessages:
         """Pins ``x_approve_client_merge__mutmut_19``/``_20`` (Zeile 268): ein
         reiner Loeschantrag (``merge_into`` ``None``) ist kein Merge-Antrag;
         toetet mit ``_21``/``_22``/``_23`` (XX/Klein/Gross) — mitgetoetet."""
-        dr = request_client_deletion(source, staff_user, "Reiner Löschantrag")
+        dr = create_or_get_client_deletion_request(source, staff_user, "Reiner Löschantrag")[0]
         assert dr.merge_into_id is None
 
         with pytest.raises(ValidationError) as exc:
@@ -186,7 +185,7 @@ class TestApproveClientMergeGuardMessages:
         """Pins ``x_approve_client_merge__mutmut_25``/``_26`` (Zeile 270): der
         Re-Check unter Lock greift bei einem bereits APPROVED-Antrag; toetet
         mit ``_27``/``_28``/``_29`` (XX/Klein/Gross) — mitgetoetet."""
-        dr = request_client_merge(source, target, staff_user, reason="Doppelt angelegt")
+        dr = create_or_get_client_merge_request(source, target, staff_user, reason="Doppelt angelegt")[0]
         approve_client_merge(dr, admin_user)
         dr.refresh_from_db()
         assert dr.status == DeletionRequest.Status.APPROVED
@@ -229,7 +228,7 @@ class TestApproveClientMergeReloadTiesToItsOwnFacility:
             facility=second_facility,
             can_confirm_deletion=True,
         )
-        dr = request_client_merge(source, target, staff_user, reason="Doppelt angelegt")
+        dr = create_or_get_client_merge_request(source, target, staff_user, reason="Doppelt angelegt")[0]
         dr.facility = second_facility
 
         with pytest.raises(DeletionRequest.DoesNotExist):
@@ -251,7 +250,7 @@ class TestRejectClientMergeGuardMessages:
     def test_reviewer_gleich_antragsteller_meldet_den_richtigen_text(self, facility, source, target, staff_user):
         """Pins ``x_reject_client_merge__mutmut_2``/``_3`` (Zeile 295); toetet
         mit ``_4``/``_5``/``_6`` (XX/Klein/Gross) — mitgetoetet."""
-        dr = request_client_merge(source, target, staff_user, reason="Doppelt angelegt")
+        dr = create_or_get_client_merge_request(source, target, staff_user, reason="Doppelt angelegt")[0]
 
         with pytest.raises(ValidationError) as exc:
             reject_client_merge(dr, staff_user)
@@ -262,7 +261,7 @@ class TestRejectClientMergeGuardMessages:
         """Pins ``x_reject_client_merge__mutmut_8``/``_9`` und tötet
         ``_10``/``_11``/``_12``: Verlust und Verfälschungen der Meldung des
         Bestätigungsrecht-Guards."""
-        dr = request_client_merge(source, target, staff_user, reason="Doppelt angelegt")
+        dr = create_or_get_client_merge_request(source, target, staff_user, reason="Doppelt angelegt")[0]
 
         with pytest.raises(ValidationError) as exc:
             reject_client_merge(dr, assistant_user)
@@ -272,7 +271,7 @@ class TestRejectClientMergeGuardMessages:
     def test_kein_zusammenfuehrungs_antrag_meldet_den_richtigen_text(self, facility, source, staff_user, admin_user):
         """Pins ``x_reject_client_merge__mutmut_19``/``_20``; toetet mit
         ``_21``/``_22``/``_23`` (XX/Klein/Gross) — mitgetoetet."""
-        dr = request_client_deletion(source, staff_user, "Reiner Löschantrag")
+        dr = create_or_get_client_deletion_request(source, staff_user, "Reiner Löschantrag")[0]
         assert dr.merge_into_id is None
 
         with pytest.raises(ValidationError) as exc:
@@ -285,7 +284,7 @@ class TestRejectClientMergeGuardMessages:
     ):
         """Pins ``x_reject_client_merge__mutmut_25``/``_26``; toetet mit
         ``_27``/``_28``/``_29`` (XX/Klein/Gross) — mitgetoetet."""
-        dr = request_client_merge(source, target, staff_user, reason="Doppelt angelegt")
+        dr = create_or_get_client_merge_request(source, target, staff_user, reason="Doppelt angelegt")[0]
         reject_client_merge(dr, admin_user)
         dr.refresh_from_db()
         assert dr.status == DeletionRequest.Status.REJECTED
@@ -311,7 +310,7 @@ class TestRejectClientMergeReloadTiesToItsOwnFacility:
             facility=second_facility,
             can_confirm_deletion=True,
         )
-        dr = request_client_merge(source, target, staff_user, reason="Doppelt angelegt")
+        dr = create_or_get_client_merge_request(source, target, staff_user, reason="Doppelt angelegt")[0]
         dr.facility = second_facility
 
         with pytest.raises(DeletionRequest.DoesNotExist):

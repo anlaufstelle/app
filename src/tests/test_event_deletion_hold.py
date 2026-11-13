@@ -18,7 +18,7 @@ from django.core.exceptions import ValidationError
 
 from core.models import AuditLog, DeletionRequest, LegalHold
 from core.services.events.crud import LEGAL_HOLD_BLOCKS_DELETE_MESSAGE
-from core.services.events.deletion import approve_deletion, request_deletion
+from core.services.events.deletion import approve_deletion, create_or_get_event_deletion_request
 
 pytestmark = pytest.mark.django_db
 
@@ -40,7 +40,7 @@ class TestApproveDeletionHonoursHolds:
         Ohne den Fall-Zweig war die Genehmigung der bequemste Ausstieg aus
         einem Fall-Hold: zwei Klicks, ein sauberes Audit, geleerte Nutzdaten.
         """
-        dr = request_deletion(case_event, staff_user, reason="Auf Wunsch der Person")
+        dr = create_or_get_event_deletion_request(case_event, staff_user, reason="Auf Wunsch der Person")[0]
         _hold(facility, admin_user, "Case", case_open.pk)
 
         with pytest.raises(ValidationError) as exc_info:
@@ -72,7 +72,9 @@ class TestApproveDeletionHonoursHolds:
         from core.services.events import deletion as deletion_module
 
         remove_event_from_case(Event.objects.get(pk=case_event.pk), staff_user)
-        dr = request_deletion(Event.objects.get(pk=case_event.pk), staff_user, reason="Auf Wunsch der Person")
+        dr = create_or_get_event_deletion_request(
+            Event.objects.get(pk=case_event.pk), staff_user, reason="Auf Wunsch der Person"
+        )[0]
         _hold(facility, admin_user, "Case", case_open.pk)
         original = deletion_module.soft_delete_event
 
@@ -97,7 +99,7 @@ class TestApproveDeletionHonoursHolds:
     def test_event_hold_stops_the_approved_deletion(self, facility, sample_event, staff_user, admin_user):
         """Der schon vorhandene Ereignis-Zweig, über denselben Einstieg belegt —
         er hielt den Vier-Augen-Weg bisher als einziger auf."""
-        dr = request_deletion(sample_event, staff_user, reason="Auf Wunsch der Person")
+        dr = create_or_get_event_deletion_request(sample_event, staff_user, reason="Auf Wunsch der Person")[0]
         _hold(facility, admin_user, "Event", sample_event.pk)
 
         with pytest.raises(ValidationError):
@@ -108,7 +110,7 @@ class TestApproveDeletionHonoursHolds:
 
     def test_approval_without_a_hold_still_deletes(self, case_event, staff_user, admin_user):
         """Gegenprobe: der Guard darf den geprüften Weg nicht generell zumauern."""
-        dr = request_deletion(case_event, staff_user, reason="Auf Wunsch der Person")
+        dr = create_or_get_event_deletion_request(case_event, staff_user, reason="Auf Wunsch der Person")[0]
 
         approve_deletion(dr, admin_user)
 

@@ -1,7 +1,7 @@
 """Service-Isolation-Tests fuer Event-CRUD (Refs #776).
 
 Charakterisiert das Verhalten von ``create_event``, ``update_event``,
-``request_deletion`` und ``approve_deletion`` direkt auf der Service-
+``create_or_get_event_deletion_request`` und ``approve_deletion`` direkt auf der Service-
 Schicht — ohne View-Layer, Forms oder HTTP-Roundtrip. Heutige Tests
 gehen meist via ``client.post(...)`` durch ``EventCreateView``; die
 Service-Funktionen muessen als isolierte Bausteine fuer
@@ -17,7 +17,7 @@ from core.models import AuditLog, DeletionRequest, EventHistory
 from core.services.events import (
     approve_deletion,
     create_event,
-    request_deletion,
+    create_or_get_event_deletion_request,
     update_event,
 )
 
@@ -84,8 +84,8 @@ class TestUpdateEventIsolation:
 @pytest.mark.django_db
 class TestRequestDeletionIsolation:
     def test_returns_existing_pending_request_idempotent(self, sample_event, staff_user):
-        first = request_deletion(sample_event, staff_user, "Grund A")
-        second = request_deletion(sample_event, staff_user, "Grund B")
+        first = create_or_get_event_deletion_request(sample_event, staff_user, "Grund A")[0]
+        second = create_or_get_event_deletion_request(sample_event, staff_user, "Grund B")[0]
         assert first.pk == second.pk
         assert DeletionRequest.objects.filter(target_id=sample_event.pk).count() == 1
         # Bei vorhandenem PENDING-Antrag bleibt der ALTE Reason erhalten —
@@ -96,7 +96,7 @@ class TestRequestDeletionIsolation:
 @pytest.mark.django_db
 class TestApproveDeletionIsolation:
     def test_soft_deletes_event_and_marks_request_approved(self, sample_event, staff_user, lead_user):
-        dr = request_deletion(sample_event, staff_user, "DSGVO")
+        dr = create_or_get_event_deletion_request(sample_event, staff_user, "DSGVO")[0]
         approve_deletion(dr, lead_user)
         sample_event.refresh_from_db()
         dr.refresh_from_db()

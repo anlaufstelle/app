@@ -31,7 +31,7 @@ from django.utils import timezone
 
 from core.models import AuditLog, DeletionRequest, Event
 from core.services.deletion import withdraw_deletion_request
-from core.services.events import request_deletion
+from core.services.events import create_or_get_event_deletion_request
 
 pytestmark = pytest.mark.django_db
 
@@ -56,7 +56,7 @@ def event_qualified(facility, client_qualified, doc_type_contact, staff_user):
 @pytest.fixture
 def own_request(event_qualified, staff_user):
     """PENDING-Antrag, gestellt von ``staff_user``."""
-    return request_deletion(event_qualified, staff_user, "Versehentlich gestellt")
+    return create_or_get_event_deletion_request(event_qualified, staff_user, "Versehentlich gestellt")[0]
 
 
 def _withdraw_audits(dr):
@@ -130,7 +130,7 @@ class TestWithdrawService:
     def test_new_request_possible_after_withdraw(self, own_request, staff_user, event_qualified):
         withdraw_deletion_request(own_request, staff_user)
 
-        neu = request_deletion(event_qualified, staff_user, "Doch loeschen")
+        neu = create_or_get_event_deletion_request(event_qualified, staff_user, "Doch loeschen")[0]
         assert neu.pk != own_request.pk
         assert neu.status == DeletionRequest.Status.PENDING
         assert DeletionRequest.objects.filter(target_id=event_qualified.pk).count() == 2
@@ -428,15 +428,17 @@ class TestWithdrawDialogCancelTarget:
 class TestWithdrawMergeRequestAudit:
     """Der Rueckzug eines Merge-Antrags nennt beide Seiten — wie der Antrag.
 
-    ``request_client_merge`` schreibt ``{"target_client", "merge_into"}``
+    ``create_or_get_client_merge_request`` schreibt ``{"target_client", "merge_into"}``
     (services/client/merge.py). Ohne ``merge_into`` benennt die Rueckzugszeile
     nicht, WELCHE Zusammenfuehrung beendet wurde — beide UUIDs sind PII-frei.
     """
 
     def test_merge_withdraw_audit_names_both_sides(self, facility, staff_user, client_qualified, client_identified):
-        from core.services.client.merge import request_client_merge
+        from core.services.client.merge import create_or_get_client_merge_request
 
-        dr = request_client_merge(client_qualified, client_identified, staff_user, reason="Doppelt angelegt")
+        dr = create_or_get_client_merge_request(
+            client_qualified, client_identified, staff_user, reason="Doppelt angelegt"
+        )[0]
         withdraw_deletion_request(dr, staff_user)
 
         entries = list(_withdraw_audits(dr))
@@ -605,7 +607,7 @@ class TestTrulyConcurrentWithdraw:
             data_json={"dauer": 20, "notiz": notiz},
             created_by=staff_user,
         )
-        return request_deletion(event, staff_user, f"{notiz} zurueckziehen")
+        return create_or_get_event_deletion_request(event, staff_user, f"{notiz} zurueckziehen")[0]
 
     def test_two_parallel_withdraws_produce_exactly_one_audit_entry(
         self, facility, client_qualified, doc_type_contact, staff_user

@@ -90,7 +90,6 @@ from core.services.client.main import (
     pending_deletion_client_ids,
     pending_merge_client_ids,
     reject_client_deletion,
-    request_client_deletion,
     resolve_writable_client,
     restore_client,
     track_client_visit,
@@ -103,7 +102,6 @@ from core.services.client.merge import (
     merge_clients,
     merge_requires_four_eyes,
     reject_client_merge,
-    request_client_merge,
     unmerge_client,
 )
 from core.services.client.rectification import (
@@ -211,9 +209,7 @@ __all__ = [
     "reject_rectification",
     "render_document",
     "create_or_get_client_deletion_request",
-    "request_client_deletion",
     "create_or_get_client_merge_request",
-    "request_client_merge",
     "request_rectification",
     "resolve_writable_client",
     "restrict_processing",

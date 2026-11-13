@@ -390,7 +390,7 @@ def _redact_deletion_requests(event_ids: list) -> None:
 def _redact_client_deletion_request(client) -> None:
     """Redigiere reason des Client-Target-Loeschantrags dieses Klienten (Refs #1091).
 
-    Der Vier-Augen-Antrag aus ``request_client_deletion`` hat
+    Der Vier-Augen-Antrag aus ``create_or_get_client_deletion_request`` hat
     ``target_type="Client"`` und wird vom Event-only-Helper
     ``_redact_deletion_requests`` nicht erfasst. Antrags-Meta
     (status/requested_by/reviewed_by/timestamps) bleibt fuer den
@@ -1203,63 +1203,13 @@ def pending_merge_client_ids(facility, clients) -> set:
     )
 
 
-def request_client_deletion(client, user, reason):
-    """Stellt einen Vier-Augen-Löschantrag für eine Person — nur der Antrag.
-
-    Duenne Huelle um :func:`create_or_get_client_deletion_request` fuer alle
-    Aufrufer, die den Unterschied „neu angelegt" vs. „lief schon" nicht
-    brauchen. Wer ihn braucht (die Views, Refs #2015), ruft direkt die
-    Tupel-Variante.
-    """
-    return create_or_get_client_deletion_request(client, user, reason)[0]
-
-
 @transaction.atomic
 def create_or_get_client_deletion_request(client, user, reason):
-    """Wie :func:`request_client_deletion`, aber ``(antrag, created)``.
+    """Create a person deletion request or return the pending request and a created flag.
 
-    Refs #2015 (Re-Review): Die Unterscheidung ist kein Komfort, sondern die
-    Bedingung dafuer, dass ein paralleler Zweitantrag die richtige Antwort
-    bekommt. Seit dem Zeilenlock (Refs #2017) laeuft der Verlierer eines
-    echten Rennens naemlich gar nicht mehr in den ``IntegrityError``: Er
-    wartet auf der Sperre und bekommt danach hier den bestehenden Antrag
-    **regulaer** zurueck. Ohne Flag meldete die View ihm „Loeschantrag
-    gestellt" — eine Erfolgsmeldung fuer etwas, das nie passiert ist.
-    ``created=False`` traegt dieselbe Aussage wie der ``IntegrityError``:
-    es gibt bereits einen laufenden Antrag.
-
-    Idempotent: wenn bereits ein PENDING-Antrag existiert, wird dieser
-    zurückgegeben (analog zu Event-Pfad in services/event.request_deletion).
-    Im Idempotenz-Fall wird KEIN neues Audit-Event geschrieben
-    (Refs #932) — der DELETION_REQUESTED-Eintrag existiert bereits vom
-    ersten Aufruf.
-
-    Aufruf: Fachkraft+ aus dem UI. Genehmigung erfolgt durch Leitung
-    via :func:`approve_client_deletion`.
-
-    Refs #2017: Ein Antrag entsteht nur gegen eine **lebende** Person. Die
-    beiden Ausschluesse spiegeln die Neuvalidierung in
-    :func:`approve_client_deletion`:
-
-    * ``merged_into`` gesetzt — ein Merge-Tombstone ist kein Antragsziel; die
-      leere Huelle liegt bereits im Papierkorb, und die Genehmigung wuerde ihr
-      ``deleted_at`` neu setzen, also die Frist und damit das Undo-Fenster der
-      Zusammenfuehrung still verschieben.
-    * ``is_deleted`` — dasselbe Argument ohne Merge: ein zweiter Weg in
-      denselben Papierkorb, der beim Genehmigen die Frist zurueckdreht.
-
-    Beides wird auf der **frisch gesperrten** Zeile geprueft (Cross-Review),
-    nicht auf der uebergebenen Instanz: zwischen dem Lookup der View
-    und diesem Aufruf kann eine Zusammenfuehrung committen, und der Guard
-    liefe dann auf einem veralteten Objekt ins Leere. Der Lock ist derselbe
-    wie in ``approve_client_deletion``/``_locked_clients`` — Antrag,
-    Genehmigung und Merge serialisieren damit auf derselben Zeile.
-
-    Der View-Filter ``is_deleted=False`` ersetzt diesen Guard nicht: der
-    Service ist die SSoT, und er liest vor dem Rennen.
-
-    Vor der Sperre steht die Einrichtungsgrenze der antragstellenden Person
-    (fail-closed): eine fremde Einrichtung haelt die Personenzeile nicht fest.
+    Refs #2015/#2017: lock the person before checking for a pending request,
+    so concurrent submissions return the existing request without duplicate
+    audit entries. This flag lets the view report a retry correctly.
     """
     actor_facility_id = getattr(user, "facility_id", None)
     if actor_facility_id is None or actor_facility_id != client.facility_id:

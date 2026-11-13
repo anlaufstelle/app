@@ -17,11 +17,11 @@ from core.services.client.main import (
     anonymize_client_now,
     anonymize_eligible_soft_deleted_clients,
     approve_client_deletion,
-    request_client_deletion,
+    create_or_get_client_deletion_request,
 )
 from core.services.dashboard import create_or_update_snapshot
 from core.services.events.crud import create_event, soft_delete_event
-from core.services.events.deletion import approve_deletion, request_deletion
+from core.services.events.deletion import approve_deletion, create_or_get_event_deletion_request
 from core.services.events.tally_undo import mint_tally_undo_token, undo_tally_event
 from tests._retention_approval_helpers import prime_first_approval
 from tests.test_snapshot_deleted_events import _event, _past_month_noon
@@ -97,7 +97,7 @@ def test_deleted_event_survives_refresh_and_later_carry(
         if path == "manual":
             soft_delete_event(event, staff_user)
         elif path == "approval":
-            approve_deletion(request_deletion(event, staff_user, "delete test event"), lead_user)
+            approve_deletion(create_or_get_event_deletion_request(event, staff_user, "delete test event")[0], lead_user)
         else:
             if path == "qualified":
                 create_proposals_for_facility(facility, settings_obj, timezone.now())
@@ -134,7 +134,9 @@ def test_erasure_keeps_live_events_and_later_carry(
     event.save(update_fields=["case"])
     create_or_update_snapshot(facility, occurred_at.year, occurred_at.month)
     if path.startswith("person"):
-        approve_client_deletion(request_client_deletion(client_identified, staff_user, "delete test person"), lead_user)
+        approve_client_deletion(
+            create_or_get_client_deletion_request(client_identified, staff_user, "delete test person")[0], lead_user
+        )
         if path == "person_manual":
             anonymize_client_now(client_identified, lead_user)
         elif path == "person_expiry":

@@ -30,7 +30,7 @@ from django.utils import timezone
 
 from core.models import AuditLog, Client, DocumentType, Event, Facility, Organization, User
 from core.models.workitem import DeletionRequest
-from core.services.events import approve_deletion, request_deletion
+from core.services.events import approve_deletion, create_or_get_event_deletion_request
 from tests._row_lock_helpers import mitschnitt
 from tests.test_client_deletion_lock_order import (
     _JOIN_TIMEOUT,
@@ -151,7 +151,7 @@ class TestApprovalWaitsWithoutHoldingTheRequest:
         facility, requester, reviewer, document_type = committed
         person = None if held == "event_without_person" else _person(facility, requester, f"Event-Lock-{held}")
         event = _event(facility, person, document_type, requester)
-        dr = request_deletion(event, requester, "Recorded twice")
+        dr = create_or_get_event_deletion_request(event, requester, "Recorded twice")[0]
         model, held_pk = (Client, person.pk) if held == "person" else (Event, event.pk)
 
         self._run_while_row_is_held(model, held_pk, dr.pk, lambda: approve_deletion(dr, reviewer))
@@ -167,7 +167,7 @@ class TestApprovalWaitsWithoutHoldingTheRequest:
 @pytest.mark.django_db
 class TestLockOrder:
     def test_approval_locks_person_then_event_then_request(self, sample_event, staff_user, lead_user):
-        dr = request_deletion(sample_event, staff_user, "Recorded twice")
+        dr = create_or_get_event_deletion_request(sample_event, staff_user, "Recorded twice")[0]
 
         with mitschnitt() as log:
             approve_deletion(dr, lead_user)
@@ -185,7 +185,7 @@ class TestLockOrder:
         self, facility, doc_type_contact, staff_user, lead_user
     ):
         event = _event(facility, None, doc_type_contact, staff_user)
-        dr = request_deletion(event, staff_user, "Recorded twice")
+        dr = create_or_get_event_deletion_request(event, staff_user, "Recorded twice")[0]
 
         with mitschnitt() as log:
             approve_deletion(dr, lead_user)
@@ -203,7 +203,7 @@ class TestLockOrder:
     ):
         original_person_id = sample_event.client_id
         other_person = _person(facility, staff_user, "Event-Lock-Other")
-        dr = request_deletion(sample_event, staff_user, "Recorded twice")
+        dr = create_or_get_event_deletion_request(sample_event, staff_user, "Recorded twice")[0]
         approvals = AuditLog.objects.filter(action=AuditLog.Action.DELETION_APPROVED).count()
 
         with mitschnitt() as log, pytest.raises(ValidationError) as excinfo:
@@ -235,7 +235,7 @@ class TestLockOrder:
             facility=second_facility if reviewer_kind == "foreign" else None,
             can_confirm_deletion=True,
         )
-        dr = request_deletion(sample_event, staff_user, "Recorded twice")
+        dr = create_or_get_event_deletion_request(sample_event, staff_user, "Recorded twice")[0]
 
         with mitschnitt() as log, pytest.raises(ValidationError) as excinfo:
             approve_deletion(dr, reviewer)

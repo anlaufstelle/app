@@ -25,17 +25,17 @@ from core.models.retention import RetentionProposal
 from core.models.workitem import DeletionRequest, WorkItem
 from core.services.client import (
     anonymize_eligible_soft_deleted_clients,
-    request_client_deletion,
+    create_or_get_client_deletion_request,
     restore_client,
 )
 from core.services.client.merge import (
     _is_empty_value,
     approve_client_merge,
+    create_or_get_client_merge_request,
     get_pending_merge_request,
     merge_clients,
     merge_requires_four_eyes,
     reject_client_merge,
-    request_client_merge,
     unmerge_client,
 )
 from core.services.dashboard import log_activity, render_activity_summary
@@ -156,7 +156,7 @@ class TestMergeValidation:
         ]
 
     def test_refuses_pending_deletion_request(self, source, target, staff_user, lead_user):
-        request_client_deletion(source, staff_user, reason="Antrag laeuft")
+        create_or_get_client_deletion_request(source, staff_user, reason="Antrag laeuft")[0]
         with pytest.raises(ValidationError) as exc_info:
             merge_clients(source, target, lead_user)
         assert exc_info.value.messages == [
@@ -359,7 +359,7 @@ class TestMergeFourEyes:
     """Antrag + Genehmigung, wenn eine der beiden Personen QUALIFIED ist."""
 
     def test_request_creates_pending_merge_request(self, facility, client_qualified, target, staff_user):
-        dr = request_client_merge(client_qualified, target, staff_user, reason="Doppelt angelegt")
+        dr = create_or_get_client_merge_request(client_qualified, target, staff_user, reason="Doppelt angelegt")[0]
         assert dr.status == DeletionRequest.Status.PENDING
         assert dr.target_type == DeletionRequest.TargetType.CLIENT
         assert dr.target_id == client_qualified.pk
@@ -380,24 +380,24 @@ class TestMergeFourEyes:
         assert get_pending_merge_request(client_qualified) == dr
 
     def test_request_is_idempotent(self, client_qualified, target, staff_user):
-        first = request_client_merge(client_qualified, target, staff_user, reason="einmal")
-        second = request_client_merge(client_qualified, target, staff_user, reason="zweimal")
+        first = create_or_get_client_merge_request(client_qualified, target, staff_user, reason="einmal")[0]
+        second = create_or_get_client_merge_request(client_qualified, target, staff_user, reason="zweimal")[0]
         assert first.pk == second.pk
         assert AuditLog.objects.filter(action=AuditLog.Action.DELETION_REQUESTED).count() == 1
 
     def test_pending_lookup_ignores_plain_deletion_request(self, client_qualified, staff_user):
-        deletion = request_client_deletion(client_qualified, staff_user, reason="Person löschen")
+        deletion = create_or_get_client_deletion_request(client_qualified, staff_user, reason="Person löschen")[0]
 
         assert deletion.merge_into_id is None
         assert get_pending_merge_request(client_qualified) is None
 
     def test_approve_rejects_requester_as_reviewer(self, client_qualified, target, admin_user):
-        dr = request_client_merge(client_qualified, target, admin_user, reason="Doppelt")
+        dr = create_or_get_client_merge_request(client_qualified, target, admin_user, reason="Doppelt")[0]
         with pytest.raises(ValidationError):
             approve_client_merge(dr, admin_user)
 
     def test_approve_requires_confirmer_right(self, client_qualified, target, staff_user, assistant_user):
-        dr = request_client_merge(client_qualified, target, staff_user, reason="Doppelt")
+        dr = create_or_get_client_merge_request(client_qualified, target, staff_user, reason="Doppelt")[0]
         with pytest.raises(ValidationError):
             approve_client_merge(dr, assistant_user)
 
@@ -405,7 +405,7 @@ class TestMergeFourEyes:
         self, facility, client_qualified, target, doc_type_contact, staff_user, admin_user
     ):
         event = _event(facility, client_qualified, doc_type_contact, staff_user)
-        dr = request_client_merge(client_qualified, target, staff_user, reason="Doppelt")
+        dr = create_or_get_client_merge_request(client_qualified, target, staff_user, reason="Doppelt")[0]
 
         result = approve_client_merge(dr, admin_user)
 
@@ -429,13 +429,13 @@ class TestMergeFourEyes:
         assert not AuditLog.objects.filter(action=AuditLog.Action.DELETION_APPROVED).exists()
 
     def test_approve_is_single_shot(self, client_qualified, target, staff_user, admin_user):
-        dr = request_client_merge(client_qualified, target, staff_user, reason="Doppelt")
+        dr = create_or_get_client_merge_request(client_qualified, target, staff_user, reason="Doppelt")[0]
         approve_client_merge(dr, admin_user)
         with pytest.raises(ValidationError):
             approve_client_merge(dr, admin_user)
 
     def test_reject_leaves_clients_untouched(self, client_qualified, target, staff_user, admin_user):
-        dr = request_client_merge(client_qualified, target, staff_user, reason="Doppelt")
+        dr = create_or_get_client_merge_request(client_qualified, target, staff_user, reason="Doppelt")[0]
         reject_client_merge(dr, admin_user)
         dr.refresh_from_db()
         assert dr.status == DeletionRequest.Status.REJECTED
@@ -450,7 +450,7 @@ class TestMergeFourEyes:
     def test_reject_service_rejects_distinct_reviewer_without_confirmation_right(
         self, client_qualified, target, staff_user, lead_user
     ):
-        dr = request_client_merge(client_qualified, target, lead_user, reason="Doppelt")
+        dr = create_or_get_client_merge_request(client_qualified, target, lead_user, reason="Doppelt")[0]
 
         with pytest.raises(ValidationError) as exc_info:
             reject_client_merge(dr, staff_user)
@@ -476,7 +476,7 @@ class TestMergeFourEyes:
             is_staff=True,
             can_confirm_deletion=has_right,
         )
-        dr = request_client_merge(client_qualified, target, lead_user, reason="Doppelt")
+        dr = create_or_get_client_merge_request(client_qualified, target, lead_user, reason="Doppelt")[0]
 
         if has_right:
             reject_client_merge(dr, reviewer)
@@ -495,17 +495,17 @@ class TestMergeFourEyes:
         """Nach einer Ablehnung muss ein NEUER Antrag moeglich sein.
 
         ``get_pending_merge_request`` darf nur PENDING liefern: gaebe sie den
-        abgelehnten Antrag zurueck, reichte ihn ``request_client_merge`` als
+        abgelehnten Antrag zurueck, reichte ihn ``create_or_get_client_merge_request`` als
         Idempotenz-Treffer weiter — es entstuende nie wieder ein
         PENDING-Antrag, und ``approve_client_merge`` wiese ihn als „bereits
         bearbeitet" ab: der Merge waere dauerhaft still blockiert.
         """
-        first = request_client_merge(client_qualified, target, staff_user, reason="Doppelt")
+        first = create_or_get_client_merge_request(client_qualified, target, staff_user, reason="Doppelt")[0]
         reject_client_merge(first, admin_user)
 
         assert get_pending_merge_request(client_qualified) is None
 
-        second = request_client_merge(client_qualified, target, staff_user, reason="Erneut: Doppelt")
+        second = create_or_get_client_merge_request(client_qualified, target, staff_user, reason="Erneut: Doppelt")[0]
         assert second.pk != first.pk
         assert second.status == DeletionRequest.Status.PENDING
         assert AuditLog.objects.filter(action=AuditLog.Action.DELETION_REQUESTED).count() == 2
@@ -515,7 +515,7 @@ class TestMergeFourEyes:
         sonst landet die Quelle im Papierkorb, ohne dass irgendetwas wandert."""
         from core.services.client import approve_client_deletion
 
-        dr = request_client_merge(client_qualified, target, staff_user, reason="Doppelt")
+        dr = create_or_get_client_merge_request(client_qualified, target, staff_user, reason="Doppelt")[0]
         with pytest.raises(ValidationError):
             approve_client_deletion(dr, admin_user)
         client_qualified.refresh_from_db()
@@ -695,7 +695,7 @@ class TestUnmerge:
         client_qualified.save()
         target.document_type = doc_type_client_profile
         target.save()
-        dr = request_client_merge(client_qualified, target, staff_user, reason="Doppelt")
+        dr = create_or_get_client_merge_request(client_qualified, target, staff_user, reason="Doppelt")[0]
         approve_client_merge(dr, admin_user)
         client_qualified.refresh_from_db()
 
@@ -1070,7 +1070,7 @@ class TestChainMerge:
     def test_requested_chain_merge_is_blocked(self, source, target, third, staff_user, lead_user):
         merge_clients(source, target, lead_user)
         with pytest.raises(ValidationError):
-            request_client_merge(target, third, staff_user, reason="Kette")
+            create_or_get_client_merge_request(target, third, staff_user, reason="Kette")[0]
 
     def test_merge_into_tombstone_carrier_stays_allowed_and_undoable(
         self, facility, source, target, third, doc_type_contact, staff_user, lead_user

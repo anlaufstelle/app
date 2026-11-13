@@ -1,6 +1,6 @@
 """4-Augen-Loeschungs-Workflow fuer Events (Refs #777, #932).
 
-``request_deletion`` legt einen ``DeletionRequest`` an (idempotent fuer
+``create_or_get_event_deletion_request`` legt einen ``DeletionRequest`` an (idempotent fuer
 PENDING-Antraege), ``approve_deletion`` und ``reject_deletion`` schliessen
 ihn.
 
@@ -36,7 +36,7 @@ def get_pending_event_deletion_request(event):
     Refs #2015: Muster ``get_pending_deletion_request`` (Personen-Pfad) und
     ``get_pending_case_deletion_request`` (Fall-Pfad). Der Ereignis-Pfad hatte
     als einziger keinen benannten Helfer, sondern eine Inline-Query in
-    :func:`request_deletion` — die View konnte den Gewinner eines
+    :func:`create_or_get_event_deletion_request` — die View konnte den Gewinner eines
     Antrags-Rennens deshalb gar nicht nachladen. Eine Quelle fuer beide
     Aufrufer.
     """
@@ -47,29 +47,11 @@ def get_pending_event_deletion_request(event):
     )
 
 
-def request_deletion(event, user, reason):
-    """Create a deletion request for qualified data — nur der Antrag.
-
-    Duenne Huelle um :func:`create_or_get_event_deletion_request` fuer alle
-    Aufrufer, die den Unterschied „neu angelegt" vs. „lief schon" nicht
-    brauchen.
-    """
-    return create_or_get_event_deletion_request(event, user, reason)[0]
-
-
 def create_or_get_event_deletion_request(event, user, reason):
-    """Wie :func:`request_deletion`, aber ``(antrag, created)``.
+    """Create an event deletion request or return the pending request and a created flag.
 
-    Refs #2015 (Re-Review): Muster ``create_or_get_client_deletion_request``.
-    Der Ereignis-Pfad hat keinen Vorab-Check in der View — die Idempotenz
-    sitzt allein hier. Ein paralleler Zweit-POST landet deshalb regelmaessig
-    im Zweig unten und muss als solcher erkennbar sein.
-
-    Idempotent: if a PENDING DeletionRequest already exists for the same
-    event, the existing record is returned instead of creating a duplicate
-    (#530). Im Idempotenz-Fall wird KEIN neues Audit-Event geschrieben
-    (Refs #932) — der DELETION_REQUESTED-Eintrag existiert bereits vom
-    ersten Aufruf.
+    Refs #2015/#932: a pending request is returned without another audit
+    entry. The view uses the flag to distinguish a retry from a new request.
     """
     # The facility of the requesting person comes first — before the lookup of
     # a running request and before anything is written (fail-closed without a

@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import RecentClientVisit, TimeFilter, User, WorkItem
-from core.services.client import approve_client_deletion, request_client_deletion, restore_client
+from core.services.client import approve_client_deletion, create_or_get_client_deletion_request, restore_client
 from core.services.zeitstrom_watch import build_zeitstrom_page_scope
 from tests._factories import make_client, make_document_type, make_event
 
@@ -144,7 +144,7 @@ def test_work_surfaces_follow_person_revocation_and_restoration(
     if surface == "profile":
         check_visible(True, favorite=True)
     if revocation == "trash":
-        pending = request_client_deletion(client_identified, staff_user, "Consent withdrawn")
+        pending = create_or_get_client_deletion_request(client_identified, staff_user, "Consent withdrawn")[0]
         approve_client_deletion(pending, lead_user)
     else:
         client_identified.is_active = False
@@ -215,7 +215,7 @@ def test_watch_validators_ignore_tasks_of_revoked_people(
         due_date=timezone.localdate(),
     )
     if revocation == "trash":
-        pending = request_client_deletion(client_identified, staff_user, "Consent withdrawn")
+        pending = create_or_get_client_deletion_request(client_identified, staff_user, "Consent withdrawn")[0]
         approve_client_deletion(pending, lead_user)
     else:
         client_identified.is_active = False
@@ -249,7 +249,7 @@ def test_kpi_validator_ignores_documentation_of_trashed_people(
         data_json={},
         created_by=staff_user,
     )
-    pending = request_client_deletion(client_identified, staff_user, "Consent withdrawn")
+    pending = create_or_get_client_deletion_request(client_identified, staff_user, "Consent withdrawn")[0]
     approve_client_deletion(pending, lead_user)
     client.force_login(reader)
     headers = {"X-Zeitstrom-Page-Scope": build_zeitstrom_page_scope(reader, facility)}

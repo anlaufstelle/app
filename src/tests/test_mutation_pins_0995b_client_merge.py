@@ -35,7 +35,6 @@ from core.services.client.merge import (
     approve_client_merge,
     create_or_get_client_merge_request,
     merge_clients,
-    request_client_merge,
 )
 from tests._row_lock_helpers import mitschnitt
 
@@ -82,7 +81,7 @@ def persons(facility, staff_user):
 @pytest.fixture
 def merge_request(persons, staff_user):
     source, target, _other = persons
-    return request_client_merge(source, target, staff_user, "Duplicate record")
+    return create_or_get_client_merge_request(source, target, staff_user, "Duplicate record")[0]
 
 
 def _assert_version_conflict(excinfo):

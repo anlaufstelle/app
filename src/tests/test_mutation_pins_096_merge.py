@@ -40,9 +40,9 @@ from core.models import AuditLog, Case, Client, DocumentTypeField, Event
 from core.models.workitem import DeletionRequest, WorkItem
 from core.services.client.merge import (
     approve_client_merge,
+    create_or_get_client_merge_request,
     merge_clients,
     reject_client_merge,
-    request_client_merge,
     unmerge_client,
 )
 from tests.conftest import _make_attachment
@@ -137,8 +137,10 @@ class TestFourEyesReloadKeepsItsPrimaryKey:
         """
         other_source = _identified(facility, staff_user, "Pin096-Zweitantrag-Quelle")
         other_target = _identified(facility, staff_user, "Pin096-Zweitantrag-Ziel")
-        dr = request_client_merge(source, target, staff_user, reason="Doppelt angelegt")
-        other_dr = request_client_merge(other_source, other_target, staff_user, reason="Ebenfalls doppelt")
+        dr = create_or_get_client_merge_request(source, target, staff_user, reason="Doppelt angelegt")[0]
+        other_dr = create_or_get_client_merge_request(
+            other_source, other_target, staff_user, reason="Ebenfalls doppelt"
+        )[0]
 
         approve_client_merge(dr, admin_user)
 
@@ -163,8 +165,10 @@ class TestFourEyesReloadKeepsItsPrimaryKey:
         """
         other_source = _identified(facility, staff_user, "Pin096-Zweitantrag-Quelle")
         other_target = _identified(facility, staff_user, "Pin096-Zweitantrag-Ziel")
-        dr = request_client_merge(source, target, staff_user, reason="Doppelt angelegt")
-        other_dr = request_client_merge(other_source, other_target, staff_user, reason="Ebenfalls doppelt")
+        dr = create_or_get_client_merge_request(source, target, staff_user, reason="Doppelt angelegt")[0]
+        other_dr = create_or_get_client_merge_request(
+            other_source, other_target, staff_user, reason="Ebenfalls doppelt"
+        )[0]
 
         reject_client_merge(dr, admin_user)
 
@@ -301,7 +305,7 @@ class TestFourEyesAccountability:
         Person. Mutant: ``row.user_id`` ist ``None`` — wer beantragt hat, ist
         aus dem append-only Protokoll nicht mehr rekonstruierbar.
         """
-        dr = request_client_merge(source, target, staff_user, reason="Doppelt angelegt")
+        dr = create_or_get_client_merge_request(source, target, staff_user, reason="Doppelt angelegt")[0]
 
         row = AuditLog.objects.get(
             action=AuditLog.Action.DELETION_REQUESTED,
@@ -319,7 +323,7 @@ class TestFourEyesAccountability:
         Zweitperson entschieden hat, ist nicht mehr belegbar, obwohl der
         Antrag die einzige Evidenz der Zusammenfuehrung ist.
         """
-        dr = request_client_merge(source, target, staff_user, reason="Doppelt angelegt")
+        dr = create_or_get_client_merge_request(source, target, staff_user, reason="Doppelt angelegt")[0]
         before = timezone.now()
 
         approve_client_merge(dr, admin_user)
@@ -341,7 +345,7 @@ class TestFourEyesAccountability:
         facility-gescopten Audit-Flaeche heraus, der Vorgang ist fuer die
         Einrichtung unsichtbar protokolliert.
         """
-        dr = request_client_merge(source, target, staff_user, reason="Doppelt angelegt")
+        dr = create_or_get_client_merge_request(source, target, staff_user, reason="Doppelt angelegt")[0]
 
         reject_client_merge(dr, admin_user)
 
@@ -579,7 +583,9 @@ class TestUnmergeStageRollback:
             pseudonym="Pin096-Ziel-Qualifiziert",
             created_by=staff_user,
         )
-        dr = request_client_merge(client_qualified, qualified_target, staff_user, reason="Doppelt angelegt")
+        dr = create_or_get_client_merge_request(
+            client_qualified, qualified_target, staff_user, reason="Doppelt angelegt"
+        )[0]
         approve_client_merge(dr, admin_user)
         client_qualified.refresh_from_db()
 
@@ -603,7 +609,7 @@ class TestUnmergeStageRollback:
         sicherheitsrelevante Stufenaenderung (nur Leitung darf sie ausloesen,
         N2) waere nicht mehr zurechenbar.
         """
-        dr = request_client_merge(client_qualified, target, staff_user, reason="Doppelt angelegt")
+        dr = create_or_get_client_merge_request(client_qualified, target, staff_user, reason="Doppelt angelegt")[0]
         approve_client_merge(dr, admin_user)
         client_qualified.refresh_from_db()
 

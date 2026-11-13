@@ -21,7 +21,6 @@ from core.services.events.deletion import (
     approve_deletion,
     create_or_get_event_deletion_request,
     reject_deletion,
-    request_deletion,
 )
 from tests._row_lock_helpers import mitschnitt
 
@@ -96,7 +95,7 @@ def _request_state(deletion_request):
 
 
 class TestRequestDeletion:
-    @pytest.mark.parametrize("service", [create_or_get_event_deletion_request, request_deletion])
+    @pytest.mark.parametrize("service", [create_or_get_event_deletion_request])
     @pytest.mark.parametrize("actor", _REQUESTERS)
     def test_foreign_actor_is_refused_before_any_lock(self, request, actor, service, sample_event):
         user = request.getfixturevalue(actor)

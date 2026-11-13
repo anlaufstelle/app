@@ -11,7 +11,7 @@ import pytest
 from django.urls import reverse
 
 from core.models import Client
-from core.services.client import approve_client_deletion, request_client_deletion
+from core.services.client import approve_client_deletion, create_or_get_client_deletion_request
 from core.services.client.restriction import restrict_processing
 
 CREATE_URLS = (
@@ -60,7 +60,7 @@ def test_restricted_person_is_not_prefilled(client, staff_user, client_identifie
 @pytest.mark.django_db
 @pytest.mark.parametrize("url_name", CREATE_URLS)
 def test_trashed_person_is_not_prefilled(client, staff_user, lead_user, client_identified, url_name):
-    deletion = request_client_deletion(client_identified, staff_user, "Doppelt angelegt")
+    deletion = create_or_get_client_deletion_request(client_identified, staff_user, "Doppelt angelegt")[0]
     approve_client_deletion(deletion, lead_user)
     client.force_login(staff_user)
 

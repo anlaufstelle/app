@@ -13,10 +13,10 @@ from core.models import AuditLog, DeletionRequest, DocumentType, DocumentTypeFie
 from core.services.events import (
     approve_deletion,
     create_event,
+    create_or_get_event_deletion_request,
     decrypt_event_text_data,
     merge_update_payload,
     reject_deletion,
-    request_deletion,
     soft_delete_event,
     update_event,
 )
@@ -174,12 +174,12 @@ class TestEventService:
         assert entry.detail.get("client_id") == str(client_identified.pk)
 
     def test_request_deletion_creates_request(self, sample_event, staff_user):
-        dr = request_deletion(sample_event, staff_user, "DSGVO-Löschung")
+        dr = create_or_get_event_deletion_request(sample_event, staff_user, "DSGVO-Löschung")[0]
         assert dr.status == DeletionRequest.Status.PENDING
         assert dr.reason == "DSGVO-Löschung"
 
     def test_approve_deletion(self, sample_event, staff_user, lead_user):
-        dr = request_deletion(sample_event, staff_user, "DSGVO")
+        dr = create_or_get_event_deletion_request(sample_event, staff_user, "DSGVO")[0]
         approve_deletion(dr, lead_user)
         dr.refresh_from_db()
         assert dr.status == DeletionRequest.Status.APPROVED
@@ -188,7 +188,7 @@ class TestEventService:
         assert sample_event.is_deleted is True
 
     def test_reject_deletion(self, sample_event, staff_user, lead_user):
-        dr = request_deletion(sample_event, staff_user, "DSGVO")
+        dr = create_or_get_event_deletion_request(sample_event, staff_user, "DSGVO")[0]
         reject_deletion(dr, lead_user)
         dr.refresh_from_db()
         assert dr.status == DeletionRequest.Status.REJECTED
@@ -199,7 +199,7 @@ class TestEventService:
 class TestEventServiceAtomicity:
     def test_approve_deletion_rolls_back_on_failure(self, sample_event, staff_user, lead_user):
         """If deletion_request.save() fails, soft_delete must also be rolled back."""
-        dr = request_deletion(sample_event, staff_user, "DSGVO")
+        dr = create_or_get_event_deletion_request(sample_event, staff_user, "DSGVO")[0]
 
         with patch.object(DeletionRequest, "save", side_effect=RuntimeError("DB error")):
             with pytest.raises(RuntimeError, match="DB error"):

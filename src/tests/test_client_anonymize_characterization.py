@@ -389,7 +389,7 @@ class TestAnonymizeClientHelpers:
     def test_redact_client_deletion_request_redacts_client_target_reason(self, facility, staff_user, client_identified):
         """Refs #1091: Der Client-Target-Loeschantrag wird redigiert.
 
-        Der Vier-Augen-Antrag aus ``request_client_deletion`` hat
+        Der Vier-Augen-Antrag aus ``create_or_get_client_deletion_request`` hat
         ``target_type="Client"`` und wird vom Event-only-Helper
         ``_redact_deletion_requests`` nicht erfasst — sein Freitext
         ``reason`` bliebe sonst als PII-Residue stehen.

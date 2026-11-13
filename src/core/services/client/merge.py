@@ -6,7 +6,7 @@ drei Produktentscheide der ADR bestimmen die Form:
 
 * **Vier-Augen gestaffelt wie die Loeschung** (ADR-044 P1c): Ist EINE der
   beiden Personen ``QUALIFIED``, braucht der Merge Antrag + Genehmigung durch
-  eine Zweitperson (:func:`request_client_merge` /
+  eine Zweitperson (:func:`create_or_get_client_merge_request` /
   :func:`approve_client_merge`). Sind beide ``IDENTIFIED``, darf die Leitung
   direkt zusammenfuehren (:func:`merge_clients`).
 * **Quelle wird Tombstone im Papierkorb**: Soft-Delete + ``merged_into``-
@@ -145,38 +145,13 @@ def get_pending_merge_request(client):
     )
 
 
-def request_client_merge(source, target, user, reason):
-    """Stellt einen Vier-Augen-Merge-Antrag — nur der Antrag.
-
-    Duenne Huelle um :func:`create_or_get_client_merge_request` fuer alle
-    Aufrufer, die den Unterschied „neu angelegt" vs. „lief schon" nicht
-    brauchen.
-    """
-    return create_or_get_client_merge_request(source, target, user, reason)[0]
-
-
 @transaction.atomic
 def create_or_get_client_merge_request(source, target, user, reason):
-    """Wie :func:`request_client_merge`, aber ``(antrag, created)``.
+    """Create a merge request or return the pending request and a created flag.
 
-    Refs #2015 (Re-Review): Muster ``create_or_get_client_deletion_request`` —
-    ein paralleler Zweitantrag muss die Idempotenz-Antwort bekommen, nicht
-    eine Erfolgsmeldung fuer etwas, das nie passiert ist.
-
-    Traeger ist ein ``DeletionRequest`` mit gesetztem ``merge_into`` — die
-    Quelle ist ``target_id``, wie beim Loeschantrag (den sie faktisch enthaelt).
-    Der partielle Unique auf (facility, target_type, target_id, PENDING) sorgt
-    dafuer, dass pro Person immer nur EIN destruktiver Antrag laeuft — Loeschung
-    ODER Merge, nie beides.
-
-    Idempotent wie ``request_client_deletion`` (Muster #932): laeuft bereits
-    ein PENDING-Merge-Antrag auf DASSELBE Ziel, wird er ohne zweites
-    Audit-Event zurueckgegeben. Ein PENDING-Antrag auf ein ANDERES Ziel (oder
-    ein Loeschantrag) blockiert stattdessen (:func:`_validate_merge`).
-
-    Bewusst auch fuer zwei ``IDENTIFIED``-Personen erlaubt: der Antragsweg ist
-    strenger als der direkte (eine Zweitperson mit ``can_confirm_deletion``
-    entscheidet) — er umgeht also kein Schutzniveau.
+    Refs #2015: both persons are locked before checking pending requests.
+    A pending merge into the same target is idempotent and writes no second
+    audit entry. A different target or a pending deletion blocks the merge.
     """
     # Art.-18-Gate (Refs #2045): der Merge-ANTRAG war anfangs
     # ungegatet. Anders als ein Art.-17-Loeschantrag ist die Zusammenfuehrung

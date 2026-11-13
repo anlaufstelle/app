@@ -106,7 +106,12 @@ from django.utils import timezone
 
 from core.models import Activity, AuditLog, Case, Client, DocumentType, Event, FieldTemplate
 from core.models.workitem import WorkItem
-from core.services.client.merge import approve_client_merge, merge_clients, request_client_merge, unmerge_client
+from core.services.client.merge import (
+    approve_client_merge,
+    create_or_get_client_merge_request,
+    merge_clients,
+    unmerge_client,
+)
 
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
@@ -520,7 +525,9 @@ class TestUndoInventoryScoping:
             data_json={},
             created_by=staff_user,
         )
-        request = request_client_merge(source, target, staff_user, reason="Pin099-MergeA Vier-Augen (Stufe zurück)")
+        request = create_or_get_client_merge_request(
+            source, target, staff_user, reason="Pin099-MergeA Vier-Augen (Stufe zurück)"
+        )[0]
         approve_client_merge(request, admin_user)
 
         with connection.cursor() as cursor:
@@ -577,7 +584,7 @@ class TestUnmergeAccountability:
         source.contact_stage = Client.ContactStage.QUALIFIED
         source.save()
 
-        dr = request_client_merge(source, target, staff_user, reason="Pin099-MergeA Vier-Augen")
+        dr = create_or_get_client_merge_request(source, target, staff_user, reason="Pin099-MergeA Vier-Augen")[0]
         approve_client_merge(dr, admin_user)
         target.refresh_from_db()
         assert target.contact_stage == Client.ContactStage.QUALIFIED
@@ -634,7 +641,9 @@ class TestUnmergeAccountability:
 
         source.contact_stage = Client.ContactStage.QUALIFIED
         source.save()
-        dr = request_client_merge(source, target, staff_user, reason="Pin099-MergeA Vier-Augen (Verschlüsselung)")
+        dr = create_or_get_client_merge_request(
+            source, target, staff_user, reason="Pin099-MergeA Vier-Augen (Verschlüsselung)"
+        )[0]
         approve_client_merge(dr, admin_user)
         target.refresh_from_db()
         assert target.contact_stage == Client.ContactStage.QUALIFIED

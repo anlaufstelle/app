@@ -38,7 +38,6 @@ from core.services.case.deletion import (
     redact_case_content,
     redact_case_goals,
     reject_case_deletion,
-    request_case_deletion,
     restore_case,
     soft_delete_case,
 )
@@ -136,7 +135,6 @@ __all__ = [
     "remove_event_from_case",
     "reopen_case",
     "create_or_get_case_deletion_request",
-    "request_case_deletion",
     "restore_case",
     "soft_delete_case",
     "toggle_milestone",

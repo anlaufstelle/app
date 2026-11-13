@@ -137,7 +137,7 @@ class TestSoftDeleteEventArt18Gate:
         weiter — der Vier-Augen-Weg oeffnet den benannten Loeschworkflow-Kontext
         und laeuft durch. Ohne diese Gegenprobe waere der Pin oben auch mit
         einem pauschalen Loeschverbot gruen."""
-        from core.services.events import approve_deletion, request_deletion
+        from core.services.events import approve_deletion, create_or_get_event_deletion_request
 
         event = create_event(
             facility=facility,
@@ -147,7 +147,7 @@ class TestSoftDeleteEventArt18Gate:
             data_json={"dauer": 15},
             client=client_identified,
         )
-        deletion_request = request_deletion(event, staff_user, "Antrag der betroffenen Person")
+        deletion_request = create_or_get_event_deletion_request(event, staff_user, "Antrag der betroffenen Person")[0]
         restrict_processing(client_identified, staff_user, reason=Client.RestrictionReason.ACCURACY_DISPUTED)
 
         approve_deletion(deletion_request, lead_user)
@@ -319,7 +319,7 @@ class TestDeletePathLocksTheRealRows:
         Abweichung beim Mutanten: die jeweilige Anweisung sperrt ``IS NULL``
         statt der Zeile.
         """
-        from core.services.events import approve_deletion, request_deletion
+        from core.services.events import approve_deletion, create_or_get_event_deletion_request
 
         event = create_event(
             facility=facility,
@@ -329,7 +329,7 @@ class TestDeletePathLocksTheRealRows:
             data_json={"dauer": 15},
             client=client_identified,
         )
-        deletion_request = request_deletion(event, staff_user, "Antrag der betroffenen Person")
+        deletion_request = create_or_get_event_deletion_request(event, staff_user, "Antrag der betroffenen Person")[0]
 
         with CaptureQueriesContext(connection) as captured:
             approve_deletion(deletion_request, lead_user)

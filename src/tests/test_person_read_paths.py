@@ -9,7 +9,7 @@ from django.utils import timezone
 from core.models import Case, Event, User
 from core.services.case.cases import close_case, create_case
 from core.services.case.workitems import create_workitem
-from core.services.client import approve_client_deletion, request_client_deletion, restore_client
+from core.services.client import approve_client_deletion, create_or_get_client_deletion_request, restore_client
 from core.services.zeitstrom_watch import build_zeitstrom_page_scope
 from tests._dynamic_test_data import entity_details, read_details
 from tests._factories import make_client, make_document_type, make_event
@@ -29,7 +29,7 @@ def person_boundary(request, facility, staff_user, lead_user):
 
     def revoke():
         if request.param == "trash":
-            pending = request_client_deletion(person, staff_user, "Consent withdrawn")
+            pending = create_or_get_client_deletion_request(person, staff_user, "Consent withdrawn")[0]
             approve_client_deletion(pending, lead_user)
         else:
             person.is_active = False
@@ -251,7 +251,7 @@ def test_pending_request_does_not_block_event_reads(client, facility, staff_user
         data_json={},
         created_by=staff_user,
     )
-    request_client_deletion(person, staff_user, "Consent withdrawn")
+    create_or_get_client_deletion_request(person, staff_user, "Consent withdrawn")[0]
     client.force_login(staff_user)
     assert client.get(reverse("core:event_detail", kwargs={"pk": event.pk})).status_code == 200
     assert event.pk in {item.pk for item in client.get(reverse("core:event_list")).context["events"]}

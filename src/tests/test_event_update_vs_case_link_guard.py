@@ -355,7 +355,7 @@ class TestFormStateRescueOnlyForLivePersons:
     def test_edit_after_link_and_person_trash_is_rejected(
         self, staff_user, lead_user, sample_event, case_open, client_identified
     ):
-        from core.services.client import approve_client_deletion, request_client_deletion
+        from core.services.client import approve_client_deletion, create_or_get_client_deletion_request
         from core.services.client.main import CLIENT_WRITE_REVOKED_MESSAGE
         from core.services.events.crud import event_form_state_token
 
@@ -364,7 +364,9 @@ class TestFormStateRescueOnlyForLivePersons:
         state = event_form_state_token(loaded)
         data_before = Event.objects.get(pk=sample_event.pk).data_json
         assign_event_to_case(case_open, Event.objects.get(pk=sample_event.pk), staff_user)
-        approve_client_deletion(request_client_deletion(client_identified, staff_user, "Doppelt angelegt"), lead_user)
+        approve_client_deletion(
+            create_or_get_client_deletion_request(client_identified, staff_user, "Doppelt angelegt")[0], lead_user
+        )
         counts_before = _history_and_audit(sample_event)
 
         with pytest.raises(ValidationError) as excinfo:
@@ -413,12 +415,14 @@ class TestEventEditWithoutTokenChecksState:
     def test_edit_without_token_after_person_trash_is_rejected(
         self, staff_user, lead_user, sample_event, client_identified
     ):
-        from core.services.client import approve_client_deletion, request_client_deletion
+        from core.services.client import approve_client_deletion, create_or_get_client_deletion_request
         from core.services.client.main import CLIENT_WRITE_REVOKED_MESSAGE
 
         loaded = Event.objects.get(pk=sample_event.pk)
         data_before = loaded.data_json
-        approve_client_deletion(request_client_deletion(client_identified, staff_user, "Doppelt angelegt"), lead_user)
+        approve_client_deletion(
+            create_or_get_client_deletion_request(client_identified, staff_user, "Doppelt angelegt")[0], lead_user
+        )
 
         with pytest.raises(ValidationError) as excinfo:
             update_event(loaded, staff_user, dict(NEW_DATA))

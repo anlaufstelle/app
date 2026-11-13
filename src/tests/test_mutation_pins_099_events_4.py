@@ -40,9 +40,9 @@ from core.services.events.context import (
 )
 from core.services.events.deletion import (
     approve_deletion,
+    create_or_get_event_deletion_request,
     get_pending_event_deletion_request,
     reject_deletion,
-    request_deletion,
 )
 from core.services.events.fields import (
     _snapshot_field_metadata,
@@ -441,7 +441,7 @@ class TestApproveDeletionMeldungen:
         (Klein-/Grossschreibung) — alle vier veraendern den Wortlaut der
         Vier-Augen-Meldung, wenn Antragsteller und Reviewer identisch sind."""
         event = _make_event(facility, client_qualified, doc_type_contact, staff_user, data_json={"notiz": "x"})
-        dr = request_deletion(event, staff_user, "Antrag")
+        dr = create_or_get_event_deletion_request(event, staff_user, "Antrag")[0]
 
         with translation.override("de"), pytest.raises(ValidationError) as excinfo:
             approve_deletion(dr, staff_user)
@@ -456,7 +456,7 @@ class TestApproveDeletionMeldungen:
         != Antragsteller) muss genau diesen Wortlaut bekommen."""
         reviewer = _make_user(facility, role=User.Role.STAFF, suffix="ohne-recht", can_confirm_deletion=False)
         event = _make_event(facility, client_qualified, doc_type_contact, staff_user, data_json={"notiz": "x"})
-        dr = request_deletion(event, staff_user, "Antrag")
+        dr = create_or_get_event_deletion_request(event, staff_user, "Antrag")[0]
 
         with translation.override("de"), pytest.raises(ValidationError) as excinfo:
             approve_deletion(dr, reviewer)
@@ -471,7 +471,7 @@ class TestApproveDeletionMeldungen:
         (Klein-/Grossschreibung) am „bereits bearbeitet"-Zweig: ein zweiter
         Approve-Aufruf auf denselben (bereits APPROVED) Antrag."""
         event = _make_event(facility, client_qualified, doc_type_contact, staff_user, data_json={"notiz": "x"})
-        dr = request_deletion(event, staff_user, "Antrag")
+        dr = create_or_get_event_deletion_request(event, staff_user, "Antrag")[0]
         approve_deletion(dr, lead_user)
 
         with translation.override("de"), pytest.raises(ValidationError) as excinfo:
@@ -490,7 +490,7 @@ class TestRejectDeletionMeldungen:
         """Pins ``x_reject_deletion__mutmut_3`` (XX-Marker auf der
         Vier-Augen-Meldung)."""
         event = _make_event(facility, client_qualified, doc_type_contact, staff_user, data_json={"notiz": "x"})
-        dr = request_deletion(event, staff_user, "Antrag")
+        dr = create_or_get_event_deletion_request(event, staff_user, "Antrag")[0]
 
         with translation.override("de"), pytest.raises(ValidationError) as excinfo:
             reject_deletion(dr, staff_user)
@@ -503,7 +503,7 @@ class TestRejectDeletionMeldungen:
         """Pinnt den Rechte-Guard des Reject-Pfads mit seinem vollständigen Wortlaut."""
         reviewer = _make_user(facility, role=User.Role.STAFF, suffix="reject-ohne-recht")
         event = _make_event(facility, client_qualified, doc_type_contact, staff_user, data_json={"notiz": "x"})
-        dr = request_deletion(event, staff_user, "Antrag")
+        dr = create_or_get_event_deletion_request(event, staff_user, "Antrag")[0]
 
         with translation.override("de"), pytest.raises(ValidationError) as excinfo:
             reject_deletion(dr, reviewer)
@@ -517,7 +517,7 @@ class TestRejectDeletionMeldungen:
         ``…__mutmut_14`` (Kleinschreibung) am „bereits bearbeitet"-Zweig: ein
         zweiter Reject-Aufruf auf denselben (bereits REJECTED) Antrag."""
         event = _make_event(facility, client_qualified, doc_type_contact, staff_user, data_json={"notiz": "x"})
-        dr = request_deletion(event, staff_user, "Antrag")
+        dr = create_or_get_event_deletion_request(event, staff_user, "Antrag")[0]
         reject_deletion(dr, lead_user)
 
         with translation.override("de"), pytest.raises(ValidationError) as excinfo:

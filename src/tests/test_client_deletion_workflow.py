@@ -16,8 +16,8 @@ from core.models.workitem import DeletionRequest
 from core.services.client import (
     anonymize_eligible_soft_deleted_clients,
     approve_client_deletion,
+    create_or_get_client_deletion_request,
     reject_client_deletion,
-    request_client_deletion,
     restore_client,
 )
 
@@ -31,7 +31,7 @@ def _make_client(facility, pseudonym="P-Workflow", **kwargs):
 class TestRequestClientDeletion:
     def test_creates_pending_request(self, facility, staff_user):
         client = _make_client(facility)
-        dr = request_client_deletion(client, staff_user, "Widerruf der Einwilligung")
+        dr = create_or_get_client_deletion_request(client, staff_user, "Widerruf der Einwilligung")[0]
         assert dr.status == DeletionRequest.Status.PENDING
         assert dr.target_type == "Client"
         assert dr.target_id == client.pk
@@ -40,8 +40,8 @@ class TestRequestClientDeletion:
 
     def test_idempotent_returns_existing_pending(self, facility, staff_user):
         client = _make_client(facility)
-        dr1 = request_client_deletion(client, staff_user, "Grund 1")
-        dr2 = request_client_deletion(client, staff_user, "Grund 2 (ignoriert)")
+        dr1 = create_or_get_client_deletion_request(client, staff_user, "Grund 1")[0]
+        dr2 = create_or_get_client_deletion_request(client, staff_user, "Grund 2 (ignoriert)")[0]
         assert dr1.pk == dr2.pk
         assert DeletionRequest.objects.filter(target_id=client.pk).count() == 1
 
@@ -60,7 +60,7 @@ class TestRequestClientDeletion:
         tombstone.soft_delete(user=staff_user)
 
         with pytest.raises(ValidationError) as exc:
-            request_client_deletion(tombstone, staff_user, "Grund")
+            create_or_get_client_deletion_request(tombstone, staff_user, "Grund")[0]
         assert "zusammengeführt" in " ".join(exc.value.messages)
         assert not DeletionRequest.objects.filter(target_id=tombstone.pk).exists()
 
@@ -71,7 +71,7 @@ class TestRequestClientDeletion:
         trashed.soft_delete(user=staff_user)
 
         with pytest.raises(ValidationError) as exc:
-            request_client_deletion(trashed, staff_user, "Grund")
+            create_or_get_client_deletion_request(trashed, staff_user, "Grund")[0]
         assert "Papierkorb" in " ".join(exc.value.messages)
         assert not DeletionRequest.objects.filter(target_id=trashed.pk).exists()
 
@@ -91,14 +91,14 @@ class TestRequestClientDeletion:
         assert stale.merged_into_id is None and stale.is_deleted is False  # veraltete Instanz
 
         with pytest.raises(ValidationError):
-            request_client_deletion(stale, staff_user, "Grund")
+            create_or_get_client_deletion_request(stale, staff_user, "Grund")[0]
         assert not DeletionRequest.objects.filter(target_id=source.pk).exists()
 
 
 class TestApproveClientDeletion:
     def test_approve_sets_soft_delete_and_audit(self, facility, staff_user, lead_user):
         client = _make_client(facility)
-        dr = request_client_deletion(client, staff_user, "Grund")
+        dr = create_or_get_client_deletion_request(client, staff_user, "Grund")[0]
         approve_client_deletion(dr, lead_user)
 
         client.refresh_from_db()
@@ -122,7 +122,7 @@ class TestApproveClientDeletion:
 
     def test_self_review_blocked(self, facility, staff_user):
         client = _make_client(facility)
-        dr = request_client_deletion(client, staff_user, "Grund")
+        dr = create_or_get_client_deletion_request(client, staff_user, "Grund")[0]
         with pytest.raises(ValidationError):
             approve_client_deletion(dr, staff_user)
 
@@ -134,7 +134,7 @@ class TestApproveClientDeletion:
         sauber ``ValidationError`` werfen, statt die Person ein zweites Mal
         zu verarbeiten."""
         client = _make_client(facility)
-        dr = request_client_deletion(client, staff_user, "Grund")
+        dr = create_or_get_client_deletion_request(client, staff_user, "Grund")[0]
 
         approve_client_deletion(dr, lead_user)
         with pytest.raises(ValidationError):
@@ -160,7 +160,7 @@ class TestApproveClientDeletion:
         """
         target = _make_client(facility, "P-Ziel")
         source = _make_client(facility, "P-Quelle")
-        dr = request_client_deletion(source, staff_user, "Grund")
+        dr = create_or_get_client_deletion_request(source, staff_user, "Grund")[0]
         # Rennen: die Zusammenfuehrung kommt zwischen Antrag und Genehmigung durch.
         source.merged_into = target
         source.save(update_fields=["merged_into"])
@@ -184,7 +184,7 @@ class TestApproveClientDeletion:
         Aufbewahrung im Papierkorb um eine volle Frist.
         """
         client = _make_client(facility)
-        dr = request_client_deletion(client, staff_user, "Grund")
+        dr = create_or_get_client_deletion_request(client, staff_user, "Grund")[0]
         client.soft_delete(user=staff_user)
         deleted_at_before = Client.objects.get(pk=client.pk).deleted_at
 
@@ -201,7 +201,7 @@ class TestApproveClientDeletion:
 class TestRejectClientDeletion:
     def test_service_rejects_distinct_reviewer_without_confirmation_right(self, facility, staff_user, lead_user):
         client = _make_client(facility)
-        dr = request_client_deletion(client, lead_user, "Grund")
+        dr = create_or_get_client_deletion_request(client, lead_user, "Grund")[0]
 
         with pytest.raises(ValidationError) as exc_info:
             reject_client_deletion(dr, staff_user)
@@ -222,7 +222,7 @@ class TestRejectClientDeletion:
             can_confirm_deletion=has_right,
         )
         client = _make_client(facility)
-        dr = request_client_deletion(client, lead_user, "Grund")
+        dr = create_or_get_client_deletion_request(client, lead_user, "Grund")[0]
 
         if has_right:
             reject_client_deletion(dr, reviewer)
@@ -237,7 +237,7 @@ class TestRejectClientDeletion:
 
     def test_reject_sets_status_only(self, facility, staff_user, lead_user):
         client = _make_client(facility)
-        dr = request_client_deletion(client, staff_user, "Grund")
+        dr = create_or_get_client_deletion_request(client, staff_user, "Grund")[0]
         reject_client_deletion(dr, lead_user)
 
         client.refresh_from_db()
@@ -249,7 +249,7 @@ class TestRejectClientDeletion:
 
     def test_self_review_blocked(self, facility, staff_user):
         client = _make_client(facility)
-        dr = request_client_deletion(client, staff_user, "Grund")
+        dr = create_or_get_client_deletion_request(client, staff_user, "Grund")[0]
         with pytest.raises(ValidationError):
             reject_client_deletion(dr, staff_user)
 
@@ -263,7 +263,7 @@ class TestRejectClientDeletion:
         stille Statuskorruption ganz ohne Spur.
         """
         client = _make_client(facility)
-        dr = request_client_deletion(client, staff_user, "Grund")
+        dr = create_or_get_client_deletion_request(client, staff_user, "Grund")[0]
         approve_client_deletion(dr, lead_user)
 
         with pytest.raises(ValidationError) as exc:
@@ -280,7 +280,7 @@ class TestRejectClientDeletion:
 class TestRestoreClient:
     def test_restore_clears_soft_delete(self, facility, admin_user, lead_user, staff_user):
         client = _make_client(facility)
-        dr = request_client_deletion(client, staff_user, "Grund")
+        dr = create_or_get_client_deletion_request(client, staff_user, "Grund")[0]
         approve_client_deletion(dr, lead_user)
         client.refresh_from_db()
 
@@ -326,12 +326,12 @@ class TestRetentionTrashAnonymization:
 
         # Frisch soft-deleter Klient (nicht abgelaufen)
         recent = _make_client(facility, pseudonym="P-Recent")
-        dr1 = request_client_deletion(recent, staff_user, "test")
+        dr1 = create_or_get_client_deletion_request(recent, staff_user, "test")[0]
         approve_client_deletion(dr1, lead_user)
 
         # Soft-deleter Klient mit abgelaufener Frist
         expired = _make_client(facility, pseudonym="P-Expired")
-        dr2 = request_client_deletion(expired, staff_user, "test")
+        dr2 = create_or_get_client_deletion_request(expired, staff_user, "test")[0]
         approve_client_deletion(dr2, lead_user)
         # deleted_at zurueckdatieren auf 31 Tage
         Client.objects.filter(pk=expired.pk).update(deleted_at=timezone.now() - timedelta(days=31))
@@ -393,7 +393,7 @@ class TestRetentionTrashAnonymization:
     def test_dry_run_returns_count_without_changes(self, facility, lead_user, staff_user):
         settings_obj = self._make_settings(facility, trash_days=30)
         client = _make_client(facility, pseudonym="P-DryRun")
-        dr = request_client_deletion(client, staff_user, "test")
+        dr = create_or_get_client_deletion_request(client, staff_user, "test")[0]
         approve_client_deletion(dr, lead_user)
         Client.objects.filter(pk=client.pk).update(deleted_at=timezone.now() - timedelta(days=31))
 
@@ -408,7 +408,7 @@ class TestRetentionTrashAnonymization:
     def _make_expired_trash_client(self, facility, staff_user, lead_user, pseudonym):
         """Soft-deleter Klient mit abgelaufener Papierkorb-Frist."""
         c = _make_client(facility, pseudonym=pseudonym)
-        dr = request_client_deletion(c, staff_user, "test")
+        dr = create_or_get_client_deletion_request(c, staff_user, "test")[0]
         approve_client_deletion(dr, lead_user)
         Client.objects.filter(pk=c.pk).update(deleted_at=timezone.now() - timedelta(days=31))
         return c

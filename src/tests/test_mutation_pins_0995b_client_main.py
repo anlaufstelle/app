@@ -34,7 +34,6 @@ from core.services.client.main import (
     approve_client_deletion,
     create_client,
     create_or_get_client_deletion_request,
-    request_client_deletion,
     restore_client,
     update_client,
 )
@@ -93,7 +92,7 @@ class TestLockClientThenDeletionRequest:
         """x__lock_client_then_deletion_request__mutmut_12 (``facility=None``) and
         x__lock_client_then_deletion_request__mutmut_14 (argument dropped): the
         person lock taken before the request lock no longer names the facility."""
-        dr = request_client_deletion(client_identified, staff_user, "Duplicate record")
+        dr = create_or_get_client_deletion_request(client_identified, staff_user, "Duplicate record")[0]
 
         with mitschnitt() as log:
             approve_client_deletion(dr, lead_user)
@@ -115,7 +114,7 @@ class TestLockClientThenDeletionRequest:
         the target person to another facility after the request was filed. The
         approval ends with ``DoesNotExist`` either way; without the facility
         scope it locks the foreign person row on its way there."""
-        dr = request_client_deletion(client_identified, staff_user, "Duplicate record")
+        dr = create_or_get_client_deletion_request(client_identified, staff_user, "Duplicate record")[0]
         Client.objects.filter(pk=client_identified.pk).update(facility=second_facility)
         foreign_row = _snapshot(client_identified)
 

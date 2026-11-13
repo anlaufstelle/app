@@ -11,7 +11,7 @@ import pytest
 from django.urls import reverse
 
 from core.models import AuditLog, Case, Client, DeletionRequest
-from core.services.case import request_case_deletion, soft_delete_case
+from core.services.case import create_or_get_case_deletion_request, soft_delete_case
 
 pytestmark = pytest.mark.django_db
 
@@ -98,7 +98,7 @@ class TestDeleteRequestPost:
 
     def test_second_request_reports_the_idempotent_truth(self, client, staff_user, qualified_case):
         """Der Service legt nichts an — ohne diese Meldung meldete die View Erfolg."""
-        request_case_deletion(qualified_case, staff_user, "Erster Grund")
+        create_or_get_case_deletion_request(qualified_case, staff_user, "Erster Grund")[0]
         client.force_login(staff_user)
         response = client.post(
             reverse("core:case_delete_request", args=[qualified_case.pk]),
@@ -111,7 +111,7 @@ class TestDeleteRequestPost:
         assert dr.reason == "Erster Grund"
 
     def test_pending_request_disables_the_action_and_shows_the_badge(self, client, staff_user, qualified_case):
-        request_case_deletion(qualified_case, staff_user, "Grund")
+        create_or_get_case_deletion_request(qualified_case, staff_user, "Grund")[0]
         client.force_login(staff_user)
         body = client.get(reverse("core:case_detail", args=[qualified_case.pk])).content.decode()
         assert 'data-testid="case-deletion-pending-badge"' in body
@@ -120,7 +120,7 @@ class TestDeleteRequestPost:
         assert 'data-testid="case-delete-request-btn"' not in body
 
     def test_list_row_carries_the_pending_badge(self, client, staff_user, qualified_case):
-        request_case_deletion(qualified_case, staff_user, "Grund")
+        create_or_get_case_deletion_request(qualified_case, staff_user, "Grund")[0]
         client.force_login(staff_user)
         body = client.get(reverse("core:case_list")).content.decode()
         assert 'data-testid="case-row-deletion-pending-badge"' in body
@@ -130,7 +130,7 @@ class TestReviewDispatchesTheCaseTarget:
     """Der zentrale Review-Einstieg kennt drei Zieltypen, nicht zwei."""
 
     def test_get_renders_the_case_review_page(self, client, staff_user, lead_user, qualified_case):
-        dr = request_case_deletion(qualified_case, staff_user, "Doppelt angelegt")
+        dr = create_or_get_case_deletion_request(qualified_case, staff_user, "Doppelt angelegt")[0]
         client.force_login(lead_user)
         response = client.get(reverse("core:deletion_review", args=[dr.pk]))
         assert response.status_code == 200
@@ -139,7 +139,7 @@ class TestReviewDispatchesTheCaseTarget:
         assert qualified_case.title in body
 
     def test_approve_moves_the_case_to_the_trash(self, client, staff_user, lead_user, qualified_case):
-        dr = request_case_deletion(qualified_case, staff_user, "Doppelt angelegt")
+        dr = create_or_get_case_deletion_request(qualified_case, staff_user, "Doppelt angelegt")[0]
         client.force_login(lead_user)
         client.post(reverse("core:deletion_review", args=[dr.pk]), {"action": "approve"})
 
@@ -149,7 +149,7 @@ class TestReviewDispatchesTheCaseTarget:
         assert dr.status == DeletionRequest.Status.APPROVED
 
     def test_reject_leaves_the_case_alone(self, client, staff_user, lead_user, qualified_case):
-        dr = request_case_deletion(qualified_case, staff_user, "Doppelt angelegt")
+        dr = create_or_get_case_deletion_request(qualified_case, staff_user, "Doppelt angelegt")[0]
         client.force_login(lead_user)
         client.post(reverse("core:deletion_review", args=[dr.pk]), {"action": "reject"})
 
@@ -159,7 +159,7 @@ class TestReviewDispatchesTheCaseTarget:
         assert dr.status == DeletionRequest.Status.REJECTED
 
     def test_case_target_is_labelled_in_the_request_list(self, client, staff_user, lead_user, qualified_case):
-        request_case_deletion(qualified_case, staff_user, "Doppelt angelegt")
+        create_or_get_case_deletion_request(qualified_case, staff_user, "Doppelt angelegt")[0]
         client.force_login(lead_user)
         body = client.get(reverse("core:deletion_request_list")).content.decode()
         assert qualified_case.title in body
@@ -173,7 +173,7 @@ class TestReviewDispatchesTheCaseTarget:
         """
         assistant_user.can_confirm_deletion = True
         assistant_user.save(update_fields=["can_confirm_deletion"])
-        request_case_deletion(qualified_case, staff_user, "Doppelt angelegt")
+        create_or_get_case_deletion_request(qualified_case, staff_user, "Doppelt angelegt")[0]
         client.force_login(assistant_user)
         body = client.get(reverse("core:deletion_request_list")).content.decode()
         assert qualified_case.title not in body
@@ -193,7 +193,7 @@ class TestReviewDispatchesTheCaseTarget:
         """
         assistant_user.can_confirm_deletion = True
         assistant_user.save(update_fields=["can_confirm_deletion"])
-        dr = request_case_deletion(qualified_case, staff_user, "Doppelt angelegt")
+        dr = create_or_get_case_deletion_request(qualified_case, staff_user, "Doppelt angelegt")[0]
         client.force_login(assistant_user)
 
         response = client.get(reverse("core:deletion_review", args=[dr.pk]))
@@ -207,7 +207,7 @@ class TestReviewDispatchesTheCaseTarget:
         assert 'value="approve"' in body
 
     def test_staff_confirmer_still_sees_the_case_summary(self, client, staff_user, lead_user, qualified_case):
-        dr = request_case_deletion(qualified_case, staff_user, "Doppelt angelegt")
+        dr = create_or_get_case_deletion_request(qualified_case, staff_user, "Doppelt angelegt")[0]
         client.force_login(lead_user)
         body = client.get(reverse("core:deletion_review", args=[dr.pk])).content.decode()
         assert qualified_case.title in body

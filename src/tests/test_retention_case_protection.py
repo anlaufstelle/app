@@ -15,7 +15,7 @@ from core.services.case.deletion import (
     anonymize_case_now,
     anonymize_eligible_soft_deleted_cases,
     approve_case_deletion,
-    request_case_deletion,
+    create_or_get_case_deletion_request,
 )
 from core.services.client.restriction import restrict_processing
 from core.services.events.crud import create_event
@@ -43,7 +43,7 @@ def expired_case(facility, client_qualified, staff_user, admin_user, doc_type_co
             client=client_qualified,
             case=case,
         )
-        request = request_case_deletion(case, staff_user, "Remove duplicate case")
+        request = create_or_get_case_deletion_request(case, staff_user, "Remove duplicate case")[0]
         approve_case_deletion(request, admin_user)
     case.refresh_from_db()
     assert case.is_deleted and case.anonymized_at is None

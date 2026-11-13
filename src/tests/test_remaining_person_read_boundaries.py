@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from core.models import Activity, User
 from core.services.case.workitems import create_workitem, update_workitem
-from core.services.client import approve_client_deletion, request_client_deletion, restore_client
+from core.services.client import approve_client_deletion, create_or_get_client_deletion_request, restore_client
 from core.services.dashboard.activity import log_activity
 from core.services.zeitstrom_watch import build_zeitstrom_page_scope
 from tests._dynamic_test_data import entity_details
@@ -28,7 +28,7 @@ def revoked_person(request, facility, staff_user, lead_user):
 
     def revoke():
         if request.param == "trash":
-            pending = request_client_deletion(person, staff_user, "Consent withdrawn")
+            pending = create_or_get_client_deletion_request(person, staff_user, "Consent withdrawn")[0]
             approve_client_deletion(pending, lead_user)
         else:
             person.is_active = False

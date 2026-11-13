@@ -19,7 +19,6 @@ from core.services.case.deletion import (
     anonymize_case_now,
     create_or_get_case_deletion_request,
     reject_case_deletion,
-    request_case_deletion,
 )
 from tests._row_lock_helpers import mitschnitt
 
@@ -59,7 +58,7 @@ def _antrags_audit():
 
 class TestLoeschantragPrueftDieEinrichtungDerFachkraft:
     @pytest.mark.parametrize("akteur", ["foreign_staff", "fachkraft_ohne_einrichtung"])
-    @pytest.mark.parametrize("dienst", [create_or_get_case_deletion_request, request_case_deletion])
+    @pytest.mark.parametrize("dienst", [create_or_get_case_deletion_request])
     def test_fremde_oder_einrichtungslose_fachkraft_sperrt_und_schreibt_nichts(
         self, request, akteur, dienst, case_open
     ):

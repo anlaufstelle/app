@@ -163,7 +163,7 @@ def test_fixture_seeds_needles_everywhere(maximal_pii_graph):
 #   - EventHistory.create-> core_eventhistory.{data_before,data_after} (UPDATE)
 #   - store_encrypted_file-> core_attachment (Name Fernet-verschluesselt:
 #                          strukturell geprueft, NICHT per Needle-Scan)
-#   - request_deletion   -> core_deletionrequest.reason
+#   - create_or_get_event_deletion_request   -> core_deletionrequest.reason
 #   - approve_deletion   -> seit #1093 KEINE Klienten-PII mehr in
 #                          core_auditlog.detail (nur die DeletionRequest-PK)
 # Alle Klartext-PII-Werte tragen den ``RESIDUEPROBE-``-Praefix.
@@ -199,7 +199,7 @@ def maximal_pii_graph(facility, admin_user, lead_user):
     from core.services.client import (
         approve_client_deletion,
         create_client,
-        request_client_deletion,
+        create_or_get_client_deletion_request,
         update_client,
     )
     from core.services.events import create_event
@@ -419,7 +419,7 @@ def maximal_pii_graph(facility, admin_user, lead_user):
     # 6) Vier-Augen-Loeschung: Antrag (reason -> core_deletionrequest.reason),
     #    Genehmigung (pseudonym + reason -> core_auditlog.detail). Reviewer
     #    != Antragsteller und reviewer.can_confirm_deletion erforderlich.
-    dr = request_client_deletion(client, admin_user, reason="RESIDUEPROBE-Begruendung")
+    dr = create_or_get_client_deletion_request(client, admin_user, reason="RESIDUEPROBE-Begruendung")[0]
     approve_client_deletion(dr, lead_user)
 
     client.refresh_from_db()
@@ -519,12 +519,12 @@ def test_attachments_deleted_after_anonymize(maximal_pii_graph):
 @pytest.mark.django_db
 def test_event_content_gone_after_soft_delete(maximal_pii_graph, admin_user, lead_user):
     from core.models import Attachment
-    from core.services.events import approve_deletion, request_deletion
+    from core.services.events import approve_deletion, create_or_get_event_deletion_request
 
     g = maximal_pii_graph
     # Vier-Augen-Loeschung des Events (Soft-Delete leert data_json). Reviewer
     # (lead_user) != Antragsteller (admin_user); lead_user.can_confirm_deletion.
-    dr = request_deletion(g.event, admin_user, reason="RESIDUEPROBE-EvDel")
+    dr = create_or_get_event_deletion_request(g.event, admin_user, reason="RESIDUEPROBE-EvDel")[0]
     approve_deletion(dr, lead_user)
 
     # Der soft-deletete Event darf keinen Klartext-Needle mehr in seiner eigenen
@@ -846,7 +846,7 @@ def _arm_retention_k_anonymization(graph, requester, reviewer):
     falschen Zweig.
     """
     from core.models import Client, Settings
-    from core.services.events import approve_deletion, request_deletion
+    from core.services.events import approve_deletion, create_or_get_event_deletion_request
 
     Settings.objects.update_or_create(
         facility=graph.facility,
@@ -859,7 +859,7 @@ def _arm_retention_k_anonymization(graph, requester, reviewer):
             age_cluster=Client.AgeCluster.UNKNOWN,
             contact_stage=Client.ContactStage.QUALIFIED,
         )
-    dr = request_deletion(graph.event, requester, reason="RESIDUEPROBE-EvDelKAnon")
+    dr = create_or_get_event_deletion_request(graph.event, requester, reason="RESIDUEPROBE-EvDelKAnon")[0]
     approve_deletion(dr, reviewer)
 
 

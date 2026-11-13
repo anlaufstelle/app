@@ -56,9 +56,11 @@ def _fall_getilgt(case, staff_user, admin_user):
 
 
 def _person_im_papierkorb(case, staff_user, admin_user):
-    from core.services.client import approve_client_deletion, request_client_deletion
+    from core.services.client import approve_client_deletion, create_or_get_client_deletion_request
 
-    antrag = request_client_deletion(Client.objects.get(pk=case.client_id), staff_user, reason="Widerruf")
+    antrag = create_or_get_client_deletion_request(
+        Client.objects.get(pk=case.client_id), staff_user, reason="Widerruf"
+    )[0]
     approve_client_deletion(antrag, admin_user)
 
 

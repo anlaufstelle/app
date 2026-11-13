@@ -107,7 +107,7 @@ from core.services.client.dsgvo_package import (
     render_document,
 )
 from core.services.client.export import _gather_events, export_client_data
-from core.services.client.main import request_client_deletion
+from core.services.client.main import create_or_get_client_deletion_request
 from core.services.client.rectification import request_rectification
 from core.services.client.restriction import (
     _require_staff,
@@ -408,7 +408,7 @@ class TestGatherAuditTrailValuesListEquivalence:
         Pin-Datei (statt bestehende Tests in ``test_client_export*.py`` als Vehikel zu
         nutzen): jene tragen kein ``_encryption_key``-``usefixtures`` und waeren im
         ``.env``-losen Mutantenbaum aus dem FALSCHEN Grund rot."""
-        request_client_deletion(client_identified, staff_user, "Pin099-Client2-Loeschgrund")
+        create_or_get_client_deletion_request(client_identified, staff_user, "Pin099-Client2-Loeschgrund")[0]
         request_rectification(
             client_identified, staff_user, text_path(client_identified), "Pin099-Client2-Neu", "Pin099-Client2-Grund"
         )

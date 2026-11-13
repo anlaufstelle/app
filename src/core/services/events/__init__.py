@@ -42,7 +42,6 @@ from core.services.events.deletion import (
     create_or_get_event_deletion_request,
     get_pending_event_deletion_request,
     reject_deletion,
-    request_deletion,
 )
 from core.services.events.feed import (
     _format_preview_value,
@@ -151,7 +150,6 @@ __all__ = [
     "resolve_idempotency_key",
     "remove_restricted_fields",
     "create_or_get_event_deletion_request",
-    "request_deletion",
     "resolve_default_document_type",
     "soft_delete_event",
     "split_file_and_text_data",
