@@ -574,6 +574,19 @@
     // bleibt (blockierte IndexedDB, klemmender Purge o.ae.).
     var _LOGOUT_WIPE_TIMEOUT_MS = 3000;
 
+    // Refs #2660: htmx page snapshots (``htmx-history-cache``) and filter keys
+    // (``filters:<path>``) live in the tab's sessionStorage and survive the
+    // logout navigation unless the browser honours ``Clear-Site-Data``. Same
+    // JS fallback as the IndexedDB wipe below. Never throws, so it can never
+    // hold back the logout POST.
+    function _wipeTabStorage() {
+        try {
+            window.sessionStorage.clear();
+        } catch (_e) {
+            // best-effort — blocked storage must not block the logout.
+        }
+    }
+
     function _wipeOfflineState() {
         // Retain logout's reset for a retry even while the old page is open.
         _shellLanguageOverride = "de";
@@ -664,6 +677,7 @@
             // NAVIGATION laufen, nicht ab dem Klick. Sonst frisst ein langer
             // Wipe (bis 3 s) ein Drittel des Fensters auf.
             window.__logoutInFlight = Date.now();
+            _wipeTabStorage();
             form.submit();
         });
     });

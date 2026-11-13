@@ -555,6 +555,27 @@
         }
     }
 
+    /** Empty this tab's ``sessionStorage`` (Refs #2660).
+     *
+     * htmx keeps up to ten body snapshots of pushed pages under
+     * ``htmx-history-cache`` and filter-persistence.js keeps ``filters:<path>``
+     * keys there. Both outlive the leave until the tab is closed; only the
+     * ``Clear-Site-Data: "storage"`` header of the logout response would remove
+     * them, and the beacon does not wait for that response. Same fallback idea
+     * as the IndexedDB key drop above.
+     *
+     * The whole storage is emptied rather than a key list, so keys added later
+     * cannot leak. Synchronous and fully guarded: reading ``sessionStorage``
+     * can throw (blocked storage), and that must never delay or block the exit.
+     */
+    function _wipeTabStorage() {
+        try {
+            window.sessionStorage.clear();
+        } catch (_e) {
+            // best-effort — leaving must not wait for or depend on this.
+        }
+    }
+
     /** Gibt ein Promise zurueck, das nach der Navigation aufloest (fuer Tests). */
     function quickExit() {
         var target = _config().url;
@@ -567,6 +588,7 @@
         _abortHtmxRequests();
         _showOverlay("exit");
         _shield(true);
+        _wipeTabStorage();
         _logout();
         return _dropSessionKey().then(function (status) {
             if (status === KEY_DROP_CLEARED) {
@@ -574,6 +596,8 @@
             } else {
                 _warnKeyDropFailed(status);
             }
+            // Again, in case a late write landed while the key drop was running.
+            _wipeTabStorage();
             _suppressReferrer();
             // Marke auffrischen: das Fenster ihrer Leser soll ab der Navigation
             // laufen, nicht ab dem Ausloesen (das Warten oben kostet bis zu

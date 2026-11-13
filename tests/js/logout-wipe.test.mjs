@@ -279,3 +279,65 @@ describe("lastActivity nach dem Logout (Refs #1946)", () => {
         expect(stamp.ts).toBeGreaterThanOrEqual(wipedAt);
     });
 });
+
+describe("Tab storage on logout", () => {
+    function seedTabStorage() {
+        window.sessionStorage.setItem("htmx-history-cache", JSON.stringify([{ url: "/clients/", content: "<b>Pseudonym</b>" }]));
+        window.sessionStorage.setItem("filters:/events/", JSON.stringify({ q: "name" }));
+    }
+
+    afterEach(() => {
+        window.sessionStorage.clear();
+    });
+
+    it("removes htmx history snapshots and filter keys before the logout POST", async () => {
+        seedTabStorage();
+        const form = makeLogoutForm();
+        let seenAtSubmit = null;
+        form.submit = vi.fn(() => {
+            seenAtSubmit = {
+                history: window.sessionStorage.getItem("htmx-history-cache"),
+                filters: window.sessionStorage.getItem("filters:/events/"),
+            };
+        });
+
+        dispatchSubmit(form);
+        await vi.waitFor(() => expect(form.submit).toHaveBeenCalledTimes(1));
+
+        expect(seenAtSubmit).toEqual({ history: null, filters: null });
+    });
+
+    it("removes entries written while the offline wipe was running", async () => {
+        let resolveWipe;
+        window.crypto_session = {
+            wipeOfflineState: vi.fn(() => new Promise((res) => (resolveWipe = res))),
+        };
+        const form = makeLogoutForm();
+        dispatchSubmit(form);
+        seedTabStorage();
+
+        resolveWipe();
+        await vi.waitFor(() => expect(form.submit).toHaveBeenCalledTimes(1));
+
+        expect(window.sessionStorage.getItem("htmx-history-cache")).toBeNull();
+        expect(window.sessionStorage.getItem("filters:/events/")).toBeNull();
+    });
+
+    it("still submits the logout when sessionStorage access throws", async () => {
+        const descriptor = Object.getOwnPropertyDescriptor(window, "sessionStorage");
+        Object.defineProperty(window, "sessionStorage", {
+            configurable: true,
+            get() {
+                throw new DOMException("denied", "SecurityError");
+            },
+        });
+        try {
+            const form = makeLogoutForm();
+            dispatchSubmit(form);
+            await vi.waitFor(() => expect(form.submit).toHaveBeenCalledTimes(1));
+        } finally {
+            if (descriptor) Object.defineProperty(window, "sessionStorage", descriptor);
+            else delete window.sessionStorage;
+        }
+    });
+});

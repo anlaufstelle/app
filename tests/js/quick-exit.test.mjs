@@ -527,6 +527,95 @@ describe("Schluessel-Loeschung vor der Navigation (R-L3-9)", () => {
     });
 });
 
+describe("Tab storage is cleared before leaving", () => {
+    function seedTabStorage() {
+        window.sessionStorage.setItem("htmx-history-cache", JSON.stringify([{ url: "/clients/", content: "<b>Pseudonym</b>" }]));
+        window.sessionStorage.setItem("filters:/events/", JSON.stringify({ q: "name" }));
+        window.sessionStorage.setItem("filters:/clients/", JSON.stringify({ q: "name" }));
+    }
+
+    afterEach(() => {
+        window.sessionStorage.clear();
+    });
+
+    it("removes the htmx history snapshots and all filter keys", async () => {
+        const { replace } = await freshLoad({ dataset: online() });
+        seedTabStorage();
+
+        await window.quickExit.trigger();
+
+        expect(replace).toHaveBeenCalledWith("https://example.org/wetter");
+        expect(window.sessionStorage.getItem("htmx-history-cache")).toBeNull();
+        expect(window.sessionStorage.getItem("filters:/events/")).toBeNull();
+        expect(window.sessionStorage.getItem("filters:/clients/")).toBeNull();
+    });
+
+    it("clears synchronously, so a hanging key deletion cannot delay it", async () => {
+        const { replace, resolveKeyDrop } = await freshLoad({ dataset: online(), keyDropHangs: true });
+        seedTabStorage();
+
+        const running = window.quickExit.trigger();
+
+        expect(window.sessionStorage.getItem("htmx-history-cache")).toBeNull();
+        expect(window.sessionStorage.getItem("filters:/events/")).toBeNull();
+        expect(replace).not.toHaveBeenCalled();
+        resolveKeyDrop();
+        await running;
+    });
+
+    it("removes entries written while the key deletion was still running", async () => {
+        const { replace, resolveKeyDrop } = await freshLoad({ dataset: online(), keyDropHangs: true });
+
+        const running = window.quickExit.trigger();
+        seedTabStorage();
+        resolveKeyDrop();
+        await running;
+
+        expect(replace).toHaveBeenCalled();
+        expect(window.sessionStorage.getItem("htmx-history-cache")).toBeNull();
+        expect(window.sessionStorage.getItem("filters:/events/")).toBeNull();
+    });
+
+    it("still leaves when sessionStorage access throws", async () => {
+        const { replace, sendBeacon } = await freshLoad({ dataset: online() });
+        const descriptor = Object.getOwnPropertyDescriptor(window, "sessionStorage");
+        Object.defineProperty(window, "sessionStorage", {
+            configurable: true,
+            get() {
+                throw new DOMException("denied", "SecurityError");
+            },
+        });
+        try {
+            await window.quickExit.trigger();
+        } finally {
+            if (descriptor) Object.defineProperty(window, "sessionStorage", descriptor);
+            else delete window.sessionStorage;
+        }
+
+        expect(sendBeacon).toHaveBeenCalledTimes(1);
+        expect(replace).toHaveBeenCalledWith("https://example.org/wetter");
+    });
+
+    it("still leaves when removing an entry throws", async () => {
+        const { replace } = await freshLoad({ dataset: online() });
+        seedTabStorage();
+        const failing = () => {
+            throw new Error("quota");
+        };
+        const removeItem = vi.spyOn(Storage.prototype, "removeItem").mockImplementation(failing);
+        const clear = vi.spyOn(Storage.prototype, "clear").mockImplementation(failing);
+        try {
+            await window.quickExit.trigger();
+        } finally {
+            // Restore first: the shared cleanup hooks call Storage#clear().
+            removeItem.mockRestore();
+            clear.mockRestore();
+        }
+
+        expect(replace).toHaveBeenCalledWith("https://example.org/wetter");
+    });
+});
+
 describe("Referrer beim Sprung auf die Zielseite", () => {
     // Refs #2179: Das Dokument liefert in Produktion
     // ``Referrer-Policy: strict-origin-when-cross-origin``. Ein https->https-
