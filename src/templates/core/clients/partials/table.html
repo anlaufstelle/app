@@ -113,7 +113,7 @@ steht.{% endcomment %}
                 </div>
 
                 {# Offline-Toggle — Mobile-Card-Variante (eigener testid) #}
-                <div class="flex-shrink-0 sm:hidden">
+                <div role="cell" class="flex-shrink-0 sm:hidden">
                     <button type="button"
                             @click.prevent.stop="toggleOffline"
                             :disabled="busy"
