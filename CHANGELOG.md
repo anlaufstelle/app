@@ -49,7 +49,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- **Mobile Abmelde-Fläche und Personenliste für Screenreader** (#2660) — Im „Mehr“-Menü ist „Abmelden“ jetzt 44 px hoch. In der Personenliste liegt der mobile Offline-Knopf in einer Tabellenzelle, sodass Hilfstechniken die Zeilen korrekt lesen.
+- **Mobile Abmelde-Fläche und Personenliste für Screenreader** (#2660) — Im „Mehr“-Menü ist „Abmelden“ jetzt 44 px hoch. In der Personenliste und in der Offline-Personenliste liegt der mobile Knopf in einer Tabellenzelle, sodass Hilfstechniken die Zeilen korrekt lesen; offline sind Knopf, Namenslink, Suche und Filter mobil 44 px groß.
 - **Statistik-Diagramme bei langsamer Verbindung** (#2691) — Die Diagramme warten auf die Diagramm-Bibliothek und erscheinen auch dann, wenn ihre Daten zuerst eintreffen. Dafür werden die Daten nur einmal abgerufen; kann die Bibliothek nicht geladen werden, erscheint die bestehende Fehlermeldung.
 - **Sicherheitsbestätigung bei Passkey-Änderungen** (#2750) — Die Weiterleitung zur erneuten Passwortbestätigung bleibt bei einem Service-Worker-Wechsel unter Kontrolle des Browsers und hängt nicht mehr am alten Worker.
 - **CSV-Export in Ortszeit** (#2713) — Datum und Uhrzeit der Statistik-Ereignisse werden in der Zeitzone der Anwendung ausgegeben, auch nahe Mitternacht und bei Sommerzeit. Früher exportierte CSV-Dateien tragen UTC-Zeiten.
