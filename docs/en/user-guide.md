@@ -183,7 +183,7 @@ The feed combines four sources for the current day:
 
 **Header row.** At the very top, a single row holds the title, the date switcher, the shift selection and the **Feed | Handover** switch; it applies to both views. The shift is named only there. On desktop, **New** groups **Create task** and **Create person** for social workers and higher roles. On a phone, date and shift are one shared tap target that opens a sheet from the bottom; **Close**, the Escape key or a tap beside the sheet closes it again, and the focus returns to the tap target.
 
-**Figures row.** In the feed, a row of figures sits directly below the header row (it scrolls sideways on a phone). Figures with an arrow lead to the corresponding lists:
+**Key figures row.** In the feed, this row sits directly below the header row (it scrolls sideways on a phone). Figures with an arrow lead to the corresponding lists:
 
 - **Contacts on shift** -- documented contacts of the selected shift and day (without a selected shift the figure reads **Contacts today**, on an earlier day **Contacts on this day**). The link opens the contacts list with the same filters plus "without tally"; tally marks do not count here.
 - **Counted (tally)** -- tally entries in the live window, including entries of types that have since been disabled; visible only when the tally is visible. The link opens the contacts list with "tally only" and the same time window. Tiles continue to count all anonymous contacts of their type, so their sum can differ from this figure.
@@ -233,7 +233,7 @@ For the application the two hours really are different points in time, one hour 
 
 On the night the clocks spring forward, by contrast, the hour from 02:00 to 03:00 **does not exist at all** -- there the form still rejects a time from that window and says why. There is nothing to choose: a time that does not exist is not made real by any selection.
 
-If the selection is not the running shift (another day or another shift), a hint "You are viewing …" appears below the header row: **to the current shift** returns to a running shift, otherwise **to today** returns to today. While the running shift is selected, the hint does not appear. The feed shows the figures row instead of a separate box; the handover contains the full shift summary.
+If the selection is not the running shift (another day or another shift), a hint "You are viewing …" appears below the header row: **to the current shift** returns to a running shift, otherwise **to today** returns to today. While the running shift is selected, the hint does not appear. The feed shows the key figures row instead of a separate box; the handover contains the full shift summary.
 
 Handover screenshots: [Desktop](../screenshots/uebergabe-en.webp) · [Mobile](../screenshots/uebergabe-mobil-en.webp).
 
@@ -266,7 +266,7 @@ Filter changes reload only the feed (HTMX), without a full page refresh.
 
 ### Entry Ban banner
 
-If there are active entry bans in your facility, the figures row shows the red-marked figure **Entry bans active**, and directly below it one red row per ban appears with the pseudonym and, depending on permissions and available content, the reason and "Until" date. The detail rows sit outside the sideways-scrolling figures row and remain visible on a phone. The figure and details update in the background when an entry ban is created, changed or deleted.
+If there are active entry bans in your facility, the key figures row shows the red-marked figure **Entry bans active**, and directly below it one red row per ban appears with the pseudonym and, depending on permissions and available content, the reason and "Until" date. The detail rows sit outside the sideways-scrolling key figures row and remain visible on a phone. The figure and details update in the background when an entry ban is created, changed or deleted.
 
 ---
 
@@ -276,7 +276,7 @@ The **Contacts list** (`/events/`) is a working list spanning multiple days, for
 
 Contacts list screenshots: [Desktop](../screenshots/kontakte-en.webp) · [Mobile](../screenshots/kontakte-mobil-en.webp).
 
-**Open it:** Select **Contacts** directly below **Timeline** in the sidebar, or **More → Contacts** on mobile. This entry is active only on `/events/`; contact detail pages remain assigned to the Timeline. The contact figure in the Timeline figures row also opens the list, carrying over the selected day, documentation type and shift and showing contacts **without tally**. The neighbouring **Counted (tally)** figure opens tally contacts in the live window.
+**Open it:** Select **Contacts** directly below **Timeline** in the sidebar, or **More → Contacts** on mobile. This entry is active only on `/events/`; contact detail pages remain assigned to the Timeline. The contact figure in the Timeline key figures row also opens the list, carrying over the selected day, documentation type and shift and showing contacts **without tally**. The neighbouring **Counted (tally)** figure opens tally contacts in the live window.
 
 **Combine filters:** The top row shows the search field, the period quick selection **Today | Week | Month | Period** and the **Filters** button. The button opens the filter panel (below the button in a wide window, otherwise as a sheet at the bottom edge) and shows the number of active filters in brackets. Every active filter appears below as a chip; **×** on a chip removes exactly that filter, and **Reset all** opens the unfiltered list. Changes apply immediately, the search field after a short pause. When the panel opens, focus moves to its first field; **Esc** closes it and returns focus to the button. Without JavaScript the panel can still be expanded and **Filter** replaces immediate filtering.
 
@@ -307,7 +307,7 @@ The **Work Center** (`/start/`) is the landing page of the **Manager** role -- a
 
 All other roles are redirected from `/start/` straight to their own workplace:
 
-- **Social worker / Assistant** -- to the Timeline (`/`); contacts and your own tasks appear in the figures row above the feed (see [What the Timeline shows](#what-the-timeline-shows)).
+- **Social worker / Assistant** -- to the Timeline (`/`); contacts and your own tasks appear in the key figures row above the feed (see [What the Timeline shows](#what-the-timeline-shows)).
 - **Application support** (`facility_admin`) -- to the administration overview (`/verwaltung/`).
 - **System administration** (`super_admin`) -- to the system area (`/system/`).
 
@@ -538,7 +538,7 @@ What happens:
 
 ## 5. Hints and Tasks (Work Items)
 
-Tasks without a person remain visible. Tasks linked to people in the trash or inactive people are excluded from the inbox, timeline, focus box, profile, navigation counts and handover; their detail links return 404, as do their edit links for users permitted to edit tasks. Timeline contacts, bans and activities targeting people, events, tasks or cases also exclude these people; entries without a person remain visible. Restoring a person who remains active makes the eligible tasks visible again. Profile favorites and recent visits also exclude deleted or inactive people. Profile event lists and contact counts, the contact count in the Timeline figures row, and handover events include only role-visible documentation that is not deleted and belongs to active people outside the trash or has no person attached.
+Tasks without a person remain visible. Tasks linked to people in the trash or inactive people are excluded from the inbox, timeline, focus box, profile, navigation counts and handover; their detail links return 404, as do their edit links for users permitted to edit tasks. Timeline contacts, bans and activities targeting people, events, tasks or cases also exclude these people; entries without a person remain visible. Restoring a person who remains active makes the eligible tasks visible again. Profile favorites and recent visits also exclude deleted or inactive people. Profile event lists and contact counts, the contact count in the Timeline key figures row, and handover events include only role-visible documentation that is not deleted and belongs to active people outside the trash or has no person attached.
 
 The ordinary person record and its deletion, merge, contact-stage downgrade and legal-hold forms return 404 for deleted or inactive people. The event list, event detail and attachment links, event search and ordinary event CSV export also exclude events belonging to deleted or inactive people; eligible events without a person remain visible. Status responses and their replays return 404 for these person-linked tasks before returning task content. The completed-task count shown when loading fragments counts only readable tasks. A pending deletion request alone does not block these readers; restoring a person who remains active makes eligible records visible again. The person ranking in statistics shows only active people outside the trash; the next visible person moves up. Aggregate statistics remain unchanged.
 

@@ -12,7 +12,7 @@ With JavaScript loaded, fields follow the application language: German `DD.MM.YY
 
 Date, the **Shift** select and **Feed | Handover** share one header. Choose **All day** or a configured shift with times; night shifts show `(+1)` after the end time. The shift matching the current time is selected when opening the page. On a phone, tap date/shift to open the selection sheet; **Esc** closes it and returns focus.
 
-Below it, the **figures row** shows contacts for the selected day and shift without tally entries, tallies in the live window, and your own open and overdue tasks. Figures with arrows open the corresponding lists; active entry bans appear as a red figure with detail rows below. When viewing a different selection, the hint returns **to the current shift**, or **to today** outside a running shift. The handover holds the full shift summary.
+Below it, the **key figures row** shows contacts for the selected day and shift without tally entries, tallies in the live window, and your own open and overdue tasks. Figures with arrows open the corresponding lists; active entry bans appear as a red figure with detail rows below. When viewing a different selection, the hint returns **to the current shift**, or **to today** outside a running shift. The handover holds the full shift summary.
 
 Tap a **tally tile** to count: **+1** saves directly, **+ …** opens the required number fields. **Undo** remains available for 60 seconds after the last tally. In the feed, one expandable row per hour shows the total and counts by type; **Show counted contacts** opens the corresponding contacts list. See the [Timeline user guide](user-guide.md#2-home--timeline).
 
