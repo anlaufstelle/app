@@ -1410,7 +1410,7 @@ The reporting duty under Art. 33/34 GDPR lies with the **controller**, i.e. the 
    | `failed_login_burst` | failed logins | `BREACH_FAILED_LOGIN_THRESHOLD` (20) | `…_LONG` (60) | per user |
    | `mfa_failure_burst` (Refs #2033) | failed second-factor verifications; `MFA_FAILED` (TOTP) and `WEBAUTHN_FAILED` (passkey) count **together**, otherwise the threshold could be evaded by switching methods | `BREACH_MFA_FAILURE_THRESHOLD` (10) | `…_LONG` (30) | per user |
    | `mass_export` | exports | `BREACH_EXPORT_THRESHOLD` (10) | `…_LONG` (30) | per user |
-   | `mass_delete` | deletions (`DELETE`) | `BREACH_DELETE_THRESHOLD` (50) | `…_LONG` (150) | facility |
+   | `mass_delete` | deletions (`DELETE`), excluding decisions on retention proposals (category `retention_proposal_…`) | `BREACH_DELETE_THRESHOLD` (50) | `…_LONG` (150) | facility |
    | `mass_client_destruction` | destruction of persons (`CLIENT_SOFT_DELETED`, `CLIENT_ANONYMIZED`, `DELETION_APPROVED`) that `mass_delete` does not see | `BREACH_CLIENT_DESTRUCTION_THRESHOLD` (20) | `…_LONG` (60) | facility |
    | `distributed_login_attack` | distinct source IPs against **one** account (distributed brute force) | `BREACH_DISTRIBUTED_LOGIN_IP_THRESHOLD` (10) | — | per user |
    | `anonymous_login_burst` | failed logins against **unknown** usernames, per source IP | `BREACH_ANON_LOGIN_IP_THRESHOLD` (20) | — | source IP |
@@ -3399,4 +3399,4 @@ Check lock-file drift     make deps-check
 <!-- translation-source: docs/ops-runbook.md -->
 <!-- translation-version: v0.99.10 -->
 <!-- translation-date: 2026-11-12 -->
-<!-- source-hash: c2dfc97979b558ecc50223a31ae23d9cf443bce8 -->
+<!-- source-hash: 2e872a62dcd1bb5a7be69b7ca75fe0d69192048a -->

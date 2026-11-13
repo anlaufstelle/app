@@ -1424,7 +1424,7 @@ Die Meldepflicht nach Art. 33/34 DSGVO trifft den **Verantwortlichen**, also den
    | `failed_login_burst` | fehlgeschlagene Logins | `BREACH_FAILED_LOGIN_THRESHOLD` (20) | `…_LONG` (60) | je Benutzer |
    | `mfa_failure_burst` (Refs #2033) | fehlgeschlagene Zweitfaktor-Pruefungen; `MFA_FAILED` (TOTP) und `WEBAUTHN_FAILED` (Passkey) zaehlen **gemeinsam**, sonst liesse sich die Schwelle durch Wechsel des Verfahrens unterlaufen | `BREACH_MFA_FAILURE_THRESHOLD` (10) | `…_LONG` (30) | je Benutzer |
    | `mass_export` | Exports | `BREACH_EXPORT_THRESHOLD` (10) | `…_LONG` (30) | je Benutzer |
-   | `mass_delete` | Loeschungen (`DELETE`) | `BREACH_DELETE_THRESHOLD` (50) | `…_LONG` (150) | Einrichtung |
+   | `mass_delete` | Loeschungen (`DELETE`), ohne Entscheidungen ueber Loeschvorschlaege (Kategorie `retention_proposal_…`) | `BREACH_DELETE_THRESHOLD` (50) | `…_LONG` (150) | Einrichtung |
    | `mass_client_destruction` | Personen-Vernichtung (`CLIENT_SOFT_DELETED`, `CLIENT_ANONYMIZED`, `DELETION_APPROVED`), die `mass_delete` nicht sieht | `BREACH_CLIENT_DESTRUCTION_THRESHOLD` (20) | `…_LONG` (60) | Einrichtung |
    | `distributed_login_attack` | distinkte Quell-IPs gegen **einen** Account (Distributed-Bruteforce) | `BREACH_DISTRIBUTED_LOGIN_IP_THRESHOLD` (10) | — | je Benutzer |
    | `anonymous_login_burst` | fehlgeschlagene Logins gegen **unbekannte** Benutzernamen, je Quell-IP | `BREACH_ANON_LOGIN_IP_THRESHOLD` (20) | — | Quell-IP |
