@@ -98,6 +98,10 @@ class TestZZPasskeyRemovalRevokesOtherSessions:
             _login_with_backup_code(page_b, base_url, codes[1])
             assert _is_signed_in(page_b, base_url), "precondition: B is signed in before the removal"
 
+            # Refs #2741/#2730: submit without a worker-idle sleep. The native
+            # navigation must survive takeover; passkey-empty below observes
+            # its completed result. A forced takeover is covered separately in
+            # test_passkey_removal_takeover.py.
             page_a.goto(f"{base_url}/mfa/settings/", wait_until="domcontentloaded")
             delete_button = page_a.locator("[data-testid='passkey-delete-button']")
             expect(delete_button).to_have_count(1)
