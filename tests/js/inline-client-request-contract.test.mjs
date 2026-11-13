@@ -30,3 +30,13 @@ it.each([
         .filter((line) => line.length < 1000).join("\n");
     expect(result.status, diagnostic).toBe(0);
 });
+
+// Modal focus and validation attributes must survive delayed framework tasks.
+it.each(["validation_then_success", "dialog_network_error", "dialog_timeout"])(
+    "waits for observable completion with delayed tasks: %s", (mode) => {
+        const result = spawnSync(process.execPath, ["tests/js/helpers/inline-client-runtime.mjs", mode, "delayed-tasks"], {
+            encoding: "utf8", timeout: 20000,
+        });
+        expect(result.status, result.stdout + result.stderr).toBe(0);
+    },
+);

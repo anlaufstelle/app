@@ -46,16 +46,46 @@ class FakeXHR {
         this.status = status; this.response = this.responseText = body; this.readyState = 4; this.onload();
     }
 }
+// Exercise delayed task delivery without changing the assertion deadline.
+if (process.argv[3] === "delayed-tasks") {
+    const setTimeout = w.setTimeout.bind(w);
+    w.setTimeout = (callback, delay = 0, ...args) => setTimeout(callback, delay === 0 ? 60 : delay, ...args);
+}
 w.XMLHttpRequest = FakeXHR;
 w.fetch = async () => ({ ok: true, json: async () => [] });
 w.eval(source("src/static/js/htmx.min.js"));
-w.htmx.config.defaultSettleDelay = 0;
+w.htmx.config.defaultSettleDelay = process.argv[3] === "delayed-tasks" ? 60 : 0;
 w.htmx.config.includeIndicatorStyles = false;
 w.eval(source("src/static/js/htmx-errors.js"));
 w.eval(source("src/static/js/alpine/forms.js"));
 w.eval(source("src/static/js/alpine-csp.min.js"));
-const tick = () => new Promise((resolve) => w.setTimeout(resolve, 25));
-await tick();
+// A response can swap synchronously but settle and Alpine focus run later.
+const pendingSettles = new Set();
+w.document.addEventListener("htmx:afterSwap", (event) => pendingSettles.add(event.target));
+w.document.addEventListener("htmx:afterSettle", (event) => pendingSettles.delete(event.target));
+async function settle() {
+    if (pendingSettles.size) {
+        await new Promise((resolve, reject) => {
+            const timeout = w.setTimeout(() => {
+                w.document.removeEventListener("htmx:afterSettle", completed);
+                reject(new Error("HTMX did not settle the response"));
+            }, 5000);
+            const completed = () => {
+                if (pendingSettles.size) return;
+                w.clearTimeout(timeout);
+                w.document.removeEventListener("htmx:afterSettle", completed);
+                resolve();
+            };
+            w.document.addEventListener("htmx:afterSettle", completed);
+        });
+    }
+    // Flush reactive effects, mutation observers and the modal's focus callback.
+    await w.Alpine.nextTick();
+}
+if (w.document.readyState === "loading") {
+    await new Promise((resolve) => w.document.addEventListener("DOMContentLoaded", resolve, { once: true }));
+}
+await settle();
 w.htmx.process(w.document.body);
 const form = w.document.getElementById("event-create-form");
 const c = w.Alpine.$data(form);
@@ -65,7 +95,7 @@ async function openModal() {
     w.document.getElementById("open").click();
     assert.equal(requests.at(-1).method, "GET");
     requests.at(-1).respond(modal);
-    await tick();
+    await settle();
     assert.equal(form.hasAttribute("inert"), true);
     assert.equal(w.document.activeElement.name, "pseudonym");
 }
@@ -85,7 +115,7 @@ const cancel = () => {
     return requests.at(-1);
 };
 const selected = async (id) => {
-    await tick();
+    await settle();
     assert.equal(posted().client, id, "the current successful creation must select its person");
     assert.equal(c.query, id, "the selected pseudonym must match the successful creation");
     assert.equal(w.document.querySelector('[role="dialog"]'), null);
@@ -96,30 +126,30 @@ const selected = async (id) => {
 
 if (mode === "selection") {
     c.selectItem({ id: "a", pseudonym: "Person A" });
-    await tick();
+    await settle();
     c.clientCases = [{ id: "case-a", title: "Case A" }];
-    await tick();
+    await settle();
     c.selectedCaseId = "case-a";
-    await tick();
+    await settle();
     assert.equal(posted().client, "a");
     assert.equal(posted().case, "case-a");
     field.value = "Person B";
     field.dispatchEvent(new w.Event("input", { bubbles: true }));
-    await tick();
+    await settle();
     assert.equal(posted().client, "");
     assert.equal(posted().case, "");
     assert.equal(c._initialCaseId, "");
     c._applyResults([{ id: "b", pseudonym: "Person B" }]);
-    await tick();
+    await settle();
     field.dispatchEvent(new w.KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true }));
     field.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     field.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
-    await tick();
+    await settle();
     assert.equal(posted().client, "");
 } else if (mode === "submit") {
     c.selectedId = "a"; c._casesClientId = "a"; c._initialCaseId = "case-a";
     c.casesState = "loading";
-    await tick();
+    await settle();
     for (const state of ["loading", "error"]) {
         c.casesState = state;
         const event = new w.Event("submit", { bubbles: true, cancelable: true });
@@ -133,7 +163,7 @@ if (mode === "selection") {
     const dialogForm = w.document.querySelector('[role="dialog"] form');
     dialogForm.dispatchEvent(new w.Event("submit", { bubbles: true, cancelable: true }));
     requests.at(-1).respond("<html>Server error</html>", {}, 500);
-    await tick();
+    await settle();
     const dialog = w.document.querySelector('[role="dialog"]');
     assert.equal(dialog.getAttribute("aria-modal"), "true");
     const toast = w.document.querySelector('[data-inline-client-error], [data-testid="htmx-error-toast"]');
@@ -153,20 +183,20 @@ if (mode === "selection") {
     assert.equal(cancel.method, "GET");
     if (mode === "cancel_pending_error") {
         create.respond("<html>Server error</html>", {}, 500);
-        await tick();
+        await settle();
         assert.equal(w.document.querySelector('[data-testid="htmx-error-toast"]'), null, "canceling must suppress errors while the close request is pending");
     }
     if (mode === "cancel_pending_success") {
         create.respond("", { "HX-Trigger-After-Swap": JSON.stringify({ "client-inline-created": { id: "new-a", pseudonym: "New A" } }) });
-        await tick();
+        await settle();
         assert.notEqual(posted().client, "new-a", "Escape must invalidate creation immediately");
     }
     cancel.respond("");
-    await tick();
+    await settle();
     assert.equal(w.document.querySelector('[role="dialog"]'), null);
     assert.equal(form.hasAttribute("inert"), false);
     c.selectItem({ id: "b", pseudonym: "Person B" });
-    await tick();
+    await settle();
     assert.equal(posted().client, "b");
     assert.equal(posted().notes, "Keep draft");
     if (mode === "reopen_then_late_success") await openModal();
@@ -176,21 +206,21 @@ if (mode === "selection") {
         nextForm.dispatchEvent(new w.Event("submit", { bubbles: true, cancelable: true }));
         const nextCreate = requests.at(-1);
         c.selectItem({ id: "b", pseudonym: "Person B" });
-        await tick();
+        await settle();
         nextCreate.respond("", { "HX-Trigger-After-Swap": JSON.stringify({ "client-inline-created": { id: "new-a", pseudonym: "New A" } }) });
-        await tick();
+        await settle();
         assert.equal(posted().client, "b", "selection changes invalidate pending creation");
     }
     if (mode === "cancel_then_late_error") {
         create.respond("<html>Server error</html>", {}, 500);
-        await tick();
+        await settle();
         assert.equal(w.document.querySelector('[data-testid="htmx-error-toast"]'), null, "a canceled request must not display a late error");
     } else if (mode === "cancel_then_late_swap") {
         create.respond(modal);
-        await tick();
+        await settle();
         assert.equal(w.document.querySelector('[role="dialog"]'), null, "a canceled request must not reopen the dialog");
     } else if (!["cancel_pending_error", "cancel_pending_success"].includes(mode)) create.respond("", { "HX-Trigger-After-Swap": JSON.stringify({ "client-inline-created": { id: "new-a", pseudonym: "New A" } }) });
-    await tick();
+    await settle();
     assert.equal(posted().client, "b", "a canceled dialog must not overwrite a later deliberate selection");
     if (["reopen_then_late_success", "selection_then_late_success"].includes(mode)) {
         assert.ok(w.document.querySelector('[role="dialog"]'), "a stale swap must not close the current dialog");
@@ -201,7 +231,7 @@ if (mode === "selection") {
     if (mode === "dialog_network_error") requests.at(-1).onerror();
     else if (mode === "dialog_timeout") requests.at(-1).ontimeout();
     else requests.at(-1).respond("<html>Private error details</html>", {}, Number(mode.match(/\d+$/)?.[0] || 500));
-    await tick();
+    await settle();
     const message = w.document.querySelector('[data-inline-client-error]');
     assert.ok(message && !message.hidden, "the error must be visible inside the dialog");
     assert.equal(message.getAttribute("aria-live"), "assertive");
@@ -212,26 +242,26 @@ if (mode === "selection") {
     assert.equal(w.document.activeElement.name, "pseudonym", "Tab from the error stays inside the dialog");
     w.document.activeElement.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
     requests.at(-1).respond("");
-    await tick();
+    await settle();
     assert.equal(w.document.querySelector('[role="dialog"]'), null);
 } else if (mode === "dynamic_background") {
     await openModal();
     const outside = w.document.createElement("aside");
     outside.innerHTML = '<button id="dynamic">Dynamic control</button>';
     w.document.body.appendChild(outside);
-    await tick();
+    await settle();
     assert.ok(w.document.getElementById("dynamic").closest("[inert]"), "new background controls must become inert");
     w.document.getElementById("dynamic").focus();
     assert.ok(w.document.querySelector('[role="dialog"]').contains(w.document.activeElement), "outside focus must return to the dialog");
     w.document.querySelector('[data-inline-client-cancel]').click();
     requests.at(-1).respond("");
-    await tick();
+    await settle();
     assert.equal(outside.hasAttribute("inert"), false, "owned dynamic inert must be released");
 } else if (mode === "current_success") {
     await openModal();
     w.document.querySelector('[role="dialog"] form').dispatchEvent(new w.Event("submit", { bubbles: true, cancelable: true }));
     requests.at(-1).respond("", { "HX-Trigger-After-Swap": JSON.stringify({ "client-inline-created": { id: "new-a", pseudonym: "New A" } }) });
-    await tick();
+    await settle();
     assert.equal(posted().client, "new-a");
     assert.equal(w.document.activeElement, field);
 } else if (mode === "double_submit") {
@@ -246,7 +276,7 @@ if (mode === "selection") {
 } else if (mode === "validation_then_success") {
     await openModal();
     send().respond(modal.replace('autofocus', 'aria-invalid="true"'));
-    await tick();
+    await settle();
     assert.equal(form.hasAttribute("inert"), true);
     assert.equal(w.document.activeElement.getAttribute("aria-invalid"), "true");
     success(send());
@@ -254,7 +284,7 @@ if (mode === "selection") {
 } else if (mode === "post_error_then_success") {
     await openModal();
     send().respond("Server error", {}, 500);
-    await tick();
+    await settle();
     success(send());
     await selected("new-a");
 } else if (mode === "second_creation") {
@@ -268,23 +298,23 @@ if (mode === "selection") {
     await openModal();
     const old = send();
     cancel().respond("");
-    await tick();
+    await settle();
     await openModal();
     const current = send();
     success(old, "old-person");
-    await tick();
+    await settle();
     assert.ok(dialogForm(), "old response cannot close the current dialog");
     success(current, "new-b");
     await selected("new-b");
 } else if (mode.startsWith("cancel_failure_then_create_")) {
     field.value = "New A";
     field.dispatchEvent(new w.Event("input", { bubbles: true }));
-    await tick();
+    await settle();
     await openModal();
     const closing = cancel();
     if (mode.endsWith("network")) closing.onerror();
     else closing.respond("Server error", {}, 500);
-    await tick();
+    await settle();
     assert.ok(dialogForm(), "failed close leaves the form available to retry");
     success(send());
     await selected("new-a");
@@ -294,7 +324,7 @@ if (mode === "selection") {
     const current = send();
     if (mode === "cancel_pending_close_before_create_success") {
         closing.respond("");
-        await tick();
+        await settle();
         assert.ok(dialogForm(), "an older close cannot discard the new creation form");
     }
     success(current);
@@ -304,9 +334,9 @@ if (mode === "selection") {
 } else if (mode === "cancel_error_then_cancel") {
     await openModal();
     cancel().respond("Error", {}, 500);
-    await tick();
+    await settle();
     cancel().respond("");
-    await tick();
+    await settle();
     assert.equal(dialogForm(), null);
     assert.equal(form.hasAttribute("inert"), false);
     assert.equal(w.document.activeElement.id, "open");
@@ -318,7 +348,7 @@ if (mode === "selection") {
     const dynamic = w.document.createElement("button");
     dynamic.textContent = "Background";
     w.document.body.append(dynamic);
-    await tick();
+    await settle();
     assert.equal(dynamic.hasAttribute("inert"), true);
     success(send());
     await selected("new-a");
@@ -328,13 +358,13 @@ if (mode === "selection") {
     assert.equal(w.document.activeElement, dynamic, "no focus trap remains after close");
     const later = w.document.createElement("button");
     w.document.body.append(later);
-    await tick();
+    await settle();
     assert.equal(later.hasAttribute("inert"), false, "observer is disconnected after close");
     await openModal();
     const modalSlot = w.document.getElementById("client-inline-create-modal");
     w.Alpine.destroyTree(modalSlot);
     modalSlot.remove();
-    await tick();
+    await settle();
     assert.equal(form.hasAttribute("inert"), false);
     assert.equal(dynamic.hasAttribute("inert"), false);
     dynamic.focus();
@@ -344,9 +374,9 @@ if (mode === "selection") {
     const first = requests.at(-1);
     w.document.getElementById("open").click();
     first.respond(modal);
-    await tick();
+    await settle();
     if (requests.at(-1) !== first) requests.at(-1).respond(modal);
-    await tick();
+    await settle();
     success(send());
     await selected("new-a");
 } else if (["stale_archived_response", "current_archived_response", "detached_archived_response"].includes(mode)) {
@@ -357,15 +387,15 @@ if (mode === "selection") {
     const closing = mode !== "current_archived_response" ? cancel() : null;
     if (mode === "detached_archived_response") {
         closing.respond("");
-        await tick();
+        await settle();
         c.selectItem({ id: "b", pseudonym: "Person B" });
-        await tick();
+        await settle();
     }
     old.respond("<p>Archived response must not replace the dialog</p>", {
         "X-Facility-Archived": "1",
         "HX-Trigger-After-Swap": JSON.stringify({ "client-inline-created": { id: "old-person", pseudonym: "Old person" } }),
     }, 403);
-    await tick();
+    await settle();
     assert.equal(purges, 1, "an authoritative archive marker must still reach the global purge handler");
     if (mode === "detached_archived_response") {
         assert.equal(posted().client, "b", "archive errors cannot replace a later person selection");
