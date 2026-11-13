@@ -121,19 +121,19 @@ class TestZZPasswordChangeUnsyncedGuard:
 
             _seed_unsynced_events(page, 2)
 
-            # expect_event blockt, bis der (asynchrone) Zaehl-Check den
-            # confirm-Dialog ausgeloest hat — kein Race auf einen festen Sleep.
-            with page.expect_event("dialog", timeout=5000) as dialog_info:
-                page.goto(f"{base_url}/password-change/", wait_until="domcontentloaded")
-                page.fill("#id_old_password", _ORIG_PASSWORD)
-                page.fill("#id_new_password1", _NEW_PASSWORD)
-                page.fill("#id_new_password2", _NEW_PASSWORD)
+            page.goto(f"{base_url}/password-change/", wait_until="domcontentloaded")
+            page.fill("#id_old_password", _ORIG_PASSWORD)
+            page.fill("#id_new_password1", _NEW_PASSWORD)
+            page.fill("#id_new_password2", _NEW_PASSWORD)
+            messages = []
+            # Dismiss in the event handler so click can finish its navigation barrier.
+            page.once("dialog", lambda dialog: (messages.append(dialog.message), dialog.dismiss()))
+            with page.expect_event("dialog", timeout=5000):
                 page.click("#password-change-form button[type=submit]")
-            dialog = dialog_info.value
-            message = dialog.message
-            dialog.dismiss()
 
-            assert "2" in message, f"Zähler fehlt/falsch in: {message}"
+            assert len(messages) == 1
+            message = messages[0]
+            assert "2" in message, f"Missing or incorrect count in: {message}"
 
             # Kein POST gelaufen: die Seite ist noch auf /password-change/.
             assert "/password-change/" in page.url
