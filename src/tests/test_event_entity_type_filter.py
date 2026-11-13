@@ -21,7 +21,7 @@ from core.forms.events import EventMetaForm
 from core.models import DocumentType, DocumentTypeField, Event, FieldTemplate, Settings
 from core.services.events import create_event
 from core.services.events.context import resolve_default_document_type
-from core.services.events.tally import tally_document_types
+from core.services.events.tally import build_tally_summary
 from tests._tally_helpers import post_tally
 
 
@@ -217,7 +217,7 @@ class TestSerienerfassungPrefillEntityTypeFilter:
 
 @pytest.mark.django_db
 class TestTallyDocumentTypesEntityTypeFilter:
-    """``services.events.tally.tally_document_types`` — Strichlisten-Panel auf der Zeitstrom-Seite.
+    """``services.events.tally.build_tally_summary`` — Strichlisten-Panel auf der Zeitstrom-Seite.
 
     Nicht im Brief namentlich genannt. Die Funktion baut das Dropdown/Panel
     der "+1"-Strichliste (direkt neben dem in Brief-Punkt 3 gefixten
@@ -226,7 +226,7 @@ class TestTallyDocumentTypesEntityTypeFilter:
     """
 
     def test_client_type_excluded(self, facility, staff_user, doc_type_client, doc_type_contact):
-        pks = [document_type.pk for document_type in tally_document_types(facility, staff_user)]
+        pks = [row["document_type"].pk for row in build_tally_summary(facility, staff_user)["rows"]]
         assert doc_type_client.pk not in pks
         assert doc_type_contact.pk in pks
 
@@ -235,7 +235,7 @@ class TestTallyDocumentTypesEntityTypeFilter:
 class TestTallyIncrementEntityTypeFilter:
     """``TallyIncrementView.post`` — Schreibpfad-Guard, Analogon zu ``EventFieldsPartialView``.
 
-    Defense-in-Depth: selbst wenn ``tally_document_types`` das Dropdown
+    Defense-in-Depth: selbst wenn ``build_tally_summary`` das Dropdown
     filtert, darf ein manipulierter POST keinen Event mit client-Typ
     anlegen koennen.
     """

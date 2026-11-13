@@ -2,7 +2,6 @@
 
 import pytest
 from django.db import connection
-from django.db.models import QuerySet
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
@@ -12,7 +11,6 @@ from core.services.events import (
     TallyIneligibilityReason,
     TallyMode,
     evaluate_tally_eligibility,
-    tally_document_types,
     tally_eligibilities,
 )
 from core.services.events import tally as tally_service
@@ -238,42 +236,6 @@ class TestTallyEligibilityPolicy:
 
 @pytest.mark.django_db
 class TestTallyPolicyConsumers:
-    def test_tally_document_types_uses_pk_as_name_tiebreak(self, facility, staff_user):
-        queryset = tally_document_types(facility, staff_user)
-
-        assert queryset.query.order_by == ("name", "pk")
-
-    def test_tally_document_types_keeps_filterable_queryset_contract_and_annotation(
-        self,
-        facility,
-        staff_user,
-    ):
-        direct = DocumentType.objects.create(
-            facility=facility,
-            name="Direkt per QuerySet",
-            tally_enabled=True,
-        )
-        numbered = DocumentType.objects.create(
-            facility=facility,
-            name="Zahl per QuerySet",
-            tally_enabled=True,
-        )
-        _assignment(numbered, name="QuerySet-Zahl")
-        DocumentType.objects.create(
-            facility=facility,
-            name="Nicht angeboten",
-            tally_enabled=False,
-        )
-
-        queryset = tally_document_types(facility, staff_user)
-
-        assert isinstance(queryset, QuerySet)
-        assert queryset.filter(pk=direct.pk).exists()
-        assert queryset.filter(pk=numbered.pk).count() == 1
-        assert queryset.count() == 2
-        assert queryset.get(pk=direct.pk).requires_number_input is False
-        assert queryset.get(pk=numbered.pk).requires_number_input is True
-
     def test_form_builds_only_fields_supplied_by_policy(self, facility, staff_user):
         document_type = DocumentType.objects.create(
             facility=facility,

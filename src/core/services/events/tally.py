@@ -265,13 +265,6 @@ def current_tally_context(facility, *, time_filters=None, now=None) -> TallyLive
     return TallyLiveContext(None, shift_date, window_start, window_end)
 
 
-def current_tally_window(facility):
-    """Aktuelles Zeitfenster für die Strichliste als ``(start_dt, end_dt)``."""
-
-    context = current_tally_context(facility)
-    return context.window_start, context.window_end
-
-
 def tally_request_matches_live_context(facility, params, *, context: TallyLiveContext | None = None) -> bool:
     """Akzeptiere Kontextparameter nur, wenn sie die Live-Erfassung meinen.
 
@@ -330,34 +323,6 @@ def new_tally_idempotency_key() -> str:
     if key is None:  # UUID-hex erfüllt den zentralen Vertrag per Definition
         raise RuntimeError("Servergenerierter Tally-Idempotenzschlüssel ist ungültig")
     return key
-
-
-def tally_document_types(facility, user):
-    """Für die Strichliste anbietbare Dokumentationstypen.
-
-    Nur explizit freigegebene, aktive Typen der Facility, die (a) der User
-    seiner Rolle nach sehen darf (Sensitivity-Guard), (b) anonymfähig sind und
-    (c) keine nichtnumerischen Pflichtfelder besitzen (Refs #1637/#1906).
-    Zahlen-Pflichtfelder werden über das Inline-Formular erfasst. Ein Typ fällt
-    für die jeweilige Rolle außerdem heraus, sobald eines seiner Pflichtfelder
-    eine höhere Feld-Sensibilität hat. Typen mit einer Mindest-Kontaktstufe
-    (``min_contact_stage``) sind NIE anonym (``create_event`` erzwingt das).
-    """
-    # Kompatibilitätsvertrag: Aufrufer bekamen historisch ein lazy/filterbares
-    # QuerySet samt ``requires_number_input``-Annotation. Die Policy muss für
-    # Bedingungen/Feld-Sensitivitäten vorab die Kandidaten auswerten; ihre
-    # freigegebenen IDs begrenzen anschließend das weiterhin lazy QuerySet.
-    eligible_ids = [result.document_type.pk for result in tally_eligibilities(facility, user) if result.eligible]
-    required_fields = DocumentTypeField.objects.filter(
-        document_type=OuterRef("pk"),
-        field_template__is_required=True,
-    )
-    return (
-        DocumentType.objects.for_facility(facility)
-        .annotate(requires_number_input=Exists(required_fields))
-        .filter(pk__in=eligible_ids)
-        .order_by("name", "pk")
-    )
 
 
 def build_tally_summary(facility, user, *, context: TallyLiveContext | None = None):

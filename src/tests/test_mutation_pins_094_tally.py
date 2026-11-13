@@ -61,7 +61,6 @@ from core.services.events.tally import (
     build_tally_summary,
     current_tally_context,
     new_tally_idempotency_key,
-    tally_document_types,
     tally_eligibilities,
     tally_request_matches_live_context,
 )
@@ -514,7 +513,7 @@ class TestNewTallyIdempotencyKeyContract:
 
 
 # ============================================================================
-# tally_document_types / build_tally_summary — Zaehl- und Annotationsgrenzen
+# build_tally_summary / build_tally_summary — Zaehl- und Annotationsgrenzen
 # ============================================================================
 
 
@@ -542,9 +541,13 @@ class TestTallyDocumentTypesAnnotation:
             sort_order=0,
         )
 
-        annotated = tally_document_types(facility, staff_user).get(pk=document_type.pk)
+        row = next(
+            row
+            for row in build_tally_summary(facility, staff_user)["rows"]
+            if row["document_type"].pk == document_type.pk
+        )
 
-        assert annotated.requires_number_input is False
+        assert row["requires_number_input"] is False
 
 
 @pytest.mark.django_db

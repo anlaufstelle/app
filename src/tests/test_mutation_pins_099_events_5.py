@@ -35,7 +35,7 @@ unveraendert. Zwoelf Mutanten sind echte Testluecken und werden hier gepinnt:
 * **Replay-Nachweis** (``undo_tally_event``, ``is_deleted``-Zweig): zwei
   weitere Filterfelder (``action``, ``target_type``) faellen aus der bereits
   audit-existence check, which already has partial regression coverage.
-* **``current_tally_window``**: exportiert, aber im gesamten Baum nirgends
+* **``current_tally_context``**: exportiert, aber im gesamten Baum nirgends
   aufgerufen (echte Testluecke) — ein Mutant stuerzt ab, der andere ignoriert
   die uebergebene Facility bei der Schichterkennung.
 
@@ -57,7 +57,7 @@ from django.utils import timezone
 from core.models import AuditLog, Event, TimeFilter
 from core.services.audit import audit_event
 from core.services.events import create_event
-from core.services.events.tally import current_tally_window
+from core.services.events.tally import current_tally_context
 from core.services.events.tally_undo import (
     TALLY_UNDO_SECONDS,
     TallyUndoDenied,
@@ -211,12 +211,12 @@ class TestCurrentTallyWindow:
     def test_liefert_ein_fenster_statt_abzustuerzen(self, facility):
         """Pins ``x_current_tally_window__mutmut_1``: ``context = None`` statt
         des Aufrufs von ``current_tally_context(facility)`` — jeder Aufruf
-        stuerzte mit ``AttributeError`` ab. ``current_tally_window`` ist
+        stuerzte mit ``AttributeError`` ab. ``current_tally_context`` ist
         exportiert (``core/services/events/__init__.py``), aber sonst nirgends
         im Baum aufgerufen — kein Bestandstest haette den Absturz gefangen."""
-        window_start, window_end = current_tally_window(facility)
+        context = current_tally_context(facility)
 
-        assert window_start < window_end
+        assert context.window_start < context.window_end
 
     def test_verwendet_die_uebergebene_einrichtung_fuer_die_schichterkennung(self, facility):
         """Pins ``x_current_tally_window__mutmut_2``:
@@ -236,9 +236,9 @@ class TestCurrentTallyWindow:
         mitten_in_der_schicht = timezone.make_aware(datetime.combine(timezone.localdate(), time(6, 0)))
 
         with patch("core.services.events.tally.timezone.localtime", return_value=mitten_in_der_schicht):
-            window_start, window_end = current_tally_window(facility)
+            context = current_tally_context(facility)
 
-        assert timezone.localtime(window_end).time() == time(12, 0)
+        assert timezone.localtime(context.window_end).time() == time(12, 0)
 
 
 def test_tally_undo_locks_only_the_event_row(facility, staff_user, doc_type_contact):

@@ -84,10 +84,8 @@ from core.services.events.tally import (
     TallyMode,
     build_tally_summary,
     current_tally_context,
-    current_tally_window,
     evaluate_tally_eligibility,
     new_tally_idempotency_key,
-    tally_document_types,
     tally_eligibilities,
     tally_request_matches_live_context,
 )
@@ -125,7 +123,6 @@ __all__ = [
     "build_redacted_delete_history",
     "build_tally_summary",
     "compute_event_diff",
-    "current_tally_window",
     "current_tally_context",
     "create_event",
     "decrypt_event_text_data",
@@ -157,6 +154,5 @@ __all__ = [
     "tally_request_matches_live_context",
     "undo_tally_event",
     "stage_index",
-    "tally_document_types",
     "update_event",
 ]
