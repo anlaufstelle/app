@@ -152,6 +152,12 @@ def create_or_get_client_merge_request(source, target, user, reason):
     Refs #2015: both persons are locked before checking pending requests.
     A pending merge into the same target is idempotent and writes no second
     audit entry. A different target or a pending deletion blocks the merge.
+
+    A ``DeletionRequest`` stores the source in ``target_id`` and the target in
+    ``merge_into``. Its partial uniqueness constraint permits only one pending
+    destructive request per person, either deletion or merge. Two identified
+    persons may also use this path: a second reviewer with
+    ``can_confirm_deletion`` must decide, so it bypasses no protection.
     """
     # Art.-18-Gate (Refs #2045): der Merge-ANTRAG war anfangs
     # ungegatet. Anders als ein Art.-17-Loeschantrag ist die Zusammenfuehrung

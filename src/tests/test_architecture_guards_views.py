@@ -749,10 +749,10 @@ class TestClientCaseViewMirrorParity:
         ),
         "EntityCreateView.get": (
             6,
-            "Die Fall-Anlage nimmt ``?client=`` entgegen und pinnt die Person vor "
-            "(``person prefill lookup`` → ``client_id``/``client_pseudonym``, Refs #1786); die "
-            "Personen-Anlage kennt keinen Vorbelegungs-Parameter und holt ``facility`` gar nicht "
-            "erst in eine lokale Variable.",
+            "Case creation accepts ``?client=`` and prefills the person through "
+            "``resolve_writable_client`` → ``client_id``/``client_pseudonym`` (Refs #1786); "
+            "person creation has no prefill parameter and does not assign ``facility`` "
+            "to a local variable.",
         ),
         "EntityCreateView.post": (
             5,

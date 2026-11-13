@@ -1,18 +1,14 @@
-"""``?case=``-Vorbelegung in ``EventCreateView`` (Konzept #1801 §6.5, Refs #1813 T4).
+"""Case prefill in ``EventCreateView`` (Refs #1801, section 6.5; #1813 T4).
 
-``?client=`` existierte bereits; ``?case=`` fehlte trotz vorhandenem
-``EventMetaForm.case``-Feld. Bei gesetztem ``?case=`` wird zusätzlich die
-Person des Falls abgeleitet vorbelegt — außer ein expliziter ``?client=``
-ist gesetzt, der gewinnt immer. Fail-closed: ein Fall aus einer fremden
-Facility darf weder das Fall- noch das Person-Feld vorbelegen (kein
-Existenz-Orakel über ``get_case_or_none``, Muster ``person prefill lookup``).
+``?case=`` also prefills the case's person unless an explicit ``?client=``
+takes precedence. ``get_case_or_none`` fails closed for foreign or revoked
+cases to prevent an existence oracle, matching ``resolve_writable_client``
+for person prefill.
 
-Das Person-/Fall-Feld ist Alpine-/JS-getrieben (``eventClientAutocomplete``,
-``static/js/alpine/forms.js``) — nicht über Djangos Widget-``initial``
-gerendert. Der einzige serverseitig prüfbare Übergabeweg sind die
-``data-initial-*``-Attribute am Formular-Tag; sie zu setzen ist der
-eigentliche Vorbelegungs-Fix (das JS liest sie in ``init()``/
-``loadCasesForClient()``).
+The person and case fields use Alpine/JS (``eventClientAutocomplete``,
+``static/js/alpine/forms.js``), rather than Django widget ``initial`` values.
+The server supplies ``data-initial-*`` attributes on the form for ``init()``
+and ``loadCasesForClient()`` to consume.
 """
 
 import pytest

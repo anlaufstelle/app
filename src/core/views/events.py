@@ -128,25 +128,19 @@ def _event_back_link(event) -> dict[str, str]:
 
 
 def _prefill_owner(meta_form, facility, client_id, case_id):
-    """``?client=`` und ``?case=`` in ``meta_form`` vorbelegen (Refs #1813 T4).
+    """Prefill ``meta_form`` from ``?client=`` and ``?case=`` (Refs #1813 T4).
 
-    Ersetzt die vormals dreifach wiederholte ``?client=``-Vorbelegung in
-    :class:`EventCreateView` — jetzt ergänzt um ``?case=`` (Konzept #1801
-    §6.5): ist ein Fall gesetzt, wird zusätzlich die zugehörige Person
-    abgeleitet vorbelegt, aber nur, solange kein expliziter ``?client=``
-    vorliegt (der gewinnt immer).
+    A selected case also supplies its person unless an explicit ``?client=``
+    takes precedence (Refs #1801, section 6.5). This replaces the repeated
+    person prefill in ``EventCreateView``.
 
-    Sicherheit: ``EventMetaForm.case`` führt bereits ein facility-gescoptes
-    Queryset als Validierungs-Whitelist — ein manipulierter ``?case=`` kann
-    beim Absenden nichts vorbelegen, was der Nutzer nicht ohnehin wählen
-    dürfte. Für die abgeleitete Person braucht es trotzdem einen eigenen
-    facility-gescopten, fail-closed Lookup (:func:`get_case_or_none`, Muster
-    ``person prefill lookup``) — sonst wäre die Ableitung ein Existenz-Orakel
-    über Fremd-/widerrufene Fälle.
+    ``EventMetaForm.case`` validates submissions against a facility-scoped
+    queryset. Deriving the person still needs ``get_case_or_none``: its
+    facility and live-person filters prevent an existence oracle for foreign
+    or revoked cases, as ``resolve_writable_client`` does for person prefill.
 
-    Gibt die (ggf. aus dem Fall abgeleitete) ``client_id`` zurück, damit der
-    Aufrufer sie für die restliche Kontext-Konstruktion (Pseudonym-Anzeige,
-    ``context["client_id"]``) weiterverwenden kann.
+    Return the selected or derived ``client_id`` for the remaining context,
+    including the pseudonym display and ``context["client_id"]``.
     """
     if case_id:
         meta_form.fields["case"].initial = case_id
@@ -494,9 +488,8 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
                         entity_type=DocumentType.EntityType.EVENT,
                     )
                 except (DocumentType.DoesNotExist, ValueError, ValidationError):
-                    # Django wirft bei syntaktisch kaputten UUID-Strings
-                    # ValidationError (nicht ValueError) — Refs #1996, analog
-                    # zu ``person prefill lookup``.
+                    # Invalid UUID strings raise ValidationError, not ValueError
+                    # (Refs #1996), as in ``resolve_writable_client``.
                     doc_type = None
                 if doc_type is not None and user_can_see_document_type(request.user, doc_type):
                     data_form = DynamicEventDataForm(

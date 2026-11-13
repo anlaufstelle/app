@@ -20,9 +20,8 @@ Was sich dadurch **verhält**:
   übereinandergeschrieben (Last-Write-Wins); jetzt stehen sie einmal unter
   ``field_templates`` und werden mehrfach referenziert.
 
-Seit Refs #1883 liegt das reine Lesen/Parsen des Katalogs in
-:mod:`core.packages.default_catalog` (Produktionspfad); hier bleibt der
-Seed-spezifische Teil.
+Catalog reading and parsing use :mod:`core.packages.catalog` (Refs #1883).
+Only the seed-specific application and cleanup remain here.
 
 Was der Loader **nicht** kann und deshalb hier bleibt: das Aufräumen
 verwaister Feldgruppen (#1710). Der Loader ist bewusst additiv — er entfernt
@@ -37,11 +36,9 @@ from django.db import transaction
 
 from core.models import DocumentType, Facility, FieldGroup
 
-# Refs #1883: Der Katalog-Reader ist Produktionscode und lebt deshalb neben dem
-# Paket, das er liest (``core/packages/default_catalog.py``) — ``core/seed/``
-# ist Fixture-Territorium, aus dem der Produktionspfad nicht importieren darf.
-# Hier bleibt der Bestands-Name als Re-Export stehen: Seed und Tests behalten
-# ihren Import, und es gibt weiterhin genau EINE Implementierung samt Cache.
+# Refs #1883: production and seed callers share the catalog reader in
+# ``core/packages/catalog.py``. Production must not import seed fixtures;
+# this module applies packages and does not re-export the reader.
 from core.packages.catalog import parse_catalog_package
 from core.packages.loader import PackageReport, load_package
 from core.packages.schema import PackageV1
@@ -54,15 +51,10 @@ __all__ = ["seed_document_types"]
 def seed_document_types(facility: Facility, *, package: str = "default") -> PackageReport:
     """Spielt ``package`` in ``facility`` ein (idempotent).
 
-    Refs #2148 (R-L5c-1): generalisiert vom reinen Standardkatalog auf jedes
-    mitgelieferte Paket — läuft für JEDEN Paketnamen (inkl. ``"default"``)
-    ueber denselben Katalog-Reader (:func:`~core.packages.catalog.parse_catalog_package`),
-    den auch ``setup_facility``/``load_package`` nutzen (MITTEL A:
-    kein Sonderpfad mehr ueber :mod:`core.packages.default_catalog`). Ein
-    unbekannter Paketname (z. B. ein Domaenen-Paket, das noch nicht im Katalog
-    liegt) schlaegt **fail-loud** als
-    :class:`~core.packages.catalog.UnknownPackageError` durch — kein stiller
-    Fallback auf den Standardkatalog.
+    Refs #2148: every bundled package, including ``"default"``, uses
+    :func:`~core.packages.catalog.parse_catalog_package`, the same reader as
+    ``setup_facility`` and ``load_package``. An unknown package raises
+    :class:`~core.packages.catalog.UnknownPackageError` without a fallback.
 
     Refs #2148 (R-L5c-6, HOCH A): „Ersatz, kein Zusatz" gilt auch
     im Seed. Ein Domaenen-Paket (``package != "default"``) darf nur gegen eine

@@ -75,8 +75,8 @@ def _normalize_document_type_kwarg(data: dict) -> DocumentType | None:
     try:
         document_type = DocumentType.objects.filter(pk=raw_pk).first()
     except (ValidationError, ValueError, TypeError):
-        # Django wirft bei ungueltigen UUID-Strings ValidationError, nicht
-        # ValueError (gleiche Falle wie in ``person prefill lookup``).
+        # Invalid UUID strings raise ValidationError, not ValueError, as in
+        # ``resolve_writable_client``.
         document_type = None
     if document_type is None:
         raise ValidationError(_("Der Dokumentationstyp existiert nicht."))
@@ -1189,6 +1189,14 @@ def create_or_get_client_deletion_request(client, user, reason):
     Refs #2015/#2017: lock the person before checking for a pending request,
     so concurrent submissions return the existing request without duplicate
     audit entries. This flag lets the view report a retry correctly.
+
+    Refs #2017: check ``merged_into`` and ``is_deleted`` on the freshly locked
+    row, since a merge may commit after the view's lookup. Approving another
+    deletion of a tombstone would reset ``deleted_at`` and silently move the
+    retention deadline and merge undo window. The service guard is required
+    even when the view filters deleted persons. Requests, approvals and merges
+    serialize on the same person row. Check the actor's facility before the
+    lock so a foreign or unscoped actor cannot hold that row.
     """
     actor_facility_id = getattr(user, "facility_id", None)
     if actor_facility_id is None or actor_facility_id != client.facility_id:

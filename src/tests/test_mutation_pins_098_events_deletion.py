@@ -13,10 +13,8 @@ Zieltreue der ``select_for_update``/``Event``-Lookups in ``approve_deletion``/
 * **``…__mutmut_38``**: spiegelbildlich — der frisch angelegte Antrag
   (``return dr, True``) meldet sich als Idempotenz-Treffer (``False``).
 
-Kein Produktivaufrufer wertet ``created`` heute aus (``views/events.py``
-verwirft es bewusst), der dokumentierte Vertrag der Funktion ist aber genau
-dieses Flag — ``create_or_get_event_deletion_request`` existiert nur wegen
-ihm (``create_or_get_event_deletion_request`` ist die Hülle ohne ihn).
+Production callers currently discard ``created`` (including ``views/events.py``),
+but the flag remains part of the function's documented contract.
 """
 
 from __future__ import annotations

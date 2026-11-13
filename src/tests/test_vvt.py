@@ -1,12 +1,7 @@
-"""Tests fuer ``core.services.compliance.vvt`` (Verzeichnis Verarbeitungstaetigkeiten).
+"""Tests for ``core.services.compliance.vvt`` (Refs #876).
 
-Refs #876. Testet die statische Konstante ``PROCESSING_ACTIVITIES``:
-
-* Schema: jeder Eintrag hat alle Pflichtfelder.
-* Mindestabdeckung: alle 6 Pflicht-Verarbeitungstaetigkeiten sind
-  registriert.
-* Helper: ``get_processing_activities`` und ``get_processing_activities`` verhalten
-  sich erwartungsgemaess.
+Verify the required schema and coverage of all six processing activities,
+and the list and snapshot contract of ``get_processing_activities``.
 """
 
 import re
@@ -28,6 +23,12 @@ from core.services.compliance import (
     get_processing_activities,
 )
 from tests._dynamic_test_data import detail_form_values
+
+
+def _activity(activity_id):
+    """Find an activity in the public snapshot, or return None."""
+    return next((activity for activity in get_processing_activities() if activity["id"] == activity_id), None)
+
 
 #: Wurzel des Anwendungs-Quellbaums (``src/``) — fuer die Quelltext-Guards
 #: unten, analog ``PO_PATH`` in ``test_i18n_catalog.py``.
@@ -279,11 +280,7 @@ class TestProcessingActivitiesContent:
     """Nutzersichtbare VVT-Angaben bleiben an der Implementierung gepinnt."""
 
     def test_client_retention_period_uses_enforced_defaults(self):
-        retention = str(
-            next(
-                (activity for activity in get_processing_activities() if activity["id"] == "klienten_stammdaten"), None
-            )["retention_period"]
-        )
+        retention = str(_activity("klienten_stammdaten")["retention_period"])
 
         assert f"{DEFAULT_RETENTION_ANONYMOUS_DAYS} Tage" in retention
         assert f"{DEFAULT_RETENTION_IDENTIFIED_DAYS} Tage" in retention
@@ -293,7 +290,7 @@ class TestProcessingActivitiesContent:
 
     def test_backup_retention_names_local_rotation_and_offsite_gap(self):
         """Refs #2464: ``backup.sh`` rotates locally (``-mtime +7/+28/+90``) and never deletes off-site."""
-        backup = next((activity for activity in get_processing_activities() if activity["id"] == "backup"), None)
+        backup = _activity("backup")
         retention = str(backup["retention_period"])
 
         # ``-mtime +N`` selects archives of at least N + 1 full days, and only
@@ -312,23 +309,14 @@ class TestProcessingActivitiesContent:
 
     def test_backup_toms_do_not_promise_deletions_vanish_from_backups(self):
         """Refs #2464: the 02:00 backup holds exactly what the 03:00 retention run deletes."""
-        toms = [
-            str(tom)
-            for tom in next((activity for activity in get_processing_activities() if activity["id"] == "backup"), None)[
-                "toms"
-            ]
-        ]
+        toms = [str(tom) for tom in _activity("backup")["toms"]]
 
         assert not any("nicht im Backup ueberleben" in tom for tom in toms)
         assert any("Rotation" in tom and "Aufbewahrungslauf" in tom for tom in toms)
 
     def test_case_data_retention_names_additional_type_period_and_deletion_effect(self):
         """The type period is additional (first expiry wins); deletion empties content, no k-anonymisation."""
-        retention = str(
-            next((activity for activity in get_processing_activities() if activity["id"] == "falldaten"), None)[
-                "retention_period"
-            ]
-        )
+        retention = str(_activity("falldaten")["retention_period"])
 
         assert "Pro Dokumentationstyp konfigurierbar" not in retention
         assert "k-anonymisiert" not in retention
@@ -339,11 +327,7 @@ class TestProcessingActivitiesContent:
 
     def test_audit_log_retention_names_exemptions_and_hold_protection(self):
         """Audit pruning has permanent exceptions, target holds and a system period."""
-        retention = str(
-            next((activity for activity in get_processing_activities() if activity["id"] == "auditlog"), None)[
-                "retention_period"
-            ]
-        )
+        retention = str(_activity("auditlog")["retention_period"])
 
         assert "per LegalHold" not in retention
         assert "aktivem Legal Hold" in retention
@@ -355,11 +339,7 @@ class TestProcessingActivitiesContent:
         assert "24 Monate installationsweit" in retention
 
     def test_data_subject_rights_match_implemented_paths(self):
-        purpose = str(
-            next((activity for activity in get_processing_activities() if activity["id"] == "dsgvo_requests"), None)[
-                "purpose"
-            ]
-        )
+        purpose = str(_activity("dsgvo_requests")["purpose"])
 
         assert "Art. 15, 16, 17 und 20" in purpose
         assert "Art. 15-22" not in purpose
@@ -503,7 +483,7 @@ class TestQualifiedAccessClaimStaysScoped:
 
 
 class TestVVTHelpers:
-    """``get_processing_activities`` und ``get_processing_activities``."""
+    """The public activity snapshot contains the required entries."""
 
     def test_get_processing_activities_returns_full_list(self):
         result = get_processing_activities()
@@ -517,24 +497,19 @@ class TestVVTHelpers:
         result.pop()
         assert len(PROCESSING_ACTIVITIES) == before
 
-    def test_get_activity_known_id(self):
-        entry = next(
-            (activity for activity in get_processing_activities() if activity["id"] == "klienten_stammdaten"), None
-        )
+    def test_processing_activities_contains_known_id(self):
+        entry = _activity("klienten_stammdaten")
         assert entry is not None
         assert entry["id"] == "klienten_stammdaten"
 
-    def test_get_activity_all_required_ids(self):
+    def test_processing_activities_contains_all_required_ids(self):
         for activity_id in REQUIRED_IDS:
-            entry = next((activity for activity in get_processing_activities() if activity["id"] == activity_id), None)
+            entry = _activity(activity_id)
             assert entry is not None, f"get_processing_activities({activity_id!r}) lieferte None."
             assert entry["id"] == activity_id
 
-    def test_get_activity_unknown_returns_none(self):
-        assert (
-            next((activity for activity in get_processing_activities() if activity["id"] == "does-not-exist"), None)
-            is None
-        )
+    def test_activity_lookup_returns_none_for_unknown_id(self):
+        assert _activity("does-not-exist") is None
 
 
 @pytest.mark.django_db(transaction=True)

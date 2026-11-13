@@ -1,12 +1,9 @@
-"""Standardkatalog-Bootstrap fuer den Produktionspfad (Refs #1883).
+"""Production catalog bootstrap (Refs #1883).
 
-Der Katalog-Reader lebt seit diesem Ticket in
-:mod:`core.packages.default_catalog` (Produktionscode) statt in
-``core/seed/doc_types.py`` (Fixture-Territorium), der einspielende Service in
-:mod:`core.services.facility_bootstrap`. Diese Datei pinnt beide Seams — den
-Reader und den Service —, weil der Admin-Anlagepfad (#1970) und der
-``setup_facility``-Command denselben Einstieg benutzen muessen statt ihn
-zweimal zu implementieren.
+The shared reader lives in :mod:`core.packages.catalog`, outside seed
+fixtures; the applying service lives in :mod:`core.services.facility_bootstrap`.
+These tests pin both entry points because admin facility creation (#1970)
+and ``setup_facility`` must share them rather than duplicate the bootstrap.
 """
 
 from __future__ import annotations

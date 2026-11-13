@@ -513,12 +513,12 @@ class TestNewTallyIdempotencyKeyContract:
 
 
 # ============================================================================
-# build_tally_summary / build_tally_summary — Zaehl- und Annotationsgrenzen
+# build_tally_summary — counting and numeric input requirements
 # ============================================================================
 
 
 @pytest.mark.django_db
-class TestTallyDocumentTypesAnnotation:
+class TestBuildTallySummaryNumericInput:
     def test_requires_number_input_counts_only_required_fields(self, facility, staff_user):
         """An optional text field needs no numeric input in the live tally summary."""
         document_type = DocumentType.objects.create(facility=facility, name="Nur optional", tally_enabled=True)

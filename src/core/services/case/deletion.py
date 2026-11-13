@@ -101,8 +101,12 @@ def create_or_get_case_deletion_request(case, user, reason):
     """Create a case deletion request or return the pending request and a created flag.
 
     Refs #2015: concurrent retries must be distinguishable from a new request.
-    The requesting actor is checked before writing; the case row is locked
-    before checking whether another request has already been created.
+    Refs #2374: reject a foreign or unscoped actor before taking any lock.
+    Lock person then case (then events), as restoration and immediate erasure
+    do, and recheck the locked case for deletion or anonymisation: the view's
+    instance may be stale. Reuse a pending request without another audit entry.
+    An Article 18 restriction deliberately permits this deletion request,
+    which does not modify the case.
     """
     actor_facility_id = getattr(user, "facility_id", None)
     if actor_facility_id is None or actor_facility_id != case.facility_id:

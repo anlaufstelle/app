@@ -195,8 +195,7 @@ def test_context_uses_the_exact_last_snapshot_key(facility, lead_user):
 
 
 def test_my_open_workitems_count_excludes_done_items(facility, staff_user, client_identified):
-    """Pins x_zeitstrom_workitem_counts__mutmut_26 (``status__in=[OPEN,
-    IN_PROGRESS]`` entfaellt aus dem Filter von ``open_qs``)."""
+    """The live workitem counts include only OPEN and IN_PROGRESS items."""
     WorkItem.objects.create(
         facility=facility,
         title="Pin-098 erledigt",

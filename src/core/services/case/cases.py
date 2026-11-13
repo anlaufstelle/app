@@ -63,7 +63,14 @@ def cases_with_live_client():
 
 
 def get_case_or_none(facility, case_id):
-    """Return a facility-scoped case for a valid ID, or None for an unavailable selection."""
+    """Return a facility-scoped case for a valid ID, or None for an unavailable selection.
+
+    Missing, invalid or foreign IDs and cases with deleted or inactive persons
+    return None. The ``cases_with_live_client`` filter is deliberate (Refs
+    #1777): deriving a person from ``?case=`` in ``EventCreateView`` must not
+    reveal foreign or revoked cases through an existence oracle. GET prefill
+    callers can thus ignore unavailable selections without raising a 404.
+    """
     if not case_id:
         return None
     try:
