@@ -150,3 +150,138 @@ def test_list_fields_reflow_and_keep_boundaries_and_keyboard_focus(browser, base
     before = {field["key"]: (field["colour"], field["border"], field["style"]) for field in snapshots[0]}
     after = {field["key"]: (field["colour"], field["border"], field["style"]) for field in snapshots[1]}
     assert before == after, (before, after)
+
+
+# --- Quick-exit button, opened contact cards and tally actions at 200 percent -------------------
+
+ZOOM_VIEWPORT = {"width": 640, "height": 450}
+_TARGETS = r"""scope => Array.from(document.querySelectorAll(scope)).filter(el => el.checkVisibility()).map(el => {
+    const r = el.getBoundingClientRect();
+    return {name: (el.getAttribute('aria-label') || el.textContent || el.name || '').trim()
+            .replace(/\s+/g, ' ').slice(0, 60), tag: el.tagName.toLowerCase(), testid: el.getAttribute('data-testid'),
+        width: r.width, height: r.height, left: r.left, right: r.right};
+})"""
+_CLICKABLE = "a[href], button:not(:disabled), summary, input:not([type=hidden]), select, textarea"
+
+
+def _scoped(prefix):
+    return ", ".join(f"{prefix} {part.strip()}" for part in _CLICKABLE.split(","))
+
+
+def _zoomed_page(browser, storage_state):
+    context = browser.new_context(
+        storage_state=storage_state, locale="de-DE", viewport=ZOOM_VIEWPORT, device_scale_factor=2
+    )
+    page = context.new_page()
+    page.set_default_timeout(15000)
+    return context, page
+
+
+def _assert_targets(targets, where):
+    small = [t for t in targets if t["width"] < 44 or t["height"] < 44]
+    outside = [t for t in targets if t["left"] < -0.5 or t["right"] > ZOOM_VIEWPORT["width"] + 0.5]
+    assert targets, f"{where}: no target found"
+    assert not small, f"{where}: targets below 44 px {small}"
+    assert not outside, f"{where}: targets outside the viewport {outside}"
+
+
+@pytest.mark.parametrize(("path", "key"), PAGES)
+def test_quick_exit_button_keeps_its_target_free_at_200_percent(browser, base_url, _login_storage_state, path, key):
+    context, page = _zoomed_page(browser, _login_storage_state)
+    try:
+        page.goto(base_url + path, wait_until="domcontentloaded")
+        expect(page.locator("#main-content h1")).to_be_visible()
+        button = page.get_by_test_id("quick-exit-button")
+        expect(button).to_be_visible()
+        values = page.evaluate(r"""() => {
+            const el = document.getElementById('quick-exit-button'), r = el.getBoundingClientRect();
+            const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+            const css = getComputedStyle(el);
+            return {dpr: devicePixelRatio, width: r.width, height: r.height, left: r.left, right: r.right,
+                top: r.top, bottom: r.bottom, viewport: document.documentElement.clientWidth,
+                scroll: document.documentElement.scrollWidth, clipped: el.scrollWidth > el.clientWidth + 1,
+                free: !!hit && (hit === el || el.contains(hit)), label: el.textContent.trim()};
+        }""")
+        _evidence(page, f"quick-exit-{key}-2x", values)
+        assert values["dpr"] == 2, values
+        assert values["width"] >= 44 and values["height"] >= 44, values
+        assert values["left"] >= 0 and values["right"] <= values["viewport"] and values["top"] >= 0, values
+        assert values["scroll"] <= values["viewport"] and not values["clipped"], values
+        assert values["free"], f"something covers the quick-exit button on {path}: {values}"
+        button.focus()
+        focus = page.evaluate("""() => { const css = getComputedStyle(document.activeElement);
+            return {id: document.activeElement.id,
+                outline: css.outlineStyle !== 'none' && parseFloat(css.outlineWidth) >= 2,
+                shadow: css.boxShadow !== 'none' && css.boxShadow.includes('2px')}; }""")
+        assert focus["id"] == "quick-exit-button" and (focus["outline"] or focus["shadow"]), focus
+    finally:
+        context.close()
+
+
+def test_opened_contact_cards_keep_their_targets_at_200_percent(browser, base_url, _login_storage_state):
+    context, page = _zoomed_page(browser, _login_storage_state)
+    try:
+        page.goto(base_url + "/events/", wait_until="domcontentloaded")
+        toggles = page.get_by_test_id("event-card-toggle")
+        expect(toggles.first).to_be_visible()
+        count = toggles.count()
+        assert count > 0
+        for index in range(count):
+            toggle = toggles.nth(index)
+            if toggle.get_attribute("aria-expanded") != "true":
+                toggle.click()
+                expect(toggle).to_have_attribute("aria-expanded", "true")
+        targets = page.evaluate(_TARGETS, _scoped("#event-table"))
+        metrics = page.evaluate("""() => ({scroll: document.documentElement.scrollWidth,
+            viewport: document.documentElement.clientWidth, dpr: devicePixelRatio,
+            clipped: Array.from(document.querySelectorAll('#event-table [id^=event-detail-] *'))
+                .filter(el => el.checkVisibility() && el.children.length === 0 && el.clientWidth > 1 &&
+                    el.scrollWidth > el.clientWidth + 1).map(el => el.textContent.trim().slice(0, 60))})""")
+        _evidence(page, "contacts-opened-2x", {"cards": count, "targets": len(targets), **metrics})
+        assert metrics["dpr"] == 2 and metrics["scroll"] <= metrics["viewport"], metrics
+        assert not metrics["clipped"], metrics["clipped"]
+        _assert_targets(targets, f"{count} opened contact cards")
+        assert any(t["name"] == "Zum Eintrag" for t in targets), "the opened cards must offer their entry link"
+    finally:
+        context.close()
+
+
+def test_tally_actions_keep_their_targets_at_200_percent(browser, base_url, _staff_storage_state):
+    context, page = _zoomed_page(browser, _staff_storage_state)
+    try:
+        page.goto(base_url + "/", wait_until="domcontentloaded")
+        panel = page.get_by_test_id("tally-panel")
+        expect(panel).to_be_visible()
+        tiles = panel.locator("[data-testid^='tally-row-']")
+        assert tiles.count() > 0, "the tally panel must show tiles for this account"
+        direct = panel.locator("button[data-testid^='tally-increment-']")
+        number = panel.locator("a[data-testid^='tally-increment-']")
+        assert direct.count() > 0 and number.count() > 0, "the seed must offer a +1 tile and a number tile"
+        actions = page.evaluate(_TARGETS, "#tally-panel [data-testid^='tally-increment-']")
+        _assert_targets(actions, "tally tile actions")
+        tile_metrics = page.evaluate("""() => ({scroll: document.documentElement.scrollWidth,
+            viewport: document.documentElement.clientWidth,
+            clipped: Array.from(document.querySelectorAll('#tally-panel [data-testid^=tally-name-], ' +
+                '#tally-panel [data-testid^=tally-count-]')).filter(el => el.checkVisibility() &&
+                el.scrollWidth > el.clientWidth + 1).map(el => el.textContent.trim())})""")
+        _evidence(page, "tally-tiles-2x", {"tiles": tiles.count(), "actions": len(actions), **tile_metrics})
+        assert tile_metrics["scroll"] <= tile_metrics["viewport"], tile_metrics
+        assert not tile_metrics["clipped"], tile_metrics["clipped"]
+
+        direct.first.click()
+        undo = page.get_by_test_id("tally-undo")
+        expect(undo).to_be_visible()
+        bar = page.evaluate(_TARGETS, "#tally-undo-slot a[href], #tally-undo-slot button")
+        _assert_targets(bar, "tally undo bar")
+        undo.click()
+        expect(page.get_by_test_id("tally-undo")).to_have_count(0)
+
+        number.first.click()
+        slot = page.get_by_test_id("tally-number-form-slot")
+        expect(slot.locator("form")).to_be_visible()
+        form = page.evaluate(_TARGETS, _scoped("#tally-number-form-slot"))
+        _assert_targets(form, "tally number form")
+        _evidence(page, "tally-number-form-2x", {"targets": len(form)})
+        slot.locator("[data-testid^='tally-cancel-']").click()
+    finally:
+        context.close()
