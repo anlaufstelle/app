@@ -322,3 +322,111 @@ describe("repeated logout click", () => {
         expect(w.__logoutSubmits).toBe(2);
     });
 });
+
+describe("back button with an empty history cache (cache miss)", () => {
+    // Without a cached snapshot htmx fetches the page with an XHR of its own,
+    // which does not pass through ``htmx:beforeRequest`` / ``htmx:beforeOnLoad``.
+    // Answering it must not bring the cache or a filter key back.
+    async function backWithCacheMiss(w) {
+        popBack(w);
+        const xhr = FakeXhr.instances.at(-1);
+        expect(xhr.headers["HX-History-Restore-Request"]).toBe("true");
+        xhr.respond(200, {}, "<p>x</p>");
+    }
+
+    it("writes neither the cache nor a filter key after the logout click", async () => {
+        const w = await openPage();
+        await pushViaHtmx(w);
+        await logout(w);
+
+        await backWithCacheMiss(w);
+
+        expect(cache(w)).toBeNull();
+        expect(Object.keys(w.sessionStorage).filter((key) => key.startsWith("filters:"))).toEqual([]);
+    });
+
+    it("writes neither the cache nor a filter key after quick exit", async () => {
+        const w = await openPage({ scripts: ["htmx.min", "quick-exit", "filter-persistence"] });
+        await pushViaHtmx(w);
+        await w.quickExit.trigger();
+
+        await backWithCacheMiss(w);
+
+        expect(cache(w)).toBeNull();
+        expect(Object.keys(w.sessionStorage).filter((key) => key.startsWith("filters:"))).toEqual([]);
+    });
+});
+
+describe("path htmx remembers for its history is not left behind after the exit", () => {
+    const PATH_KEY = "htmx-current-path-for-history";
+    const path = (w) => w.sessionStorage.getItem(PATH_KEY);
+
+    it("keeps the current path while nothing was left (control)", async () => {
+        const w = await openPage();
+
+        await pushViaHtmx(w);
+
+        expect(path(w)).toBe("/clients/?page=2");
+    });
+
+    it("is removed after a pushed response that arrives once the 10 s request lock expired", async () => {
+        const w = await openPage();
+        await logout(w);
+        advancePastGraceWindow(w);
+
+        const pending = startPendingHtmxRequest(w);
+        pending.respond(200, { "HX-Push-Url": "/clients/?q=secret" }, "<p>later</p>");
+
+        expect(path(w)).toBeNull();
+    });
+
+    it("is removed after a replaced URL that arrives once the 10 s request lock expired", async () => {
+        const w = await openPage();
+        await logout(w);
+        advancePastGraceWindow(w);
+
+        const pending = startPendingHtmxRequest(w);
+        pending.respond(200, { "HX-Replace-Url": "/clients/?q=secret" }, "<p>later</p>");
+
+        expect(path(w)).toBeNull();
+    });
+
+    it("is removed after the back button restored a page from the server (logout)", async () => {
+        const w = await openPage();
+        await pushViaHtmx(w);
+        await logout(w);
+
+        popBack(w);
+        FakeXhr.instances.at(-1).respond(200, {}, "<p>x</p>");
+
+        expect(path(w)).toBeNull();
+    });
+
+    it("is removed after the back button restored a page from the server (quick exit)", async () => {
+        const w = await openPage({ scripts: ["htmx.min", "quick-exit", "filter-persistence"] });
+        await pushViaHtmx(w);
+        await w.quickExit.trigger();
+
+        popBack(w);
+        FakeXhr.instances.at(-1).respond(200, {}, "<p>x</p>");
+
+        expect(path(w)).toBeNull();
+    });
+
+    it("lets htmx carry on with the key missing", async () => {
+        const w = await openPage();
+        await pushViaHtmx(w);
+        await logout(w);
+        const savedPaths = [];
+        w.document.body.addEventListener("htmx:beforeHistorySave", (event) => savedPaths.push(event.detail.path));
+
+        popBack(w);
+        FakeXhr.instances.at(-1).respond(200, {}, "<p>x</p>");
+        popBack(w);
+
+        // The reader falls back to the location when the key is gone.
+        expect(savedPaths).toEqual(["/clients/?page=2", "/clients/?page=2"]);
+        expect(w.history.state).toEqual({ htmx: true });
+        expect(cache(w)).toBeNull();
+    });
+});
