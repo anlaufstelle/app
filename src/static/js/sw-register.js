@@ -639,9 +639,9 @@
     //    ``htmx:historyRestore``) remove the key again, so it is only there
     //    between the write and the event in the same task. The reader (the
     //    snapshot writer) falls back to the location when the key is missing and
-    //    is a no-op anyway at size 0. If the swap of a restored page throws,
-    //    htmx skips ``htmx:historyRestore`` and the key stays until the next
-    //    page load overwrites it.
+    //    is a no-op anyway at size 0. Every write is followed by its event in
+    //    the same synchronous call; when an earlier step of htmx throws, the
+    //    write does not happen either.
     // The switches hold for the rest of this document and do NOT expire with
     // the 10 s window of the request lock: they cost nothing if the logout
     // fails (Back then reloads the page from the server instead of restoring

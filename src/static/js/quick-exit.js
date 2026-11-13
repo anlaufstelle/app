@@ -590,9 +590,8 @@
      * of the vendored file (called on a push, a replace and when Back restores
      * a page from the server) and cannot be switched off. The events htmx fires
      * right after each of these writes remove the key again, so it is only
-     * there between the write and the event in the same task. If the swap of a
-     * restored page throws, htmx skips ``htmx:historyRestore`` and the key
-     * stays until the next page load overwrites it.
+     * there between the write and the event in the same synchronous call. When
+     * an earlier step of htmx throws, the write does not happen either.
      *
      * Synchronous and fully guarded: reading ``sessionStorage`` can throw
      * (blocked storage), and that must never delay or block the exit.
