@@ -11,7 +11,7 @@ from urllib.parse import urljoin
 import pytest
 from playwright.sync_api import expect
 
-from ._helpers import SEED_PASSWORD, tally_tile, wait_until_htmx_bound
+from ._helpers import SEED_PASSWORD, tally_tile, wait_until, wait_until_htmx_bound
 
 pytestmark = pytest.mark.e2e
 
@@ -25,19 +25,23 @@ def _count(row):
     return row.locator('[data-testid^="tally-count-"]')
 
 
-def _feed_event_ids(page):
-    """Return the visible feed event-card IDs, independent of FEED_MAX."""
-    return set(
-        page.locator('#feed-list button[aria-controls^="event-detail-"]').evaluate_all(
-            "els => els.map(el => el.getAttribute('aria-controls'))"
-        )
+def _tally_feed_total(page):
+    """Sum the entries of every hourly tally group currently in the feed.
+
+    Tally entries never get their own event card; the feed folds them into
+    one group row per hour (``data-total``).  Summing over all groups keeps
+    the check independent of the hour in which a click happens to land.
+    """
+    return page.locator('#feed-list [data-testid="tally-group"]').evaluate_all(
+        "els => els.reduce((sum, el) => sum + Number(el.dataset.total), 0)"
     )
 
 
-def _feed_cards_outside(page, baseline_ids):
-    """Build a live locator for event cards not present in the baseline."""
-    exclusions = "".join(f':not([aria-controls="{event_id}"])' for event_id in baseline_ids)
-    return page.locator(f'#feed-list button[aria-controls^="event-detail-"]{exclusions}')
+def _wait_for_tally_feed_total(page, expected, timeout_ms=22000):
+    """Wait for the live refresh to bring the feed's tally total to ``expected``."""
+    assert wait_until(page, lambda: _tally_feed_total(page) == expected, timeout_ms=timeout_ms), (
+        f"feed tally total is {_tally_feed_total(page)}, expected {expected}"
+    )
 
 
 class TestCollaborativeTally:
@@ -80,7 +84,7 @@ class TestCollaborativeTally:
             contact_button_a = contact_row_a.locator('[data-testid^="tally-increment-"]')
             contact_count_a = _count(contact_row_a)
             count_before = int(contact_count_a.inner_text().strip())
-            feed_before_ids = _feed_event_ids(page_b)
+            feed_total_before = _tally_feed_total(page_b)
 
             with page_a.expect_response(
                 lambda response: response.request.method == "POST" and "/partials/tally/increment/" in response.url
@@ -91,15 +95,12 @@ class TestCollaborativeTally:
 
             contact_row_b = _row(page_b, "Kontakt")
             expect(_count(contact_row_b)).to_have_text(str(count_before + 1), timeout=22000)
-            new_feed_cards = _feed_cards_outside(page_b, feed_before_ids)
-            expect(new_feed_cards).to_have_count(1, timeout=22000)
-            new_event_id = new_feed_cards.get_attribute("aria-controls")
-            assert new_event_id and new_event_id not in feed_before_ids
+            _wait_for_tally_feed_total(page_b, feed_total_before + 1)
             expect(syringe_form_b.locator('input[name="ausgabe"]')).to_have_value("17")
             expect(syringe_form_b.locator('input[name="rueckgabe"]')).to_have_value("4")
 
             # Undo exactly the first +1 after B observed it.  B must naturally
-            # converge to baseline; the newly observed card must disappear.
+            # converge to baseline; the feed's tally total must drop again.
             # The undo bar sits in the fixed slot outside the tile grid.
             undo_a = page_a.locator('#tally-undo-slot [data-testid="tally-undo"]')
             expect(undo_a).to_be_visible()
@@ -110,8 +111,7 @@ class TestCollaborativeTally:
             expect(contact_count_a).to_have_text(str(count_before), timeout=5000)
 
             expect(_count(_row(page_b, "Kontakt"))).to_have_text(str(count_before), timeout=22000)
-            expect(_feed_cards_outside(page_b, feed_before_ids)).to_have_count(0, timeout=22000)
-            assert new_event_id not in _feed_event_ids(page_b)
+            _wait_for_tally_feed_total(page_b, feed_total_before)
             expect(syringe_form_b.locator('input[name="ausgabe"]')).to_have_value("17")
             expect(syringe_form_b.locator('input[name="rueckgabe"]')).to_have_value("4")
         finally:
