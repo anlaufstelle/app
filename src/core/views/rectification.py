@@ -38,28 +38,11 @@ from core.services.client.rectification import (
 from core.services.client.restriction import restrict_processing
 from core.services.scoping import get_scoped_object
 from core.utils.ratelimit import ratelimit
+from core.views.attachments import load_client_owner
 from core.views.mixins import LeadOrAdminRequiredMixin, StaffRequiredMixin
 from core.views.utils import object_back_link
 
 logger = logging.getLogger(__name__)
-
-
-def _writable_client(request, pk):
-    """Person fuer einen Schreibpfad aufloesen (Facility-Scope + Widerruf).
-
-    ``is_active=False`` (anonymisiert) und ``is_deleted=True`` (Papierkorb)
-    fallen bewusst auf 404 statt auf eine Fehlermeldung: an einem widerrufenen
-    Datensatz gibt es nichts mehr zu berichtigen, und die Unterscheidung waere
-    nur ein zusaetzliches Detail ueber eine geloeschte Person (Muster
-    ``resolve_writable_client``, Refs #1771).
-    """
-    return get_scoped_object(
-        Client.objects.select_related("document_type"),
-        request,
-        pk=pk,
-        is_deleted=False,
-        is_active=True,
-    )
 
 
 def _display_value(value):
@@ -97,14 +80,14 @@ class RectificationCreateView(StaffRequiredMixin, View):
     """Berichtigungsantrag zu einer Person erfassen (Fachkraft und hoeher)."""
 
     def get(self, request, pk):
-        client = _writable_client(request, pk)
+        client = load_client_owner(request, pk)
         form = RectificationRequestForm(client=client, user=request.user)
         return render(request, "core/rectification/form.html", _form_context(client, form))
 
     def post(self, request, pk):
         # Lookup VOR der Payload-Validierung — IDOR-Proben muessen deterministisch
         # 404 sehen, nicht die Formularfehler eines fremden Datensatzes.
-        client = _writable_client(request, pk)
+        client = load_client_owner(request, pk)
         form = RectificationRequestForm(request.POST, client=client, user=request.user)
         if form.is_valid():
             try:
