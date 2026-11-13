@@ -1310,7 +1310,7 @@
 
 **Routen:** `/clients/`, `/clients/new/`, `/clients/<uuid>/`, `/clients/<uuid>/edit/`, `/clients/<uuid>/export/json/`, `/clients/<uuid>/export/pdf/`, `/clients/<uuid>/delete/`, `/clients/trash/`, `/clients/<uuid>/restore/`, `/clients/<uuid>/anonymize/`, `/partials/clients/autocomplete/`  
 **Views:** `src/core/views/clients.py` (`ClientListView`, `ClientCreateView`, `ClientDetailView`, `ClientUpdateView`, `ClientAutocompleteView`, `ClientDataExportJSONView`, `ClientDataExportPDFView`) + `src/core/views/client_deletion.py` (`ClientDeleteRequestView`, `ClientTrashView`, `ClientRestoreView`, `ClientAnonymizeView`)  
-**Services:** `src/core/services/client/main.py` (`create_client`, `update_client`, `request_client_deletion`, `restore_client`, `track_client_visit`, `get_pending_deletion_request`, `pending_deletion_client_ids`, `anonymize_client_now`)  
+**Services:** `src/core/services/client/main.py` (`create_client`, `update_client`, `create_or_get_client_deletion_request`, `restore_client`, `track_client_visit`, `get_pending_deletion_request`, `pending_deletion_client_ids`, `anonymize_client_now`)  
 **E2E-Coverage:** `test_clients_search.py`, `test_client_edit.py`, `test_client_deletion_workflow.py`, `test_client_deletion_status.py`, `test_client_autocomplete_recency.py`, `test_client_export.py`, `test_min_contact_stage_anonymous.py`, `test_contact_stage.py`, `test_fuzzy_search.py`  
 **Spezial-Setup:** Cross-Facility-Tests benötigen `.venv/bin/python src/manage.py seed --flush --scale medium` und 2 parallele Browser-Profile (`admin` in Facility 1, `admin_1` in Facility 2). DSGVO-Exporte erfordern Sudo-Re-Auth (Refs #683).
 
@@ -3813,7 +3813,7 @@
 
 **Routen:** `/deletion-requests/`, `/deletion-requests/<uuid>/review/`, `/deletion-requests/<uuid>/withdraw/`  
 **Views:** `src/core/views/event_deletion.py` (`DeletionRequestListView`, `DeletionRequestReviewView`), `src/core/views/client_deletion.py` (Verzweigung über `target_type`)  
-**Services:** `src/core/services/events/deletion.py` (`request_deletion`, `approve_deletion`, `reject_deletion`), `src/core/services/client/main.py` (`approve_client_deletion`, `reject_client_deletion`), `src/core/services/events/crud.py` (`soft_delete_event`)  
+**Services:** `src/core/services/events/deletion.py` (`create_or_get_event_deletion_request`, `approve_deletion`, `reject_deletion`), `src/core/services/client/main.py` (`approve_client_deletion`, `reject_client_deletion`), `src/core/services/events/crud.py` (`soft_delete_event`)  
 **E2E-Coverage:** `test_workitems_deletion.py`, `test_client_deletion_workflow.py`, `test_client_deletion_status.py`  
 **Spezial-Setup:** Vier-Augen-Test braucht 2 separate Sessions (Antragsteller + Reviewer). DeletionRequest existiert pro `target_type` (Event vs. Client).
 
@@ -3833,7 +3833,7 @@
 3. Bestätigen.
 
 **Erwartetes Ergebnis:**
-- `EventDeleteView.post`: `event.client.contact_stage == QUALIFIED` → kein Direct-Delete, sondern `request_deletion(event, user, reason)` legt `DeletionRequest` (status=PENDING) an.
+- `EventDeleteView.post`: `event.client.contact_stage == QUALIFIED` → kein Direct-Delete, sondern `create_or_get_event_deletion_request(event, user, reason)` legt `DeletionRequest` (status=PENDING) an.
 - Flash: „Löschantrag wurde gestellt und muss von einer Leitung genehmigt werden."
 - Redirect → `/`.
 - Event bleibt sichtbar (kein Soft-Delete).

@@ -122,7 +122,7 @@ Lokale `python manage.py <command>`-Beispiele beziehen sich auf eine isolierte E
 1. Als `admin` (Einrichtungsadmin; `AuditLogListView` verlangt `FacilityAdminRequiredMixin`) `/audit/?action=deletion_requested`, `/audit/?action=deletion_approved` und `/audit/?action=deletion_rejected` aufrufen.
 2. Gegenprüfung in der Shell: `AuditLog.objects.filter(target_type="DeletionRequest", target_id__in=[str(dr_ok.pk), str(dr_rej.pk)]).values_list("action", "user__username", "target_id", "detail")`.
 3. Lösch-Eintrag des genehmigten Ereignisses: `AuditLog.objects.filter(action="delete", target_type="Event", target_id=str(dr_ok.target_id))`.
-4. Idempotenz in der Shell: `request_deletion(event, fachkraft, "x")` (`core.services.events.deletion`) zweimal hintereinander auf ein Ereignis ohne offenen Antrag; `deletion_requested`-Einträge für dieses Ereignis zählen.
+4. Idempotenz in der Shell: `create_or_get_event_deletion_request(event, fachkraft, "x")` (`core.services.events.deletion`) zweimal hintereinander auf ein Ereignis ohne offenen Antrag; `deletion_requested`-Einträge für dieses Ereignis zählen.
 
 **Erwartetes Ergebnis:**
 - Jede Workflow-Stufe hat **einen eigenen** Eintrag mit `target_type="DeletionRequest"`, `target_id=str(<dr>.pk)`, `detail={"target_event": "<event_pk>"}`:

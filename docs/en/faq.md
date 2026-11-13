@@ -97,4 +97,4 @@ Decision aid: [User Guide § 7 “The Three Tabs at a Glance”](https://github.
 <!-- translation-source: docs/faq.md -->
 <!-- translation-version: v0.99.10 -->
 <!-- translation-date: 2026-11-13 -->
-<!-- source-hash: 98a0612a74ad0ad16d13289ddaf772cd9cb94590 -->
+<!-- source-hash: 35a002af00a6897bda066b3bddac2291b37876c4 -->

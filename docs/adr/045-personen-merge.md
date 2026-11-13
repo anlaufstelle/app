@@ -93,7 +93,7 @@ Die Auskunft ([`services/client/export.py`](../../src/core/services/client/expor
 
 - Umsetzungs-Issue: #1876
 - Service: [`services/client/merge.py`](../../src/core/services/client/merge.py); Modell/Migration: [`models/client.py`](../../src/core/models/client.py), [`models/workitem.py`](../../src/core/models/workitem.py), Migration 0160
-- Blaupausen: [ADR-044](044-fall-loeschpfad.md) (Staffelung P1c), [`services/client/main.py`](../../src/core/services/client/main.py) (`request_client_deletion` … `approve_client_deletion`)
+- Blaupausen: [ADR-044](044-fall-loeschpfad.md) (Staffelung P1c), [`services/client/main.py`](../../src/core/services/client/main.py) (`create_or_get_client_deletion_request` … `approve_client_deletion`)
 - Tests: `src/tests/test_client_merge_workflow.py`, `src/tests/test_client_merge_views.py`, Auskunft in `src/tests/test_client_export.py` (`TestClientExportMergeProvenance`), E2E in `src/tests/e2e/test_client_merge.py`; Guard-Pins in `src/tests/test_cases_trash_invariant.py`
 
 ## Nachtrag 2026-10-06: Undo-Gate, Holds und Modellschutz (Refs #2450)

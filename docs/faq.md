@@ -606,11 +606,11 @@ Das Recht „Löschbestätigung“ ist rollenunabhängig. Beim Anlegen eines Zug
 
 **Relevante Dateien:**
 - [`src/core/models/workitem.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/workitem.py) — `DeletionRequest`
-- [`src/core/services/events/crud.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/events/crud.py) — `soft_delete_event`; [`src/core/services/events/deletion.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/events/deletion.py) — `request_deletion`, `approve_deletion`, `reject_deletion`
+- [`src/core/services/events/crud.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/events/crud.py) — `soft_delete_event`; [`src/core/services/events/deletion.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/events/deletion.py) — `create_or_get_event_deletion_request`, `approve_deletion`, `reject_deletion`
 - [`src/core/views/events.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/events.py) — `EventDeleteView`; [`src/core/views/event_deletion.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/event_deletion.py) — `DeletionRequestReviewView`
-- [`src/core/services/case/deletion.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/case/deletion.py) — `soft_delete_case`, `request_case_deletion`, `approve_case_deletion`, `restore_case`, `anonymize_case`
+- [`src/core/services/case/deletion.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/case/deletion.py) — `soft_delete_case`, `create_or_get_case_deletion_request`, `approve_case_deletion`, `restore_case`, `anonymize_case`
 - [`src/core/views/case_deletion.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/case_deletion.py) — `CaseDeleteRequestView`, `CaseTrashView`, `CaseRestoreView`, `CaseAnonymizeView`
-- [`src/core/services/client/merge.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/client/merge.py) — `merge_clients`, `request_client_merge`, `approve_client_merge`, `unmerge_client`
+- [`src/core/services/client/merge.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/client/merge.py) — `merge_clients`, `create_or_get_client_merge_request`, `approve_client_merge`, `unmerge_client`
 - [`src/core/views/client_merge.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/client_merge.py) — `ClientMergeView`, `ClientUnmergeView`, `ClientSimilarHintView`
 
 ### 16. Was hat KEINEN Löschmechanismus?

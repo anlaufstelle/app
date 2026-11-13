@@ -192,7 +192,7 @@ Der Loader ist **update-sicher**, und genau das ist eine sichtbare Verhaltensän
 - [`src/core/packages/loader.py`](../../src/core/packages/loader.py) — idempotenter Loader (`load_package`, `PackageReport`, `PackageLoadError`)
 - [`src/core/packages/default.yaml`](../../src/core/packages/default.yaml) — Standardkatalog als Paket (Quelle des Seeds)
 - [`src/core/management/commands/load_package.py`](../../src/core/management/commands/load_package.py) — CLI-Fassade
-- [`src/core/seed/doc_types.py`](../../src/core/seed/doc_types.py) — Seed über den Loader (`load_default_package_data`, `seed_document_types`)
+- [`src/core/seed/doc_types.py`](../../src/core/seed/doc_types.py) — Seed über den Loader (`seed_document_types`); [`src/core/packages/catalog.py`](../../src/core/packages/catalog.py) — Katalogdaten (`load_package_data("default")`)
 - [`src/core/forms/dynamic.py`](../../src/core/forms/dynamic.py) — entity-neutraler Form-Builder (`DynamicDataForm`, `exclude_file_fields`, `grouped_fields`)
 - [`src/core/services/dynamic_data.py`](../../src/core/services/dynamic_data.py) — entity-neutrale Feld-Helfer (`merge_dynamic_data`, `validate_data_json`, `remove_restricted_fields`)
 - [`src/core/management/commands/reencrypt_fields.py`](../../src/core/management/commands/reencrypt_fields.py) — Schlüsselrotation inkl. `Client`/`Case`

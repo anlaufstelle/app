@@ -255,7 +255,7 @@
 
 **Code-Referenz:**
 - `src/core/views/clients.py` (`ClientDeleteRequestView`)
-- `src/core/services/client/main.py` (request_deletion)
+- `src/core/services/client/main.py` (create_or_get_client_deletion_request)
 - `src/core/views/event_deletion.py` (`DeletionRequestReviewView`)
 
 **Voraussetzung:** eine Person vorhanden, beide Rollen verfügbar.

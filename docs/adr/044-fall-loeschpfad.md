@@ -140,6 +140,6 @@ Ebenso rollengegatet wie die Antragsliste (§9) ist die **Prüfseite** eines Fal
 ## References
 
 - Umsetzungs-Issue: #1818
-- Blaupause: [`services/client/main.py`](../../src/core/services/client/main.py) (`request_client_deletion` … `anonymize_eligible_soft_deleted_clients`), [`views/events.py`](../../src/core/views/events.py) (`EventDeleteView.post`, Staffelung)
+- Blaupause: [`services/client/main.py`](../../src/core/services/client/main.py) (`create_or_get_client_deletion_request` … `anonymize_eligible_soft_deleted_clients`), [`views/events.py`](../../src/core/views/events.py) (`EventDeleteView.post`, Staffelung)
 - Grenze: [`services/case/cases.py`](../../src/core/services/case/cases.py) (`cases_with_live_client`), Guards in `src/tests/test_cases_trash_invariant.py`
 - Abgelöst: [ADR-039](039-owner-generische-dateianhaenge.md) §6
