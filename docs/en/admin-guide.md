@@ -1799,7 +1799,7 @@ The dedicated `cron-egress` network gives only `cron` general egress, not an all
 30 * * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance detect_breaches >> /var/log/anlaufstelle-breach.log 2>&1
 ```
 
-> **Note:** The complete, authoritative list of all background jobs including their schedule (backup, retention, audit chain verification, statistics snapshots, orphan cleanup, breach scan) is in the [ops runbook § 3](ops-runbook.md#3-cron-jobs). In the bundled compose stack they run in the `cron` sidecar (`deploy/crontab`); on the dev server they run as systemd timers via `dev-ops/deploy/install-timers.sh` — in both cases the breach scan runs hourly at minute 30.
+> **Note:** The complete, authoritative list of all background jobs including their schedule (backup, retention, audit chain verification, statistics snapshots, orphan cleanup, breach scan) is in the [ops runbook § 3](ops-runbook.md#3-cron-jobs). In the bundled compose stack, maintenance jobs run in the `cron` sidecar (`deploy/crontab`); backups run separately through **host cron** (setup: [ops runbook § 3.3](ops-runbook.md#33-host-cron-backup--remaining-host-jobs)). On the dev server, jobs run as systemd timers via `dev-ops/deploy/install-timers.sh`. The breach scan runs hourly at minute 30 in both variants.
 
 ---
 
@@ -2591,5 +2591,5 @@ Person anonymization clears these dynamic fields as well as related titles and g
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: 78b71a9c26ce595e0cfb9703cb4219c415bde599 -->
-<!-- translation-date: 2026-11-12 -->
+<!-- source-hash: 36d91e9866e8ae6e774c7f4adde2a1768d07e528 -->
+<!-- translation-date: 2026-11-13 -->

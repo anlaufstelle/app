@@ -1798,7 +1798,7 @@ Das eigene Netz `cron-egress` gibt ausschließlich `cron` allgemeinen Ausgang, k
 30 * * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml run --rm -T maintenance detect_breaches >> /var/log/anlaufstelle-breach.log 2>&1
 ```
 
-> **Hinweis:** Die vollständige, autoritative Liste aller Hintergrundjobs samt Zeitplan (Backup, Retention, Audit-Ketten-Verifikation, Statistik-Snapshots, Orphan-Cleanup, Breach-Scan) steht im [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs). Im mitgelieferten Compose-Stack laufen sie im `cron`-Sidecar (`deploy/crontab`), auf dem Dev-Server als systemd-Timer via `dev-ops/deploy/install-timers.sh` — in beiden Fällen der Breach-Scan stündlich zur 30. Minute.
+> **Hinweis:** Die vollständige, autoritative Liste aller Hintergrundjobs samt Zeitplan (Backup, Retention, Audit-Ketten-Verifikation, Statistik-Snapshots, Orphan-Cleanup, Breach-Scan) steht im [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs). Im mitgelieferten Compose-Stack laufen die Wartungsjobs im `cron`-Sidecar (`deploy/crontab`); das Backup läuft separat im **Host-Cron** (Einrichtung: [Ops-Runbook § 3.3](ops-runbook.md#33-host-cron-backup--restliche-host-jobs)). Auf dem Dev-Server laufen die Jobs als systemd-Timer via `dev-ops/deploy/install-timers.sh`. Der Breach-Scan läuft in beiden Varianten stündlich zur 30. Minute.
 
 ---
 
