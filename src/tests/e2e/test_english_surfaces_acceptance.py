@@ -8,7 +8,7 @@ the 2FA settings, statistics (lead, admin), the offline fallback page and the he
 Per page:
 
 * no visible text or attribute equals a German message id whose English translation differs
-  (an untranslated catalog entry or a string rendered outside gettext); names and slugs of
+  unless it is also an English catalog translation; names and slugs of
   document types and field templates are configuration data and exempt,
 * no template placeholder (``%(name)s``, ``{{``, ``{%``) is visible,
 * no serious or critical axe violation at 1280 px,
@@ -74,14 +74,16 @@ COLLECT = """() => {
 
 
 def _translated_message_ids() -> set[str]:
-    """German message ids that must never reach an English page unchanged."""
+    """German message ids that are not also valid English catalog translations."""
     with CATALOG.open("rb") as handle:
         catalog = gettext.GNUTranslations(handle)._catalog
+    # A message id can also be an English translation of another entry.
+    english_translations = set(catalog.values())
     return {
         msgid
         for msgid, msgstr in catalog.items()
         if isinstance(msgid, str) and len(msgid) >= 4 and msgstr != msgid and re.search(r"[A-Za-zÄÖÜäöü]{3}", msgid)
-    }
+    } - english_translations
 
 
 def _configuration_names(e2e_env) -> set[str]:
