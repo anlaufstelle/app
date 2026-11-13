@@ -38,9 +38,9 @@ The start page shows events as a chronological stream, optionally filtered by a 
 
 ### Contacts list
 
-The working list `/events/` complements the daily Timeline with combined period, documentation type, person, creator, own-entry, shift and anonymity filters. Assistant and higher can see other team members’ entries within the same facility and sensitivity limits as the Timeline. Case filtering and display require Social worker or higher. Deleted contacts and contacts in the trash are excluded. Results show metadata only, newest first, with pagination and mobile cards; filters remain in the URL across Back/Forward.
+The working list `/events/` complements the daily Timeline with combined period, documentation type, person, creator, own-entry, shift and anonymity filters. Assistant and higher can see other team members’ entries within the same facility and sensitivity limits as the Timeline. Case filtering and display require Social worker or higher. Deleted contacts and contacts in the trash are excluded. Results show preview details and rows expand to reveal field values permitted for the role, newest first, with pagination and mobile cards; filters remain in the URL across Back/Forward.
 
-**Contacts** appears directly below **Timeline** in the sidebar and in the mobile More menu. Only the list route activates it; event detail pages remain assigned to Timeline. The local Timeline link also remains and carries over day, documentation type and shift.
+**Contacts** appears directly below **Timeline** in the sidebar and in the mobile More menu. Only the list route activates it; event detail pages remain assigned to Timeline. The contact figure in the Timeline key figures row opens the list without tally entries and carries over day, documentation type and shift.
 
 Search stays limited to pseudonym and `Event.search_text`: only unencrypted fields with effective Normal sensitivity, excluding case titles and file contents. A search term also excludes events belonging to people in the trash. There is no autocomplete, export or bulk action, and list/filter requests create no audit entry. See [ADR-043](../adr/043-suchraum-volltextsuche.md), [ADR-016](../adr/016-search-postgres-only.md), #2521 and the [user guide](user-guide.md#contacts-list).
 
@@ -373,5 +373,5 @@ The largest collective pre-release to date — the configurability milestones M0
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: 6f8e4af07e8b3f3b54a98b4f845e2462781de08a -->
+<!-- source-hash: 643b57638b10d18831c6b8408a1c7a2a043789b1 -->
 <!-- translation-date: 2026-11-12 -->
