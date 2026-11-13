@@ -3,11 +3,12 @@
 import importlib.util
 import os
 import signal
+import socket
 import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import MagicMock, Mock
 
 import pytest
 
@@ -51,7 +52,7 @@ def test_enforced_server_uses_separate_port_range(e2e_servers, monkeypatch, port
         assert command[command.index("--bind") + 1] == f"127.0.0.1:{port}"
         assert start.call_args.kwargs["env"]["E2E_MFA_ENFORCE_ROLES"] == "1"
         cleanup.assert_called_once_with(port)
-        ready.assert_called_once_with(url)
+        ready.assert_called_once_with(url, process)
     finally:
         with pytest.raises(StopIteration):
             next(fixture)
@@ -105,3 +106,53 @@ def test_port_cleanup_without_lsof_does_not_use_broad_process_search(e2e_servers
 
     assert lookup.call_count == 1
     kill.assert_not_called()
+
+
+@pytest.mark.parametrize("server", ["primary", "enforced", "clamav"])
+def test_occupied_port_aborts_before_server_start(e2e_servers, monkeypatch, tmp_path, server):
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen()
+        port = listener.getsockname()[1]
+        offset = {"primary": 0, "enforced": 100, "clamav": 200}[server]
+        monkeypatch.setenv("E2E_PORT_BASE", str(port - offset))
+        monkeypatch.setattr(e2e_servers.subprocess, "run", Mock(return_value=SimpleNamespace(stdout="")))
+        monkeypatch.setattr(e2e_servers, "_create_e2e_db", Mock())
+        monkeypatch.setattr(e2e_servers, "_run_or_die", Mock())
+        start = Mock()
+        monkeypatch.setattr(e2e_servers.subprocess, "Popen", start)
+        monkeypatch.setattr(e2e_servers, "_wait_for_server", Mock())
+        request = SimpleNamespace(config=SimpleNamespace())
+        primary_url = f"http://127.0.0.1:{port - offset}"
+        if server == "primary":
+            factory = SimpleNamespace(getbasetemp=lambda: tmp_path / "pytest0")
+            fixture = e2e_servers.base_url.__wrapped__(request, factory)
+        elif server == "enforced":
+            fixture = e2e_servers.enforced_base_url.__wrapped__(request, primary_url)
+        else:
+            monkeypatch.setitem(sys.modules, "tests.e2e.conftest", e2e_servers)
+            spec = importlib.util.spec_from_file_location(
+                "tests.e2e._upload_under_test", Path(__file__).parent / "e2e" / "test_upload_virus_feedback.py"
+            )
+            upload = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(upload)
+            fixture = upload.clamav_base_url.__wrapped__(primary_url, {}, SimpleNamespace(port=3310))
+
+        try:
+            with pytest.raises(RuntimeError, match=rf"Port {port}.*orphaned.*E2E_PORT_BASE"):
+                next(fixture)
+            start.assert_not_called()
+            assert listener.getsockname()[1] == port
+        finally:
+            fixture.close()
+
+
+@pytest.mark.parametrize("exit_codes", [[3], [None, 3]])
+def test_exited_process_aborts_despite_http_200(e2e_servers, monkeypatch, exit_codes):
+    process = MagicMock()
+    process.poll.side_effect = exit_codes
+    response = Mock(return_value=SimpleNamespace(status_code=200))
+    monkeypatch.setattr(e2e_servers.requests, "get", response)
+
+    with pytest.raises(RuntimeError, match=r"http://127.0.0.1:9044.*exit code 3"):
+        e2e_servers._wait_for_server("http://127.0.0.1:9044", process)

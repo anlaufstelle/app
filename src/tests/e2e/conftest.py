@@ -13,6 +13,7 @@ Bei paralleler Ausführung (pytest-xdist) bekommt jeder Worker:
 
 import os
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -90,40 +91,53 @@ def _create_e2e_db(python, db_name):
 
 
 def _kill_port(port):
-    """Terminate only our direct children listening on this port and await their exit."""
+    """Clean up direct children, then refuse to start on an occupied port."""
     try:
         stale = subprocess.run(["lsof", f"-tiTCP:{port}", "-sTCP:LISTEN"], capture_output=True, text=True)
     except FileNotFoundError:
-        return
-    for raw_pid in stale.stdout.split():
+        stale_pids = []
+    else:
+        stale_pids = stale.stdout.split()
+    for raw_pid in stale_pids:
         with suppress(ChildProcessError, ProcessLookupError, ValueError):
             pid = int(raw_pid)
             # waitpid rejects foreign processes, and reaps already exited children.
             if os.waitpid(pid, os.WNOHANG) == (0, 0):
                 os.kill(pid, signal.SIGTERM)
                 os.waitpid(pid, 0)
+    with socket.socket() as probe:
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            probe.bind(("127.0.0.1", port))
+        except OSError as exc:
+            raise RuntimeError(
+                f"Port {port} is unavailable; check for an orphaned process or choose a separate E2E_PORT_BASE."
+            ) from exc
 
 
-def _wait_for_server(url, retries=30, interval=0.5):
-    """Warten bis der Server auf /login/ antwortet.
+def _wait_for_server(url, proc, retries=30, interval=0.5):
+    """Wait for /login/ while checking that the process we started is alive.
 
-    ``Connection: close`` ist Pflicht (Refs #1055): Der erste Probe-Request
-    erreicht den Server oft noch während des App-Boots, läuft client-seitig
-    in den 1s-ReadTimeout und der Socket bleibt im pytest-Prozess offen
-    (requests/urllib3 räumt ihn nach ReadTimeout nicht zuverlässig ab).
-    Ohne ``Connection: close`` hält gunicorn diese Verbindung als
-    Keep-Alive aktiv und blockiert beim Teardown den graceful Shutdown
-    um volle 30s (graceful_timeout) — ``proc.wait(timeout=10)`` läuft
-    dann reproduzierbar in ``TimeoutExpired``.
+    Connection: close prevents a timed-out boot probe from keeping a gunicorn
+    connection alive and delaying graceful shutdown (Refs #1055).
     """
+
+    def check_process():
+        exit_code = proc.poll()
+        if exit_code is not None:
+            raise RuntimeError(f"Server {url} exited before readiness with exit code {exit_code}")
+
     for _ in range(retries):
+        check_process()
         try:
             resp = requests.get(f"{url}/login/", timeout=1, headers={"Connection": "close"})
+            check_process()
             if resp.status_code == 200:
                 return
         except (requests.ConnectionError, requests.ReadTimeout):
             time.sleep(interval)
-    raise RuntimeError(f"Server konnte nicht gestartet werden: {url}")
+    check_process()
+    raise RuntimeError(f"Server did not become ready: {url}")
 
 
 @pytest.fixture(scope="session")
@@ -195,7 +209,7 @@ def base_url(request, tmp_path_factory):
         label=" ".join(seed_command[2:]),
     )
 
-    # Alte gunicorn-Prozesse auf diesem Port beenden
+    # Clean up our children and reject any remaining listener before starting.
     _kill_port(port)
 
     # gunicorn statt runserver: 2 Workers + 2 Threads = 4 parallele Request-Slots.
@@ -223,12 +237,12 @@ def base_url(request, tmp_path_factory):
     )
 
     url = f"http://127.0.0.1:{port}"
-    _wait_for_server(url)
-
-    yield url
-
-    proc.send_signal(signal.SIGTERM)
-    proc.wait(timeout=10)
+    try:
+        _wait_for_server(url, proc)
+        yield url
+    finally:
+        proc.send_signal(signal.SIGTERM)
+        proc.wait(timeout=10)
 
 
 @pytest.fixture(scope="session")
@@ -333,12 +347,12 @@ def enforced_base_url(request, base_url):
         env=env,
     )
     url = f"http://127.0.0.1:{port}"
-    _wait_for_server(url)
-
-    yield url
-
-    proc.send_signal(signal.SIGTERM)
-    proc.wait(timeout=10)
+    try:
+        _wait_for_server(url, proc)
+        yield url
+    finally:
+        proc.send_signal(signal.SIGTERM)
+        proc.wait(timeout=10)
 
 
 # Replay is released only inside a sync-orchestrator run whose revocation check

@@ -289,7 +289,7 @@ def clamav_base_url(base_url, e2e_env, fake_clamd):
     )
     url = f"http://127.0.0.1:{port}"
     try:
-        _wait_for_server(url)
+        _wait_for_server(url, proc)
         yield url
     finally:
         _stop_process(proc)
