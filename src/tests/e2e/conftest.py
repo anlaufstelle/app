@@ -90,17 +90,18 @@ def _create_e2e_db(python, db_name):
 
 
 def _kill_port(port):
-    """Alte Prozesse auf einem Port beenden."""
+    """Terminate only our direct children listening on this port and await their exit."""
     try:
-        stale = subprocess.run(["lsof", "-ti", f":{port}"], capture_output=True, text=True)
+        stale = subprocess.run(["lsof", f"-tiTCP:{port}", "-sTCP:LISTEN"], capture_output=True, text=True)
     except FileNotFoundError:
-        subprocess.run(["pkill", "-f", f"gunicorn.*{port}"], capture_output=True)
-        stale = None
-    if stale and stale.stdout.strip():
-        for pid in stale.stdout.split():
-            with suppress(ProcessLookupError, ValueError):
-                os.kill(int(pid), signal.SIGTERM)
-        time.sleep(1)
+        return
+    for raw_pid in stale.stdout.split():
+        with suppress(ChildProcessError, ProcessLookupError, ValueError):
+            pid = int(raw_pid)
+            # waitpid rejects foreign processes, and reaps already exited children.
+            if os.waitpid(pid, os.WNOHANG) == (0, 0):
+                os.kill(pid, signal.SIGTERM)
+                os.waitpid(pid, 0)
 
 
 def _wait_for_server(url, retries=30, interval=0.5):
@@ -297,15 +298,14 @@ def admin_url(base_url):
 
 @pytest.fixture(scope="session")
 def enforced_base_url(request, base_url):
-    """Zweiter E2E-Server mit aktivem Rollen-MFA-Enforcement (A3.1, Refs #1019).
+    """Run an MFA-enforced server sharing the primary server's database and seed.
 
-    Teilt DB + Seed mit ``base_url`` (dort bereits migriert/geseedet), startet
-    aber einen separaten gunicorn mit ``E2E_MFA_ENFORCE_ROLES=1`` auf eigenem
-    Port (``8944 + worker_num``). So bleibt der Default-Server (``base_url``)
-    bewusst MFA-frei und nur hier greift der Rollen-Redirect auf ``/mfa/setup/``.
+    Reserve a separate worker range relative to E2E_PORT_BASE. Keep the
+    historical 100-port offset unless the primary range needs more ports.
     """
     worker_num, _ = _get_worker_info(request)
-    port = 8944 + worker_num
+    worker_count = getattr(request.config, "workerinput", {}).get("workercount", 1)
+    port = int(os.environ.get("E2E_PORT_BASE", "8844")) + max(100, worker_count) + worker_num
     db_name = "anlaufstelle_e2e" if worker_num == 0 else f"anlaufstelle_e2e_{worker_num}"
     python = ".venv/bin/python" if os.path.exists(".venv/bin/python") else sys.executable
     env = {**_E2E_ENV, "E2E_DATABASE_NAME": db_name, "E2E_MFA_ENFORCE_ROLES": "1"}
