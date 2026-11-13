@@ -107,6 +107,10 @@ def test_invalid_offline_task_is_not_confirmed_as_saved(browser, base_url, e2e_e
         _go_online(page)
         page.wait_for_timeout(1500)
         assert not [t for t in _server_workitem_titles(e2e_env, client_pk) if marker in t or t.startswith("TTTT")]
+        if case != "empty-title":
+            # Refs #2744: reconnect counter updates must not erase the field
+            # error while the invalid input is still unsaved.
+            expect(page.locator(FIELD_ERROR[case])).to_be_visible()
 
         # A corrected input is saved normally.
         if case == "reminder-after-due":

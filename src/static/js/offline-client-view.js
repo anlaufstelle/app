@@ -186,11 +186,18 @@
             get canCreateWorkItem() {
                 return this.assignableUsers.length > 0;
             },
+            get showLoading() {
+                return this.loading && !this.available;
+            },
             get showUnavailable() {
                 return !this.loading && !this.available;
             },
             get showAvailable() {
-                return !this.loading && this.available;
+                // Refs #2744/#2745: a background refresh must keep the live form
+                // attached. Recreating it loses field errors and interrupts a
+                // click between pointer down and submit. Unavailable reads still
+                // remove the view and discard its draft in _markUnavailable().
+                return this.available;
             },
             async load() {
                 this.loading = true;
@@ -361,9 +368,8 @@
             // bundle). Drop every open form with its unsaved input and release
             // the decrypted record: a later rebuild must not revive a draft of
             // the previous session, possibly for another account signed in on
-            // this device meanwhile. The available subtree of the template is
-            // already torn down here (load() set ``loading`` before its first
-            // await), so ``data = null`` is safe for the template.
+            // this device meanwhile. Hide the available subtree before clearing
+            // data so Alpine removes its descendants before updating their bindings.
             _markUnavailable() {
                 this.available = false;
                 this.data = null;
