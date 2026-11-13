@@ -32,9 +32,10 @@ from django.apps import apps as django_apps
 from django.db import connection
 
 from core.models import DocumentType, FieldTemplate
+from core.packages.catalog import load_package_data
 from core.packages.loader import PackageLoadError, load_package
 from core.packages.schema import PackageValidationError, parse_package
-from core.seed.doc_types import load_default_package_data, seed_document_types
+from core.seed.doc_types import seed_document_types
 
 pytestmark = pytest.mark.django_db
 
@@ -260,7 +261,7 @@ class TestStandardpaket:
         werden ``begleitung`` und ``vermittlung``: beide sind zaehlende
         Schluessel, die Verwechslung waere in keiner anderen Zusicherung sichtbar.
         """
-        rohdaten = load_default_package_data()
+        rohdaten = load_package_data("default")
         vertauscht = {"begleitung": "referral", "vermittlung": "accompaniment"}
         for eintrag in rohdaten["document_types"]:
             if eintrag["slug"] in vertauscht:
@@ -275,7 +276,7 @@ class TestStandardpaket:
 
     def test_katalog_fuehrt_den_schluessel_an_jedem_typ_mit(self):
         """Event types carry reporting keys; entity fields do not create report categories."""
-        package = parse_package(load_default_package_data())
+        package = parse_package(load_package_data("default"))
         missing_event_keys = [
             definition.slug
             for definition in package.document_types

@@ -6,9 +6,9 @@ import pytest
 
 from core.admin.documents import DocumentTypeAdmin
 from core.models import DocumentType, DocumentTypeField, Event, FieldTemplate
+from core.packages.catalog import load_package_data
 from core.packages.loader import load_package
 from core.packages.schema import PackageValidationError, parse_package
-from core.seed.doc_types import load_default_package_data
 from core.services.events import build_tally_summary
 from core.services.system.facility_export import build_facility_export
 from tests._tally_helpers import post_tally
@@ -84,7 +84,7 @@ class TestTallyConfiguration:
         assert document_type.tally_enabled is False
 
     def test_default_package_enables_only_curated_types(self):
-        definitions = parse_package(load_default_package_data()).document_types
+        definitions = parse_package(load_package_data("default")).document_types
         enabled_slugs = {definition.slug for definition in definitions if definition.tally_enabled}
 
         assert enabled_slugs == {"kontakt", "spritzentausch", "vermittlung", "notiz"}

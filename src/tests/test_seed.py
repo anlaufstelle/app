@@ -6,6 +6,8 @@ import pytest
 from django.core.management import call_command
 from django.core.management.base import CommandError
 
+from core.packages.catalog import load_package_data
+
 # Der Seed-Command erzeugt Datei-Uploads via ``store_encrypted_file``, das seit
 # #610 libmagic für Magic-Bytes-Validierung verwendet. Ohne libmagic (z.B.
 # Host ohne ``libmagic1``-Paket) ist der Command nicht lauffähig — im
@@ -1063,7 +1065,7 @@ def test_seed_field_groups_idempotent_no_duplicates():
 
 def _renamed_catalog(*, doc_type_slug: str, group_slug: str, new_group_name: str) -> dict:
     """Paket-Kopie mit einer Gruppen-Umbenennung (per Slug adressiert)."""
-    data = doc_types.load_default_package_data()
+    data = load_package_data("default")
     for dt_def in data["document_types"]:
         if dt_def["slug"] != doc_type_slug:
             continue
@@ -1085,7 +1087,7 @@ def _catalog_without_group(*, doc_type_slug: str, group_slug: str) -> dict:
     Feldes teilen (der bisherige Innen-Index 0/1/2 der ausgruppierten Felder
     kollidierte sonst mit der verbleibenden Gruppe bzw. untereinander).
     """
-    data = doc_types.load_default_package_data()
+    data = load_package_data("default")
     for dt_def in data["document_types"]:
         if dt_def["slug"] != doc_type_slug:
             continue
@@ -1298,17 +1300,17 @@ def test_default_package_ships_next_to_the_loader():
     resource = importlib.resources.files("core.packages").joinpath("default.yaml")
     assert resource.is_file(), "core/packages/default.yaml fehlt im ausgelieferten Paket."
 
-    data = doc_types.load_default_package_data()
+    data = load_package_data("default")
     assert data["schema_version"] == 1
     assert [dt["slug"] for dt in data["document_types"]] == STANDARD_TYPE_SLUGS + list(EXPECTED_DOCUMENT_TYPES)
 
 
 def test_default_package_data_is_returned_as_a_copy():
     """Der Modul-Cache darf von Aufrufern nicht verändert werden können."""
-    first = doc_types.load_default_package_data()
+    first = load_package_data("default")
     first["document_types"].clear()
 
-    assert len(doc_types.load_default_package_data()["document_types"]) == len(STANDARD_TYPE_SLUGS) + len(
+    assert len(load_package_data("default")["document_types"]) == len(STANDARD_TYPE_SLUGS) + len(
         EXPECTED_DOCUMENT_TYPES
     )
 
@@ -1319,7 +1321,7 @@ def test_default_package_declares_no_conditions():
     Ein ``conditions``-Schlüssel (auch ``[]``) würde per UI angelegte
     Feldbedingungen beim nächsten Seed-Lauf löschen.
     """
-    data = doc_types.load_default_package_data()
+    data = load_package_data("default")
 
     assert all("conditions" not in dt_def for dt_def in data["document_types"])
 

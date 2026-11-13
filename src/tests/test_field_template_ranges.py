@@ -11,9 +11,9 @@ from core.forms.config import FieldTemplateForm
 from core.forms.dynamic import DynamicDataForm
 from core.forms.tally import TallyNumberDataForm
 from core.models import DocumentType, DocumentTypeField, Event, FieldTemplate
+from core.packages.catalog import load_package_data
 from core.packages.loader import load_package
 from core.packages.schema import PackageValidationError, parse_package
-from core.seed.doc_types import load_default_package_data
 from core.services.dynamic_data import merge_dynamic_data, validate_data_json
 from core.services.events import create_event
 from core.services.file_vault import encrypt_field
@@ -240,7 +240,7 @@ class TestPackageNumberRanges:
         assert FieldTemplate.objects.get(facility=facility, slug="ausgabe").max_value == 50
 
     def test_default_package_sets_non_negative_needle_exchange_quantities(self):
-        field_templates = {field.slug: field for field in parse_package(load_default_package_data()).field_templates}
+        field_templates = {field.slug: field for field in parse_package(load_package_data("default")).field_templates}
 
         assert field_templates["ausgabe"].min_value == 0
         assert field_templates["rueckgabe"].min_value == 0

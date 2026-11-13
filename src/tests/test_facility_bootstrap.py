@@ -14,30 +14,24 @@ from __future__ import annotations
 import pytest
 
 from core.models import DocumentType, FieldTemplate
-from core.packages.default_catalog import load_default_package_data, parse_default_package
+from core.packages.catalog import load_package_data, parse_catalog_package
 from core.services.facility_bootstrap import DEFAULT_QUICK_TEMPLATES, DEFAULT_TIME_FILTERS, ensure_catalog_package
 
 
 class TestDefaultCatalogReader:
     def test_reader_lives_in_packages_not_in_seed(self):
         """Der Produktionspfad darf nicht aus ``core/seed/`` importieren."""
-        assert load_default_package_data.__module__ == "core.packages.default_catalog"
+        assert load_package_data.__module__ == "core.packages.catalog"
 
     def test_returns_a_copy_so_callers_cannot_poison_the_cache(self):
-        first = load_default_package_data()
+        first = load_package_data("default")
         first["document_types"] = []
-        assert load_default_package_data()["document_types"]
+        assert load_package_data("default")["document_types"]
 
     def test_parsed_package_offers_at_least_one_event_type(self):
         """Ohne ``entity_type: event`` bliebe die Typ-Auswahl beim Dokumentieren leer."""
-        package = parse_default_package()
+        package = parse_catalog_package("default")
         assert any(doc.entity_type == "event" for doc in package.document_types)
-
-    def test_seed_module_reexports_the_same_callable(self):
-        """Bestands-Importe aus ``core.seed.doc_types`` bleiben gueltig (ein Objekt, kein Klon)."""
-        from core.seed import doc_types
-
-        assert doc_types.load_default_package_data is load_default_package_data
 
 
 @pytest.mark.django_db
@@ -113,7 +107,7 @@ class TestEnsureDefaultPackage:
 @pytest.mark.django_db
 class TestForeignCatalogSlugs:
     def test_reports_inactive_document_types_and_field_templates_outside_package(self, facility):
-        from core.packages.default_catalog import parse_default_package
+        from core.packages.catalog import parse_catalog_package
         from core.services.facility_bootstrap import foreign_catalog_slugs
 
         DocumentType.objects.create(
@@ -129,7 +123,7 @@ class TestForeignCatalogSlugs:
             is_active=False,
         )
 
-        assert foreign_catalog_slugs(facility, parse_default_package()) == {"fremder-typ", "fremdes-feld"}
+        assert foreign_catalog_slugs(facility, parse_catalog_package("default")) == {"fremder-typ", "fremdes-feld"}
 
 
 @pytest.mark.django_db
