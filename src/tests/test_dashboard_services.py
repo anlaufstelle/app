@@ -15,7 +15,6 @@ from django.utils import timezone
 
 from core.models import (
     DeletionRequest,
-    Event,
     RetentionProposal,
     Settings,
     User,
@@ -24,35 +23,13 @@ from core.models import (
 from core.services.dashboard import (
     facility_admin_dashboard_context,
     lead_dashboard_context,
-    staff_dashboard_context,
     super_admin_dashboard_context,
 )
+from core.services.dashboard.main import zeitstrom_workitem_counts
 
 
 @pytest.mark.django_db
-class TestStaffDashboardContext:
-    def test_returns_today_events_count(self, facility, staff_user, doc_type_contact, client_identified):
-        Event.objects.create(
-            facility=facility,
-            client=client_identified,
-            document_type=doc_type_contact,
-            occurred_at=timezone.now(),
-            data_json={"dauer": 1},
-            created_by=staff_user,
-        )
-        Event.objects.create(
-            facility=facility,
-            client=client_identified,
-            document_type=doc_type_contact,
-            occurred_at=timezone.now() - timedelta(days=2),
-            data_json={"dauer": 1},
-            created_by=staff_user,
-        )
-
-        ctx = staff_dashboard_context(staff_user, facility)
-
-        assert ctx["today_events_count"] == 1
-
+class TestPersonalWorkitemCounts:
     def test_returns_open_workitems_assigned_to_user(self, facility, staff_user, client_identified):
         WorkItem.objects.create(
             facility=facility,
@@ -71,15 +48,11 @@ class TestStaffDashboardContext:
             created_by=other,
         )
 
-        ctx = staff_dashboard_context(staff_user, facility)
+        ctx = zeitstrom_workitem_counts(staff_user, facility)
 
-        assert ctx["my_open_workitems_count"] == 1
+        assert ctx["my_open"] == 1
 
-    def test_no_recent_clients_key(self, facility, staff_user):
-        ctx = staff_dashboard_context(staff_user, facility)
-        assert "recent_clients" not in ctx
-
-    def test_surfaces_overdue_workitems_first(self, facility, staff_user, client_identified):
+    def test_counts_overdue_workitems(self, facility, staff_user, client_identified):
         today = timezone.localdate()
         WorkItem.objects.create(
             facility=facility,
@@ -88,7 +61,7 @@ class TestStaffDashboardContext:
             client=client_identified,
             created_by=staff_user,
         )
-        overdue = WorkItem.objects.create(
+        WorkItem.objects.create(
             facility=facility,
             title="Überfällig",
             assigned_to=staff_user,
@@ -96,9 +69,8 @@ class TestStaffDashboardContext:
             created_by=staff_user,
             due_date=today - timedelta(days=3),
         )
-        ctx = staff_dashboard_context(staff_user, facility)
-        assert ctx["my_open_workitems"][0].pk == overdue.pk
-        assert ctx["my_overdue_count"] == 1
+        ctx = zeitstrom_workitem_counts(staff_user, facility)
+        assert ctx["my_overdue"] == 1
 
     def test_no_overdue_when_due_dates_future(self, facility, staff_user, client_identified):
         WorkItem.objects.create(
@@ -109,8 +81,8 @@ class TestStaffDashboardContext:
             created_by=staff_user,
             due_date=timezone.localdate() + timedelta(days=5),
         )
-        ctx = staff_dashboard_context(staff_user, facility)
-        assert ctx["my_overdue_count"] == 0
+        ctx = zeitstrom_workitem_counts(staff_user, facility)
+        assert ctx["my_overdue"] == 0
 
 
 @pytest.mark.django_db

@@ -26,7 +26,6 @@ from core.services.dashboard.focus_box import build_focus_box
 from core.services.dashboard.main import (
     facility_admin_dashboard_context,
     lead_dashboard_context,
-    staff_dashboard_context,
     super_admin_dashboard_context,
 )
 from core.services.dashboard.quick_templates import (
@@ -143,7 +142,6 @@ __all__ = [
     "search_clients_and_events",
     "search_result_counts",
     "search_similar_clients",
-    "staff_dashboard_context",
     "super_admin_dashboard_context",
     "suppress_sample_report_1_stats",
     "suppress_report_stats",

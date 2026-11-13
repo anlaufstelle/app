@@ -889,7 +889,6 @@
   "src/tests/test_mutation_pins_0998_compliance_retention.py": 0.01,
   "src/tests/test_mutation_pins_0998_compliance_retention_approvers.py": 0.16,
   "src/tests/test_mutation_pins_0998_config_mutations.py": 0.88,
-  "src/tests/test_mutation_pins_0998_dashboard_main.py": 0.02,
   "src/tests/test_mutation_pins_0998_dashboard_snapshot.py": 0.41,
   "src/tests/test_mutation_pins_0998_dynamic_data.py": 0.07,
   "src/tests/test_mutation_pins_0998_dynamic_protection.py": 0.62,

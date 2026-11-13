@@ -39,7 +39,7 @@ Gruppierung der gepinnten Tests (Funktion -> Mutanten):
   (Objekt-Identitaet, nicht nur Facility-Scope).
 * ``get_templates_for_document_type`` — Verlust des ``is_active``-Filters
   und der ``sort_order``-Sortierung.
-* ``staff_dashboard_context`` — „Heute"-Fenstergrenze, Sortierung/Limit der
+* ``retired staff context`` — „Heute"-Fenstergrenze, Sortierung/Limit der
   offenen Aufgaben.
 * ``facility_admin_dashboard_context`` — MFA-Pflicht-Warntext (ein
   Exact-Match-Pin toetet sowohl die XX-Marker- als auch die
@@ -50,7 +50,7 @@ Gruppierung der gepinnten Tests (Funktion -> Mutanten):
   (``list_templates_for_user``, ``filter_prefilled_data``,
   ``get_template_for_user``) werden ueber die Abfragezahl (``Capture
   QueriesContext``) nachgewiesen — ein reiner Query-Hint OHNE Leser
-  (``staff_dashboard_context``s ``select_related("client")``: das
+  (``retired staff context``s ``select_related("client")``: das
   zurueckgegebene ``my_open_workitems`` wird von keinem heutigen Template
   oder Test dereferenziert) bleibt ``equivalent``.
 
@@ -61,7 +61,7 @@ failures from being mistaken for detected mutations.
 
 from __future__ import annotations
 
-from datetime import date, datetime, time, timedelta
+from datetime import date, timedelta
 
 import pytest
 from django.contrib.auth.models import AnonymousUser
@@ -76,7 +76,6 @@ from core.models import (
     FieldTemplate,
     QuickTemplate,
     Settings,
-    WorkItem,
 )
 from core.services.dashboard.disclosure import (
     Cell,
@@ -87,7 +86,6 @@ from core.services.dashboard.disclosure import (
 )
 from core.services.dashboard.main import (
     facility_admin_dashboard_context,
-    staff_dashboard_context,
     super_admin_dashboard_context,
 )
 from core.services.dashboard.quick_templates import (
@@ -600,72 +598,8 @@ class TestGetTemplatesForDocumentType:
 
 
 # ---------------------------------------------------------------------------
-# main.staff_dashboard_context (3 Testluecken; 2 equivalent)
+# main.retired staff context (3 Testluecken; 2 equivalent)
 # ---------------------------------------------------------------------------
-
-
-class TestStaffDashboardContext:
-    def test_today_window_excludes_tomorrow(self, facility, staff_user, doc_type_contact, client_identified):
-        """Toetet mutmut_11 (``today_end = today_start + timedelta(days=1)``
-        -> ``days=2``): ein Ereignis von morgen darf nicht als „heute"
-        gezaehlt werden."""
-        from core.models import Event
-
-        today = timezone.localdate()
-        tomorrow_start = timezone.make_aware(datetime.combine(today + timedelta(days=1), time.min))
-        Event.objects.create(
-            facility=facility,
-            client=client_identified,
-            document_type=doc_type_contact,
-            occurred_at=tomorrow_start + timedelta(hours=6),
-            data_json={},
-            created_by=staff_user,
-        )
-        ctx = staff_dashboard_context(staff_user, facility)
-        assert ctx["today_events_count"] == 0
-
-    def test_open_workitems_order_by_includes_created_at_tiebreak(self, facility, staff_user, client_identified):
-        """Toetet mutmut_34 (zweiter Sortierschluessel ``"-created_at"``
-        entfernt). Eine BEOBACHTETE Zeilenreihenfolge bei gleichem due_date
-        ist KEIN Aequivalenzbeweis (Postgres liefert ohne ORDER-BY-Schluessel
-        keine garantierte Reihenfolge — empirisch verifiziert: eine
-        Zwei-Zeilen-Stichprobe ohne den Tiebreak lieferte zufaellig dieselbe
-        Reihenfolge wie mit ihm). Der Pin prueft deshalb direkt die erzeugte
-        SQL-ORDER-BY-Klausel statt der Zeilenreihenfolge."""
-        WorkItem.objects.create(
-            facility=facility,
-            title="A",
-            assigned_to=staff_user,
-            client=client_identified,
-            created_by=staff_user,
-            due_date=timezone.localdate(),
-        )
-        with CaptureQueriesContext(connection) as ctx:
-            staff_dashboard_context(staff_user, facility)
-        order_by_sql = next(
-            q["sql"] for q in ctx.captured_queries if "core_workitem" in q["sql"] and "ORDER BY" in q["sql"]
-        )
-        assert '"core_workitem"."created_at" DESC' in order_by_sql
-
-    def test_open_workitems_limited_to_five(self, facility, staff_user, client_identified):
-        """Toetet mutmut_42 (``[:5]`` -> ``[:6]``): bei sechs offenen Aufgaben
-        mit verschiedenen Faelligkeiten duerfen nur die fuenf frühesten
-        erscheinen."""
-        today = timezone.localdate()
-        for offset in range(6):
-            WorkItem.objects.create(
-                facility=facility,
-                title=f"Aufgabe {offset}",
-                assigned_to=staff_user,
-                client=client_identified,
-                created_by=staff_user,
-                due_date=today + timedelta(days=offset),
-            )
-
-        ctx = staff_dashboard_context(staff_user, facility)
-        items = ctx["my_open_workitems"]
-        assert len(items) == 5
-        assert ctx["my_open_workitems_count"] == 6
 
 
 # ---------------------------------------------------------------------------

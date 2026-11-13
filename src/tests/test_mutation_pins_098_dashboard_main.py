@@ -22,7 +22,7 @@ rollenspezifischen ``..._dashboard_context``-Funktionen, die der Bestand
   auf ``None``/eine falsche Facility zurueck oder die
   ``order_by("-year", "-month")``-Sortierung verliert Jahr oder Monat als
   Kriterium.
-* **``staff_dashboard_context``/``super_admin_dashboard_context``**: fehlende
+* **``zeitstrom_workitem_counts``/``super_admin_dashboard_context``**: fehlende
   Ober-/Statusgrenzen bei Ereignissen bzw. Aufgaben, verlorene
   Ueberfaellig-zuerst-Sortierung, fehlende Zeit-/Aktionsfilter der
   kritischen Audit-Zeile, invertierte Aktiv-Zaehlung der Nutzerzahl.
@@ -54,7 +54,6 @@ from django.utils import timezone, translation
 from core.models import (
     AuditLog,
     EncryptedTOTPDevice,
-    Event,
     StatisticsSnapshot,
     User,
     WorkItem,
@@ -62,9 +61,9 @@ from core.models import (
 from core.services.dashboard import (
     facility_admin_dashboard_context,
     lead_dashboard_context,
-    staff_dashboard_context,
     super_admin_dashboard_context,
 )
+from core.services.dashboard.main import zeitstrom_workitem_counts
 
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
@@ -191,49 +190,12 @@ def test_context_uses_the_exact_last_snapshot_key(facility, lead_user):
 
 
 # ---------------------------------------------------------------------------
-# staff_dashboard_context — heutige Ereignisse, offene Aufgaben
+# zeitstrom_workitem_counts — heutige Ereignisse, offene Aufgaben
 # ---------------------------------------------------------------------------
 
 
-def test_today_events_count_ignores_events_dated_in_the_future(
-    facility, staff_user, client_identified, doc_type_contact
-):
-    """Pins x_staff_dashboard_context__mutmut_17 (``occurred_at__lt=
-    today_end`` entfaellt — keine Obergrenze mehr)."""
-    Event.objects.create(
-        facility=facility,
-        client=client_identified,
-        document_type=doc_type_contact,
-        occurred_at=timezone.now() + timedelta(days=2),
-        data_json={"dauer": 1},
-        created_by=staff_user,
-    )
-
-    ctx = staff_dashboard_context(staff_user, facility)
-
-    assert ctx["today_events_count"] == 0
-
-
-def test_today_events_count_ignores_soft_deleted_events(facility, staff_user, client_identified, doc_type_contact):
-    """Pins x_staff_dashboard_context__mutmut_18 (``is_deleted=False``
-    entfaellt)."""
-    Event.objects.create(
-        facility=facility,
-        client=client_identified,
-        document_type=doc_type_contact,
-        occurred_at=timezone.now(),
-        data_json={"dauer": 1},
-        created_by=staff_user,
-        is_deleted=True,
-    )
-
-    ctx = staff_dashboard_context(staff_user, facility)
-
-    assert ctx["today_events_count"] == 0
-
-
 def test_my_open_workitems_count_excludes_done_items(facility, staff_user, client_identified):
-    """Pins x_staff_dashboard_context__mutmut_26 (``status__in=[OPEN,
+    """Pins x_zeitstrom_workitem_counts__mutmut_26 (``status__in=[OPEN,
     IN_PROGRESS]`` entfaellt aus dem Filter von ``open_qs``)."""
     WorkItem.objects.create(
         facility=facility,
@@ -244,40 +206,9 @@ def test_my_open_workitems_count_excludes_done_items(facility, staff_user, clien
         status=WorkItem.Status.DONE,
     )
 
-    ctx = staff_dashboard_context(staff_user, facility)
+    ctx = zeitstrom_workitem_counts(staff_user, facility)
 
-    assert ctx["my_open_workitems_count"] == 0
-
-
-def test_overdue_item_stays_first_even_when_created_before_the_undated_item(facility, staff_user, client_identified):
-    """Pins x_staff_dashboard_context__mutmut_33 (``order_by(F("due_date").
-    asc(nulls_last=True), "-created_at")`` -> ``order_by("-created_at")``).
-
-    Der Bestandstest ``test_surfaces_overdue_workitems_first`` legt das
-    ueberfaellige Item ZULETZT an — dort liefert auch ``-created_at`` allein
-    dieselbe Reihenfolge. Hier entsteht das ueberfaellige Item ZUERST
-    (aelterer ``created_at``), das terminlose Item DANACH: nur die
-    Faelligkeits-Sortierung bringt das Ueberfaellige trotzdem nach vorn.
-    """
-    overdue = WorkItem.objects.create(
-        facility=facility,
-        title="Pin-098 ueberfaellig",
-        assigned_to=staff_user,
-        client=client_identified,
-        created_by=staff_user,
-        due_date=timezone.localdate() - timedelta(days=3),
-    )
-    WorkItem.objects.create(
-        facility=facility,
-        title="Pin-098 ohne Termin",
-        assigned_to=staff_user,
-        client=client_identified,
-        created_by=staff_user,
-    )
-
-    ctx = staff_dashboard_context(staff_user, facility)
-
-    assert ctx["my_open_workitems"][0].pk == overdue.pk
+    assert ctx["my_open"] == 0
 
 
 # ---------------------------------------------------------------------------
