@@ -120,7 +120,7 @@ Click **Log out** at the foot of the sidebar (mobile: under **More**). For data 
 
 ### Quick Exit
 
-At the top of every page there is a **Quick exit** button. It is meant for situations where someone is reading along or unexpectedly standing next to you -- at a reception desk, in a women's shelter, when documenting in a public place.
+A compact red button sits at the top right: **Quick exit** on a wide screen, **Leave** on a phone. It stays reachable while scrolling and does not occupy a separate bar. It is meant for situations where someone is reading along or unexpectedly standing next to you -- at a reception desk, in a women's shelter, when documenting in a public place.
 
 One click does three things, in this order:
 
@@ -168,6 +168,8 @@ Invalid calendar dates (such as `2026-02-30`) and values outside the permitted b
 
 After signing in, you land on the **Timeline** (`/`) -- a chronological daily feed that unifies contacts, system activities, tasks, and entry bans in a single view.
 
+Screenshots: [Timeline on desktop](../screenshots/zeitstrom-en.webp) · [Timeline on mobile](../screenshots/zeitstrom-mobil-en.webp).
+
 ### What the Timeline shows
 
 The feed combines four sources for the current day:
@@ -202,7 +204,7 @@ Each type appears as a **tile** with a large counter, an action mark (`+1` or `+
 
 - **Without required fields:** One tap on the tile (`+1`) immediately creates one anonymous contact.
 - **With required number fields:** The tile carries the mark `+ …`; a tap opens a compact value form, as a popover at the tile on desktop and as a sheet from the bottom on a phone. The tiles do not move while it is open. **Cancel**, the Escape key or a click outside closes it, and the focus returns to the tile. Enter every required value and select **Count contact**. This creates exactly one anonymous contact. For a needle exchange, for example, issued and returned needles belong to the same contact rather than counting multiple contacts.
-- **Undo:** After a tally, a fixed bar with **Undo** and the remaining time appears for 60 seconds, below the tally on desktop and above the bottom navigation on a phone. It always refers to the tally you counted last; it disappears when the time is up.
+- **Undo:** After a tally, a bar with **Undo** and the remaining time appears for 60 seconds: in the page flow below the tally on desktop, fixed above the bottom navigation on a phone. It always refers to the tally you counted last; it disappears when the time is up.
 - A type appears only when it is enabled for the tally and your role may see it as well as every required field. Types with other required field types do not appear in the tally.
 
 **Counted contacts in the feed.** Tally entries appear as one expandable row per hour, for example “18–19 · 15 counted · anonymous · 12 Contact · 3 Needle exchange · Team”. Even a single tally forms a group. Enter or Space on the row opens the counts by type; **Show counted contacts** opens the day's contact list filtered to tally entries. “+1” and “Undo” update the group on the next feed refresh, including in other open Timeline tabs. The group count includes visible tally entries in the selected time window; with an active document-type filter, only entries of that type are included. Entries of types that have since been disabled also count, so the group count may differ from the sum of the available tiles. Anonymous contacts created through the documentation form remain individual rows. Grouping also applies with the contacts or document-type filter; offline, local tallies remain individual entries.
@@ -217,7 +219,7 @@ Entries share one list with aligned time, type and person columns; on a phone ea
 
 ### Shift filter
 
-In the header row you choose the shift in the **Shift** selection list: **Whole day** or a configured shift with its times (e.g., "Early shift", "Late shift", "Night shift" -- configurable by the administration; a night shift carries `(+1)` after the end time). In the feed, changing it updates the feed and figures without a page reload; in the handover it opens that shift's handover. When you open the Timeline, the shift that matches the current time is auto-selected; night shifts crossing midnight are handled correctly.
+In the header row you choose the shift in the **Shift** selection list: **All day** or a configured shift with its times (e.g., "Early shift", "Late shift", "Night shift" -- configurable by the administration; a night shift carries `(+1)` after the end time). In the feed, changing it updates the feed and figures without a page reload; in the handover it opens that shift's handover. When you open the Timeline, the shift that matches the current time is auto-selected; night shifts crossing midnight are handled correctly.
 
 **Daylight-saving changes.** On both changeover weekends a clock time is ambiguous, and the shift filter resolves that explicitly. On the night the clocks fall back to standard time, the hour from 02:00 to 03:00 runs twice; a shift that ends within that hour ends at the **second** occurrence -- a night shift from 20:00 to 02:45 therefore actually lasts 7 hours 45 minutes that night, and everything documented during the extra hour stays visible in the Timeline, the handover, and the tally. On the night the clocks spring forward to daylight-saving time, the hour from 02:00 to 03:00 is skipped; a shift that would have ended within it instead ends after its agreed duration from shift start and is actually one hour shorter. Full-day views are unaffected -- the changeover day in autumn still spans 25 hours, the one in spring 23.
 
@@ -231,7 +233,9 @@ For the application the two hours really are different points in time, one hour 
 
 On the night the clocks spring forward, by contrast, the hour from 02:00 to 03:00 **does not exist at all** -- there the form still rejects a time from that window and says why. There is nothing to choose: a time that does not exist is not made real by any selection.
 
-If the selection is not the running shift (another day or another shift), a hint "You are viewing …" with the link **to the running shift** appears below the header row; while the running shift is selected it does not appear. The feed shows the figures row instead of a separate box; the handover contains the full shift summary.
+If the selection is not the running shift (another day or another shift), a hint "You are viewing …" appears below the header row: **to the current shift** returns to a running shift, otherwise **to today** returns to today. While the running shift is selected, the hint does not appear. The feed shows the figures row instead of a separate box; the handover contains the full shift summary.
+
+Handover screenshots: [Desktop](../screenshots/uebergabe-en.webp) · [Mobile](../screenshots/uebergabe-mobil-en.webp).
 
 #### Handover note
 
@@ -270,9 +274,11 @@ If there are active entry bans in your facility, the figures row shows the red-m
 
 The **Contacts list** (`/events/`) is a working list spanning multiple days, for example “all crisis conversations last month” or “my entries this week”. The Timeline remains the daily view with activities, tasks and entry bans.
 
-**Open it:** Select **Contacts** directly below **Timeline** in the sidebar, or **More → Contacts** on mobile. This entry is active only on `/events/`; contact detail pages remain assigned to the Timeline. A local **Contacts** link on the Timeline page also opens the list, carrying over the selected day, documentation type and shift.
+Contacts list screenshots: [Desktop](../screenshots/kontakte-en.webp) · [Mobile](../screenshots/kontakte-mobil-en.webp).
 
-**Combine filters:** The top row shows the search field, the period quick selection **Today | Week | Month | Period** and the **Filter** button. The button opens the filter panel (below the button in a wide window, otherwise as a sheet at the bottom edge) and shows the number of active filters in brackets. Every active filter appears below as a chip; **×** on a chip removes exactly that filter, and **Reset all** opens the unfiltered list. Changes apply immediately, the search field after a short pause. When the panel opens, focus moves to its first field; **Esc** closes it and returns focus to the button. Without JavaScript the panel can still be expanded and **Filter** replaces immediate filtering.
+**Open it:** Select **Contacts** directly below **Timeline** in the sidebar, or **More → Contacts** on mobile. This entry is active only on `/events/`; contact detail pages remain assigned to the Timeline. The contact figure in the Timeline figures row also opens the list, carrying over the selected day, documentation type and shift and showing contacts **without tally**. The neighbouring **Counted (tally)** figure opens tally contacts in the live window.
+
+**Combine filters:** The top row shows the search field, the period quick selection **Today | Week | Month | Period** and the **Filters** button. The button opens the filter panel (below the button in a wide window, otherwise as a sheet at the bottom edge) and shows the number of active filters in brackets. Every active filter appears below as a chip; **×** on a chip removes exactly that filter, and **Reset all** opens the unfiltered list. Changes apply immediately, the search field after a short pause. When the panel opens, focus moves to its first field; **Esc** closes it and returns focus to the button. Without JavaScript the panel can still be expanded and **Filter** replaces immediate filtering.
 
 | Filter | Use |
 |---|---|
@@ -281,17 +287,17 @@ The **Contacts list** (`/events/`) is a working list spanning multiple days, for
 | **Type** | Documentation type within your role's visibility |
 | **Person** | Select an active person by pseudonym; no autocomplete search |
 | **Case** | Select a case; the filter and case display are available from Social worker upwards |
-| **Created by / Only mine** | Other team members' contacts or your own; both filters apply together |
+| **Recorded by / Only mine** | Other team members' contacts or your own; both filters apply together |
 | **Shift** | The configured time window on every day of the period; an overnight shift belongs to its start day |
 | **Anonymous** | All, only anonymous or only non-anonymous contacts |
-| **Recording method** | **Without tally sheet** shows contacts not created through the tally sheet, **Tally sheet only** those counted through it |
+| **Entry channel** | **Without tally** shows contacts not created through the tally, **Tally only** those counted through it |
 | **Search term** | Search pseudonym and event search text from two characters onwards; it does not appear as a chip but stays visible in the search field |
 
 The search scope matches global search (#1862, [ADR-043](../adr/043-suchraum-volltextsuche.md)): event search text contains only unencrypted fields with effective **Normal** sensitivity. Encrypted, elevated or high field values, case titles and file contents are excluded. There are no search suggestions. Contacts belonging to people in the trash are excluded when a search term is used. **Reset all** opens the unfiltered list again and also clears the search term.
 
 **Visibility:** Assistant, Social worker, Manager and Application support see contacts within their own facility, including entries by other team members, with the same sensitivity limit as the Timeline: Assistant sees **Normal**, Social worker up to **Elevated**, Manager and Application support also **High**. Deleted contacts and contacts in the trash are absent. System administration has no access to this working list.
 
-**Results:** Newest contacts appear first, with 25 entries per page. The total number of filtered results appears beside the heading and updates when filtering. Day headings show the date and the number of all filtered results for that day, even when the day spans several pages. The local calendar day of the contact timestamp in the application’s time zone applies, rather than the start of an overnight shift. Below it, rows show only the time, type, person or “Anonymous”, case from Social worker upwards, and “Created by”; a desktop header labels the columns, while mobile entries remain on two lines. Click the header or press Enter or Space there to expand and collapse the details. The visible field values follow the same role permissions as the Timeline. **Go to entry** still opens the detail view. Filters remain in the address when sharing, changing pages and using Back/Forward, including the form values.
+**Results:** Newest contacts appear first, with 25 entries per page. The total number of filtered results appears beside the heading and updates when filtering. Day headings show the locale-specific short date (for example “Fri, Oct 23” in English, “Fr, 23. Okt” in German) and the number of all filtered results for that day, even when the day spans several pages. The local calendar day of the contact timestamp in the application’s time zone applies, rather than the start of an overnight shift. The time column shows only the time. Beside it are type, person or “Anonymous”, preview details, case from Social worker upwards, and “Recorded by”; a desktop header labels the columns, while mobile entries remain on two lines. Click the header or press Enter or Space there to expand and collapse the details. The visible field values follow the same role permissions as the Timeline. **Go to entry** still opens the detail view. Filters remain in the address when sharing, changing pages and using Back/Forward, including the form values.
 
 The list offers **no export or bulk actions**. Export options remain under [Statistics and Export](#7-statistics-and-export). List and filter requests create **no audit entry**; opening a detail view follows that view's access rules.
 
@@ -301,7 +307,7 @@ The **Work Center** (`/start/`) is the landing page of the **Manager** role -- a
 
 All other roles are redirected from `/start/` straight to their own workplace:
 
-- **Social worker / Assistant** -- to the Timeline (`/`); the former tiles "Today's contacts" and "My tasks" have become the figures row above the feed (see [What the Timeline shows](#what-the-timeline-shows)).
+- **Social worker / Assistant** -- to the Timeline (`/`); contacts and your own tasks appear in the figures row above the feed (see [What the Timeline shows](#what-the-timeline-shows)).
 - **Application support** (`facility_admin`) -- to the administration overview (`/verwaltung/`).
 - **System administration** (`super_admin`) -- to the system area (`/system/`).
 
@@ -532,7 +538,7 @@ What happens:
 
 ## 5. Hints and Tasks (Work Items)
 
-Tasks without a person remain visible. Tasks linked to people in the trash or inactive people are excluded from the inbox, timeline, focus box, profile, navigation counts and handover; their detail links return 404, as do their edit links for users permitted to edit tasks. Timeline contacts, bans and activities targeting people, events, tasks or cases also exclude these people; entries without a person remain visible. Restoring a person who remains active makes the eligible tasks visible again. Profile favorites and recent visits also exclude deleted or inactive people. Profile event lists and contact counts, the cockpit’s contact count for today, and handover events include only role-visible documentation that is not deleted and belongs to active people outside the trash or has no person attached.
+Tasks without a person remain visible. Tasks linked to people in the trash or inactive people are excluded from the inbox, timeline, focus box, profile, navigation counts and handover; their detail links return 404, as do their edit links for users permitted to edit tasks. Timeline contacts, bans and activities targeting people, events, tasks or cases also exclude these people; entries without a person remain visible. Restoring a person who remains active makes the eligible tasks visible again. Profile favorites and recent visits also exclude deleted or inactive people. Profile event lists and contact counts, the contact count in the Timeline figures row, and handover events include only role-visible documentation that is not deleted and belongs to active people outside the trash or has no person attached.
 
 The ordinary person record and its deletion, merge, contact-stage downgrade and legal-hold forms return 404 for deleted or inactive people. The event list, event detail and attachment links, event search and ordinary event CSV export also exclude events belonging to deleted or inactive people; eligible events without a person remain visible. Status responses and their replays return 404 for these person-linked tasks before returning task content. The completed-task count shown when loading fragments counts only readable tasks. A pending deletion request alone does not block these readers; restoring a person who remains active makes eligible records visible again. The person ranking in statistics shows only active people outside the trash; the next visible person moves up. Aggregate statistics remain unchanged.
 
@@ -1207,5 +1213,5 @@ Phone, email, date and address patterns are detected heuristically and locally o
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: 30d72f1f44724c7d34cb3b3ab077bac7c61934e8 -->
-<!-- translation-date: 2026-11-12 -->
+<!-- source-hash: 8ad7306893adf01f2d94abb37b066e0dde53e5c4 -->
+<!-- translation-date: 2026-11-13 -->

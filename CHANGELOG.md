@@ -60,6 +60,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Schlüsselrotation verschiebt die Anonymisierung inaktiver Personen nicht mehr** (#2715) — Die Neuverschlüsselung lässt den Änderungszeitpunkt von Personen, Fällen und Aufgaben unverändert; eine gleichzeitige fachliche Änderung hat weiterhin Vorrang.
 - **Demo-Reset: Audit-Kettenprüfung bleibt nach `seed --flush` grün** (#2708) — `seed --flush` setzt die externe Audit-Ankerdatei jetzt zusammen mit dem Audit-Protokoll zurück. Bisher blieb `verify_audit_chain` dauerhaft rot, sobald ein Prüflauf eine Kette aus dem Seed-Fenster verankert hatte, etwa nach einer Anmeldung beim stündlichen Reset.
 
+### Docs
+
+- **Handbuch und Design-Nachweise aktualisiert** (#2662) — Handbuch, FAQ und Hilfe beschreiben Kennzahlenzeile, Strichliste und Kontaktliste; die Bildgalerie enthält Kontakte und mobile Übergabe. Das Barrierefreiheits-Audit trennt Kontrast- und Testnachweise von offenen Messungen; das Admin-Handbuch ordnet Backups dem Host-Cron zu.
+
 ## [0.99.10] - 2026-11-11
 
 Weiterer Release-Kandidat vor 1.0: bündelt neue Basis-Image-Digests für PostgreSQL, Redis, ClamAV und Caddy (Betreiber-Aktion), einen Schwachstellen-Scan für App- und Fremdimages als Release-Gate mit befristeten Ausnahmen, die Advisory- und SBOM-Prüfung manuell vendorter JavaScript-Bibliotheken, ein offen bleibendes Offline-Bearbeitungsformular, Barrierefreiheits-Korrekturen, einen gehärteten Sprachcookie sowie Sicherheitsupdates für Entwicklungsabhängigkeiten.

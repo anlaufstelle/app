@@ -118,7 +118,7 @@ Klicken Sie am Fuß der Sidebar (mobil unter **Mehr**) auf **Abmelden**. Aus Dat
 
 ### Schnell verlassen
 
-Oben auf jeder Seite steht der Knopf **Schnell verlassen**. Er ist für Situationen gedacht, in denen jemand mitliest oder unerwartet neben Ihnen steht — am Empfangsplatz, im Frauenhaus, bei der Dokumentation an einem öffentlichen Ort.
+Oben rechts steht ein kompakter roter Knopf: am breiten Fenster **Schnell verlassen**, am Handy **Verlassen**. Er bleibt beim Scrollen erreichbar und nimmt keine eigene Leiste ein. Er ist für Situationen gedacht, in denen jemand mitliest oder unerwartet neben Ihnen steht — am Empfangsplatz, im Frauenhaus, bei der Dokumentation an einem öffentlichen Ort.
 
 Ein Klick bewirkt drei Dinge in dieser Reihenfolge:
 
@@ -166,6 +166,8 @@ Ungültige Kalendertage (zum Beispiel `30.02.2026`) und Werte außerhalb der erl
 
 Nach dem Login landen Sie auf dem **Zeitstrom** (`/`) — einem chronologischen Tagesfeed, der Kontakte, Systemaktivitäten, Aufgaben und Hausverbote in einer einheitlichen Ansicht zusammenführt.
 
+Screenshots: [Zeitstrom am Desktop](screenshots/zeitstrom.webp) · [Zeitstrom mobil](screenshots/zeitstrom-mobil.webp).
+
 ### Was der Zeitstrom zeigt
 
 Der Feed fasst vier Quellen des aktuellen Tages zusammen:
@@ -200,7 +202,7 @@ Jeder Typ erscheint als **Kachel** mit großem Zähler, Aktionsmarke (`+1` oder 
 
 - **Ohne Pflichtfelder:** Ein Tipp auf die Kachel (`+1`) legt sofort einen anonymen Kontakt an.
 - **Mit Zahlen-Pflichtfeldern:** Die Kachel trägt die Marke `+ …`; ein Tipp öffnet eine kompakte Werteingabe, am Desktop als Popover an der Kachel, am Handy als Fenster von unten. Die Kacheln verschieben sich dabei nicht. **Abbrechen**, die Escape-Taste oder ein Klick außerhalb schließen die Eingabe, der Fokus kehrt zur Kachel zurück. Tragen Sie alle Pflichtwerte ein und wählen Sie **Kontakt zählen**. Das erzeugt genau einen anonymen Kontakt. Bei einem Spritzentausch gehören zum Beispiel Ausgabe und Rückgabe zu demselben Kontakt, statt mehrere Kontakte zu zählen.
-- **Rückgängig:** Nach einem Strich erscheint für 60 Sekunden eine feste Leiste mit **Rückgängig** und der Restzeit, am Desktop unter der Strichliste, am Handy über der unteren Navigation. Sie bezieht sich immer auf Ihren zuletzt gezählten Strich; nach Ablauf verschwindet sie.
+- **Rückgängig:** Nach einem Strich erscheint für 60 Sekunden eine Leiste mit **Rückgängig** und der Restzeit: am Desktop im Seitenfluss unter der Strichliste, am Handy fest über der unteren Navigation. Sie bezieht sich immer auf Ihren zuletzt gezählten Strich; nach Ablauf verschwindet sie.
 - Ein Typ ist nur sichtbar, wenn er für die Strichliste freigegeben ist und Ihre Rolle ihn sowie alle erforderlichen Felder sehen darf. Typen mit anderen Pflichtfeldarten erscheinen nicht in der Strichliste.
 
 **Gezählte Kontakte im Feed.** Strichlisten-Einträge erscheinen pro Stunde als eine aufklappbare Zeile: etwa „18–19 · 15 gezählt · anonym · 12 Kontakt · 3 Spritzentausch · Team“. Auch ein einzelner Strich bildet eine Gruppe. Enter oder Leertaste auf der Zeile öffnet die Anzahl je Typ; **Gezählte Kontakte anzeigen** führt zur Kontaktliste des Tages mit dem Filter „Strichliste“. „+1“ und „Rückgängig“ aktualisieren die Gruppe beim nächsten Feed-Refresh, auch in anderen geöffneten Zeitstrom-Tabs. Die Gruppenzahl umfasst die sichtbaren Strichlisten-Einträge im gewählten Zeitfenster, bei aktivem Dokumentationstyp-Filter nur die dieses Typs. Auch Einträge inzwischen deaktivierter Typen zählen mit; die Gruppenzahl kann deshalb von der Summe der angebotenen Kacheln abweichen. Anonyme Kontakte aus dem Dokumentationsformular bleiben einzelne Zeilen. Das gilt auch mit Kontakt- oder Dokumentationstyp-Filter; offline bleiben lokale Striche einzeln sichtbar.
@@ -229,7 +231,9 @@ Die beiden Stunden sind für die Anwendung wirklich verschiedene Zeitpunkte, die
 
 In der Nacht zur Sommerzeit gibt es die Stunde von 02:00 bis 03:00 dagegen **gar nicht** — dort weist das Formular eine Uhrzeit aus diesem Fenster weiterhin zurück und nennt den Grund. Eine Auswahl gibt es hier nicht: eine Uhrzeit, die es nicht gibt, wird durch keine Angabe real.
 
-Zeigt die Auswahl nicht den laufenden Dienst (anderer Tag oder andere Schicht), steht unter der Kopfzeile ein Hinweis „Du siehst …“ mit dem Link **zum laufenden Dienst**; bei laufendem Dienst erscheint er nicht. Im Feed steht statt einer eigenen Box die Kennzahlenzeile; die vollständige Schichtzusammenfassung enthält die Übergabe.
+Zeigt die Auswahl nicht den laufenden Dienst (anderer Tag oder andere Schicht), steht unter der Kopfzeile ein Hinweis „Du siehst …“: Bei laufender Schicht führt **zum laufenden Dienst** zurück, sonst **zu heute**; bei laufendem Dienst erscheint der Hinweis nicht. Im Feed steht statt einer eigenen Box die Kennzahlenzeile; die vollständige Schichtzusammenfassung enthält die Übergabe.
+
+Screenshots der Übergabe: [Desktop](screenshots/uebergabe.webp) · [Mobil](screenshots/uebergabe-mobil.webp).
 
 #### Übergabenotiz
 
@@ -268,7 +272,9 @@ Wenn aktive Hausverbote in Ihrer Einrichtung bestehen, steht in der Kennzahlenze
 
 Die **Kontakte-Liste** (`/events/`) ist die Arbeitsliste für Kontakte über mehrere Tage, zum Beispiel „alle Krisengespräche im letzten Monat“ oder „meine Erfassungen diese Woche“. Der Zeitstrom bleibt die Tagesansicht mit Aktivitäten, Aufgaben und Hausverboten.
 
-**Öffnen:** Wählen Sie **Kontakte** direkt unter **Zeitstrom** in der Seitenleiste, mobil **Mehr → Kontakte**. Nur auf `/events/` ist dieser Eintrag aktiv; Kontakt-Detailseiten bleiben dem Zeitstrom zugeordnet. Auch auf der Zeitstrom-Seite führt ein lokaler Link **Kontakte** zur Liste: Er übernimmt den ausgewählten Tag, Dokumentationstyp und die Schicht.
+Screenshots der Kontakte-Liste: [Desktop](screenshots/kontakte.webp) · [Mobil](screenshots/kontakte-mobil.webp).
+
+**Öffnen:** Wählen Sie **Kontakte** direkt unter **Zeitstrom** in der Seitenleiste, mobil **Mehr → Kontakte**. Nur auf `/events/` ist dieser Eintrag aktiv; Kontakt-Detailseiten bleiben dem Zeitstrom zugeordnet. Auch die Kontaktzahl in der Kennzahlenzeile des Zeitstroms führt zur Liste: Sie übernimmt den ausgewählten Tag, Dokumentationstyp und die Schicht und zeigt Kontakte **ohne Strichliste**. Die benachbarte Zahl **gezählt (Strichliste)** öffnet die Strichlisten-Kontakte im Live-Fenster.
 
 **Filter kombinieren:** Die Kopfzeile zeigt das Suchfeld, die Zeitraum-Schnellwahl **Heute | Woche | Monat | Zeitraum** und den Knopf **Filter**. Der Knopf öffnet das Filter-Panel (bei breitem Fenster unter dem Knopf, sonst als Blatt am unteren Rand) und nennt in Klammern die Zahl der aktiven Filter. Jeder aktive Filter steht darunter als Chip; **×** am Chip entfernt genau diesen Filter, **Alle zurücksetzen** öffnet die ungefilterte Liste. Änderungen wirken sofort, das Suchfeld nach einer kurzen Pause. Beim Öffnen springt der Fokus auf das erste Feld, **Esc** schließt das Panel und gibt den Fokus an den Knopf zurück. Ohne JavaScript bleibt das Panel aufklappbar und **Filtern** ersetzt das sofortige Filtern.
 
@@ -289,7 +295,7 @@ Der Suchraum entspricht der globalen Suche (#1862, [ADR-043](adr/043-suchraum-vo
 
 **Sichtbarkeit:** Assistenz, Fachkraft, Leitung und Anwendungsbetreuung sehen Kontakte der eigenen Einrichtung, auch Erfassungen anderer Mitarbeitender, mit derselben Sensibilitätsgrenze wie im Zeitstrom: Assistenz nur **Normal**, Fachkraft bis **Erhöht**, Leitung und Anwendungsbetreuung auch **Hoch**. Gelöschte Kontakte und Kontakte im Papierkorb fehlen. Die Systemadministration hat keinen Zugang zu dieser Arbeitsliste.
 
-**Ergebnisse:** Neueste Kontakte stehen zuerst, mit 25 Einträgen je Seite. Neben der Überschrift steht die Gesamtzahl der Filtertreffer; sie aktualisiert sich beim Filtern. Tagesköpfe nennen Datum und Zahl aller Filtertreffer dieses Tages, auch wenn der Tag auf mehreren Seiten erscheint. Maßgeblich ist der lokale Kalendertag des Kontaktzeitpunkts in der Zeitzone der Anwendung, nicht der Beginn einer Nachtschicht. Darunter zeigen die Zeilen nur die Uhrzeit, Typ, Person beziehungsweise „Anonym“, ab Fachkraft den Fall sowie „Erfasst von“; am Desktop benennt eine Kopfzeile die Spalten, mobil bleiben die Einträge zweizeilig. Klicken Sie auf die Kopfzeile oder drücken Sie dort Enter beziehungsweise die Leertaste, um die Angaben auf- und zuzuklappen. Sie sehen dieselben rollenberechtigten Feldwerte wie im Zeitstrom. **Zum Eintrag** öffnet weiterhin die Detailansicht. Die Filter stehen in der Adresse und bleiben beim Teilen, Seitenwechsel und mit der Zurück-/Vorwärts-Taste erhalten, einschließlich der Formularwerte.
+**Ergebnisse:** Neueste Kontakte stehen zuerst, mit 25 Einträgen je Seite. Neben der Überschrift steht die Gesamtzahl der Filtertreffer; sie aktualisiert sich beim Filtern. Tagesköpfe nennen das sprachabhängige Kurzdatum (zum Beispiel „Fr, 23. Okt“ auf Deutsch, „Fri, Oct 23“ auf Englisch) und die Zahl aller Filtertreffer dieses Tages, auch wenn der Tag auf mehreren Seiten erscheint. Maßgeblich ist der lokale Kalendertag des Kontaktzeitpunkts in der Zeitzone der Anwendung, nicht der Beginn einer Nachtschicht. Die Zeitspalte zeigt nur die Uhrzeit. Daneben stehen Typ, Person beziehungsweise „Anonym“, Vorschauangaben, ab Fachkraft der Fall sowie „Erfasst von“; am Desktop benennt eine Kopfzeile die Spalten, mobil bleiben die Einträge zweizeilig. Klicken Sie auf die Kopfzeile oder drücken Sie dort Enter beziehungsweise die Leertaste, um die Angaben auf- und zuzuklappen. Sie sehen dieselben rollenberechtigten Feldwerte wie im Zeitstrom. **Zum Eintrag** öffnet weiterhin die Detailansicht. Die Filter stehen in der Adresse und bleiben beim Teilen, Seitenwechsel und mit der Zurück-/Vorwärts-Taste erhalten, einschließlich der Formularwerte.
 
 Die Liste bietet **keinen Export und keine Massenaktionen**. Exportmöglichkeiten bleiben im Bereich [Statistik und Export](#7-statistik-und-export). Listen- und Filteraufrufe erzeugen **keinen Audit-Eintrag**; beim Öffnen einer Detailansicht gelten deren Zugriffsregeln.
 
@@ -299,7 +305,7 @@ Die **Arbeitszentrale** (`/start/`) ist die Landingpage der **Leitung** — eine
 
 Alle übrigen Rollen werden von `/start/` direkt an ihren Arbeitsplatz umgeleitet:
 
-- **Fachkraft / Assistenz** — zum Zeitstrom (`/`); die bisherigen Kacheln „Heutige Kontakte" und „Meine Aufgaben" sind dort zur Kennzahlenzeile oberhalb des Feeds geworden (siehe [Was der Zeitstrom zeigt](#was-der-zeitstrom-zeigt)).
+- **Fachkraft / Assistenz** — zum Zeitstrom (`/`); Kontakte und eigene Aufgaben stehen dort in der Kennzahlenzeile oberhalb des Feeds (siehe [Was der Zeitstrom zeigt](#was-der-zeitstrom-zeigt)).
 - **Anwendungsbetreuung** (`facility_admin`) — zur Verwaltungs-Übersicht (`/verwaltung/`).
 - **Systemadministration** (`super_admin`) — zum Systembereich (`/system/`).
 
@@ -530,7 +536,7 @@ Was dabei passiert:
 
 ## 5. Hinweise und Aufgaben (WorkItems)
 
-Aufgaben ohne Person bleiben sichtbar. Aufgaben zu Personen im Papierkorb oder zu inaktiven Personen fehlen in Posteingang, Zeitstrom, Fokus, Profil, Navigationszählern und Übergabe; ihre Detaillinks und für Bearbeitungsberechtigte auch ihre Bearbeitungslinks liefern 404. Auch Kontakte, Hausverbote und Aktivitäten mit Personen-, Ereignis-, Aufgaben- oder Fallziel im Zeitstrom schließen diese Personen aus; Einträge ohne Personenbezug bleiben sichtbar. Nach Wiederherstellung der weiterhin aktiven Person ist der zulässige Aufgabenbestand wieder sichtbar. Auch Favoriten und zuletzt besuchte Personen im Profil schließen gelöschte oder inaktive Personen aus. Ereignislisten und Kontaktzähler im Profil, der heutige Kontaktzähler im Cockpit sowie Ereignisse in der Übergabe berücksichtigen nur für die Rolle sichtbare, nicht gelöschte Dokumentation aktiver Personen außerhalb des Papierkorbs oder ohne Personenbezug.
+Aufgaben ohne Person bleiben sichtbar. Aufgaben zu Personen im Papierkorb oder zu inaktiven Personen fehlen in Posteingang, Zeitstrom, Fokus, Profil, Navigationszählern und Übergabe; ihre Detaillinks und für Bearbeitungsberechtigte auch ihre Bearbeitungslinks liefern 404. Auch Kontakte, Hausverbote und Aktivitäten mit Personen-, Ereignis-, Aufgaben- oder Fallziel im Zeitstrom schließen diese Personen aus; Einträge ohne Personenbezug bleiben sichtbar. Nach Wiederherstellung der weiterhin aktiven Person ist der zulässige Aufgabenbestand wieder sichtbar. Auch Favoriten und zuletzt besuchte Personen im Profil schließen gelöschte oder inaktive Personen aus. Ereignislisten und Kontaktzähler im Profil, der Kontaktzähler in der Kennzahlenzeile des Zeitstroms sowie Ereignisse in der Übergabe berücksichtigen nur für die Rolle sichtbare, nicht gelöschte Dokumentation aktiver Personen außerhalb des Papierkorbs oder ohne Personenbezug.
 
 Die gewöhnliche Personenakte und ihre Lösch-, Zusammenführungs-, Herabstufungs- und Aufbewahrungssperrformulare liefern für gelöschte oder inaktive Personen 404. Auch die Ereignisliste, Ereignis-Detail- und Anhanglinks, die Ereignissuche und der gewöhnliche Ereignis-CSV-Export schließen Ereignisse zu gelöschten oder inaktiven Personen aus; zulässige Ereignisse ohne Person bleiben sichtbar. Statusantworten und deren Wiederholungen liefern für solche Personenaufgaben 404 vor der Ausgabe von Aufgabeninhalten. Der beim Nachladen angezeigte Erledigt-Zähler zählt nur lesbare Aufgaben. Ein offener Löschantrag allein sperrt diese Leser nicht; Wiederherstellung einer weiterhin aktiven Person macht den zulässigen Bestand wieder sichtbar. Die personenbezogene Statistikrangliste zeigt nur aktive Personen außerhalb des Papierkorbs; die nächste sichtbare Person rückt nach. Aggregierte Statistikzahlen bleiben davon unberührt.
 
