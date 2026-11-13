@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-12 23:15+0100\n"
+"POT-Creation-Date: 2026-11-13 02:17+0100\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -13177,34 +13177,6 @@ msgstr "Cron must run hourly."
 msgid "Letzter Scan vor %(age)sh — Cron ausgefallen?"
 msgstr "Last scan %(age)sh ago — cron failed?"
 
-#: src/core/services/compliance/cron.py:147
-msgid "Statistik-View-Refresh"
-msgstr "Statistics view refresh"
-
-#: src/core/services/compliance/cron.py:156
-msgid "Noch kein View-Refresh — Cron lief vielleicht nie."
-msgstr "No view refresh yet — cron may never have run."
-
-#: src/core/services/compliance/cron.py:161
-#, python-format
-msgid "Letzter Refresh: %(timestamp)s"
-msgstr "Last refresh: %(timestamp)s"
-
-#: src/core/services/compliance/cron.py:169
-#, python-format
-msgid "Letzter Refresh vor %(age)sh."
-msgstr "Last refresh %(age)sh ago."
-
-#: src/core/services/compliance/cron.py:180
-#, python-format
-msgid "Letzter Refresh vor %(age)sh — Dashboard evtl. veraltet."
-msgstr "Last refresh %(age)sh ago — dashboard possibly outdated."
-
-#: src/core/services/compliance/cron.py:192
-#, python-format
-msgid "Letzter Refresh vor %(age)sh — Cron ausgefallen?"
-msgstr "Last refresh %(age)sh ago — cron failed?"
-
 #: src/core/services/compliance/cron.py:215
 msgid "Audit-Ketten-Prüfung"
 msgstr "Audit chain check"
@@ -13512,10 +13484,6 @@ msgstr "Deletion request has been submitted and must be approved by another pers
 msgid "Kontakte-Liste"
 msgstr "Contacts list"
 
-#: src/core/views/help.py:62
-msgid "„Kontakte“ steht direkt unter „Zeitstrom“ in der Seitenleiste, mobil unter „Mehr → Kontakte“. Der lokale Kontakte-Link im Zeitstrom übernimmt Tag, Dokumentationstyp und Schicht."
-msgstr "\"Contacts\" sits directly below \"Timeline\" in the sidebar, on mobile under \"More → Contacts\". The local Contacts link in the timeline takes over day, document type and shift."
-
 #: src/core/views/help.py:67
 msgid "Die Liste filtert Kontakte über mehrere Tage, auch Erfassungen anderer Mitarbeitender. Ab Assistenz gelten dieselben Sichtbarkeitsgrenzen wie im Zeitstrom; Fallfilter und Fallanzeige gibt es erst ab Fachkraft. Die Filter bleiben in der Adresse, beim Seitenwechsel und über Zurück/Vorwärts erhalten."
 msgstr "The list filters contacts across several days, including entries by other staff members. From assistant level on, the same visibility limits apply as in the timeline; case filter and case display are available only from social worker level. The filters are kept in the address, when changing pages and when going back/forward."
@@ -13527,10 +13495,6 @@ msgstr "The search covers only the pseudonym and the event search text from two 
 #: src/core/views/help.py:80
 msgid "Person und Fall werden ausgewählt; es gibt keine Autocomplete-Suche und keine Suchvorschläge."
 msgstr "Person and case are selected; there is no autocomplete search and no search suggestions."
-
-#: src/core/views/help.py:83
-msgid "Die Liste zeigt keine Feldwerte und bietet keinen Export und keine Massenaktionen."
-msgstr "The list shows no field values and offers no export and no bulk actions."
 
 #: src/core/views/help.py:84
 msgid "Listen- und Filteraufrufe erzeugen keinen Audit-Eintrag."
@@ -15242,3 +15206,11 @@ msgstr[1] "%(count)s results"
 #: src/templates/core/events/partials/day_heading.html:2
 msgid "D, j. M"
 msgstr "D, M j"
+
+#: src/core/views/help.py:62
+msgid "„Kontakte“ steht direkt unter „Zeitstrom“ in der Seitenleiste, mobil unter „Mehr → Kontakte“. Die Kontaktzahl in der Kennzahlenzeile übernimmt Tag, Dokumentationstyp und Schicht und öffnet die Liste ohne Strichlisten-Einträge."
+msgstr "\"Contacts\" is directly below \"Timeline\" in the sidebar, or \"More → Contacts\" on mobile. The contact figure in the key figures row carries over day, document type and shift and opens the list without tally entries."
+
+#: src/core/views/help.py:84
+msgid "Zeilen lassen sich für rollenberechtigte Feldwerte aufklappen; „Zum Eintrag“ öffnet die Detailansicht. Die Liste bietet keinen Export und keine Massenaktionen."
+msgstr "Expand rows to see field values permitted for your role; \"Go to entry\" opens the detail view. The list offers no export or bulk actions."

@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-12 23:15+0100\n"
+"POT-Creation-Date: 2026-11-13 02:17+0100\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -13265,34 +13265,6 @@ msgstr "Cron muss stündlich laufen."
 msgid "Letzter Scan vor %(age)sh — Cron ausgefallen?"
 msgstr "Letzter Scan vor %(age)sh — Cron ausgefallen?"
 
-#: src/core/services/compliance/cron.py:147
-msgid "Statistik-View-Refresh"
-msgstr "Statistik-View-Refresh"
-
-#: src/core/services/compliance/cron.py:156
-msgid "Noch kein View-Refresh — Cron lief vielleicht nie."
-msgstr "Noch kein View-Refresh — Cron lief vielleicht nie."
-
-#: src/core/services/compliance/cron.py:161
-#, python-format
-msgid "Letzter Refresh: %(timestamp)s"
-msgstr "Letzter Refresh: %(timestamp)s"
-
-#: src/core/services/compliance/cron.py:169
-#, python-format
-msgid "Letzter Refresh vor %(age)sh."
-msgstr "Letzter Refresh vor %(age)sh."
-
-#: src/core/services/compliance/cron.py:180
-#, python-format
-msgid "Letzter Refresh vor %(age)sh — Dashboard evtl. veraltet."
-msgstr "Letzter Refresh vor %(age)sh — Dashboard evtl. veraltet."
-
-#: src/core/services/compliance/cron.py:192
-#, python-format
-msgid "Letzter Refresh vor %(age)sh — Cron ausgefallen?"
-msgstr "Letzter Refresh vor %(age)sh — Cron ausgefallen?"
-
 #: src/core/services/compliance/cron.py:215
 msgid "Audit-Ketten-Prüfung"
 msgstr "Audit-Ketten-Prüfung"
@@ -13600,10 +13572,6 @@ msgstr "Löschantrag wurde gestellt und muss von einer anderen Person mit dem Re
 msgid "Kontakte-Liste"
 msgstr "Kontakte-Liste"
 
-#: src/core/views/help.py:62
-msgid "„Kontakte“ steht direkt unter „Zeitstrom“ in der Seitenleiste, mobil unter „Mehr → Kontakte“. Der lokale Kontakte-Link im Zeitstrom übernimmt Tag, Dokumentationstyp und Schicht."
-msgstr "„Kontakte“ steht direkt unter „Zeitstrom“ in der Seitenleiste, mobil unter „Mehr → Kontakte“. Der lokale Kontakte-Link im Zeitstrom übernimmt Tag, Dokumentationstyp und Schicht."
-
 #: src/core/views/help.py:67
 msgid "Die Liste filtert Kontakte über mehrere Tage, auch Erfassungen anderer Mitarbeitender. Ab Assistenz gelten dieselben Sichtbarkeitsgrenzen wie im Zeitstrom; Fallfilter und Fallanzeige gibt es erst ab Fachkraft. Die Filter bleiben in der Adresse, beim Seitenwechsel und über Zurück/Vorwärts erhalten."
 msgstr "Die Liste filtert Kontakte über mehrere Tage, auch Erfassungen anderer Mitarbeitender. Ab Assistenz gelten dieselben Sichtbarkeitsgrenzen wie im Zeitstrom; Fallfilter und Fallanzeige gibt es erst ab Fachkraft. Die Filter bleiben in der Adresse, beim Seitenwechsel und über Zurück/Vorwärts erhalten."
@@ -13615,10 +13583,6 @@ msgstr "Die Suche umfasst nur Pseudonym und Ereignis-Suchtext ab zwei Zeichen, k
 #: src/core/views/help.py:80
 msgid "Person und Fall werden ausgewählt; es gibt keine Autocomplete-Suche und keine Suchvorschläge."
 msgstr "Person und Fall werden ausgewählt; es gibt keine Autocomplete-Suche und keine Suchvorschläge."
-
-#: src/core/views/help.py:83
-msgid "Die Liste zeigt keine Feldwerte und bietet keinen Export und keine Massenaktionen."
-msgstr "Die Liste zeigt keine Feldwerte und bietet keinen Export und keine Massenaktionen."
 
 #: src/core/views/help.py:84
 msgid "Listen- und Filteraufrufe erzeugen keinen Audit-Eintrag."
@@ -15330,3 +15294,11 @@ msgstr[1] "%(count)s Treffer"
 #: src/templates/core/events/partials/day_heading.html:2
 msgid "D, j. M"
 msgstr "D, j. M"
+
+#: src/core/views/help.py:62
+msgid "„Kontakte“ steht direkt unter „Zeitstrom“ in der Seitenleiste, mobil unter „Mehr → Kontakte“. Die Kontaktzahl in der Kennzahlenzeile übernimmt Tag, Dokumentationstyp und Schicht und öffnet die Liste ohne Strichlisten-Einträge."
+msgstr "„Kontakte“ steht direkt unter „Zeitstrom“ in der Seitenleiste, mobil unter „Mehr → Kontakte“. Die Kontaktzahl in der Kennzahlenzeile übernimmt Tag, Dokumentationstyp und Schicht und öffnet die Liste ohne Strichlisten-Einträge."
+
+#: src/core/views/help.py:84
+msgid "Zeilen lassen sich für rollenberechtigte Feldwerte aufklappen; „Zum Eintrag“ öffnet die Detailansicht. Die Liste bietet keinen Export und keine Massenaktionen."
+msgstr "Zeilen lassen sich für rollenberechtigte Feldwerte aufklappen; „Zum Eintrag“ öffnet die Detailansicht. Die Liste bietet keinen Export und keine Massenaktionen."
