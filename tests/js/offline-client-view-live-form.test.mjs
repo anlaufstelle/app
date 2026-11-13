@@ -3,7 +3,25 @@ import Alpine from "@alpinejs/csp";
 import { readFileSync } from "node:fs";
 
 const template = readFileSync("src/templates/core/clients/offline_detail.html", "utf8");
-const loadingCondition = template.match(/<template x-if="([^"]+)">\s*<div[^>]*data-testid="offline-loading"/)[1];
+function conditionsFor(testId) {
+    const source = document.createElement("template");
+    source.innerHTML = template;
+    function visit(node, conditions) {
+        if (node.getAttribute?.("data-testid") === testId) return conditions;
+        const nested = node.matches?.("template[x-if]") ? [...conditions, node.getAttribute("x-if")] : conditions;
+        for (const child of (node.content || node).children || []) {
+            const found = visit(child, nested);
+            if (found) return found;
+        }
+    }
+    const found = visit(source, []);
+    if (!found?.length) throw new Error(`Missing template condition for ${testId}`);
+    return found;
+}
+const loadingCondition = conditionsFor("offline-loading").at(-1);
+const availableCondition = conditionsFor("offline-edit-form")[0];
+const editingCondition = conditionsFor("offline-edit-form").at(-1);
+const creatingWorkItemCondition = conditionsFor("offline-wi-create-form").at(-1);
 
 // Exercise real Alpine DOM updates, including the available-view x-if used by
 // offline_detail.html. State-only tests cannot see a destroyed form node.
@@ -44,8 +62,8 @@ beforeEach(async () => {
     root.innerHTML = `
         <template x-if="${loadingCondition}"><p id="loading">Loading</p></template>
         <button id="new-task" @click="startCreateWorkItem">New task</button>
-        <template x-if="showAvailable"><div>
-            <template x-if="creatingWorkItem">
+        <template x-if="${availableCondition}"><div>
+            <template x-if="${creatingWorkItemCondition}">
                 <form @submit.prevent="saveCreateWorkItem">
                     <input id="title" x-model="wiValues.title" @input="clearWorkItemErrors"
                         data-wi-field="title" data-wi-error-id="title-error" required>
@@ -56,7 +74,7 @@ beforeEach(async () => {
             <template x-for="event in data.events" :key="event.pk"><article>
                 <span id="displayed-note" x-text="event.data_fields.note"></span>
                 <button id="edit" @click="startEdit(event)">Edit</button>
-                <template x-if="event.editing"><form @submit.prevent="saveEdit(event)">
+                <template x-if="${editingCondition}"><form @submit.prevent="saveEdit(event)">
                     <input id="note" x-model="editValues.note">
                     <button id="save-edit" type="submit" :disabled="saving">Save</button>
                 </form></template>
