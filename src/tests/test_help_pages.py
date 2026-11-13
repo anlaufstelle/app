@@ -1,5 +1,7 @@
 """In-App-Hilfe und kontextuelle Orientierung (Refs #2043)."""
 
+from html import unescape
+
 import pytest
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -95,6 +97,27 @@ class TestHelpPages:
         assert "Zum Eintrag" in body
         assert "Die Liste zeigt keine Feldwerte" not in body
         assert "Der lokale Kontakte-Link" not in body
+
+    @pytest.mark.parametrize(
+        "guidance",
+        (
+            '"Contacts" is directly below "Timeline" in the sidebar, or "More → Contacts" on mobile. '
+            "The contact figure in the key figures row carries over day, document type and shift "
+            "and opens the list without tally entries.",
+            'Expand rows to see field values permitted for your role; "Go to entry" opens the detail view. '
+            "The list offers no export or bulk actions.",
+        ),
+        ids=("contact-entry", "expandable-fields"),
+    )
+    def test_timeline_help_renders_current_contact_guidance_in_english(self, client, staff_user, guidance):
+        """Render both current contact instructions in the selected visit language."""
+        client.force_login(staff_user)
+
+        response = client.get(reverse("core:help_page", kwargs={"slug": "zeitstrom"}), {"lang": "en"})
+
+        assert response.status_code == 200
+        assert response.wsgi_request.LANGUAGE_CODE == "en"
+        assert guidance in unescape(response.content.decode())
 
     def test_help_page_is_login_required(self, client):
         response = client.get(reverse("core:help_page", kwargs={"slug": "personen"}))
