@@ -852,7 +852,9 @@ class TestPrecachedShellBumpGuard:
     # errors visibly; v67 is still unreleased, so only this hash moves.
     # The offline conflict list shell gained a hint for a rejected edit (#2720);
     # v67 is still unreleased, so only this hash moves.
-    _PINNED_SHELL_HASH = "3b329ff53abbd0834cd5293564f6f76ca7de9cd58c4f14e669540b9b98314f52"
+    # Refs #2744, #2745: preserve the live offline form during cache refreshes.
+    # v68 is still unreleased and covers this template change.
+    _PINNED_SHELL_HASH = "7f8da0e43ef7537e256caeeef9abc4ca141fe0db6ae2481596a6882df4dee9e6"
     # Refs #1904: SHA-256 over the Content-Security-Policy headers the server
     # delivers with the precached offline home (see _policy_fingerprint). Every
     # precached shell and every runtime entry keeps the policy it was stored
