@@ -55,6 +55,7 @@
     document.addEventListener("alpine:init", () => {
         Alpine.data("offlineClientView", () => ({
             loading: true,
+            _loadGeneration: 0,
             available: false,
             data: null,
             lastSynced: null,
@@ -200,14 +201,17 @@
                 return this.available;
             },
             async load() {
+                const generation = ++this._loadGeneration;
                 this.loading = true;
                 try {
                     await window.crypto_session?.awaitReady?.();
+                    if (generation !== this._loadGeneration) return;
                     if (!window.offlineClient) {
                         this._markUnavailable();
                         return;
                     }
                     const cached = await window.offlineClient.getOfflineClient(this._pk);
+                    if (generation !== this._loadGeneration) return;
                     if (!cached) {
                         this._markUnavailable();
                         return;
@@ -311,6 +315,7 @@
                     // after the data: a change during the read then counts as
                     // a change. An unreadable epoch fails closed.
                     const keyEpoch = await this._readKeyEpoch();
+                    if (generation !== this._loadGeneration) return;
                     if (keyEpoch === null || keyEpoch !== this._dataKeyEpoch) this._discardEditState();
                     // Refs #2688: keep an open inline edit across the rebuild.
                     // The sync counter events also fire with unchanged values
@@ -348,18 +353,20 @@
                     this.lastSyncedRel = this.relativeTime(cached.lastSynced);
                     this.available = true;
                 } catch (e) {
+                    if (generation !== this._loadGeneration) return;
                     // eslint-disable-next-line no-console
                     console.error("[offline-viewer]", e);
                     this._markUnavailable();
                 } finally {
-                    this.loading = false;
-                    // Refs #2382: ein waehrend dieses load() eingegangenes
-                    // Widerrufssignal jetzt garantiert nachholen — sonst bliebe
-                    // der veraltete Sync-Hinweis stehen, obwohl der Bestand
-                    // laengst geloescht ist (Boot-/Reconnect-Race).
-                    if (this._revocationCheckPending) {
-                        this._revocationCheckPending = false;
-                        await this._checkRevocationDiscarded();
+                    // Refs #2744/#2745: an older read must not publish state
+                    // after saving has started a newer read, including errors
+                    // and the loading flag. The newest read owns reconciliation.
+                    if (generation === this._loadGeneration) {
+                        this.loading = false;
+                        if (this._revocationCheckPending) {
+                            this._revocationCheckPending = false;
+                            await this._checkRevocationDiscarded();
+                        }
                     }
                 }
             },

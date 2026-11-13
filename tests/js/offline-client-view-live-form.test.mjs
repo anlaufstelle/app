@@ -54,6 +54,7 @@ beforeEach(async () => {
                 </form>
             </template>
             <template x-for="event in data.events" :key="event.pk"><article>
+                <span id="displayed-note" x-text="event.data_fields.note"></span>
                 <button id="edit" @click="startEdit(event)">Edit</button>
                 <template x-if="event.editing"><form @submit.prevent="saveEdit(event)">
                     <input id="note" x-model="editValues.note">
@@ -148,4 +149,79 @@ it("does not move an open form by inserting a loading indicator during refresh",
     expect.soft(root.querySelector("#loading")).toBeNull();
     finishRead();
     await Alpine.nextTick();
+});
+
+function parkRead() {
+    let resolve, reject, started;
+    const ready = new Promise(done => { started = done; });
+    const result = new Promise((yes, no) => { resolve = yes; reject = no; });
+    window.offlineClient.getOfflineClient.mockImplementationOnce(() => {
+        started();
+        return result;
+    });
+    return { ready, resolve, reject };
+}
+
+it("keeps the saved value when a read started before saving finishes last", async () => {
+    root.querySelector("#edit").click();
+    await Alpine.nextTick();
+    const note = root.querySelector("#note");
+    note.value = "Edited note";
+    note.dispatchEvent(new Event("input", { bubbles: true }));
+    const save = root.querySelector("#save-edit");
+    const read = parkRead();
+    const oldLoad = state.load();
+    await read.ready;
+    await Alpine.nextTick();
+    const saved = bundle();
+    saved.events[0].data_fields.note = "Edited note";
+    window.offlineEdit.markEventModified.mockImplementationOnce(async () => {
+        window.offlineClient.getOfflineClient.mockResolvedValue(saved);
+        return { pk: "event-1" };
+    });
+    expect(save.isConnected).toBe(true);
+    save.click();
+    await Alpine.nextTick();
+    expect(window.offlineEdit.markEventModified).toHaveBeenCalledOnce();
+    expect(root.querySelector("#displayed-note").textContent).toBe("Edited note");
+    read.resolve(bundle());
+    await oldLoad;
+    await Alpine.nextTick();
+    expect(root.querySelector("#displayed-note").textContent).toBe("Edited note");
+    expect(state.available).toBe(true);
+    expect(state.loading).toBe(false);
+});
+
+it.each(["missing", "expired", "error"])("ignores an obsolete %s read after a newer successful read", async (outcome) => {
+    const read = parkRead();
+    const oldLoad = state.load();
+    await read.ready;
+    await state.load();
+    const current = state.data;
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+        if (outcome === "error") read.reject(new Error("Read failed"));
+        else read.resolve(outcome === "missing" ? null : { ...bundle(), expiresAt: "2000-01-01" });
+        await oldLoad;
+        expect(state.data).toBe(current);
+        expect(state.available).toBe(true);
+        expect(state.loading).toBe(false);
+    } finally {
+        log.mockRestore();
+    }
+});
+
+it("keeps loading true while the newest read is pending", async () => {
+    const first = parkRead();
+    const oldLoad = state.load();
+    await first.ready;
+    const second = parkRead();
+    const newLoad = state.load();
+    await second.ready;
+    first.resolve(bundle());
+    await oldLoad;
+    expect.soft(state.loading).toBe(true);
+    second.resolve(bundle());
+    await newLoad;
+    expect(state.loading).toBe(false);
 });
