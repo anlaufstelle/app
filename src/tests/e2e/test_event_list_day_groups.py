@@ -190,6 +190,15 @@ def test_grouped_row_layout_keyboard_expansion_and_detail_link(staff_page, base_
         expect(column_heading).to_be_hidden()
         next_page_box = page.get_by_role("link", name="Nächste Seite").bounding_box()
         assert next_page_box and next_page_box["width"] >= 44 and next_page_box["height"] >= 44, next_page_box
+        page.get_by_role("link", name="Nächste Seite").click()
+        previous_page = page.get_by_role("link", name="Vorherige Seite")
+        expect(previous_page).to_be_visible()
+        previous_page_box = previous_page.bounding_box()
+        assert previous_page_box and previous_page_box["width"] >= 44 and previous_page_box["height"] >= 44, (
+            previous_page_box
+        )
+        previous_page.click()
+        expect(page.get_by_role("link", name="Nächste Seite")).to_be_visible()
     toggle = page.get_by_test_id("event-card-toggle").first
     geometry = toggle.evaluate("""el => {
         const cell = name => el.querySelector(`[data-feed-column='${name}']`).getBoundingClientRect();
