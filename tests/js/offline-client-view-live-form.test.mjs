@@ -263,3 +263,24 @@ it.each([null, "replacement-key"])("hides the old record before a blocked read w
     ready();
     await loading;
 });
+
+it.each([null, "replacement-key"])("hides the old record when hydration changes the epoch to %s", async (epoch) => {
+    window.crypto_session = { keyEpoch: vi.fn(async () => "original-key") };
+    await state.load();
+    root.querySelector("#new-task").click();
+    await Alpine.nextTick();
+    enterTitle("Private draft");
+    window.crypto_session.awaitReady = async () => {
+        window.crypto_session.keyEpoch.mockResolvedValue(epoch);
+    };
+    const read = parkRead();
+    const loading = state.load();
+    await read.ready;
+    await Alpine.nextTick();
+    expect.soft(root.querySelector("form")).toBeNull();
+    expect.soft(root.querySelector("#displayed-note")).toBeNull();
+    expect.soft(state.data).toBeNull();
+    expect.soft(state.wiValues).toEqual({});
+    read.resolve(bundle());
+    await loading;
+});

@@ -214,6 +214,13 @@
                     }
                     await window.crypto_session?.awaitReady?.();
                     if (generation !== this._loadGeneration) return;
+                    // Hydration can itself expire the key or adopt another
+                    // tab's key. Hide the old record before reading that cache.
+                    if (window.crypto_session) {
+                        const readyEpoch = await this._readKeyEpoch();
+                        if (generation !== this._loadGeneration) return;
+                        if (readyEpoch === null || readyEpoch !== this._dataKeyEpoch) this._markUnavailable();
+                    }
                     if (!window.offlineClient) {
                         this._markUnavailable();
                         return;
