@@ -20,7 +20,7 @@ beforeEach(async () => {
     vi.resetModules();
     now = START;
     vi.spyOn(Date, "now").mockImplementation(() => now);
-    document.body.innerHTML = '<meta name="csrf-token" content="rotated-token"><div data-demo-offline-password="public demo password"></div><div data-demo-offline-error hidden role="alert">Bootstrap failed</div>';
+    document.body.innerHTML = '<meta name="csrf-token" content="rotated-token"><div data-demo-offline-password="public demo password"></div><div data-demo-offline-error hidden role="alert">Bootstrap failed</div><div data-demo-offline-success hidden role="status"></div>';
     // The bootstrap error is only shown to authenticated sessions (base.html renders data-user-id for them).
     document.body.dataset.userId = "1";
     document.body.dataset.sessionAge = "7200";
@@ -38,10 +38,36 @@ async function bootstrap() {
     await import("../../src/static/js/auth-bootstrap.js");
 }
 
+// Refs #2751: key derivation precedes server confirmation. Wait for the
+// observable bootstrap result before assertions or teardown of its globals.
+async function waitForBootstrap() {
+    await vi.waitFor(() => expect(document.querySelector("[data-demo-offline-success]").hidden).toBe(false));
+    expect(window.crypto_session.hasSessionKey()).toBe(true);
+}
+
 describe("demo offline bootstrap", () => {
+    it("finishes only after the delayed key confirmation response", async () => {
+        let release;
+        const confirmation = new Promise((resolve) => { release = resolve; });
+        fetch.mockResolvedValueOnce({
+            ok: true, json: async () => ({ salt: SALT, home_url: "/", offline_key_max_age: 3600 }),
+        }).mockReturnValueOnce(confirmation);
+        try {
+            await bootstrap();
+            await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+            expect(window.crypto_session.hasSessionKey()).toBe(true);
+            expect(document.querySelector("[data-demo-offline-success]").hidden).toBe(true);
+            release({ ok: true });
+            await waitForBootstrap();
+            expect(document.querySelector("[data-demo-offline-success]").hidden).toBe(false);
+        } finally {
+            release({ ok: true });
+        }
+    });
+
     it("fetches one audited salt, derives a usable key and warms facility metadata", async () => {
         await bootstrap();
-        await vi.waitFor(() => expect(window.crypto_session.hasSessionKey()).toBe(true));
+        await waitForBootstrap();
         expect(fetch).toHaveBeenCalledTimes(2);
         expect(fetch).toHaveBeenCalledWith("/auth/offline-key-salt/", expect.objectContaining({
             method: "POST", credentials: "same-origin",
@@ -63,7 +89,7 @@ describe("demo offline bootstrap", () => {
 
     it("honours the server lifetime and preserves encrypted work after expiration", async () => {
         await bootstrap();
-        await vi.waitFor(() => expect(window.crypto_session.hasSessionKey()).toBe(true));
+        await waitForBootstrap();
         await store.saveOfflineEdit({ pk: "demo-event", data: { note: "kept" } });
         now += 3600_000;
         expect(await store.getOfflineEvent("demo-event")).toBeNull();
@@ -153,7 +179,7 @@ describe("demo bootstrap interruption notice", () => {
         await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
         expect(document.querySelector("[data-demo-offline-pending]").hidden).toBe(false);
         release({ ok: true, json: async () => ({ salt: SALT, home_url: "/", offline_key_max_age: 3600 }) });
-        await vi.waitFor(() => expect(window.crypto_session.hasSessionKey()).toBe(true));
+        await waitForBootstrap();
         await vi.waitFor(() => expect(document.querySelector("[data-demo-offline-pending]").hidden).toBe(true));
     });
 });
@@ -169,9 +195,9 @@ it("does not show a demo recovery error when a persisted key is restored", async
 });
 
 it("replaces the pending notice with a visible success status", async () => {
-    document.body.insertAdjacentHTML("beforeend", '<div data-demo-offline-pending></div><div data-demo-offline-success hidden role="status"></div>');
+    document.body.insertAdjacentHTML("beforeend", '<div data-demo-offline-pending></div>');
     await bootstrap();
-    await vi.waitFor(() => expect(window.crypto_session.hasSessionKey()).toBe(true));
+    await waitForBootstrap();
     await vi.waitFor(() => expect(document.querySelector("[data-demo-offline-success]").hidden).toBe(false));
     expect(document.querySelector("[data-demo-offline-pending]").hidden).toBe(true);
     expect(document.querySelector("[data-demo-offline-error]").hidden).toBe(true);
@@ -182,7 +208,7 @@ it("confirms a restored key without deriving it again or extending its lifetime"
     await window.crypto_session.deriveSessionKey(PASSWORD, SALT);
     await store.saveOfflineEdit({ pk: "previous-work", data: { note: "preserved" } });
     const derive = vi.spyOn(window.crypto.subtle, "deriveKey");
-    document.body.insertAdjacentHTML("beforeend", '<div data-demo-offline-pending></div><div data-demo-offline-success hidden role="status"></div>');
+    document.body.insertAdjacentHTML("beforeend", '<div data-demo-offline-pending></div>');
     await bootstrap();
     await vi.waitFor(() => expect(document.querySelector("[data-demo-offline-success]").hidden).toBe(false));
     expect(derive).not.toHaveBeenCalled();
@@ -201,7 +227,6 @@ it.each(["http", "network"])("shows a current-page error if key confirmation fai
     await window.crypto_session.deriveSessionKey(PASSWORD, SALT);
     if (failure === "http") fetch.mockResolvedValue({ ok: false, status: 429 });
     else fetch.mockRejectedValue(new Error("Offline"));
-    document.body.insertAdjacentHTML("beforeend", '<div data-demo-offline-success hidden role="status"></div>');
     await bootstrap();
     await vi.waitFor(() => expect(document.querySelector("[data-demo-offline-error]").hidden).toBe(false));
     expect(window.crypto_session.hasSessionKey()).toBe(true);
