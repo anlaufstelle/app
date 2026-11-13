@@ -962,11 +962,7 @@ class TestClientCaseViewMirrorParity:
         pairs = set(self._pairs())
         expected = {
             "_entity_data_form",
-            "_file_field_slugs",
             "_rerender_data_form",
-            "_lock_invisible_document_type",
-            "_active_attachment_chains",
-            "_values_at_risk",
         }
         assert expected <= pairs, f"AST-Ableitung unvollstaendig: {sorted(pairs)}"
 
@@ -977,8 +973,8 @@ class TestClientCaseViewMirrorParity:
         # gruen, obwohl er weniger prueft. Diese Zahl macht so einen Schwund zum
         # Testfehler. Beim bewussten Entfernen/Zusammenfuehren eines Paares hier
         # mit anpassen (und pruefen, ob der Zwilling wirklich mit weg soll).
-        assert len(pairs) == 15, (
-            f"Der abgeleitete Paar-Vorrat hat sich geaendert: {len(pairs)} statt 15 Paare "
+        assert len(pairs) == 11, (
+            f"Der abgeleitete Paar-Vorrat hat sich geaendert: {len(pairs)} statt 11 Paare "
             f"({sorted(pairs)}). Entweder ist ein Spiegel-Paar nur in einem der beiden "
             "Module verschwunden/umbenannt — dann im Zwilling nachziehen —, oder die "
             "Aenderung ist gewollt und die Zahl gehoert angepasst."
@@ -1056,6 +1052,23 @@ class TestClientCaseViewMirrorParity:
     def test_every_expected_divergence_carries_a_reason(self):
         thin = [key for key, (_count, reason) in self._EXPECTED_DIVERGENCES.items() if len(reason.strip()) < 40]
         assert not thin, f"Diese Ausnahmen tragen keine belastbare Begruendung: {sorted(thin)}"
+
+    @pytest.mark.architecture
+    def test_shared_owner_helpers_have_one_implementation(self):
+        """Both edit paths must use one implementation of their common helpers."""
+        from pathlib import Path
+
+        from core.views import _owner_dynamic_fields, cases, clients
+
+        for name in ("_file_field_slugs", "_lock_invisible_document_type", "_values_at_risk"):
+            shared = getattr(_owner_dynamic_fields, name)
+            assert getattr(cases, name) is shared
+            assert getattr(clients, name) is shared
+        for module in (cases, clients):
+            tree = ast.parse(Path(module.__file__).read_text())
+            assert not any(
+                isinstance(node, ast.FunctionDef) and node.name == "_active_attachment_chains" for node in tree.body
+            )
 
 
 class TestSystemMutationsRequireSudo:

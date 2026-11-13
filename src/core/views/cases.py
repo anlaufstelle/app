@@ -19,7 +19,7 @@ from django.views import View
 
 from core.constants import RATELIMIT_MUTATION
 from core.forms.cases import CaseForm, DynamicCaseDataForm
-from core.models import Case, DocumentType, Event, FieldTemplate
+from core.models import Case, DocumentType, Event
 from core.services.attachments import (
     apply_attachment_changes,
     build_attachment_context,
@@ -48,8 +48,6 @@ from core.services.client.restriction import PROCESSING_RESTRICTED_MESSAGE
 from core.services.compliance import get_visible_event_or_404, user_can_see_document_type
 from core.services.dynamic_data import (
     build_dynamic_data_context,
-    build_field_template_lookup,
-    count_filled_dynamic_values,
     decrypt_dynamic_text_data,
     file_marker_slugs,
     merge_dynamic_data,
@@ -65,6 +63,11 @@ from core.views._edit_errors import (
     file_reselection_context,
     is_version_conflict,
     refresh_edit_visibility,
+)
+from core.views._owner_dynamic_fields import (
+    _file_field_slugs,
+    _lock_invisible_document_type,
+    _values_at_risk,
 )
 from core.views.case_goals import _abgelehnt as case_goals_abgelehnt
 from core.views.mixins import (
@@ -112,17 +115,6 @@ def _case_data_form(request, document_type, *, data=None, files=None, initial_da
     if document_type is None:
         return data_form, []
     return data_form, remove_restricted_fields(request.user, document_type, data_form)
-
-
-def _file_field_slugs(document_type):
-    """Slugs der FILE-Felder eines Typs (Spiegel aus ``views/clients.py``)."""
-    if document_type is None:
-        return set()
-    return {
-        slug
-        for slug, ft in build_field_template_lookup(document_type).items()
-        if ft.field_type == FieldTemplate.FieldType.FILE
-    }
 
 
 def _rerender_data_form(
@@ -184,56 +176,6 @@ def _rerender_data_form(
         existing_file_slugs=existing_file_slugs,
     )
     return data_form
-
-
-def _lock_invisible_document_type(request, case, form):
-    """Typ-Select entfernen, wenn die Rolle den Typ des Falls nicht sehen darf.
-
-    Muster ``remove_restricted_fields``, eine Ebene hoeher (P7-Entscheid E-2):
-    traegt der Fall einen Typ mit zu hoher Sensitivitaet, wuerde das Select
-
-    * den Typnamen ins HTML schreiben (Leak) und
-    * bei einem Submit mit leerem Wert Typ **und** alle Zusatzfeld-Werte still
-      loeschen, obwohl der Benutzer sie nie sehen konnte (Datenverlust).
-
-    Beides wird verhindert, indem das Feld ganz aus dem Formular faellt:
-    ``form.cleaned_data`` traegt dann kein ``document_type``, der Service laesst
-    ``document_type``/``data_json`` folglich unangetastet.
-
-    Rueckgabe: ``True``, wenn der Typ gesperrt wurde.
-    """
-    doc_type = case.document_type
-    if doc_type is not None and not user_can_see_document_type(request.user, doc_type):
-        del form.fields["document_type"]
-        return True
-    return False
-
-
-def _active_attachment_chains(owner) -> int:
-    """Aktive Versions**ketten** eines Owners (Spiegel aus ``views/clients.py``).
-
-    DISTINCT ueber ``entry_id`` — dieselbe Zaehlung wie
-    :func:`~core.services.attachments.discard_type_switch_file_chains`.
-    ``order_by()`` ist Pflicht (``Meta.ordering`` zoege ``-created_at`` ins
-    DISTINCT).
-    """
-    return owner.attachments.filter(deleted_at__isnull=True).order_by().values("entry_id").distinct().count()
-
-
-def _values_at_risk(case, data_json, *, type_locked: bool) -> dict[str, int] | None:
-    """Was ein Typwechsel/-entfernen verwerfen wuerde (Refs #1733/#1738).
-
-    Spiegel von ``views/clients.py``: ``None``, wenn nichts auf dem Spiel steht,
-    sonst ``{"field_values": n, "files": m}`` — Datei-Marker zaehlen NICHT als
-    Feldwert, Dateien werden als Ketten separat beziffert.
-    """
-    if type_locked:
-        return None
-    field_values = count_filled_dynamic_values(data_json)
-    files = _active_attachment_chains(case)
-    if not field_values and not files:
-        return None
-    return {"field_values": field_values, "files": files}
 
 
 def _get_case_event_context(case, facility, user):

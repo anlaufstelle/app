@@ -23,7 +23,7 @@ from core.forms.clients import (
     DynamicClientDataForm,
     is_pseudonym_conflict,
 )
-from core.models import AuditLog, Client, DocumentType, Event, FieldTemplate, RectificationRequest, WorkItem
+from core.models import AuditLog, Client, DocumentType, Event, RectificationRequest, WorkItem
 from core.models import Case as CaseModel
 from core.services.attachments import (
     apply_attachment_changes,
@@ -55,8 +55,6 @@ from core.services.client.restriction import PROCESSING_RESTRICTED_MESSAGE
 from core.services.compliance import user_can_see_document_type
 from core.services.dynamic_data import (
     build_dynamic_data_context,
-    build_field_template_lookup,
-    count_filled_dynamic_values,
     decrypt_dynamic_text_data,
     file_marker_slugs,
     merge_dynamic_data,
@@ -74,6 +72,11 @@ from core.views._edit_errors import (
     file_reselection_context,
     is_version_conflict,
     refresh_edit_visibility,
+)
+from core.views._owner_dynamic_fields import (
+    _file_field_slugs,
+    _lock_invisible_document_type,
+    _values_at_risk,
 )
 from core.views.mixins import (
     AssistantOrAboveRequiredMixin,
@@ -126,22 +129,6 @@ def _client_data_form(request, document_type, *, data=None, files=None, initial_
     if document_type is None:
         return data_form, []
     return data_form, remove_restricted_fields(request.user, document_type, data_form)
-
-
-def _file_field_slugs(document_type):
-    """Slugs der FILE-Felder eines Typs (M24/AP4, Refs #1738).
-
-    Basis fuer ``preserve_file_markers``: nur Slugs des **aktuellen** Typs
-    duerfen nachgezogen werden — bei einem Typwechsel gehoert ein Alt-Slug
-    nicht mehr zum Feldset.
-    """
-    if document_type is None:
-        return set()
-    return {
-        slug
-        for slug, ft in build_field_template_lookup(document_type).items()
-        if ft.field_type == FieldTemplate.FieldType.FILE
-    }
 
 
 def _rerender_data_form(
@@ -203,70 +190,6 @@ def _rerender_data_form(
         existing_file_slugs=existing_file_slugs,
     )
     return data_form
-
-
-def _lock_invisible_document_type(request, client, form):
-    """Typ-Select entfernen, wenn die Rolle den Typ der Person nicht sehen darf.
-
-    Muster ``remove_restricted_fields``, eine Ebene hoeher: traegt die Person
-    einen Typ mit zu hoher Sensitivitaet, wuerde das Select
-
-    * den Typnamen ins HTML schreiben (Leak) und
-    * bei einem Submit mit leerem Wert Typ **und** alle Zusatzfeld-Werte still
-      loeschen, obwohl der Benutzer sie nie sehen konnte (Datenverlust).
-
-    Beides wird verhindert, indem das Feld ganz aus dem Formular faellt:
-    ``form.cleaned_data`` traegt dann kein ``document_type``, der Service laesst
-    ``document_type``/``data_json`` folglich unangetastet.
-
-    Rueckgabe: ``True``, wenn der Typ gesperrt wurde.
-    """
-    doc_type = client.document_type
-    if doc_type is not None and not user_can_see_document_type(request.user, doc_type):
-        del form.fields["document_type"]
-        return True
-    return False
-
-
-def _active_attachment_chains(owner) -> int:
-    """Anzahl der aktiven Versions**ketten** eines Owners (M24/AP4, Refs #1738).
-
-    Bewusst dieselbe Zaehlung wie
-    :func:`~core.services.attachments.discard_type_switch_file_chains` (das
-    genau diese Ketten beim Typwechsel soft-loescht): DISTINCT ueber
-    ``entry_id``, nicht ueber Einzelversionen — eine ersetzte Datei ist EINE
-    Datei, keine zwei. ``order_by()`` ist Pflicht: ``Attachment.Meta.ordering``
-    zoege ``-created_at`` ins DISTINCT und die Ketten kaemen mehrfach zurueck.
-    """
-    return owner.attachments.filter(deleted_at__isnull=True).order_by().values("entry_id").distinct().count()
-
-
-def _values_at_risk(client, data_json, *, type_locked: bool) -> dict[str, int] | None:
-    """Was ein Typwechsel/-entfernen verwerfen wuerde (Refs #1733/#1738).
-
-    Speist Warnung und Rueckfrage im Bearbeiten-Formular. Ist das Select
-    gesperrt (unsichtbarer Typ, ``_lock_invisible_document_type``), gibt es
-    keine Wechselmoeglichkeit — dann auch nichts zu bestaetigen.
-
-    Rueckgabe ``None``, wenn nichts auf dem Spiel steht (Template-Vertrag:
-    ``{% if dynamic_values_at_risk %}``), sonst
-    ``{"field_values": n, "files": m}``:
-
-    * ``field_values`` — befuellte Zusatzfeld-Slugs OHNE Datei-Marker,
-    * ``files`` — aktive Versionsketten (M24/AP4, Refs #1738). Beide Zahlen
-      erscheinen getrennt im Text; „1 Feldwert" fuer eine Datei waere
-      irrefuehrend.
-
-    ``data_json`` kommt separat, weil der POST-Re-Render den DB-Stand VOR der
-    ``ModelForm._post_clean``-Mutation braucht (Refs #1613).
-    """
-    if type_locked:
-        return None
-    field_values = count_filled_dynamic_values(data_json)
-    files = _active_attachment_chains(client)
-    if not field_values and not files:
-        return None
-    return {"field_values": field_values, "files": files}
 
 
 class ClientListView(AssistantOrAboveRequiredMixin, FilteredPaginatedListMixin, HTMXPartialMixin, View):
