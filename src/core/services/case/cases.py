@@ -63,21 +63,7 @@ def cases_with_live_client():
 
 
 def get_case_or_none(facility, case_id):
-    """Lookup a case by PK scoped to *facility* (Refs #1813 T4).
-
-    Analog zu :func:`core.services.client.main.person prefill lookup`: liefert
-    ``None`` statt eine Exception, wenn der Fall nicht existiert, die ID keine
-    gültige UUID ist, der Fall einer anderen Facility gehört, oder seine
-    Person widerrufen ist (Papierkorb/anonymisiert — ``cases_with_live_client``,
-    Refs #1777). Der Live-Client-Filter ist hier bewusst mit drin: ein Aufrufer,
-    der aus dieser Rückgabe eine Person ableitet (z. B. ``?case=``-Vorbelegung
-    in ``EventCreateView``), darf über einen fremden/widerrufenen Fall kein
-    Existenz-Orakel bekommen.
-
-    Gedacht für View-GET-Handler, die einen vorselektierten Fall aus der
-    URL/Query laden wollen, ohne bei fehlendem/ungültigem Parameter eine 404
-    zu werfen.
-    """
+    """Return a facility-scoped case for a valid ID, or None for an unavailable selection."""
     if not case_id:
         return None
     try:

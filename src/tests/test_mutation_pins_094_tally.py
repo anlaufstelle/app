@@ -23,7 +23,7 @@ Schwerpunkte:
 * der Fehlertext des Server-Idempotenzschluessels (``pragma: no cover``
   schliesst nur die Coverage-Messung aus, nicht die Erreichbarkeit);
 * die Zaehlgrenzen der Strichlisten-Aggregation (soft-geloescht, Zeitfenster)
-  und die ``requires_number_input``-Annotation (nur Pflichtfelder).
+  and the live summary's ``requires_number_input`` flag for required fields.
 
 Konventionen wie ``test_mutation_pins_093_import_engine.py`` und
 ``test_mutation_pins_091_cut.py``: Zusicherungen vergleichen EXAKT (``==``),
@@ -520,14 +520,7 @@ class TestNewTallyIdempotencyKeyContract:
 @pytest.mark.django_db
 class TestTallyDocumentTypesAnnotation:
     def test_requires_number_input_counts_only_required_fields(self, facility, staff_user):
-        """Pin: x_tally_document_types__mutmut_10 — ``field_template__is_required=True``
-        faellt aus dem ``Exists``-Subquery.
-
-        Der Typ hat GENAU EIN Feld, und zwar ein optionales Textfeld. Original
-        annotiert ``requires_number_input == False`` (kein Pflichtfeld
-        vorhanden); ohne den Filter matcht jedes Feld und der Mutant liefert
-        ``True``.
-        """
+        """An optional text field needs no numeric input in the live tally summary."""
         document_type = DocumentType.objects.create(facility=facility, name="Nur optional", tally_enabled=True)
         optional_template = FieldTemplate.objects.create(
             facility=facility,

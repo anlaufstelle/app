@@ -35,9 +35,8 @@ unveraendert. Zwoelf Mutanten sind echte Testluecken und werden hier gepinnt:
 * **Replay-Nachweis** (``undo_tally_event``, ``is_deleted``-Zweig): zwei
   weitere Filterfelder (``action``, ``target_type``) faellen aus der bereits
   audit-existence check, which already has partial regression coverage.
-* **``current_tally_context``**: exportiert, aber im gesamten Baum nirgends
-  aufgerufen (echte Testluecke) — ein Mutant stuerzt ab, der andere ignoriert
-  die uebergebene Facility bei der Schichterkennung.
+* Live window checks use ``current_tally_context`` directly, including
+  facility-specific shift selection.
 
 ``_encryption_key`` liegt modulweit an: der Mutantenbaum hat keine ``.env``,
 und ``create_event``/``soft_delete_event`` laufen bis in den
@@ -209,23 +208,13 @@ class TestReplayNachweisPrueftAktionUndZieltyp:
 
 class TestCurrentTallyWindow:
     def test_liefert_ein_fenster_statt_abzustuerzen(self, facility):
-        """Pins ``x_current_tally_window__mutmut_1``: ``context = None`` statt
-        des Aufrufs von ``current_tally_context(facility)`` — jeder Aufruf
-        stuerzte mit ``AttributeError`` ab. ``current_tally_context`` ist
-        exportiert (``core/services/events/__init__.py``), aber sonst nirgends
-        im Baum aufgerufen — kein Bestandstest haette den Absturz gefangen."""
+        """The live tally context provides a nonempty window."""
         context = current_tally_context(facility)
 
         assert context.window_start < context.window_end
 
     def test_verwendet_die_uebergebene_einrichtung_fuer_die_schichterkennung(self, facility):
-        """Pins ``x_current_tally_window__mutmut_2``:
-        ``current_tally_context(facility)`` -> ``current_tally_context(None)``.
-        ``TimeFilter.objects.for_facility(None)`` filtert auf
-        ``facility_id IS NULL`` — bei einer nicht-nullbaren FK immer leer. Die
-        Mutante faellt deshalb IMMER auf den Ganztags-Fallback zurueck, selbst
-        waehrend eine echte, enger begrenzte Schicht dieser Einrichtung
-        laeuft."""
+        """The requested facility determines the live shift window."""
         TimeFilter.objects.create(
             facility=facility,
             label="Pin099-events5-Fruehschicht",

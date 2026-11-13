@@ -47,12 +47,7 @@ EXPLODING_MAILERS = {"default": {"BACKEND": "tests.test_invite_flow.ExplodingEma
 @pytest.mark.django_db
 class TestInviteEmailLink:
     def test_absolute_url_uses_the_configured_origin(self, facility, settings):
-        """Refs #1967: Der Setup-Link ist immer absolut.
-
-        Bis dahin lieferte ``send_invite_email`` ohne Request eine RELATIVE URL —
-        in einer E-Mail unbrauchbar. Schema und Host stehen jetzt fest in
-        ``EXTERNAL_ORIGIN``, der Request wird gar nicht mehr gelesen.
-        """
+        """The mailed setup link is absolute and uses EXTERNAL_ORIGIN (#1967)."""
         settings.EXTERNAL_ORIGIN = "https://portal.example.org"
         user = User.objects.create_user(
             username="testinvite",

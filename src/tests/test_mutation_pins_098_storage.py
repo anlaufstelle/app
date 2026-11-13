@@ -1,25 +1,9 @@
-"""Mutation regression tests for ``core.services.file_vault.storage``.
+"""Storage and file-context regression checks based on #2193.
 
-Quelle: Füllauftrag #2193,
-Batch ``merge-crud`` (``triage-096-vault-rot-storage.json``). Vier Mutanten in
-zwei Funktionen, inhaltlich deckungsgleich mit dem Batch-Text (keine
-Numerierungsdrift in diesem Modul):
-
-* **``_commit_staged_upload`` — Schreibumfang des Replace-Pfads** (1 Mutant):
-  ``supersedes.save(update_fields=[...])`` verliert das Argument (Default
-  ``None`` = Vollschreiben). Genau die Art unbedingten Vollschreibens, die
-  #2131/#2177 in der Rotation beseitigt haben — ein Rotationslauf oder
-  ``soft_delete_attachment_chain``, der die Vorgaengerzeile im selben Fenster
-  aendert, wuerde stillschweigend ueberschrieben.
-* **``build_attachment_context`` — Sortierung und Feld-Scope** (3
-  Mutanten): der Tiebreaker ``created_at`` bzw. der Primaerschluessel
-  ``sort_order`` faellt aus der Sortierung, oder der ``field_template``-Filter
-  entfaellt komplett (Dateien aus Feld B erscheinen unter Feld A).
-
-Konventionen wie ``test_mutation_pins_096_storage.py``: eine Testklasse je
-Funktion, echte Model-Objekte durch den echten File-Vault (kein Mock der
-Pipeline selbst — nur die zu pinnende Schreib-/Sortier-Operation wird
-beobachtet), Zusicherungen EXAKT.
+Replacing a file writes only the intended predecessor fields, preserving
+concurrent rotation and soft-delete changes. File-context checks exercise
+the active marker-based display path; obsolete query-only sorting pins
+were removed with the unused field lookup.
 """
 
 from unittest import mock

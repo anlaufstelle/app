@@ -345,7 +345,7 @@ class ConfigDocTypeFieldAddView(FacilityAdminRequiredMixin, View):
             # Roh in den UUID-pk-Filter gefüttert würde ein Nicht-UUID-String
             # Djangos UUIDField beim Query-Ausführen eine ``ValidationError``
             # werfen (NICHT ValueError) → ungefangen → 500. Vorab kanonisieren
-            # (Muster: ``_parse_uuids`` in views/config/reorder.py).
+            # See the shared parse_uuid_list helper in core.views.utils.
             try:
                 group_uuid = uuid.UUID(group_pk)
             except (ValueError, TypeError):

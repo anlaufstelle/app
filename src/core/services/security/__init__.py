@@ -22,7 +22,7 @@ Module:
 - :mod:`core.services.security.locking` — Optimistic Locking
   (``check_version_conflict``).
 - :mod:`core.services.security.invite` — Invite-Mail-Versand
-  (``send_invite_email``, ``send_invite_email``).
+  (``send_invite_email``).
 - :mod:`core.services.security.origin` — feste Basis-Origin fuer
   sicherheitsrelevante Links (``build_external_url``,
   ``external_link_context``, ``get_external_origin``).
