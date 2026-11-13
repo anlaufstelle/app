@@ -24,7 +24,7 @@ def e2e_servers(monkeypatch):
 
 
 @pytest.mark.parametrize("port_base", [None, 8854, 8944])
-@pytest.mark.parametrize("worker_num, worker_count", [(0, 1), (0, 4), (3, 4), (101, 128)])
+@pytest.mark.parametrize("worker_num, worker_count", [(0, 1), (0, 4), (3, 4), (99, 100), (101, 128)])
 def test_enforced_server_uses_separate_port_range(e2e_servers, monkeypatch, port_base, worker_num, worker_count):
     if port_base is None:
         monkeypatch.delenv("E2E_PORT_BASE", raising=False)
@@ -48,6 +48,10 @@ def test_enforced_server_uses_separate_port_range(e2e_servers, monkeypatch, port
         port = int(url.rsplit(":", 1)[1])
         assert port == primary_base + max(100, worker_count) + worker_num
         assert port not in range(primary_base, primary_base + worker_count)
+        if worker_count <= 100:
+            enforced_ports = set(range(port - worker_num, port - worker_num + worker_count))
+            clamav_ports = set(range(primary_base + 200, primary_base + 200 + worker_count))
+            assert enforced_ports.isdisjoint(clamav_ports)
         command = start.call_args.args[0]
         assert command[command.index("--bind") + 1] == f"127.0.0.1:{port}"
         assert start.call_args.kwargs["env"]["E2E_MFA_ENFORCE_ROLES"] == "1"

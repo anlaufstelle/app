@@ -316,6 +316,11 @@ def enforced_base_url(request, base_url):
 
     Reserve a separate worker range relative to E2E_PORT_BASE. Keep the
     historical 100-port offset unless the primary range needs more ports.
+    Enforced uses base + max(100, worker_count) + worker, while ClamAV uses
+    base + 200 + worker. All three ranges are disjoint up to 100 workers;
+    worker counts are configurable and have no enforced upper limit.
+    Sessions with bases less than 200 + worker_count apart can overlap
+    (for example 8844/8944); occupied ports cause a loud startup failure.
     """
     worker_num, _ = _get_worker_info(request)
     worker_count = getattr(request.config, "workerinput", {}).get("workercount", 1)

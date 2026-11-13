@@ -248,10 +248,10 @@ def clamav_base_url(base_url, e2e_env, fake_clamd):
     und startet nur einen zusaetzlichen gunicorn — analog ``enforced_base_url``
     (``conftest.py``).
 
-    Portwahl: ``base_url``-Port + 200. Ein frueherer Vorschlag nutzte ``8848 + worker_num``
-    vor; das kollidiert ab vier xdist-Workern mit den ``base_url``-Ports
-    (8844+n). Der Abstand +200 ist per Konstruktion kollisionsfrei und folgt der
-    bestehenden Konvention (``enforced_base_url`` = +100).
+    Port allocation: E2E_PORT_BASE + 200 + worker number. Primary, enforced,
+    and ClamAV ranges are disjoint up to 100 workers; larger worker counts
+    can overlap the enforced range. Separate sessions also need disjoint
+    ranges (see enforced_base_url); occupied ports fail before startup.
     """
     port = urlparse(base_url).port + 200
     env = {
