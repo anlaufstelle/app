@@ -212,7 +212,7 @@ Zusätzlich bestätige (bewusst akzeptierte) Ausgangswerte ohne Korrekturbedarf:
 
 `--border-soft: oklch(0.87 0.01 75)` ist ausschließlich dekorativ und nicht für WCAG 1.4.11 relevante Bedienelement-Begrenzungen bestimmt. `.card`, Strichlisten-Inhalt und Filterpanel/-Chips nutzen den weichen Rahmen explizit; die globale Default-Regel bleibt `var(--border)`. Die Hausverbot-Hülle verwendet als Warnsignal den vollen roten Rahmen `border-ban` (`--kind-ban`): 4,963:1 gegen `--kind-ban-bg` und 5,468:1 gegen Canvas. Der Strichlisten-Titel steht als 12-px-Versallabel vor dem Inhalt; die Fokusbox verwendet bereits ein freistehendes 12-px-Label.
 
-Rechenweg: OKLCH → OKLab (`a=C·cos(h)`, `b=C·sin(h)`) → lineares sRGB; `Y=0,2126·R+0,7152·G+0,0722·B`, Kontrast `(Yhell+0,05)/(Ydunkel+0,05)`. Leuchtdichten: Weiß `1`, Canvas `0,898026`, harter Rahmen `0,261810`, weicher Rahmen `0,658007`, Akzent `0,097304`, gedämpfter Text `0,157266`. Beispiel Rahmen/Canvas: `(0,898026+0,05)/(0,261810+0,05)=3,040:1`.
+Rechenweg: OKLCH → OKLab (`a=C·cos(h)`, `b=C·sin(h)`) → lineares sRGB (Kanäle auf 0–1 begrenzt); `Y=0,2126·R+0,7152·G+0,0722·B`, Kontrast `(Yhell+0,05)/(Ydunkel+0,05)`. Leuchtdichten: Weiß `1`, Canvas `0,898026`, harter Rahmen `0,261810`, weicher Rahmen `0,658007`, Akzent `0,097304`, gedämpfter Text `0,157266`. Beispiel Rahmen/Canvas: `(0,898026+0,05)/(0,261810+0,05)=3,040:1`.
 
 | Element | Begrenzung/Indikator | Auf Weiß | Auf Canvas | Ergebnis |
 |---|---|---|---|---|
@@ -226,7 +226,13 @@ Rechenweg: OKLCH → OKLab (`a=C·cos(h)`, `b=C·sin(h)`) → lineares sRGB; `Y=
 | Karten-/Listenrahmen, Zeilentrenner | `--border-soft` | 1,483:1 | 1,339:1 | rein dekorativ |
 | Spaltentexte, Uhrzeit, Versallabel | `text-ink-muted` | 5,066:1 | 4,574:1 | ≥ 4,5:1 |
 
-\* Die Zahlen gelten für den CSS-Token, nicht als Vermessung der betriebssystemabhängigen nativen Kontrollgrafik. Native Checkbox-/Radiobutton-Darstellung wird durch diese Änderung nicht verändert. Kein Button, Eingabefeld oder Fokusrahmen erhält den weichen Token; deckungsgleiche Kontrollfarben und berechnete Schwellen werden durch automatisierte Tests abgesichert. Die Browserprüfung bei 200 % Zoom und die erneute axe-Abnahme stehen gesondert aus.
+\* Die Zahlen gelten für den CSS-Token, nicht als Vermessung der betriebssystemabhängigen nativen Kontrollgrafik. Native Checkbox-/Radiobutton-Darstellung wird durch diese Änderung nicht verändert. Kein Button, Eingabefeld oder Fokusrahmen erhält den weichen Token; deckungsgleiche Kontrollfarben und berechnete Schwellen werden durch automatisierte Tests abgesichert. Die folgenden Nachweise ergänzen die Token-Rechnung:
+
+- **A11Y-017 — Schichtauswahl:** Die Schichtauswahl ist ein beschriftetes natives `<select>` (`zeitstrom-shift-select`). Wert und Auswahlzustand kommen vom nativen Steuerelement; ein eigenes `aria-selected`-Tabmuster ist dort nicht erforderlich. Mobil liegt dieselbe Auswahl in einem Dialogblatt mit Rückkehr zum Auslöser.
+- **Kacheln und fester Knopf:** Die Strichlisten-Kacheln haben mindestens 72 px Höhe mobil bzw. 64 px am Desktop; ihre über die gesamte Kachel gestreckte Aktion hat auf jeder Breite mindestens 44 × 44 CSS-px. Der oben rechts beim Scrollen erreichbare Knopf „Schnell verlassen“/„Verlassen“ hat ebenfalls unabhängig vom Breakpoint mindestens 44 × 44 CSS-px (`base.html`, `partials/_quick_exit_standalone.html`). Das ist ein Nachweis der CSS-Mindestmaße, keine eigene Browsermessung bei 200 %.
+- **200-%-Äquivalent und Listenziele:** `test_list_zoom_acceptance.py` vergleicht 1280 CSS-px bei DPR 1 mit 640 CSS-px bei DPR 2 für Zeitstrom, Kontakte, Personen und Aufgaben. Es prüft Reflow ohne Seitenüberlauf, sichtbare Beschriftungen, Feldrahmen, Tastaturfokus und bei der schmalen Ansicht mindestens 44 × 44 CSS-px für sichtbare Felder und die erfassten Links/Buttons im Hauptinhalt (einschließlich Strichlisten-Aktionen). Der feste Verlassen-Knopf liegt außerhalb dieses Messbereichs. `test_event_list_day_groups.py` ergänzt Desktop (1280 px) und Mobil (390 px): mindestens 44 × 44 CSS-px für Kontaktzeilen, mobil auch „Zum Eintrag“ und beide Seitenpfeile, Tastaturbedienung mit Enter/Leertaste sowie axe vor und nach dem Aufklappen. Die aufgeklappten Ziele werden dort bei 390 px, nicht gesondert bei 200 %, gemessen.
+
+Die genannten Prüfungen ersetzen weder die vollständige WCAG-Abnahme noch eine Prüfung mit assistiver Technik. Eine gesonderte 200-%-Browsermessung des festen Verlassen-Knopfs und der aufgeklappten Kontaktziele bleibt offen.
 
 ### 2.4 Korrektur-Wellen
 
