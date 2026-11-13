@@ -16,7 +16,9 @@ def test_dev_restore_rejects_a_materialized_cache_refresh_error(tmp_path):
     backup.mkdir()
     (backup / "dump-2026-11-12.pgc.enc").write_bytes(b"test dump")
     environment_file = tmp_path / "restore-test.env"
-    environment_file.write_text("BACKUP_ENCRYPTION_KEY=real-test-key-0123456789abcdef\n")
+    environment_file.write_text(
+        "BACKUP_ENCRYPTION_KEY=real-test-key-0123456789abcdef\nPOSTGRES_DB=restore_drill_live\n"
+    )
     binaries = tmp_path / "bin"
     binaries.mkdir()
     commands = {
@@ -41,7 +43,9 @@ def test_dev_restore_rejects_a_materialized_cache_refresh_error(tmp_path):
         "ENV_FILE": str(environment_file),
         "DEV_BACKUP_DIR": str(backup),
     }
-    environment.pop("BACKUP_TIMESTAMP", None)
+    # Ambient values must not decide the outcome: the drill reads both from the env file.
+    for ambient in ("BACKUP_TIMESTAMP", "POSTGRES_DB"):
+        environment.pop(ambient, None)
     result = subprocess.run(
         ["bash", str(RESTORE_DRILL), "--dev"], env=environment, capture_output=True, text=True, timeout=30
     )
