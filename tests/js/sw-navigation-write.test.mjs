@@ -327,6 +327,38 @@ describe("native MFA navigation ownership", () => {
         }
     );
 
+    // Refs #2750: dispatch the redirect in the retiring worker, then activate
+    // another real worker instance while the old network response is pending.
+    it.each(["/sudo/", "/sudo/?next=%2Fmfa%2Fsettings%2F"])(
+        "does not retain the redirect %s in the old worker after takeover",
+        async (path) => {
+            const oldWorker = workerContext();
+            const newWorker = workerContext();
+            let release;
+            oldWorker.context.fetch = vi.fn(() => new Promise((resolve) => { release = resolve; }));
+            const claim = vi.spyOn(newWorker.context.clients, "claim");
+            const post = dispatchFetch(oldWorker.handlers.fetch, nativePost(ORIGIN + "/mfa/passkey/3/delete/"));
+            expect(post).toBeNull();
+            const redirect = dispatchFetch(oldWorker.handlers.fetch, navigationGet(ORIGIN + path));
+            let activation;
+            newWorker.handlers.activate({ waitUntil(value) { activation = value; } });
+            await activation;
+            expect(claim).toHaveBeenCalledTimes(1);
+            expect(newWorker.context.fetch).not.toHaveBeenCalled();
+            try {
+                // Claiming clients does not transfer an existing respondWith
+                // promise. This redirect must remain browser-owned throughout.
+                expect(redirect).toBeNull();
+                expect(oldWorker.context.fetch).not.toHaveBeenCalled();
+            } finally {
+                if (release) {
+                    release(new Response("sudo confirmation", { headers: { "Content-Type": "text/html" } }));
+                    await redirect;
+                }
+            }
+        }
+    );
+
     it("still handles ordinary navigation and MFA partial requests", async () => {
         const fetchImpl = vi.fn(async () => new Response("server", { headers: { "Content-Type": "text/html" } }));
         const { handlers, context } = workerContext();
@@ -334,12 +366,16 @@ describe("native MFA navigation ownership", () => {
         for (const request of [
             navigationGet(ORIGIN + "/clients/"),
             navigationGet(ORIGIN + "/mfa-help/"),
+            navigationGet(ORIGIN + "/sudo/help/"),
+            navigationGet(ORIGIN + "/sudo-extra/"),
+            navigationGet("https://elsewhere.test/sudo/"),
+            new Request(ORIGIN + "/sudo/", { headers: { "HX-Request": "true" } }),
             navigationGet("https://elsewhere.test/mfa/settings/"),
             new Request(ORIGIN + "/mfa/settings/", { headers: { "HX-Request": "true" } }),
         ]) {
             const response = await dispatchFetch(handlers.fetch, request);
             expect(await response.text()).toBe("server");
         }
-        expect(fetchImpl).toHaveBeenCalledTimes(4);
+        expect(fetchImpl).toHaveBeenCalledTimes(8);
     });
 });
