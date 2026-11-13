@@ -69,6 +69,8 @@ def test_list_fields_reflow_and_keep_boundaries_and_keyboard_focus(browser, base
             page.set_default_timeout(15000)
             page.goto(base_url + path, wait_until="domcontentloaded")
             expect(page.locator("#main-content h1")).to_be_visible()
+            if key == "inbox":
+                expect(page.locator('#inbox-content [id^="workitem-"]').first).to_be_visible()
             _open_filters(page, key, scale == 2)
             fields = _fields(page)
             metrics = page.evaluate(r"""() => ({
