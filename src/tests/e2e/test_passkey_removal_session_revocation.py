@@ -82,11 +82,62 @@ def _new_context(browser, language: str):
     return context, page
 
 
+def _hold_worker_updates(context):
+    """Allow the test to activate one real update at the request boundary."""
+    context.add_init_script("""(() => {
+        const send = ServiceWorker.prototype.postMessage;
+        window.__sendWorkerMessage = send;
+        window.__heldActivations = [];
+        ServiceWorker.prototype.postMessage = function(message, ...rest) {
+            if (message?.type === 'SKIP_WAITING') {
+                window.__heldActivations.push(this);
+                return;
+            }
+            return send.call(this, message, ...rest);
+        };
+    })();""")
+
+
+def _arm_session_check_takeover(page, base_url):
+    """Take over from a separate tab while the session-check request is held."""
+    probe = "session-check-" + uuid.uuid4().hex
+    assert page.evaluate("() => !!navigator.serviceWorker.controller")
+    control = page.context.new_page()
+    control.goto(f"{base_url}/manifest.json", wait_until="domcontentloaded")
+    page.evaluate(
+        """probe => navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (navigator.serviceWorker.controller?.scriptURL.includes(probe)) console.info(probe);
+        })""",
+        probe,
+    )
+    page.evaluate("async probe => navigator.serviceWorker.register('/sw.js?' + probe, {scope: '/'})", probe)
+    page.wait_for_function(
+        "probe => window.__heldActivations.some(worker => "
+        "worker.scriptURL.includes(probe) && worker.state === 'installed')",
+        arg=probe,
+    )
+    events = []
+
+    def take_over(route):
+        events.append("request-held")
+        with page.expect_console_message(lambda message: message.text == probe):
+            control.evaluate(
+                "async () => { const registration = await navigator.serviceWorker.getRegistration(); "
+                "window.__sendWorkerMessage.call(registration.waiting, {type: 'SKIP_WAITING'}); }"
+            )
+        events.append("controllerchange")
+        route.continue_()
+
+    page.route(f"{base_url}/mfa/settings/", take_over, times=1)
+    return events
+
+
+@pytest.mark.parametrize("takeover", [False, True], ids=["normal", "takeover"])
 @pytest.mark.parametrize("language", ["de", "en"])
 class TestZZPasskeyRemovalRevokesOtherSessions:
     """ZZ prefix: the account carries seeded devices while the tests run."""
 
-    def test_other_session_is_signed_out_and_own_session_stays(self, base_url, browser, e2e_env, language):
+    def test_other_session_is_signed_out_and_own_session_stays(self, base_url, browser, e2e_env, language, takeover):
         codes = _seed_totp_with_codes(e2e_env)
         _seed_passkey(e2e_env)
         previous_language = _set_language(e2e_env, language)
@@ -94,6 +145,8 @@ class TestZZPasskeyRemovalRevokesOtherSessions:
         try:
             context_a, page_a = _new_context(browser, language)
             context_b, page_b = _new_context(browser, language)
+            if takeover:
+                _hold_worker_updates(context_a)
             _login_with_backup_code(page_a, base_url, codes[0])
             _login_with_backup_code(page_b, base_url, codes[1])
             assert _is_signed_in(page_b, base_url), "precondition: B is signed in before the removal"
@@ -125,7 +178,10 @@ class TestZZPasskeyRemovalRevokesOtherSessions:
             assert _passkey_count(e2e_env) == 0, "the passkey must be gone"
             assert _confirmed_device_count(e2e_env) == 1, "the authenticator device must remain"
             assert _is_signed_out(page_b, base_url), "B must be signed out on its next request"
+            takeover_events = _arm_session_check_takeover(page_a, base_url) if takeover else None
             assert _is_signed_in(page_a, base_url), "A must stay signed in after its own removal"
+            if takeover:
+                assert takeover_events == ["request-held", "controllerchange"]
         finally:
             for context in (context_a, context_b):
                 if context is not None:

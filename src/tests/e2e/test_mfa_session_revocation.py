@@ -187,7 +187,11 @@ def _is_signed_out(page, base_url) -> bool:
 
 
 def _is_signed_in(page, base_url) -> bool:
-    page.goto(f"{base_url}/mfa/settings/", wait_until="domcontentloaded")
+    # Refs #2749: browser-initiated goto does not emit Navigation API events.
+    # Navigate from the document so the worker-update guard observes the request
+    # before takeover can reload it, then check the completed response as before.
+    with page.expect_navigation(wait_until="domcontentloaded"):
+        page.evaluate("url => window.location.assign(url)", f"{base_url}/mfa/settings/")
     return urlsplit(page.url).path == "/mfa/settings/"
 
 
