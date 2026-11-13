@@ -12,7 +12,7 @@ from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
 from core.models import User
-from core.services.security import build_invite_url, invite_token_generator, send_invite_email
+from core.services.security import invite_token_generator, send_invite_email
 
 
 class ExplodingEmailBackend(BaseEmailBackend):
@@ -45,11 +45,11 @@ EXPLODING_MAILERS = {"default": {"BACKEND": "tests.test_invite_flow.ExplodingEma
 
 
 @pytest.mark.django_db
-class TestBuildInviteUrl:
-    def test_absolute_url_aus_der_konfigurierten_origin(self, facility, settings):
+class TestInviteEmailLink:
+    def test_absolute_url_uses_the_configured_origin(self, facility, settings):
         """Refs #1967: Der Setup-Link ist immer absolut.
 
-        Bis dahin lieferte ``build_invite_url`` ohne Request eine RELATIVE URL —
+        Bis dahin lieferte ``send_invite_email`` ohne Request eine RELATIVE URL —
         in einer E-Mail unbrauchbar. Schema und Host stehen jetzt fest in
         ``EXTERNAL_ORIGIN``, der Request wird gar nicht mehr gelesen.
         """
@@ -59,7 +59,8 @@ class TestBuildInviteUrl:
             email="invite@example.org",
             facility=facility,
         )
-        url = build_invite_url(user)
+        assert send_invite_email(user) is True
+        url = next(line.strip() for line in mail.outbox[-1].body.splitlines() if "/invite/" in line)
         assert "/invite/" in url
         assert url.startswith("https://portal.example.org/")
 
@@ -69,7 +70,8 @@ class TestBuildInviteUrl:
             email="invite2@example.org",
             facility=facility,
         )
-        url = build_invite_url(user)
+        assert send_invite_email(user) is True
+        url = next(line.strip() for line in mail.outbox[-1].body.splitlines() if "/invite/" in line)
         expected_uid = urlsafe_base64_encode(force_bytes(user.pk))
         assert expected_uid in url
         token = url.rstrip("/").split("/")[-1]

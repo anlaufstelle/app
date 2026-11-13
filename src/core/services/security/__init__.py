@@ -22,7 +22,7 @@ Module:
 - :mod:`core.services.security.locking` — Optimistic Locking
   (``check_version_conflict``).
 - :mod:`core.services.security.invite` — Invite-Mail-Versand
-  (``build_invite_url``, ``send_invite_email``).
+  (``send_invite_email``, ``send_invite_email``).
 - :mod:`core.services.security.origin` — feste Basis-Origin fuer
   sicherheitsrelevante Links (``build_external_url``,
   ``external_link_context``, ``get_external_origin``).
@@ -37,7 +37,7 @@ from core.services.security.credentials import (
     RevocationReason,
     revoke_credentials,
 )
-from core.services.security.invite import build_invite_url, invite_token_generator, send_invite_email
+from core.services.security.invite import invite_token_generator, send_invite_email
 from core.services.security.locking import check_version_conflict
 from core.services.security.lockout_recovery import (
     build_recovery_token,
@@ -87,7 +87,6 @@ __all__ = [
     "SUDO_SESSION_KEY",
     "_hash_code",
     "build_external_url",
-    "build_invite_url",
     "build_recovery_token",
     "check_version_conflict",
     "clear_sudo",

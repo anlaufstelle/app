@@ -24,7 +24,7 @@ Initialpasswort → Zwangswechsel → MFA" vermischt sie:
 ``dev.py`` das ``console``-Mail-Backend, und der E2E-gunicorn laeuft mit
 ``stdout=DEVNULL`` (``conftest.py``). Weder ``mail.outbox`` (nur locmem) noch
 der Konsolentext sind fuer den Testprozess erreichbar. Der Setup-Link wird
-deshalb serverseitig ueber ``build_invite_url`` erzeugt; nur der PFAD wird
+deshalb serverseitig ueber the invite route and token generator erzeugt; nur der PFAD wird
 uebernommen, weil ``EXTERNAL_ORIGIN`` in E2E auf ``localhost:8844`` zeigt, die
 Fixture aber ``127.0.0.1`` liefert.
 
@@ -85,9 +85,11 @@ def _create_invited_user(e2e_env, username):
     gesetzt sind wie bei einer echten Einladung durch die Anwendungsbetreuung.
     """
     script = f"""
-from urllib.parse import urlparse
 from core.models import Facility, User
-from core.services.security.invite import build_invite_url
+from django.urls import reverse
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
+from core.services.security.invite import invite_token_generator
 from core.services.user_access import create_invited_user
 
 facility = User.objects.get(username="admin").facility  # nicht first(): UUID-PK, Ordnung zufaellig (E2E-Harness)
@@ -102,7 +104,14 @@ result = create_invited_user(
     mfa_required=True,
     can_confirm_deletion=False,
 )
-print("E2E_INVITE_PATH=" + urlparse(build_invite_url(result.user)).path)
+path = reverse(
+    "invite_confirm",
+    kwargs={{
+        "uidb64": urlsafe_base64_encode(force_bytes(result.user.pk)),
+        "token": invite_token_generator.make_token(result.user),
+    }},
+)
+print("E2E_INVITE_PATH=" + path)
 """
     pfade = _marker_values(e2e_env, script, "E2E_INVITE_PATH=")
     assert len(pfade) == 1, f"Invite-Anlage lieferte keinen Setup-Pfad: {pfade}"

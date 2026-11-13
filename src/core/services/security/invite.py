@@ -22,12 +22,11 @@ from django.conf import settings
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
-from django.urls import reverse
 from django.utils.crypto import constant_time_compare
 from django.utils.encoding import force_bytes
 from django.utils.http import base36_to_int, urlsafe_base64_encode
 
-from core.services.security.origin import build_external_url, external_link_context
+from core.services.security.origin import external_link_context
 
 logger = logging.getLogger(__name__)
 
@@ -71,18 +70,6 @@ class InviteTokenGenerator(PasswordResetTokenGenerator):
 
 # Modul-Singleton (analog Djangos ``default_token_generator``).
 invite_token_generator = InviteTokenGenerator()
-
-
-def build_invite_url(user) -> str:
-    """Erzeugt den absoluten Setup-Link (uidb64 + token) für den Invite-Flow.
-
-    Schema und Host kommen aus ``EXTERNAL_ORIGIN`` (Refs #1967), nicht aus dem
-    Request: ein Setup-Link ist ein Token-Link und darf nicht auf einen Host
-    zeigen, den ein eingehender Request bestimmt hat.
-    """
-    uid = urlsafe_base64_encode(force_bytes(user.pk))
-    token = invite_token_generator.make_token(user)
-    return build_external_url(reverse("invite_confirm", kwargs={"uidb64": uid, "token": token}))
 
 
 def send_invite_email(user) -> bool:

@@ -23,7 +23,7 @@ from django.urls import reverse
 from anlaufstelle.settings._env import env_origin
 from core.admin import UserAdmin
 from core.models import User
-from core.services.security import build_invite_url
+from core.services.security import send_invite_email
 from core.services.security.origin import build_external_url, external_link_context, get_external_origin
 
 ORIGIN = "https://portal.example.org"
@@ -46,7 +46,9 @@ class TestEinladungslink:
         settings.EXTERNAL_ORIGIN = ORIGIN
         user = User.objects.create_user(username="einladung1", email="e1@example.org", facility=facility)
 
-        assert build_invite_url(user).startswith(f"{ORIGIN}/invite/")
+        assert send_invite_email(user) is True
+        url = next(line.strip() for line in mail.outbox[-1].body.splitlines() if "/invite/" in line)
+        assert url.startswith(f"{ORIGIN}/invite/")
 
     def test_einladungsmail_ignoriert_den_request_host(self, settings, rf, admin_user, facility):
         """Der Admin legt das Konto ueber einen Request mit fremdem Host an —
