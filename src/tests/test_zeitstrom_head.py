@@ -1,8 +1,12 @@
 """Zeitstrom header: one date navigation, one shift selection, shift named once."""
 
 import re
-from datetime import timedelta
+from datetime import UTC, date, datetime, time, timedelta
+from html import unescape
 from types import SimpleNamespace
+from unittest.mock import patch
+from urllib.parse import parse_qs, urlparse
+from zoneinfo import ZoneInfo
 
 import pytest
 from django.template.loader import render_to_string
@@ -10,6 +14,20 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import TimeFilter
+
+
+@pytest.fixture(
+    autouse=True,
+    params=[(23, 59, 0), (0, 30, -1), (2, 0, -1), (5, 59, -1), (6, 1, 0), (14, 0, 0)],
+    ids=["23:59", "00:30", "02:00", "05:59", "06:01", "14:00"],
+)
+def default_feed_date(request):
+    """Pin each header test across the night shift and return its expected service date."""
+    hour, minute, day_offset = request.param
+    today = date(2026, 11, 13)
+    now = datetime.combine(today, time(hour, minute), tzinfo=ZoneInfo("Europe/Berlin"))
+    with timezone.override("Europe/Berlin"), patch("django.utils.timezone.now", return_value=now.astimezone(UTC)):
+        yield today + timedelta(days=day_offset)
 
 
 @pytest.fixture
@@ -83,16 +101,53 @@ class TestSingleHeader:
         assert "22:00–06:00 (+1)" in select
         assert re.search(r'<label[^>]*for="zeitstrom-shift-select"', html)
 
-    def test_next_day_is_disabled_today_and_not_a_link_target(self, client, staff_user, shifts):
-        html = _get(client, staff_user)
+    def test_next_day_is_disabled_on_calendar_today_and_not_a_link_target(self, client, staff_user, shifts):
+        html = _get(client, staff_user, {"date": timezone.localdate().isoformat(), "time_filter": "all"})
 
         nav = html[html.index('data-testid="zeitstrom-date-nav"') :]
         nxt = re.search(r"<(?:a|span|button)[^>]*Nächster Tag[^>]*>", nav).group(0)
         assert 'aria-disabled="true"' in nxt
         assert "href=" not in nxt
 
-    def test_today_link_only_when_not_today(self, client, staff_user, shifts):
-        assert _count_testid(_get(client, staff_user), "zeitstrom-date-today") == 0
+    def test_default_selection_uses_service_date_and_allows_navigation_up_to_calendar_today(
+        self, client, staff_user, shifts, default_feed_date
+    ):
+        html = _get(client, staff_user)
+        assert f'<input type="hidden" name="date" value="{default_feed_date.isoformat()}">' in html
+
+        nav = html[html.index('data-testid="zeitstrom-date-nav"') :]
+        nxt = re.search(r"<(?:a|span|button)[^>]*Nächster Tag[^>]*>", nav).group(0)
+        if default_feed_date < timezone.localdate():
+            assert 'aria-disabled="true"' not in nxt
+            href = unescape(re.search(r'href="([^"]+)"', nxt).group(1))
+            assert parse_qs(urlparse(href).query) == {
+                "date": [timezone.localdate().isoformat()],
+                "time_filter": [str(shifts[1].pk)],
+            }
+            response = client.get(reverse("core:zeitstrom") + href)
+            assert response.status_code == 200
+            assert response.context["target_date"] == timezone.localdate()
+            assert response.context["selected_filter"] == shifts[1]
+            next_nav = response.content.decode()
+            next_tag = re.search(r"<(?:a|span|button)[^>]*Nächster Tag[^>]*>", next_nav).group(0)
+            assert 'aria-disabled="true"' in next_tag
+            assert "href=" not in next_tag
+        else:
+            assert 'aria-disabled="true"' in nxt
+            assert "href=" not in nxt
+
+    def test_today_link_only_when_not_calendar_today(self, client, staff_user, shifts, default_feed_date):
+        html = _get(client, staff_user)
+        assert _count_testid(html, "zeitstrom-date-today") == int(default_feed_date < timezone.localdate())
+        if default_feed_date < timezone.localdate():
+            today_link = re.search(r'<a[^>]*href="([^"]+)"[^>]*data-testid="zeitstrom-date-today"', html)
+            assert today_link.group(1) == reverse("core:zeitstrom")
+            response = client.get(today_link.group(1))
+            assert response.status_code == 200
+            assert response.context["target_date"] == default_feed_date
+            assert response.context["selected_filter"] == shifts[1]
+        calendar_today = _get(client, staff_user, {"time_filter": "all"})
+        assert _count_testid(calendar_today, "zeitstrom-date-today") == 0
         past = (timezone.localdate() - timedelta(days=3)).isoformat()
         assert _count_testid(_get(client, staff_user, {"date": past}), "zeitstrom-date-today") == 1
 
