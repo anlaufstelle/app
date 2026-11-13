@@ -36,18 +36,18 @@
                    x-model="searchQuery"
                    placeholder="{% trans 'Pseudonym suchen...' %}"
                    aria-label="{% trans 'Pseudonym suchen' %}"
-                   class="w-full bg-surface border border-subtle rounded-[10px] pl-8 pr-3 py-2 text-[13px] text-ink"
+                   class="w-full min-h-[44px] md:min-h-0 bg-surface border border-subtle rounded-[10px] pl-8 pr-3 py-2 text-[13px] text-ink"
                    data-testid="offline-client-search">
         </div>
         <select x-model="stageFilter" aria-label="{% trans 'Kontaktstufe filtern' %}"
-                class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft cursor-pointer"
+                class="min-h-[44px] md:min-h-0 bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft cursor-pointer"
                 data-testid="offline-client-stage-filter">
             <option value="">{% trans "Alle Stufen" %}</option>
             <option value="identified">{% trans "Nur Pseudonym" %}</option>
             <option value="qualified">{% trans "Mit Zusatzangaben" %}</option>
         </select>
         <select x-model="ageFilter" aria-label="{% trans 'Altersgruppe filtern' %}"
-                class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft cursor-pointer"
+                class="min-h-[44px] md:min-h-0 bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft cursor-pointer"
                 data-testid="offline-client-age-filter">
             <option value="">{% trans "Alle Altersgruppen" %}</option>
             <option value="u18">{% trans "Unter 18" %}</option>
@@ -91,7 +91,7 @@
                     <div class="flex items-start justify-between gap-2 sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.5fr)_auto] sm:gap-4 sm:items-center sm:px-4 sm:py-3">
                         {# Pseudonym + "deaktiviert"-Markierung (is_active=False bleibt sichtbar). #}
                         <div role="cell" class="flex-1 min-w-0 sm:flex-auto">
-                            <a :href="c.href" class="block sm:inline" data-testid="client-detail-link">
+                            <a :href="c.href" class="flex min-h-[44px] items-center md:inline md:min-h-0" data-testid="client-detail-link">
                                 <div class="flex items-center gap-2">
                                     <span class="text-[14px] font-semibold text-accent truncate hover:underline" x-text="c.pseudonym"></span>
                                     <span x-show="!c.isActive" x-cloak
@@ -127,10 +127,10 @@
                         <div role="cell" class="hidden md:block text-[13px] font-mono text-ink-muted" x-text="c.lastContactLabel"></div>
 
                         {# Offline-Aktion — Mobile-Card-Variante: nur "Entfernen". #}
-                        <div class="flex-shrink-0 sm:hidden">
+                        <div role="cell" class="flex-shrink-0 sm:hidden">
                             <button type="button"
                                     @click.prevent.stop="remove(c.pk)"
-                                    class="inline-flex items-center text-[12px] text-ink-muted hover:text-accent px-2 py-1"
+                                    class="inline-flex items-center justify-center min-h-[44px] min-w-[44px] text-[12px] text-ink-muted hover:text-accent"
                                     data-testid="card-remove-offline-btn"
                                     aria-label="{% trans 'Aus Offline-Cache entfernen' %}">
                                 <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>

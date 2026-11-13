@@ -38,9 +38,11 @@ parallelisieren.
 from __future__ import annotations
 
 from contextlib import suppress
+from pathlib import Path
 
 import pytest
 
+from ._axe import _AXE_RUN, AXE_TAGS, AxeResult, _normalise, assert_within_baseline
 from ._helpers import do_real_login as _do_real_login
 from ._helpers import wait_for_active_service_worker as _wait_for_active_service_worker
 
@@ -303,6 +305,51 @@ def test_cold_offline_client_list_search_and_filters(browser, base_url):
             timeout=10000,
         )
         _row(page, ANTON_PK).wait_for(state="visible", timeout=10000)
+    finally:
+        with suppress(Exception):
+            page.context.set_offline(False)
+            page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+        context.close()
+
+
+AXE_SOURCE = Path(__file__).resolve().parents[2] / "static" / "js" / "vendor" / "axe.min.js"
+
+
+def test_cold_offline_client_list_is_accessible_and_touchable_on_a_phone(browser, base_url):
+    """The offline list at 390 px reads as a table with rows and keeps 44 px targets.
+
+    The footer links are left out, as on every other page (they stay small by design). axe is
+    injected as an init script before going offline (the vendored file is not part of the
+    precache, and an init script is not subject to the page's CSP).
+    """
+    context = browser.new_context(locale="de-DE", viewport={"width": 390, "height": 844})
+    context.add_init_script(script=AXE_SOURCE.read_text())
+    page = context.new_page()
+    page.set_default_timeout(30000)
+    try:
+        _prepare_cold_offline_list(page, base_url)
+        page.wait_for_function(
+            "() => document.querySelectorAll('[data-testid=client-row]').length === 3 && !!window.axe",
+            timeout=10000,
+        )
+        page.locator("[data-testid='card-remove-offline-btn']").first.wait_for(state="visible", timeout=10000)
+        metrics = page.evaluate(
+            """() => ({scroll: document.documentElement.scrollWidth, viewport: document.documentElement.clientWidth,
+                small: Array.from(document.querySelectorAll(
+                    '#main-content a[href], #main-content button:not(:disabled), #main-content select, ' +
+                    '#main-content input:not([type=hidden])'))
+                    .filter(el => el.checkVisibility() && !el.closest('footer')).map(el => {
+                    const r = el.getBoundingClientRect();
+                    return {name: (el.getAttribute('aria-label') || el.textContent || el.name || '').trim()
+                        .replace(/\\s+/g, ' ').slice(0, 50), testid: el.getAttribute('data-testid'),
+                        width: Math.round(r.width), height: Math.round(r.height)};
+                }).filter(r => r.width < 44 || r.height < 44)})"""
+        )
+        violations = page.evaluate(_AXE_RUN, [None, list(AXE_TAGS)])
+        result = AxeResult(url=page.url, violations=[_normalise(v) for v in violations])
+        assert metrics["scroll"] <= metrics["viewport"], metrics
+        assert_within_baseline("offline_clients_390", result, {})
+        assert not metrics["small"], f"targets below 44 px: {metrics['small']}"
     finally:
         with suppress(Exception):
             page.context.set_offline(False)

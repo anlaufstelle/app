@@ -854,7 +854,10 @@ class TestPrecachedShellBumpGuard:
     # v67 is still unreleased, so only this hash moves.
     # Refs #2744, #2745: preserve the live offline form during cache refreshes.
     # v68 is still unreleased and covers this template change.
-    _PINNED_SHELL_HASH = "7f8da0e43ef7537e256caeeef9abc4ca141fe0db6ae2481596a6882df4dee9e6"
+    # The offline client list mirrors the online list on a phone: cell
+    # wrapper for the remove button and 44 px fields, filters and name link; v68
+    # is still unreleased, so only this hash moves.
+    _PINNED_SHELL_HASH = "033a6dd2fe92fc47e094c3a52adcb60cb5d5423671dd4c5c377360174ac04ab7"
     # Refs #1904: SHA-256 over the Content-Security-Policy headers the server
     # delivers with the precached offline home (see _policy_fingerprint). Every
     # precached shell and every runtime entry keeps the policy it was stored
