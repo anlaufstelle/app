@@ -2056,5 +2056,19 @@
     "reason": "docs/en/ops-runbook.md section 3.4 is stripped from the public tree",
     "exclusion": "dev-ops",
     "rationale": "Runbook section 3.4 (dev systemd timers) sits in a release:strip block and is removed together with dev-ops/ by the release build."
+  },
+  {
+    "nodeid": "src/tests/e2e/test_quick_exit_geometry.py::TestDemoNotice::test_notice_stays_visible_and_clear_of_the_button_on_every_width[chromium-/]",
+    "profile": "public",
+    "reason": "Requires the demo profile (E2E_DEMO_MODE=1, E2E_SEED_SCALE=demo)",
+    "requires_env": "E2E_DEMO_MODE=1",
+    "rationale": "The demo suite is opt-in through the make test-e2e-demo gate with E2E_DEMO_MODE=1 and E2E_SEED_SCALE=demo."
+  },
+  {
+    "nodeid": "src/tests/e2e/test_quick_exit_geometry.py::TestDemoNotice::test_notice_stays_visible_and_clear_of_the_button_on_every_width[chromium-/clients/]",
+    "profile": "public",
+    "reason": "Requires the demo profile (E2E_DEMO_MODE=1, E2E_SEED_SCALE=demo)",
+    "requires_env": "E2E_DEMO_MODE=1",
+    "rationale": "The demo suite is opt-in through the make test-e2e-demo gate with E2E_DEMO_MODE=1 and E2E_SEED_SCALE=demo."
   }
 ]

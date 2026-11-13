@@ -1,5 +1,6 @@
 """Exercise the public skip policy through pytest's command line."""
 
+import ast
 import json
 import os
 import subprocess
@@ -318,6 +319,35 @@ def test_shipped_env_entries_match_their_skip_sites():
         assert f"def {names[-1].split('[')[0]}(" in source, entry
         assert entry["reason"] in source, entry
         assert name in source and f'"{value}"' in source, entry
+
+
+def test_demo_notice_geometry_nodes_are_approved_for_the_public_profile():
+    # The class skips itself outside the demo profile; each parametrized node
+    # needs its own opt-in entry, otherwise the public run ends with exit 1.
+    module = ROOT / "src/tests/e2e/test_quick_exit_geometry.py"
+    tree = ast.parse(module.read_text())
+    demo_class = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "TestDemoNotice")
+    skip_reasons = [
+        node.args[0].value
+        for node in ast.walk(demo_class)
+        if isinstance(node, ast.Call) and ast.unparse(node.func) == "pytest.skip"
+    ]
+    assert len(skip_reasons) == 1, skip_reasons
+    method = next(n for n in demo_class.body if isinstance(n, ast.FunctionDef) and n.name.startswith("test_"))
+    paths = [
+        value
+        for decorator in method.decorator_list
+        if ast.unparse(decorator).startswith("pytest.mark.parametrize('path'")
+        for value in ast.literal_eval(decorator.args[1])
+    ]
+    assert paths, "the demo notice test must stay parametrized by path"
+    allowed = json.loads((ROOT / "src/tests/public_skip_allowlist.json").read_text())
+    approved = {entry["nodeid"]: entry for entry in allowed if entry.get("requires_env") == "E2E_DEMO_MODE=1"}
+    for path in paths:
+        nodeid = f"src/tests/e2e/test_quick_exit_geometry.py::TestDemoNotice::{method.name}[chromium-{path}]"
+        assert nodeid in approved, nodeid
+        assert approved[nodeid]["profile"] == "public", nodeid
+        assert approved[nodeid]["reason"] == skip_reasons[0], nodeid
 
 
 @pytest.fixture(scope="module", autouse=True)
