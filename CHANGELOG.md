@@ -48,6 +48,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Statistik-Diagramme bei langsamer Verbindung** (#2691) — Die Diagramme warten auf die Diagramm-Bibliothek und erscheinen auch dann, wenn ihre Daten zuerst eintreffen. Dafür werden die Daten nur einmal abgerufen; kann die Bibliothek nicht geladen werden, erscheint die bestehende Fehlermeldung.
 - **Englische Tagesköpfe in der Kontakte-Liste** (#2659) — Die englische Ansicht zeigt das Kurzdatum in der Reihenfolge Wochentag, Monat, Tag; die deutsche Datumsdarstellung bleibt erhalten.
 - **Sicherheitsbestätigung bei Passkey-Änderungen** (#2750) — Die Weiterleitung zur erneuten Passwortbestätigung bleibt bei einem Service-Worker-Wechsel unter Kontrolle des Browsers und hängt nicht mehr am alten Worker.
 - **CSV-Export in Ortszeit** (#2713) — Datum und Uhrzeit der Statistik-Ereignisse werden in der Zeitzone der Anwendung ausgegeben, auch nahe Mitternacht und bei Sommerzeit. Früher exportierte CSV-Dateien tragen UTC-Zeiten.

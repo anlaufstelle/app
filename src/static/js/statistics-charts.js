@@ -29,7 +29,35 @@ document.addEventListener("htmx:beforeSwap", function (evt) {
 // statt <select>), gibt es weder das Select noch den Platzhalter — und damit
 // auch den Sonderfall nicht mehr.
 
-/* statisticsCharts wird per Alpine.data() registriert (CSP-friendly, Refs #672). */
+// Chart.js is deferred after Alpine; the data response can arrive first (Refs #2691).
+function waitForStatisticsChartLibrary() {
+  if (typeof window.Chart === "function") return Promise.resolve();
+
+  return new Promise(function (resolve, reject) {
+    const script = document.querySelector('script[src*="chart.min.js"]');
+    if (!script || document.readyState === "complete") {
+      reject(new Error("Chart.js is unavailable"));
+      return;
+    }
+
+    function settle() {
+      clearTimeout(timeout);
+      script.removeEventListener("load", settle);
+      script.removeEventListener("error", settle);
+      window.removeEventListener("load", settle);
+      if (typeof window.Chart === "function") resolve();
+      else reject(new Error("Chart.js failed to load"));
+    }
+
+    // Bound a stalled download; window load also catches an earlier script error.
+    const timeout = setTimeout(settle, 15000);
+    script.addEventListener("load", settle);
+    script.addEventListener("error", settle);
+    window.addEventListener("load", settle);
+  });
+}
+
+/* Register statisticsCharts through Alpine.data() (CSP-friendly, Refs #672). */
 function buildStatisticsCharts() {
   return {
     charts: {},
@@ -84,6 +112,9 @@ function buildStatisticsCharts() {
         }
         const data = await resp.json();
         this.sources = data.sources || [];
+        await waitForStatisticsChartLibrary();
+        // An HTMX swap may have replaced this component while the library loaded.
+        if (host && !host.isConnected) return;
         this.destroyCharts();
         this.renderContactsChart(data);
         this.renderDocTypeChart(data);
