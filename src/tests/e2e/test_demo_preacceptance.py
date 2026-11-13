@@ -221,15 +221,17 @@ def test_demo_pages_hold_up_for_each_role_and_width(browser, base_url, role, lab
         if width < 768:
             page.get_by_test_id("mobile-nav-more").click()
             menu = page.get_by_test_id("mobile-more-items")
+            expect(menu).to_be_visible()
             wait_for_settled(menu)
             logout = menu.get_by_role("button", name="Abmelden")
         else:
             logout = page.locator("nav").get_by_role("button", name="Abmelden")
         expect(logout).to_be_visible()
-        box = logout.bounding_box()
-        _record(page, f"demo-{role}-{width}-logout-target", {"width": box["width"], "height": box["height"]})
+        # offsetWidth/offsetHeight ignore the scale of the menu's enter transition (bounding_box does not).
+        size = logout.evaluate("el => ({width: el.offsetWidth, height: el.offsetHeight})")
+        _record(page, f"demo-{role}-{width}-logout-target", size)
         if width < 768:
-            assert box["height"] >= 44, f"logout target is {box}"
+            assert size["height"] >= 44, f"logout target is {size}"
         logout.click()
         page.wait_for_url(lambda url: "/login/" in url or "/demo/" in url, timeout=15000)
         _assert_session_ended(page, base_url, "logout")
