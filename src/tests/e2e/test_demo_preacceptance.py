@@ -118,8 +118,9 @@ def _check_page(page, base_url, key, width, role, *, require_banner=True):
     assert metrics["scroll"] <= metrics["viewport"], f"{name}: horizontal overflow {metrics}"
     assert_within_baseline(f"demo_{key}_{role}", result, {})
     if width < 768:
-        # The folded demo notice is a deliberate one-line bar (at most 36 px high); its toggle keeps the
-        # WCAG 2.5.8 minimum of 24 px and is the only target below 44 px that is accepted.
+        # The folded demo notice is a deliberate one-line bar (at most 36 px high). Its toggle is
+        # demo only and meets WCAG 2.5.8 AA (at least 24 px); it is the only target below 44 px
+        # that is accepted, the 44 px goal holds for every other target.
         small = [t for t in metrics["small"] if not (t["testid"] == "demo-banner-toggle" and t["height"] >= 24)]
         assert not small, f"{name}: targets below 44 px {small}"
     if require_banner:
