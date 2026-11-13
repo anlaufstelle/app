@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 import uuid
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -74,6 +75,14 @@ class TestDateFieldsInAppLanguage:
             fill_date(page, "#statistics-date-to", "2026-04-12")
             with page.expect_response(lambda r: "statistics" in r.url and r.request.method == "GET"):
                 page.locator("[data-testid='statistics-period-apply']").click()
+            # Response headers arrive before HTMX commits the updated history entry.
+            page.wait_for_url(
+                lambda url: (
+                    urlsplit(url).path == "/statistics/"
+                    and parse_qs(urlsplit(url).query).get("date_to") == ["2026-04-12"]
+                ),
+                timeout=20000,
+            )
             expect_date_value(page, "#statistics-date-to", "2026-04-12")
 
             # Leave and come back: format and values stay.

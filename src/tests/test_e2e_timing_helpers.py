@@ -183,3 +183,67 @@ def test_onboarding_second_factor_uses_device_window_after_boundary(monkeypatch,
     expected_counter = max(device.last_t + 1, int(now[0] / device.step) + device.drift)
     assert token == str(hotp(device.bin_key, expected_counter, digits=device.digits)).zfill(device.digits)
     assert device.verify_token(token), "The second login must accept the code after confirmation crossed a window"
+
+
+@pytest.mark.parametrize(("app_language", "browser_locale"), [("de", "en-US"), ("en", "de-DE")])
+def test_date_filter_waits_for_delayed_history_before_leaving(monkeypatch, app_language, browser_locale):
+    from contextlib import contextmanager
+    from urllib.parse import parse_qs, urlsplit
+
+    from tests.e2e import test_i18n_acceptance as dates
+
+    initial = "http://testserver/statistics/?zeitraum=frei&date_from=2026-03-05&date_to=2026-03-20"
+    updated = initial.replace("2026-03-20", "2026-04-12")
+    history = [initial]
+    pending_history = []
+    fields = {}
+    page = Mock()
+    page.url = initial
+
+    def restore(url):
+        query = parse_qs(urlsplit(url).query)
+        fields["#statistics-date-from"] = query["date_from"][0]
+        fields["#statistics-date-to"] = query["date_to"][0]
+
+    def goto(url, **kwargs):
+        page.url = url
+        if "/statistics/" in url:
+            restore(url)
+        else:
+            fields["#event-date_from"] = "2026-03-05"
+            fields["#event-date_to"] = "2026-03-20"
+
+    def wait_for_url(predicate, **kwargs):
+        assert not predicate(page.url)
+        assert pending_history == [updated]
+        page.url = pending_history.pop()
+        assert predicate(page.url)
+        history[0] = page.url
+
+    @contextmanager
+    def response(*args, **kwargs):
+        yield  # Headers arrived, but HTMX has not yet pushed the URL.
+
+    def expect_value(page, selector, expected):
+        assert fields[selector] == expected
+
+    page.goto.side_effect = goto
+    page.wait_for_url.side_effect = wait_for_url
+    page.expect_response.side_effect = response
+    page.go_back.side_effect = lambda **kwargs: restore(history[0])
+    page.locator.return_value.click.side_effect = lambda: pending_history.append(updated)
+    page.locator.return_value.evaluate.side_effect = lambda script: (
+        "12.04.2026" if app_language == "de" else fields["#statistics-date-to"]
+    )
+    context = SimpleNamespace(new_page=lambda: page, close=Mock())
+    browser = SimpleNamespace(new_context=lambda **kwargs: context)
+    monkeypatch.setattr(dates, "_set_language", Mock())
+    monkeypatch.setattr(dates, "fill_date", lambda page, selector, value: fields.update({selector: value}))
+    monkeypatch.setattr(dates, "expect_date_value", expect_value)
+
+    dates.TestDateFieldsInAppLanguage().test_statistics_and_events_filters_keep_format_and_values_after_back(
+        browser, "http://testserver", {}, {}, app_language, browser_locale
+    )
+
+    assert history == [updated]
+    context.close.assert_called_once()
