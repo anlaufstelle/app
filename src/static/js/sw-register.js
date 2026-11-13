@@ -612,16 +612,19 @@
     //
     // Emptying the storage once is not enough, because the old document stays
     // alive until the logout response replaces it and writes could follow:
-    // htmx saves a snapshot from its own ``popstate`` handler (Back button),
-    // without any request, so the request/response lock above does not see it.
-    // ``historyCacheSize = 0`` makes htmx's snapshot writer a no-op that
-    // removes the key instead (vendored htmx 2.0.11: the save function returns
-    // right after ``removeItem`` when the size is <= 0).
-    // The switch holds for the rest of this document and does NOT expire with
-    // the 10 s window of the request lock: it costs nothing if the logout
+    //  * htmx saves a snapshot from its own ``popstate`` handler (Back button),
+    //    without any request, so the request/response lock above does not see
+    //    it. ``historyCacheSize = 0`` makes htmx's snapshot writer a no-op that
+    //    removes the key instead (vendored htmx 2.0.11: the save function
+    //    returns right after ``removeItem`` when the size is <= 0).
+    //  * filter-persistence.js writes ``filters:<path>`` on every change; it
+    //    stops once ``window.__tabStorageWiped`` is set.
+    // Both switches hold for the rest of this document and do NOT expire with
+    // the 10 s window of the request lock: they cost nothing if the logout
     // fails (Back then reloads the page from the server instead of restoring
-    // a snapshot).
+    // a snapshot, and filters are no longer remembered in this tab).
     function _wipeTabStorage() {
+        window.__tabStorageWiped = true;
         try {
             if (window.htmx && window.htmx.config) window.htmx.config.historyCacheSize = 0;
         } catch (_e) {
@@ -679,8 +682,12 @@
         if (action.indexOf("/logout/") === -1 && !action.endsWith("/logout/")) return;
 
         // Re-Entrancy-Guard pro Form: der zweite Klick darf nicht am
-        // laufenden Wipe vorbei nativ abschicken.
-        if (form._logoutWipeInFlight) {
+        // laufenden Wipe vorbei nativ abschicken. Refs #2660: nur solange die
+        // Abmeldung frisch ist (gleiche Frist wie die Anfragesperre). Ist die
+        // Frist abgelaufen, ohne dass navigiert wurde, ist der erste Versuch
+        // gescheitert — ein erneuter Klick startet die Abmeldung neu, statt
+        // fuer den Rest des Dokuments verschluckt zu werden.
+        if (form._logoutWipeInFlight && _logoutNavInFlight()) {
             event.preventDefault();
             return;
         }

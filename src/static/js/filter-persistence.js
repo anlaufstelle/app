@@ -68,6 +68,11 @@
    * Read current filter values and persist to sessionStorage.
    */
   function saveFilters() {
+    // Refs #2660: logout and "quick exit" empty the tab's sessionStorage and
+    // set this flag. The old document may live on for a moment (late input,
+    // slow logout), but must not store filter values again.
+    if (window.__tabStorageWiped) return;
+
     var elements = getFilterElements();
     if (elements.length === 0) return;
 

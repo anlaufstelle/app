@@ -569,13 +569,15 @@
      * htmx also saves a snapshot from its own ``popstate`` handler (Back
      * button), with no request that ``_exiting`` could block, so
      * ``historyCacheSize = 0`` turns its snapshot writer into a no-op (vendored
-     * htmx 2.0.11 removes the key and returns). The document is being left, so
-     * the switch stays on for good.
+     * htmx 2.0.11 removes the key and returns). filter-persistence.js stops
+     * writing once ``window.__tabStorageWiped`` is set. The document is being
+     * left, so both stay on for good.
      *
      * Synchronous and fully guarded: reading ``sessionStorage`` can throw
      * (blocked storage), and that must never delay or block the exit.
      */
     function _wipeTabStorage() {
+        window.__tabStorageWiped = true;
         try {
             if (window.htmx && window.htmx.config) window.htmx.config.historyCacheSize = 0;
         } catch (_e) {
