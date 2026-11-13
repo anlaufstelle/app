@@ -141,7 +141,7 @@ def _prefill_owner(meta_form, facility, client_id, case_id):
     beim Absenden nichts vorbelegen, was der Nutzer nicht ohnehin wählen
     dürfte. Für die abgeleitete Person braucht es trotzdem einen eigenen
     facility-gescopten, fail-closed Lookup (:func:`get_case_or_none`, Muster
-    ``get_client_or_none``) — sonst wäre die Ableitung ein Existenz-Orakel
+    ``person prefill lookup``) — sonst wäre die Ableitung ein Existenz-Orakel
     über Fremd-/widerrufene Fälle.
 
     Gibt die (ggf. aus dem Fall abgeleitete) ``client_id`` zurück, damit der
@@ -496,7 +496,7 @@ class EventCreateView(AssistantOrAboveRequiredMixin, IdempotentCreateMixin, View
                 except (DocumentType.DoesNotExist, ValueError, ValidationError):
                     # Django wirft bei syntaktisch kaputten UUID-Strings
                     # ValidationError (nicht ValueError) — Refs #1996, analog
-                    # zu ``get_client_or_none``.
+                    # zu ``person prefill lookup``.
                     doc_type = None
                 if doc_type is not None and user_can_see_document_type(request.user, doc_type):
                     data_form = DynamicEventDataForm(

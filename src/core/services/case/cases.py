@@ -65,7 +65,7 @@ def cases_with_live_client():
 def get_case_or_none(facility, case_id):
     """Lookup a case by PK scoped to *facility* (Refs #1813 T4).
 
-    Analog zu :func:`core.services.client.main.get_client_or_none`: liefert
+    Analog zu :func:`core.services.client.main.person prefill lookup`: liefert
     ``None`` statt eine Exception, wenn der Fall nicht existiert, die ID keine
     gültige UUID ist, der Fall einer anderen Facility gehört, oder seine
     Person widerrufen ist (Papierkorb/anonymisiert — ``cases_with_live_client``,

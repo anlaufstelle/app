@@ -175,7 +175,7 @@ def _rerender_data_form(
         )
     except (DocumentType.DoesNotExist, ValidationError, ValueError):
         # Django wirft bei syntaktisch ungueltigen UUIDs ValidationError,
-        # nicht ValueError (gleiche Falle wie in ``get_client_or_none``).
+        # nicht ValueError (gleiche Falle wie in ``person prefill lookup``).
         return data_form
     if not doc_type.is_active and str(doc_type.pk) != str(allow_inactive_pk):
         return data_form

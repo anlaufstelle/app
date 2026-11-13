@@ -76,7 +76,7 @@ def _normalize_document_type_kwarg(data: dict) -> DocumentType | None:
         document_type = DocumentType.objects.filter(pk=raw_pk).first()
     except (ValidationError, ValueError, TypeError):
         # Django wirft bei ungueltigen UUID-Strings ValidationError, nicht
-        # ValueError (gleiche Falle wie in ``get_client_or_none``).
+        # ValueError (gleiche Falle wie in ``person prefill lookup``).
         document_type = None
     if document_type is None:
         raise ValidationError(_("Der Dokumentationstyp existiert nicht."))
@@ -1077,27 +1077,6 @@ def resolve_writable_client(facility, client_id, *, missing_error):
     #    neue inhaltliche Verarbeitung, nicht blosse Speicherung.
     assert_processing_allowed(client)
     return client
-
-
-def get_client_or_none(facility, client_id):
-    """Lookup a client by PK scoped to *facility*.
-
-    Returns None if the client doesn't exist, the ID isn't a valid UUID, or
-    the client belongs to a different facility. Gedacht für View-GET-Handler,
-    die einen vorselektierten Client aus der URL/Query laden wollen, ohne bei
-    fehlendem/ungültigem Parameter eine 404 zu werfen — stattdessen wird das
-    Formular unverändert angezeigt.
-
-    Refs #598.
-    """
-    if not client_id:
-        return None
-    try:
-        return Client.objects.get(pk=client_id, facility=facility)
-    except (Client.DoesNotExist, ValueError, ValidationError):
-        # Django wirft bei ungültigen UUID-Strings ValidationError (nicht
-        # ValueError) — beide Fälle werden als "not found" behandelt.
-        return None
 
 
 def track_client_visit(user, client, facility):

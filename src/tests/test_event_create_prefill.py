@@ -5,7 +5,7 @@
 Person des Falls abgeleitet vorbelegt — außer ein expliziter ``?client=``
 ist gesetzt, der gewinnt immer. Fail-closed: ein Fall aus einer fremden
 Facility darf weder das Fall- noch das Person-Feld vorbelegen (kein
-Existenz-Orakel über ``get_case_or_none``, Muster ``get_client_or_none``).
+Existenz-Orakel über ``get_case_or_none``, Muster ``person prefill lookup``).
 
 Das Person-/Fall-Feld ist Alpine-/JS-getrieben (``eventClientAutocomplete``,
 ``static/js/alpine/forms.js``) — nicht über Djangos Widget-``initial``

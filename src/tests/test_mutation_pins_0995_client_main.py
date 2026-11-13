@@ -1,37 +1,52 @@
-"""Pins fuer den Personen-Lookup der Vorauswahl (``core.services.client.main``).
-
-Quelle: Mutations-Delta des Checkpoints release-0.99.4, 1 Mutant in
-``get_client_or_none``: der Lookup verliert die angefragte ``client_id``.
-Bei genau einer Person der Einrichtung waere sie dann fuer jede — auch eine
-unbekannte — ID vorgewaehlt, bei mehreren liefe ``get`` in
-``MultipleObjectsReturned``. Die Pins legen deshalb je Fall die passende
-Personenzahl an.
-"""
+"""Regression checks for person selection through the create views."""
 
 import uuid
 
 import pytest
+from django.urls import reverse
 
 from core.models import Client
-from core.services.client.main import get_client_or_none
 
 pytestmark = pytest.mark.django_db
 
 
-class TestGetClientOrNone:
-    """``get_client_or_none``: Lookup nach ``client_id`` in der Einrichtung."""
+@pytest.mark.parametrize("url_name", ["core:event_create", "core:case_create", "core:workitem_create"])
+class TestPersonPrefill:
+    def test_requested_person_is_selected_among_two(self, client, facility, staff_user, url_name):
+        first = Client.objects.create(facility=facility, pseudonym="First", created_by=staff_user)
+        second = Client.objects.create(facility=facility, pseudonym="Second", created_by=staff_user)
+        client.force_login(staff_user)
+        for person in (second, first):
+            response = client.get(reverse(url_name), {"client": str(person.pk)})
+            assert response.status_code == 200
+            assert response.context["client_id"] == str(person.pk)
+            assert response.context["client_pseudonym"] == person.pseudonym
+        response = client.get(reverse(url_name), {"client": str(uuid.uuid4())})
+        assert response.context["client_id"] == ""
+        assert response.context["client_pseudonym"] == ""
 
-    def test_liefert_die_angefragte_von_zwei_personen(self, facility, staff_user):
-        """x_get_client_or_none__mutmut_4: ohne ``pk`` wirft ``get`` bei zwei
-        Personen ``MultipleObjectsReturned`` (unbehandelt, Serverfehler)."""
-        erste = Client.objects.create(facility=facility, pseudonym="Alpha-Erste", created_by=staff_user)
-        zweite = Client.objects.create(facility=facility, pseudonym="Zulu-Zweite", created_by=staff_user)
-        assert get_client_or_none(facility, zweite.pk) == zweite
-        assert get_client_or_none(facility, erste.pk) == erste
-        assert get_client_or_none(facility, uuid.uuid4()) is None
+    def test_unknown_id_does_not_select_the_only_person(self, client, client_identified, staff_user, url_name):
+        client.force_login(staff_user)
+        response = client.get(reverse(url_name), {"client": str(uuid.uuid4())})
+        assert response.status_code == 200
+        assert response.context["client_id"] == ""
+        assert response.context["client_pseudonym"] == ""
+        response = client.get(reverse(url_name), {"client": str(client_identified.pk)})
+        assert response.context["client_id"] == str(client_identified.pk)
+        assert response.context["client_pseudonym"] == client_identified.pseudonym
 
-    def test_unbekannte_id_waehlt_die_einzige_person_nicht_vor(self, facility, client_identified):
-        """x_get_client_or_none__mutmut_4: ohne ``pk`` kaeme die einzige
-        Person der Einrichtung fuer jede unbekannte ID zurueck."""
-        assert get_client_or_none(facility, uuid.uuid4()) is None
-        assert get_client_or_none(facility, client_identified.pk) == client_identified
+    @pytest.mark.parametrize("params", [{}, {"client": ""}, {"client": "not-a-uuid"}])
+    def test_missing_or_invalid_id_leaves_selection_empty(self, client, staff_user, url_name, params):
+        client.force_login(staff_user)
+        response = client.get(reverse(url_name), params)
+        assert response.status_code == 200
+        assert response.context["client_id"] == ""
+        assert response.context["client_pseudonym"] == ""
+
+    def test_foreign_person_is_not_disclosed(self, client, client_identified, second_facility_user, url_name):
+        client.force_login(second_facility_user)
+        response = client.get(reverse(url_name), {"client": str(client_identified.pk)})
+        assert response.status_code == 200
+        assert response.context["client_id"] == ""
+        assert response.context["client_pseudonym"] == ""
+        assert client_identified.pseudonym not in response.content.decode()
