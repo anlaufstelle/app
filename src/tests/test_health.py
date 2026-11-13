@@ -8,7 +8,10 @@ Detailfelder ``version``, ``smtp``, ``last_backup_age_hours`` und
 """
 
 import logging
+import shutil
 from datetime import timedelta
+from shutil import disk_usage
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -48,10 +51,13 @@ def _clear_health_cache():
 
 
 @pytest.fixture(autouse=True)
-def _measurable_media_root(settings, tmp_path):
-    """Use an isolated media path and a healthy measurement independent of the host."""
+def _measurable_media_root(settings, tmp_path, request):
+    """Isolate health measurements unless a test explicitly requests the real disk."""
     settings.MEDIA_ROOT = tmp_path
-    with patch("core.views.health.shutil.disk_usage", return_value=(100, 50, 50)):
+    if not getattr(request, "param", True):
+        yield
+        return
+    with patch("core.views.health.shutil", SimpleNamespace(disk_usage=lambda _path: (100, 50, 50))):
         yield
 
 
@@ -363,11 +369,29 @@ class TestHealthDetail:
         assert data["backup_required"] is False
         assert data["status"] == "ok"
 
+    @pytest.mark.parametrize("_measurable_media_root", [False], indirect=True)
     def test_disk_free_pct_field_populated(self, detail_token, tmp_path, settings):
         settings.MEDIA_ROOT = str(tmp_path)
-        data = _detail_get().json()
+        measured = []
+
+        def measure(path):
+            usage = disk_usage(path)
+            measured.append(usage)
+            return usage
+
+        with patch("core.views.health.shutil", SimpleNamespace(disk_usage=measure)):
+            data = _detail_get().json()
+        assert len(measured) == 1
+        total, _used, free = measured[0]
         assert data["disk_free_pct"] is not None
+        assert isinstance(data["disk_free_pct"], (int, float))
         assert 0 <= data["disk_free_pct"] <= 100
+        assert data["disk_free_pct"] == round(free / total * 100, 1)
+
+    def test_disk_measurement_stub_is_local(self, detail_token):
+        assert shutil.disk_usage is disk_usage
+        data = _detail_get().json()
+        assert data["disk_free_pct"] == 50.0
 
     def test_disk_measurement_error_degrades_when_required(self, detail_token, tmp_path, settings, monkeypatch, caplog):
         def _raise_disk_error(_path):
