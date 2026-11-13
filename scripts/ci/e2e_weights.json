@@ -144,6 +144,7 @@
   "test_review_forms_narrow_viewport.py": 47.637,
   "test_search_entry.py": 18.123,
   "test_security_hardening.py": 12.281,
+  "test_statistics_chart_load_order.py": 26.526,
   "test_statistics_charts.py": 28.766,
   "test_statistics_dashboard.py": 21.43,
   "test_statistics_export_bar.py": 18.544,
