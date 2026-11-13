@@ -1,6 +1,6 @@
 # FAQ — retention, erasure, offline work and statistics
 
-This English FAQ covers the Contacts list, the updated retention topic, the offline key lifetime
+This English FAQ covers the Timeline, the Contacts list, the updated retention topic, the offline key lifetime
 and revocation check addendum and the statistics guidance. Other topics remain in the
 [German FAQ](../faq.md); see the [English user guide](user-guide.md) for daily work.
 
@@ -8,13 +8,21 @@ and revocation check addendum and the statistics guidance. Other topics remain i
 
 With JavaScript loaded, fields follow the application language: German `DD.MM.YYYY`, English `YYYY-MM-DD`; times use the 24-hour clock (`HH:MM`, also `:SS` where second precision is supported). Correct invalid calendar dates and values outside the field bounds before saving. Without JavaScript, the native field uses the browser display.
 
+## Timeline and shift selection
+
+Date, the **Shift** select and **Feed | Handover** share one header. Choose **All day** or a configured shift with times; night shifts show `(+1)` after the end time. The shift matching the current time is selected when opening the page. On a phone, tap date/shift to open the selection sheet; **Esc** closes it and returns focus.
+
+Below it, the **figures row** shows contacts for the selected day and shift without tally entries, tallies in the live window, and your own open and overdue tasks. Figures with arrows open the corresponding lists; active entry bans appear as a red figure with detail rows below. When viewing a different selection, the hint returns **to the current shift**, or **to today** outside a running shift. The handover holds the full shift summary.
+
+Tap a **tally tile** to count: **+1** saves directly, **+ …** opens the required number fields. **Undo** remains available for 60 seconds after the last tally. In the feed, one expandable row per hour shows the total and counts by type; **Show counted contacts** opens the corresponding contacts list. See the [Timeline user guide](user-guide.md#2-home--timeline).
+
 ## Contacts list
 
 ### Where is the list, and what can it not do?
 
-Select **Contacts** directly below **Timeline** in the sidebar, or **More → Contacts** on mobile (`/events/`). The local Timeline link carries over day, documentation type and shift. From Assistant upwards, the list supports periods across multiple days and other team members’ entries, with the same facility scope and sensitivity limits as the Timeline. Case selection and display require Social worker or higher.
+Select **Contacts** directly below **Timeline** in the sidebar, or **More → Contacts** on mobile (`/events/`). The contact figure in the Timeline carries over day, documentation type and shift and excludes tally entries; the counted figure opens tally contacts in the live window. From Assistant upwards, the list supports periods across multiple days and other team members’ entries, with the same facility scope and sensitivity limits as the Timeline. Case selection and display require Social worker or higher.
 
-Search covers only **pseudonym and event search text**, from two characters onwards. Encrypted or effectively elevated/high field values, case titles and file contents are excluded. Person and case filters use selection fields without autocomplete or search suggestions. The list shows no field values and offers no export or bulk actions. List and filter requests create no audit entry. Filters stay in the address across pagination and Back/Forward. See the [Contacts list user guide](user-guide.md#contacts-list) and its [permissions table](user-guide.md#who-can-do-what).
+Search covers only **pseudonym and event search text**, from two characters onwards. Encrypted or effectively elevated/high field values, case titles and file contents are excluded. Person and case filters use selection fields without autocomplete or search suggestions. Expand rows to see permitted field values; **Go to entry** opens the detail page. Search, **Today | Week | Month | Period** and **Filters** share one row; changes apply immediately, or through **Filter** without JavaScript. Chips remove individual filters, and **Entry channel** separates tallies from other contacts. The result count and day headings show full filtered totals, even across page boundaries. The list offers no export or bulk actions. List and filter requests create no audit entry. Filters stay in the address across pagination and Back/Forward. See the [Contacts list user guide](user-guide.md#contacts-list) and its [permissions table](user-guide.md#who-can-do-what).
 
 ## Retention and erasure
 
@@ -88,5 +96,5 @@ Decision aid: [User Guide § 7 “The Three Tabs at a Glance”](https://github.
 
 <!-- translation-source: docs/faq.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- translation-date: 2026-11-12 -->
-<!-- source-hash: a7c7c0760514cbd13b7737425ef848bbef0c6633 -->
+<!-- translation-date: 2026-11-13 -->
+<!-- source-hash: 98a0612a74ad0ad16d13289ddaf772cd9cb94590 -->

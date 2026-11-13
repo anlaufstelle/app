@@ -174,14 +174,15 @@ Alles wird nach Zeitpunkt absteigend sortiert (max. 200 Einträge pro Typ).
 
 #### Wie funktioniert die Schichtfilterung?
 
-- Oben stehen **TimeFilter-Tabs** (z.B. Frühdienst 08:00–16:00, Nachtdienst 22:00–08:00).
-- Beim Klick wird der Feed per **HTMX** auf das gewählte Zeitfenster eingeschränkt.
-- Nachtschichten mit Mitternachts-Überlappung (z.B. 22:00–08:00) werden korrekt behandelt.
-- Passt die aktuelle Uhrzeit zu einer Schicht, wird diese **automatisch vorausgewählt**.
+Datum, **Schicht**-Auswahlliste und **Feed | Übergabe** stehen in einer gemeinsamen Kopfzeile. Sie wählen **Ganzer Tag** oder eine eingerichtete Schicht mit Uhrzeiten; Nachtschichten tragen `(+1)` hinter der Endzeit. Beim Öffnen wird die zur aktuellen Uhrzeit passende Schicht vorausgewählt. Mobil öffnet ein Tipp auf Datum/Schicht das Auswahlblatt; **Esc** schließt es und gibt den Fokus zurück.
+
+Unter der Kopfzeile zeigt die **Kennzahlenzeile** Kontakte der gewählten Schicht und des Tages ohne Strichliste, die im Live-Fenster gezählten Striche sowie eigene und überfällige Aufgaben. Zahlen mit Pfeil öffnen die passenden Listen; aktive Hausverbote erscheinen als rote Zahl mit Detailzeilen darunter. Bei einer abweichenden Auswahl führt der Hinweis **zum laufenden Dienst** zurück, außerhalb einer laufenden Schicht **zu heute**. Die separate [Übergabe](#6-wie-funktioniert-die-übergabe-schichtübergabe) enthält die vollständige Schichtzusammenfassung.
+
+Die **Strichliste** zählt per Kachel: **+1** speichert direkt, **+ …** öffnet die erforderlichen Zahlenfelder. **Rückgängig** steht nach dem letzten Strich 60 Sekunden bereit. Im Feed fasst eine aufklappbare Zeile pro Stunde die Striche mit Gesamtzahl und Aufschlüsselung nach Typ zusammen; **Gezählte Kontakte anzeigen** öffnet die passende Kontakte-Liste. Details: [Handbuch § 2](user-guide.md#2-startseite--zeitstrom).
 
 #### Was ist die Schichtübergabe?
 
-Oberhalb des Feeds steht dauerhaft **Aktueller Dienst** mit Kontakten, neuen Aufgaben, neuen Personen und wichtigen Vorkommnissen der laufenden Schicht. Die Box folgt der aktuellen Uhrzeit, nicht der Filterauswahl des Feeds, und erscheint nur während einer eingerichteten laufenden Schicht. Die separate [Übergabe](#6-wie-funktioniert-die-übergabe-schichtübergabe) dient dem Schichtwechsel.
+Wählen Sie **Übergabe** in der gemeinsamen Kopfzeile. Dort stehen die vollständige Zusammenfassung der gewählten Schicht und — ab Fachkraft — die Übergabenotiz; **Feed** führt zurück zum Tagesfeed mit Kennzahlenzeile. Details: [Frage 6](#6-wie-funktioniert-die-übergabe-schichtübergabe).
 
 #### Was steht in der Sidebar?
 
@@ -189,13 +190,13 @@ In der rechten Seitenspalte steht die Team-Fokusbox **„Team-Aufgaben mit Handl
 
 #### Wo finde ich die Kontakte-Liste, und was kann sie nicht?
 
-**Kontakte** steht direkt unter **Zeitstrom** in der Seitenleiste, mobil unter **Mehr → Kontakte** (`/events/`). Der lokale Kontakte-Link im Zeitstrom übernimmt Tag, Dokumentationstyp und Schicht. Ab Assistenz können Sie über mehrere Tage filtern und auch Erfassungen anderer Mitarbeitender sehen; Sichtbarkeit und Sensibilitätsgrenze entsprechen dem Zeitstrom, Fallfilter und Fallanzeige beginnen erst ab Fachkraft.
+**Kontakte** steht direkt unter **Zeitstrom** in der Seitenleiste, mobil unter **Mehr → Kontakte** (`/events/`). Die Kontaktzahl im Zeitstrom übernimmt Tag, Dokumentationstyp und Schicht und öffnet die Liste ohne Strichlisten-Einträge; die Zahl „gezählt“ öffnet die Strichlisten-Kontakte im Live-Fenster. Ab Assistenz können Sie über mehrere Tage filtern und auch Erfassungen anderer Mitarbeitender sehen; Sichtbarkeit und Sensibilitätsgrenze entsprechen dem Zeitstrom, Fallfilter und Fallanzeige beginnen erst ab Fachkraft.
 
-Die Liste durchsucht nur **Pseudonym und Ereignis-Suchtext** ab zwei Zeichen, keine verschlüsselten oder wirksam erhöht/hoch eingestuften Feldwerte, Falltitel oder Dateiinhalte. Personen und Fälle werden ausgewählt, ohne Autocomplete-Suche oder Suchvorschläge. Feldwerte, Export und Massenaktionen fehlen in der Liste; Listen- und Filteraufrufe erzeugen keinen Audit-Eintrag. Filter bleiben in der Adresse, beim Seitenwechsel und über Zurück/Vorwärts erhalten. Anleitung: [User-Guide „Kontakte-Liste“](user-guide.md#kontakte-liste).
+Die Liste durchsucht nur **Pseudonym und Ereignis-Suchtext** ab zwei Zeichen, keine verschlüsselten oder wirksam erhöht/hoch eingestuften Feldwerte, Falltitel oder Dateiinhalte. Personen und Fälle werden ausgewählt, ohne Autocomplete-Suche oder Suchvorschläge. Die Zeilen lassen sich für rollenberechtigte Feldwerte aufklappen; **Zum Eintrag** öffnet die Detailseite. Suche, **Heute | Woche | Monat | Zeitraum** und **Filter** stehen in einer Zeile; Änderungen wirken sofort, ohne JavaScript über **Filtern**. Chips entfernen einzelne Filter, **Erfassungsweg** trennt Strichliste und andere Kontakte. Trefferzahl und Tagesköpfe nennen die vollständigen gefilterten Zahlen, auch über Seitengrenzen hinweg. Export und Massenaktionen fehlen; Listen- und Filteraufrufe erzeugen keinen Audit-Eintrag. Filter bleiben in der Adresse, beim Seitenwechsel und über Zurück/Vorwärts erhalten. Anleitung: [User-Guide „Kontakte-Liste“](user-guide.md#kontakte-liste).
 
 #### Wie funktioniert die HTMX-Interaktion?
 
-Filter-Änderungen (Schicht, Typ, Dokumentationstyp) lösen einen HTMX-Request aus. Nur der Feed-Container wird ersetzt — kein Full-Page-Reload.
+Filter-Änderungen (Schicht, Typ, Dokumentationstyp) lösen einen HTMX-Request aus. Feed und die zugehörigen Kennzahlen werden ohne vollständigen Seitenwechsel aktualisiert.
 
 **Relevante Dateien:**
 - [`src/core/views/zeitstrom.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/zeitstrom.py) — `ZeitstromView`, `ZeitstromFeedPartialView`
@@ -213,7 +214,7 @@ Die **Arbeitszentrale** (`/start/`) ist die Landingpage der **Leitung** (Refs #9
 | Rolle | Was `/start/` tut |
 |-------|-------------------|
 | **Leitung** (`lead`) | Zeigt die Arbeitszentrale: Die Karten **Löschanträge**, **Löschvorschläge** und **Statistik**; daneben die Statuszeile **Speicher** mit Belegung und Link zur Seite **Dateien** |
-| **Fachkraft / Assistenz** (`staff`, `assistant`) | Weiterleitung auf den **Zeitstrom** (`/`) — heutige Kontakte, eigene offene Aufgaben und zuletzt bearbeitete Personen stehen dort als Cockpit-Block über dem Feed |
+| **Fachkraft / Assistenz** (`staff`, `assistant`) | Weiterleitung auf den **Zeitstrom** (`/`) — Kontakte, gezählte Striche, eigene und überfällige Aufgaben stehen dort in der Kennzahlenzeile über dem Feed |
 | **Anwendungsbetreuung** (`facility_admin`) | Weiterleitung auf die **Verwaltung** (`/verwaltung/`) — dort stehen u. a. User ohne MFA und die Settings-Warnungen |
 | **Systemadministration** (`super_admin`) | Weiterleitung auf den **Systembereich** (`/system/`) mit der einrichtungsübergreifenden Sicht |
 
@@ -251,7 +252,7 @@ Die **Übergabe** ist ein Dashboard für den Schichtwechsel — ersetzt das anal
 - Öffnet man die Übergabe **heute**, wird automatisch der **zuletzt abgeschlossene Dienst** mit seinem Schichtdatum vorausgewählt — auch nach Mitternacht und beim Wechsel vom Nachtdienst zum Frühdienst
 - Datums-Navigation (vor/zurück) + Tab-Wechsel zwischen Schichten und „Ganzer Tag"
 - Nachtschichten über Mitternacht werden korrekt via `covers_time()`-Logik behandelt
-- Im Zeitstrom zeigt **Aktueller Dienst** dauerhaft die laufende Schicht; die Übergabe selbst enthält keine allgemeine Aufgabenliste. Dafür gibt es die Team-Fokusbox und die Aufgabenübersicht.
+- Im Zeitstrom stehen Datum und Schicht in der Kopfzeile und die Zahlen zur gewählten Ansicht in der Kennzahlenzeile; die Übergabe selbst enthält keine allgemeine Aufgabenliste. Dafür gibt es die Team-Fokusbox und die Aufgabenübersicht.
 - Hinweise zu Bearbeitungsfrist, Verschlüsselung und Aufbewahrung der Notiz stehen im [Benutzerhandbuch](user-guide.md#übergabenotiz).
 
 **Relevante Dateien:**

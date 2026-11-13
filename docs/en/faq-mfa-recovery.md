@@ -8,5 +8,5 @@ Earlier codes with SHA digests and the old input format are invalid; changing `S
 
 <!-- translation-source: docs/faq.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- translation-date: 2026-11-12 -->
-<!-- source-hash: a7c7c0760514cbd13b7737425ef848bbef0c6633 -->
+<!-- translation-date: 2026-11-13 -->
+<!-- source-hash: 98a0612a74ad0ad16d13289ddaf772cd9cb94590 -->

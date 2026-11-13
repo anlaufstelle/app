@@ -81,6 +81,21 @@ class TestHelpPages:
         ):
             assert guidance in body
 
+    def test_timeline_help_names_current_contact_entry_and_expandable_fields(self, client, staff_user):
+        """Explain the figures-row entry and field expansion through the public help page."""
+        client.force_login(staff_user)
+
+        response = client.get(reverse("core:help_page", kwargs={"slug": "zeitstrom"}))
+
+        assert response.status_code == 200
+        body = response.content.decode()
+        assert "Die Kontaktzahl in der Kennzahlenzeile" in body
+        assert "ohne Strichlisten-Einträge" in body
+        assert "Zeilen lassen sich für rollenberechtigte Feldwerte aufklappen" in body
+        assert "Zum Eintrag" in body
+        assert "Die Liste zeigt keine Feldwerte" not in body
+        assert "Der lokale Kontakte-Link" not in body
+
     def test_help_page_is_login_required(self, client):
         response = client.get(reverse("core:help_page", kwargs={"slug": "personen"}))
 

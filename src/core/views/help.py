@@ -60,8 +60,8 @@ HELP_PAGES = {
                     paragraphs=(
                         _(
                             "„Kontakte“ steht direkt unter „Zeitstrom“ in der Seitenleiste, mobil unter "
-                            "„Mehr → Kontakte“. Der lokale Kontakte-Link im Zeitstrom übernimmt Tag, "
-                            "Dokumentationstyp und Schicht."
+                            "„Mehr → Kontakte“. Die Kontaktzahl in der Kennzahlenzeile übernimmt Tag, "
+                            "Dokumentationstyp und Schicht und öffnet die Liste ohne Strichlisten-Einträge."
                         ),
                         _(
                             "Die Liste filtert Kontakte über mehrere Tage, auch Erfassungen anderer Mitarbeitender. "
@@ -80,7 +80,10 @@ HELP_PAGES = {
                             "Person und Fall werden ausgewählt; "
                             "es gibt keine Autocomplete-Suche und keine Suchvorschläge."
                         ),
-                        _("Die Liste zeigt keine Feldwerte und bietet keinen Export und keine Massenaktionen."),
+                        _(
+                            "Zeilen lassen sich für rollenberechtigte Feldwerte aufklappen; „Zum Eintrag“ "
+                            "öffnet die Detailansicht. Die Liste bietet keinen Export und keine Massenaktionen."
+                        ),
                         _("Listen- und Filteraufrufe erzeugen keinen Audit-Eintrag."),
                     ),
                 ),
