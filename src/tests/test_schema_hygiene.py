@@ -47,6 +47,7 @@ from core.constants import RECENT_VISIT_TOUCH_THROTTLE_MINUTES
 from core.models import Facility, QuickTemplate, RecentClientVisit, RectificationRequest, TimeFilter
 from core.services.client.main import anonymize_client, track_client_visit
 from core.services.config.delete_blockers import ConfigDeleteBlocked, delete_document_type
+from core.services.facility_bootstrap import DEFAULT_TIME_FILTERS
 
 MIGRATION = importlib.import_module("core.migrations.0167_schema_hygiene")
 
@@ -377,8 +378,8 @@ class TestTimeFilterIsDefaultEntfernt:
             assert cursor.fetchone() is None
 
     def test_bootstrap_legt_die_drei_standardschichten_an(self, facility):
-        from core.services.facility_bootstrap import ensure_default_time_filters
+        from core.services.facility_bootstrap import ensure_time_filters
 
-        created = ensure_default_time_filters(facility)
+        created = ensure_time_filters(facility, DEFAULT_TIME_FILTERS)
         assert created is not None
         assert [tf.label for tf in created] == ["Frühdienst", "Spätdienst", "Nachtdienst"]

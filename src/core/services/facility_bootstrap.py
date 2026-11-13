@@ -126,7 +126,7 @@ DEFAULT_TIME_FILTERS: tuple[TimeFilterDef, ...] = (
 # erben vom Typ ``kontakt`` die Sensitivitaet NORMAL und sind unverschluesselt,
 # ``beratung`` ist ein aktiver Options-Slug von ``leistungen``. Verlassen tut
 # sich der Schreibpfad darauf nicht — er filtert (siehe
-# :func:`ensure_default_quick_templates`), weil der Katalog auch ein fremder
+# :func:`ensure_quick_templates`), weil der Katalog auch ein fremder
 # sein kann.
 DEFAULT_QUICK_TEMPLATES: tuple[QuickTemplateDef, ...] = (
     QuickTemplateDef("kontakt", "Kurzkontakt", {"dauer": 5}),
@@ -253,32 +253,6 @@ def ensure_catalog_package(facility: Facility, name: str) -> PackageReport | Non
         return load_package(facility, package)
 
 
-def ensure_default_package(facility: Facility) -> PackageReport | None:
-    """Stattet ``facility`` mit dem mitgelieferten Standardkatalog aus.
-
-    Gibt den Loader-Report zurueck — oder ``None``, wenn die Einrichtung
-    bereits Katalog-Objekte hat und deshalb **unangetastet** bleibt (siehe
-    Modul-Docstring: Grundausstattung, kein Katalog-Update). Aufrufer nutzen
-    genau diese Unterscheidung fuer ihre Ausgabe.
-
-    Der Erstlauf gegen eine leere Einrichtung legt nur an; ein Loeschen
-    verwaister Objekte wie im Seed (``core.seed.doc_types.seed_document_types``
-    raeumt Feldgruppen weg, Refs #1710) gibt es hier bewusst nicht — der
-    Produktionspfad entfernt nie etwas.
-
-    Fehler werden **nicht** geschluckt: eine
-    :class:`~core.packages.schema.PackageValidationError` (kaputter Katalog im
-    Repo) bzw. :class:`~core.packages.loader.PackageLoadError` (Konflikt mit
-    dem Bestand) schlaegt bis zum Aufrufer durch — eine halb ausgestattete
-    Einrichtung waere schlimmer als ein abgebrochener Lauf. Der CLI-Aufrufer
-    uebersetzt sie in eine ``CommandError``-Meldung.
-    """
-    # Der Loader klammert sich selbst atomar; die Klammer hier haelt zusaetzlich
-    # Bestandspruefung und Anwenden zusammen, wenn der Aufrufer noch keine
-    # Transaktion geoeffnet hat.
-    return ensure_catalog_package(facility, "default")
-
-
 def ensure_time_filters(facility: Facility, definitions: tuple[TimeFilterDef, ...]) -> list[TimeFilter] | None:
     """Legt deklarierte Zeitfenster an, sofern noch keine gepflegt sind."""
     if TimeFilter.objects.for_facility(facility).exists():
@@ -293,24 +267,6 @@ def ensure_time_filters(facility: Facility, definitions: tuple[TimeFilterDef, ..
         )
         for index, item in enumerate(definitions)
     ]
-
-
-def ensure_default_time_filters(facility: Facility) -> list[TimeFilter] | None:
-    """Legt die drei Standardschichten an — oder ``None``, wenn schon welche da sind.
-
-    Fehlende Zeitfenster **blockieren nichts**: ``build_zeitstrom_state`` liest
-    die aktiven Filter als moeglicherweise leeres Tupel,
-    ``current_tally_context`` faellt ohne passende Schicht auf den heutigen Tag
-    zurueck und ``get_time_range`` ohne Filter auf 00:00–23:59. Was fehlt, ist
-    die **Schichtsicht**: Uebergabe-Ansicht, Zeitstrom-Filter und Live-Zaehler
-    haben ohne Zeitfenster keinen Zeitraum, auf den sie sich beziehen koennen.
-
-    „Ausstatten, kein Nachziehen" wie beim Katalog (siehe Modul-Docstring):
-    schon EIN vorhandenes Zeitfenster heisst, dass die Einrichtung ihre
-    Schichten selbst pflegt — dann bleibt sie unangetastet. Sonst wuerde ein
-    Wiederholungslauf geloeschte Standardschichten stumm wieder hereinholen.
-    """
-    return ensure_time_filters(facility, DEFAULT_TIME_FILTERS)
 
 
 def ensure_quick_templates(facility: Facility, definitions: tuple[QuickTemplateDef, ...]) -> list[QuickTemplate] | None:
@@ -340,34 +296,6 @@ def ensure_quick_templates(facility: Facility, definitions: tuple[QuickTemplateD
     return created
 
 
-def ensure_default_quick_templates(facility: Facility) -> list[QuickTemplate] | None:
-    """Legt den Startbestand an Schnellvorlagen an.
-
-    Gibt ``None`` zurueck, wenn die Einrichtung schon Schnellvorlagen traegt
-    (unangetastet), sonst die Liste der angelegten Vorlagen — die **leer** sein
-    darf: gibt es keinen Dokumentationstyp mit dem erwarteten Slug, entsteht
-    einfach nichts. Das ist kein Fehler, sondern der Normalfall fuer eine
-    Einrichtung mit eigenem Katalog.
-
-    Der Lookup laeuft ueber den **Slug**, nicht ueber den Namen. Der Slug ist je
-    Einrichtung eindeutig (UniqueConstraint) und im Admin nicht editierbar; der
-    Name ist es. Ein ueber den Namen suchender Bootstrap faende nach der ersten
-    Umbenennung nichts mehr — genau der Lookup-Fehler, den der Seed noch traegt
-    (``core/seed/quick_templates.py``) und den ``core/seed/doc_types.py``
-    laengst behoben hat.
-
-    ``prefilled_data`` geht durch denselben Whitelist-Filter wie der etablierte
-    Schreibpfad (``QuickTemplateAdmin.save_model`` in
-    ``core/admin/documents.py``): der gefundene Typ muss nicht aus der
-    Auslieferung stammen — eine Einrichtung mit **eigenem** ``kontakt``-Typ
-    ohne eine einzige Vorlage bekommt den Startbestand ebenfalls. Traegt deren
-    ``dauer``-Feld eine erhoehte Sensitivitaet oder fehlt der Options-Slug
-    ``beratung``, entstuende sonst ein Wert, den ``apply_template`` beim
-    Anwenden ohnehin still verwirft — gespeichert, aber wirkungslos.
-    """
-    return ensure_quick_templates(facility, DEFAULT_QUICK_TEMPLATES)
-
-
 def ensure_facility_baseline(facility: Facility, *, package: str | None = "default") -> FacilityBaseline:
     """Der EINE Einstieg fuer die Grundausstattung einer Einrichtung (Refs #1970).
 
@@ -395,7 +323,7 @@ def ensure_facility_baseline(facility: Facility, *, package: str | None = "defau
     die Komfort-Objekte zu viel; sie stehen deshalb je Paket als schmale
     Deklaration in diesem Modul.
 
-    Fehler werden nicht geschluckt (siehe :func:`ensure_default_package`): die
+    Fehler werden nicht geschluckt (siehe :func:`ensure_catalog_package`): die
     Transaktionsklammer nimmt bei einem kaputten Katalog auch Schichtfenster und
     Schnellvorlagen wieder mit, statt eine halb ausgestattete Einrichtung
     zurueckzulassen.

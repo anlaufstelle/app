@@ -15,7 +15,7 @@ import pytest
 
 from core.models import DocumentType, FieldTemplate
 from core.packages.default_catalog import load_default_package_data, parse_default_package
-from core.services.facility_bootstrap import ensure_default_package
+from core.services.facility_bootstrap import DEFAULT_QUICK_TEMPLATES, DEFAULT_TIME_FILTERS, ensure_catalog_package
 
 
 class TestDefaultCatalogReader:
@@ -43,7 +43,7 @@ class TestDefaultCatalogReader:
 @pytest.mark.django_db
 class TestEnsureDefaultPackage:
     def test_creates_document_types_and_field_templates(self, facility):
-        report = ensure_default_package(facility)
+        report = ensure_catalog_package(facility, "default")
 
         assert report is not None
         assert DocumentType.objects.filter(facility=facility, entity_type="event").exists()
@@ -61,7 +61,7 @@ class TestEnsureDefaultPackage:
         Lauf ebenfalls nichts Neues an) — er haette den stillen Rueckschreiber
         auf ``name``/``sort_order`` genau nicht gefunden.
         """
-        ensure_default_package(facility)
+        ensure_catalog_package(facility, "default")
         doc_type = DocumentType.objects.get(facility=facility, slug="kontakt")
         doc_type.name = "Beratungskontakt"
         doc_type.sort_order = 99
@@ -71,7 +71,7 @@ class TestEnsureDefaultPackage:
         template.name = "Eigene Beschriftung"
         template.save()
 
-        assert ensure_default_package(facility) is None
+        assert ensure_catalog_package(facility, "default") is None
 
         doc_type.refresh_from_db()
         template.refresh_from_db()
@@ -92,7 +92,7 @@ class TestEnsureDefaultPackage:
             field_type=FieldTemplate.FieldType.NUMBER,
         )
 
-        assert ensure_default_package(facility) is None
+        assert ensure_catalog_package(facility, "default") is None
 
         assert FieldTemplate.objects.get(facility=facility, slug="dauer").name == "Eigene Beschriftung"
         assert not DocumentType.objects.filter(facility=facility).exists()
@@ -101,10 +101,10 @@ class TestEnsureDefaultPackage:
         """Die Bestands-Pruefung ist einrichtungs-, nicht installationsweit."""
         from core.models import Facility
 
-        ensure_default_package(facility)
+        ensure_catalog_package(facility, "default")
         other = Facility.objects.create(organization=organization, name="Zweitstelle")
 
-        report = ensure_default_package(other)
+        report = ensure_catalog_package(other, "default")
 
         assert report is not None
         assert DocumentType.objects.filter(facility=other, entity_type="event").exists()
@@ -145,9 +145,9 @@ class TestEnsureDefaultTimeFilters:
 
     def test_creates_the_standard_shifts_once(self, facility):
         from core.models import TimeFilter
-        from core.services.facility_bootstrap import DEFAULT_TIME_FILTERS, ensure_default_time_filters
+        from core.services.facility_bootstrap import DEFAULT_TIME_FILTERS, ensure_time_filters
 
-        created = ensure_default_time_filters(facility)
+        created = ensure_time_filters(facility, DEFAULT_TIME_FILTERS)
 
         assert created is not None
         labels = list(TimeFilter.objects.for_facility(facility).order_by("sort_order").values_list("label", flat=True))
@@ -155,9 +155,9 @@ class TestEnsureDefaultTimeFilters:
 
     def test_sort_order_follows_the_declaration(self, facility):
         from core.models import TimeFilter
-        from core.services.facility_bootstrap import DEFAULT_TIME_FILTERS, ensure_default_time_filters
+        from core.services.facility_bootstrap import DEFAULT_TIME_FILTERS, ensure_time_filters
 
-        ensure_default_time_filters(facility)
+        ensure_time_filters(facility, DEFAULT_TIME_FILTERS)
 
         shifts = TimeFilter.objects.for_facility(facility).order_by("sort_order")
         orders = list(shifts.values_list("sort_order", flat=True))
@@ -168,7 +168,7 @@ class TestEnsureDefaultTimeFilters:
         from datetime import time
 
         from core.models import TimeFilter
-        from core.services.facility_bootstrap import ensure_default_time_filters
+        from core.services.facility_bootstrap import ensure_time_filters
 
         TimeFilter.objects.create(
             facility=facility,
@@ -177,18 +177,18 @@ class TestEnsureDefaultTimeFilters:
             end_time=time(18, 0),
         )
 
-        assert ensure_default_time_filters(facility) is None
+        assert ensure_time_filters(facility, DEFAULT_TIME_FILTERS) is None
 
         assert list(TimeFilter.objects.for_facility(facility).values_list("label", flat=True)) == ["Tagdienst 10-18"]
 
     def test_a_second_facility_gets_its_own_shifts(self, facility, organization):
         from core.models import Facility, TimeFilter
-        from core.services.facility_bootstrap import ensure_default_time_filters
+        from core.services.facility_bootstrap import ensure_time_filters
 
-        ensure_default_time_filters(facility)
+        ensure_time_filters(facility, DEFAULT_TIME_FILTERS)
         other = Facility.objects.create(organization=organization, name="Zweitstelle")
 
-        assert ensure_default_time_filters(other) is not None
+        assert ensure_time_filters(other, DEFAULT_TIME_FILTERS) is not None
         assert TimeFilter.objects.for_facility(other).exists()
 
 
@@ -205,16 +205,16 @@ class TestEnsureDefaultQuickTemplates:
         from core.models import QuickTemplate
         from core.services.facility_bootstrap import (
             DEFAULT_QUICK_TEMPLATES,
-            ensure_default_package,
-            ensure_default_quick_templates,
+            ensure_catalog_package,
+            ensure_quick_templates,
         )
 
-        ensure_default_package(facility)
+        ensure_catalog_package(facility, "default")
         doc_type = DocumentType.objects.get(facility=facility, slug="kontakt")
         doc_type.name = "Erstkontakt"  # Umbenennung im Admin darf den Bootstrap nicht abhaengen
         doc_type.save()
 
-        created = ensure_default_quick_templates(facility)
+        created = ensure_quick_templates(facility, DEFAULT_QUICK_TEMPLATES)
 
         assert created is not None
         assert len(created) == len(DEFAULT_QUICK_TEMPLATES)
@@ -233,12 +233,12 @@ class TestEnsureDefaultQuickTemplates:
         """
         from core.services.facility_bootstrap import (
             DEFAULT_QUICK_TEMPLATES,
-            ensure_default_package,
-            ensure_default_quick_templates,
+            ensure_catalog_package,
+            ensure_quick_templates,
         )
 
-        ensure_default_package(facility)
-        created = ensure_default_quick_templates(facility)
+        ensure_catalog_package(facility, "default")
+        created = ensure_quick_templates(facility, DEFAULT_QUICK_TEMPLATES)
 
         assert created
         assert {tpl.name: tpl.prefilled_data for tpl in created} == {
@@ -258,7 +258,7 @@ class TestEnsureDefaultQuickTemplates:
         denselben Filter.
         """
         from core.models import DocumentType, DocumentTypeField, FieldTemplate, QuickTemplate
-        from core.services.facility_bootstrap import ensure_default_quick_templates
+        from core.services.facility_bootstrap import ensure_quick_templates
 
         doc_type = DocumentType.objects.create(
             facility=facility,
@@ -275,7 +275,7 @@ class TestEnsureDefaultQuickTemplates:
         )
         DocumentTypeField.objects.create(document_type=doc_type, field_template=dauer, sort_order=0)
 
-        created = ensure_default_quick_templates(facility)
+        created = ensure_quick_templates(facility, DEFAULT_QUICK_TEMPLATES)
 
         assert created, "Die Vorlagen selbst entstehen — nur ihre Werte muessen den Filter passieren"
         for template in created:
@@ -286,20 +286,20 @@ class TestEnsureDefaultQuickTemplates:
     def test_without_a_matching_catalog_nothing_is_created(self, facility):
         """Kein Dokumentationstyp mit passendem Slug -> leere Liste, kein Fehler."""
         from core.models import QuickTemplate
-        from core.services.facility_bootstrap import ensure_default_quick_templates
+        from core.services.facility_bootstrap import ensure_quick_templates
 
-        assert ensure_default_quick_templates(facility) == []
+        assert ensure_quick_templates(facility, DEFAULT_QUICK_TEMPLATES) == []
         assert not QuickTemplate.objects.for_facility(facility).exists()
 
     def test_facility_with_own_templates_stays_untouched(self, facility):
         from core.models import QuickTemplate
-        from core.services.facility_bootstrap import ensure_default_package, ensure_default_quick_templates
+        from core.services.facility_bootstrap import ensure_catalog_package, ensure_quick_templates
 
-        ensure_default_package(facility)
+        ensure_catalog_package(facility, "default")
         doc_type = DocumentType.objects.get(facility=facility, slug="kontakt")
         QuickTemplate.objects.create(facility=facility, document_type=doc_type, name="Eigene Vorlage")
 
-        assert ensure_default_quick_templates(facility) is None
+        assert ensure_quick_templates(facility, DEFAULT_QUICK_TEMPLATES) is None
 
         assert list(QuickTemplate.objects.for_facility(facility).values_list("name", flat=True)) == ["Eigene Vorlage"]
 

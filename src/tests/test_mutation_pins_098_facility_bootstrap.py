@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import pytest
 
-from core.services.facility_bootstrap import QuickTemplateDef, ensure_default_package, ensure_quick_templates
+from core.services.facility_bootstrap import QuickTemplateDef, ensure_catalog_package, ensure_quick_templates
 
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
@@ -41,7 +41,7 @@ class TestEnsureQuickTemplatesSkipsOnlyTheUnknownSlug:
         bleibt leer (``[]``) — die komplette Batch nach dem fehlenden Slug
         fehlt im Startbestand der Einrichtung.
         """
-        ensure_default_package(facility)
+        ensure_catalog_package(facility, "default")
 
         created = ensure_quick_templates(
             facility,

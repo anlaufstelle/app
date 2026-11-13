@@ -45,7 +45,7 @@ def seed_settings(facility: Facility) -> None:
 def seed_time_filters(facility: Facility) -> None:
     """Create the three standard shift time filters if missing.
 
-    Anders als der Produktionspfad (``ensure_default_time_filters``: ruehrt
+    Anders als der Produktionspfad (``ensure_time_filters``: ruehrt
     eine Einrichtung mit eigenen Schichten gar nicht mehr an) fuellt der Seed
     je Label einzeln nach — Fixtures sollen einen vollstaendigen, bekannten
     Stand herstellen.
