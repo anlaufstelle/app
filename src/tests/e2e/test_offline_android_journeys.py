@@ -39,6 +39,7 @@ import uuid
 from contextlib import suppress
 
 import pytest
+from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import expect
 
 from ._helpers import do_real_login as _do_real_login
@@ -113,16 +114,23 @@ def _server_workitem_titles(e2e_env, client_pk):
 
 
 def _wait_until(fn, timeout_s=25.0, interval_s=0.5, desc=""):
-    """Python-seitiges Polling (kein wait_for_function mit async-Praedikat —
-    das liefert False-Positives, siehe Suite-Konvention)."""
-    deadline = time.time() + timeout_s
+    """Poll through navigation context loss while preserving the overall deadline."""
+    deadline = time.monotonic() + timeout_s
     last = None
-    while time.time() < deadline:
-        last = fn()
+    while time.monotonic() < deadline:
+        try:
+            last = fn()
+        except PlaywrightError as exc:
+            if not any(
+                message in str(exc)
+                for message in ("Execution context was destroyed", "Cannot find context with specified id")
+            ):
+                raise
+            last = None
         if last:
             return last
         time.sleep(interval_s)
-    raise AssertionError(f"Timeout ({timeout_s}s): {desc} — zuletzt: {last!r}")
+    raise AssertionError(f"Timeout ({timeout_s}s): {desc} — last result: {last!r}")
 
 
 # ---------------------------------------------------------------------------
