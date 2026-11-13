@@ -11,7 +11,7 @@ Numerierungsdrift in diesem Modul):
   #2131/#2177 in der Rotation beseitigt haben — ein Rotationslauf oder
   ``soft_delete_attachment_chain``, der die Vorgaengerzeile im selben Fenster
   aendert, wuerde stillschweigend ueberschrieben.
-* **``get_current_entries_for_field`` — Sortierung und Feld-Scope** (3
+* **``build_attachment_context`` — Sortierung und Feld-Scope** (3
   Mutanten): der Tiebreaker ``created_at`` bzw. der Primaerschluessel
   ``sort_order`` faellt aus der Sortierung, oder der ``field_template``-Filter
   entfaellt komplett (Dateien aus Feld B erscheinen unter Feld A).
@@ -26,7 +26,6 @@ from unittest import mock
 
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db.models.query import QuerySet
 
 # ``store_encrypted_file`` prueft Magic-Bytes per libmagic; ohne die
 # Shared-Library (Host ohne ``libmagic1``) ist die Pipeline nicht lauffaehig.
@@ -43,7 +42,6 @@ except Exception as _libmagic_exc:  # noqa: BLE001 — libmagic-Shared-Library f
 from core.models import FieldTemplate  # noqa: E402
 from core.models.attachment import Attachment  # noqa: E402
 from core.services.file_vault import store_encrypted_file  # noqa: E402
-from core.services.file_vault.storage import get_current_entries_for_field  # noqa: E402
 
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
@@ -110,52 +108,21 @@ class TestCommitStagedUploadReplaceScope:
 
 
 @pytest.mark.usefixtures("medienordner")
-class TestGetCurrentEntriesForFieldOrdering:
-    """Die dokumentierte Sortierung ist ``sort_order`` MIT ``created_at`` als
-    Tiebreaker — beide Schluessel, in dieser Reihenfolge, in einem Aufruf."""
-
-    def test_query_wird_nach_sort_order_und_created_at_sortiert(self, facility, staff_user, sample_event, ft_file):
-        """Pin: ``x_get_current_entries_for_field__mutmut_4`` (nur
-        ``created_at``, ``sort_order`` entfaellt) und ``_5`` (nur
-        ``sort_order``, ``created_at``-Tiebreaker entfaellt).
-
-        Beobachtet die tatsaechlichen ``order_by``-Argumente statt sich auf
-        DB-Ausfuehrungsreihenfolge bei Gleichstand zu verlassen (nicht
-        garantiert ohne Tiebreaker). Abweichung bei BEIDEN Mutanten: das Tupel
-        ``("sort_order", "created_at")`` taucht unter den Aufrufen nicht auf.
-        """
-        store_encrypted_file(facility, _upload(), ft_file, sample_event, staff_user)
-        calls = []
-        original_order_by = QuerySet.order_by
-
-        def spy(self, *args, **kwargs):
-            calls.append(args)
-            return original_order_by(self, *args, **kwargs)
-
-        with mock.patch.object(QuerySet, "order_by", spy):
-            get_current_entries_for_field(sample_event, ft_file)
-
-        assert ("sort_order", "created_at") in calls, calls
-
-
-@pytest.mark.usefixtures("medienordner")
 class TestGetCurrentEntriesForFieldScope:
     """Nur Anhaenge des ANGEFRAGTEN FILE-Feldes — nie die eines anderen."""
 
-    def test_nur_eintraege_des_angefragten_feldes_kommen_zurueck(self, facility, staff_user, sample_event, ft_file):
-        """Pin: ``x_get_current_entries_for_field__mutmut_9`` — der
-        ``field_template``-Filter entfaellt komplett.
+    def test_file_context_keeps_fields_separate(self, facility, staff_user, sample_event, ft_file):
+        from core.services.attachments import build_attachment_context
 
-        Abweichung beim Mutanten: die Funktion liefert ALLE aktuellen Anhaenge
-        des Owners, nicht nur die von ``ft_file`` — der Anhang aus
-        ``ft_other`` erscheint mit im Ergebnis.
-        """
-        ft_other = FieldTemplate.objects.create(
-            facility=facility, name="Anderes Feld (Pin098)", field_type=FieldTemplate.FieldType.FILE
+        other_field = FieldTemplate.objects.create(
+            facility=facility, name="Other field", field_type=FieldTemplate.FieldType.FILE
         )
         wanted = store_encrypted_file(facility, _upload(), ft_file, sample_event, staff_user)
-        store_encrypted_file(facility, _upload(name="anderes-feld.pdf"), ft_other, sample_event, staff_user)
-
-        entries = get_current_entries_for_field(sample_event, ft_file)
-
-        assert [entry.pk for entry in entries] == [wanted.pk]
+        other = store_encrypted_file(facility, _upload(name="other.pdf"), other_field, sample_event, staff_user)
+        sample_event.data_json = {
+            ft_file.slug: {"__file__": True, "attachment_id": str(wanted.pk)},
+            other_field.slug: {"__file__": True, "attachment_id": str(other.pk)},
+        }
+        context = build_attachment_context(sample_event)
+        assert [entry["attachment_id"] for entry in context[ft_file.slug]] == [str(wanted.pk)]
+        assert [entry["attachment_id"] for entry in context[other_field.slug]] == [str(other.pk)]

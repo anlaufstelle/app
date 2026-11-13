@@ -20,7 +20,6 @@ from core.services.events import (
     normalize_file_marker,
 )
 from core.services.file_vault import (
-    get_current_entries_for_field,
     soft_delete_attachment_chain,
     store_encrypted_file,
 )
@@ -133,18 +132,21 @@ class TestSoftDeleteAttachmentChain:
 
 @pytest.mark.django_db
 class TestGetCurrentEntriesForField:
-    def test_excludes_soft_deleted(self, facility, staff_user, doc_type_with_file):
-        dt, ft = doc_type_with_file
+    def test_removed_entries_are_absent_from_the_field_context(self, facility, staff_user, doc_type_with_file):
+        from core.services.attachments import build_attachment_context
+
+        document_type, field = doc_type_with_file
         event = Event.objects.create(
-            facility=facility, document_type=dt, occurred_at=timezone.now(), created_by=staff_user
+            facility=facility, document_type=document_type, occurred_at=timezone.now(), created_by=staff_user
         )
-        a1 = store_encrypted_file(facility, _upload(b"1"), ft, event, staff_user, sort_order=0)
-        a2 = store_encrypted_file(facility, _upload(b"2"), ft, event, staff_user, sort_order=1)
-        assert len(get_current_entries_for_field(event, ft)) == 2
-        soft_delete_attachment_chain(event, a1.entry_id, staff_user)
-        remaining = get_current_entries_for_field(event, ft)
+        first = store_encrypted_file(facility, _upload(b"1"), field, event, staff_user, sort_order=0)
+        second = store_encrypted_file(facility, _upload(b"2"), field, event, staff_user, sort_order=1)
+        event.data_json = {field.slug: {"__files__": True, "entries": [{"id": str(first.pk)}, {"id": str(second.pk)}]}}
+        assert len(build_attachment_context(event)[field.slug]) == 2
+        soft_delete_attachment_chain(event, first.entry_id, staff_user)
+        remaining = build_attachment_context(event)[field.slug]
         assert len(remaining) == 1
-        assert remaining[0].pk == a2.pk
+        assert remaining[0]["attachment_id"] == str(second.pk)
 
 
 @pytest.mark.django_db

@@ -372,21 +372,3 @@ def get_visible_attachment_for_owner_or_404(user, owner, attachment_pk, *, inclu
     if not user_can_see_field(user, document_type.sensitivity, attachment.field_template.sensitivity):
         raise PermissionDenied
     return attachment
-
-
-def get_visible_attachment_or_404(user, facility, event_pk, attachment_pk):
-    """Load an event attachment only if the parent event is visible to *user*.
-
-    Event visibility is enforced first (role vs. DocumentType sensitivity, → 404);
-    danach uebernimmt der owner-generische
-    :func:`get_visible_attachment_for_owner_or_404` (Refs #1738) — inklusive des
-    Feld-Sensitivity-Gates, das vorher jede Aufrufstelle selbst nachziehen
-    musste. Wirkungsgleich fuer den Download-View: der hob dort denselben
-    :class:`PermissionDenied` (403).
-
-    Returns: ``(event, attachment)`` — das Paar bleibt Teil des Vertrags, weil
-    der View das Event fuer Audit-Detail und Logging braucht.
-    """
-    event = get_visible_event_or_404(user, facility, event_pk, select_related=("document_type",))
-    attachment = get_visible_attachment_for_owner_or_404(user, event, attachment_pk)
-    return event, attachment

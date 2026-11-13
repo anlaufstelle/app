@@ -493,23 +493,6 @@ def soft_delete_attachment_chain(owner, entry_id, user, *, audit=True, field=Non
         return updated
 
 
-def get_current_entries_for_field(owner, field_template):
-    """Liefert die aktuellen, nicht soft-deleted Einträge für ein FILE-Feld.
-
-    Gibt Heads der Versionsketten zurück (is_current=True, deleted_at IS NULL),
-    sortiert nach ``sort_order`` und ``created_at``. Der Aufrufer kann daraus
-    ``entry_id``, ``pk``, ``original_filename`` etc. ableiten. ``owner`` ist ein
-    ``Event``, ``Client`` oder ``Case`` (AP2, Refs #1738).
-    """
-    return list(
-        owner.attachments.filter(
-            field_template=field_template,
-            is_current=True,
-            deleted_at__isnull=True,
-        ).order_by("sort_order", "created_at")
-    )
-
-
 def get_attachment_path(attachment):
     """Return the full filesystem path of an encrypted attachment.
 

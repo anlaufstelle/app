@@ -11,7 +11,7 @@ Dokumenttyp-/Feld-Sensitivität (``effective_sensitivity``,
 Anhang-Übersichts-Query (``visible_attachments_for_user``) und das
 fünfstufige Download-Gate (``get_visible_event_or_404``,
 ``get_visible_attachment_for_owner_or_404``,
-``get_visible_attachment_or_404``). Die Bestandsdeckung
+``get_visible_attachment_for_owner_or_404``). Die Bestandsdeckung
 (``test_field_sensitivity.py``, ``test_compliance_attachment_gate.py``,
 ``test_attachment_reachability.py``) prüft die Haupt-Branches mit explizit
 übergebenen Argumenten; die 46 Survivors liegen an drei Stellen, die dort
@@ -399,33 +399,26 @@ class TestOwnerGateSelectRelatedUndFailClosedAttribut:
 
 
 class TestEventAttachmentGateSelectRelatedDurchreichen:
-    """``get_visible_attachment_or_404`` reicht ``select_related=
+    """``get_visible_attachment_for_owner_or_404`` reicht ``select_related=
     ("document_type",)`` an ``get_visible_event_or_404`` durch."""
 
-    def test_document_type_select_related_wird_durchgereicht(
-        self, facility, lead_user, staff_user, sample_event, django_assert_num_queries
+    def test_event_download_preloads_the_document_type(
+        self, facility, lead_user, staff_user, sample_event, django_assert_num_queries, rf
     ):
-        """Pin: ``x_get_visible_attachment_or_404__mutmut_5``
-        (``select_related=("document_type",)`` -> ``select_related=None``),
-        ``x_get_visible_attachment_or_404__mutmut_9`` (das
-        ``select_related``-Keyword ganz entfernt, gleicher Effekt über den
-        Default).
+        """The real download loader and owner gate need only two queries."""
+        from core.services.compliance import get_visible_attachment_for_owner_or_404
+        from core.views.attachments import load_event_owner
 
-        ``get_visible_attachment_for_owner_or_404`` liest direkt danach
-        ``getattr(owner, "document_type", None)`` — ohne den
-        durchgereichten select_related-Pfad löst der Zugriff auf
-        ``event.document_type`` eine N+1-Zusatzquery aus.
-        """
-        from core.services.compliance.sensitivity import get_visible_attachment_or_404
-
-        ft = _ft(facility, "Beleg-EventGate-SR")
-        att = _attach(facility, staff_user, ft, event=sample_event)
-
+        ft = _ft(facility, "Event relation")
+        attachment = _attach(facility, staff_user, ft, event=sample_event)
+        request = rf.get("/")
+        request.user = lead_user
+        request.current_facility = facility
         with django_assert_num_queries(2):
-            found_event, found_attachment = get_visible_attachment_or_404(lead_user, facility, sample_event.pk, att.pk)
+            found_event = load_event_owner(request, sample_event.pk)
+            found_attachment = get_visible_attachment_for_owner_or_404(lead_user, found_event, attachment.pk)
             _ = found_event.document_type.sensitivity
-
-        assert found_attachment == att
+        assert found_attachment == attachment
 
 
 class TestHttp404MeldungenSindExakt:

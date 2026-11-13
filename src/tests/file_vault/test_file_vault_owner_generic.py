@@ -25,11 +25,11 @@ except Exception as _libmagic_exc:  # noqa: BLE001 — libmagic-Shared-Library f
 
 from core.models import Event, FieldTemplate  # noqa: E402
 from core.models.attachment import Attachment  # noqa: E402
+from core.services.attachments import build_attachment_context
 from core.services.file_vault import (  # noqa: E402
     commit_staged_upload,
     delete_attachments_for,
     get_attachment_path,
-    get_current_entries_for_field,
     prepare_encrypted_upload,
     soft_delete_attachment_chain,
     store_encrypted_file,
@@ -140,25 +140,30 @@ class TestSpeicherpfad:
 @pytest.mark.django_db
 @pytest.mark.usefixtures("_encryption_key")
 class TestOwnerGenerischeKettenHelfer:
-    """``soft_delete_attachment_chain``/``get_current_entries_for_field``/
+    """``soft_delete_attachment_chain``/``build_attachment_context``/
     ``delete_attachments_for`` laufen ueber den geteilten Reverse-Accessor
     ``owner.attachments`` und funktionieren damit fuer alle drei Owner."""
 
-    def test_aktuelle_eintraege_einer_person(self, facility, staff_user, client_identified, ft_file):
-        staged_first = _stage(facility, staff_user)
-        staged_second = _stage(facility, staff_user)
-        first = commit_staged_upload(client_identified, ft_file, staged_first, staff_user, sort_order=0)
-        second = commit_staged_upload(client_identified, ft_file, staged_second, staff_user, sort_order=1)
-        entries = get_current_entries_for_field(client_identified, ft_file)
-        assert [a.pk for a in entries] == [first.pk, second.pk]
+    def test_person_file_context_resolves_the_ordered_markers(self, facility, staff_user, client_identified, ft_file):
+        first = commit_staged_upload(client_identified, ft_file, _stage(facility, staff_user), staff_user, sort_order=0)
+        second = commit_staged_upload(
+            client_identified, ft_file, _stage(facility, staff_user), staff_user, sort_order=1
+        )
+        client_identified.data_json = {
+            ft_file.slug: {"__files__": True, "entries": [{"id": str(first.pk)}, {"id": str(second.pk)}]}
+        }
+        entries = build_attachment_context(client_identified)[ft_file.slug]
+        assert [entry["attachment_id"] for entry in entries] == [str(first.pk), str(second.pk)]
 
-    def test_soft_delete_der_kette_einer_person(self, facility, staff_user, client_identified, ft_file):
+    def test_removed_person_chain_is_absent_from_the_file_context(
+        self, facility, staff_user, client_identified, ft_file
+    ):
         attachment = commit_staged_upload(client_identified, ft_file, _stage(facility, staff_user), staff_user)
-        updated = soft_delete_attachment_chain(client_identified, attachment.entry_id, staff_user)
-        assert updated == 1
+        client_identified.data_json = {ft_file.slug: {"__file__": True, "attachment_id": str(attachment.pk)}}
+        assert soft_delete_attachment_chain(client_identified, attachment.entry_id, staff_user) == 1
         attachment.refresh_from_db()
         assert attachment.deleted_at is not None
-        assert get_current_entries_for_field(client_identified, ft_file) == []
+        assert build_attachment_context(client_identified) == {}
 
     def test_delete_attachments_for_loescht_personen_anhaenge(self, facility, staff_user, client_identified, ft_file):
         attachment = commit_staged_upload(client_identified, ft_file, _stage(facility, staff_user), staff_user)
@@ -175,13 +180,17 @@ class TestOwnerGenerischeKettenHelfer:
         assert not path.exists()
         assert Attachment.objects.filter(event=sample_event).count() == 0
 
-    def test_ketten_helfer_scopen_auf_den_eigenen_owner(
+    def test_file_context_resolves_only_its_own_attachments(
         self, facility, staff_user, client_identified, case_open, ft_file
     ):
-        """Ein Anhang der Person taucht nicht bei ihrem Fall auf (und umgekehrt)."""
-        commit_staged_upload(client_identified, ft_file, _stage(facility, staff_user), staff_user)
-        assert get_current_entries_for_field(case_open, ft_file) == []
-        assert len(get_current_entries_for_field(client_identified, ft_file)) == 1
+        attachment = commit_staged_upload(client_identified, ft_file, _stage(facility, staff_user), staff_user)
+        marker = {ft_file.slug: {"__file__": True, "attachment_id": str(attachment.pk)}}
+        client_identified.data_json = marker
+        case_open.data_json = marker
+        assert build_attachment_context(case_open) == {}
+        assert [entry["attachment_id"] for entry in build_attachment_context(client_identified)[ft_file.slug]] == [
+            str(attachment.pk)
+        ]
 
 
 @pytest.mark.django_db

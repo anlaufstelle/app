@@ -33,7 +33,6 @@ from django.utils import timezone  # noqa: E402
 from core.models import DocumentType, FieldTemplate  # noqa: E402
 from core.services.compliance.sensitivity import (  # noqa: E402
     get_visible_attachment_for_owner_or_404,
-    get_visible_attachment_or_404,
 )
 from core.services.file_vault import commit_staged_upload, prepare_encrypted_upload  # noqa: E402
 
@@ -126,17 +125,8 @@ class TestOwnerGenerischesGate:
 @pytest.mark.django_db
 @pytest.mark.usefixtures("_encryption_key")
 class TestBestandsfunktionDelegiert:
-    """``get_visible_attachment_or_404`` (Event-Pfad) delegiert nach dem
+    """``get_visible_attachment_for_owner_or_404`` (Event-Pfad) delegiert nach dem
     Event-Lookup an den neuen Helfer — wirkungsgleich fuer den Download-View."""
-
-    def test_liefert_weiterhin_das_paar_event_anhang(self, facility, staff_user, sample_event):
-        ft = _file_template(facility)
-        attachment = _attach(sample_event, ft, staff_user)
-        found_event, found_attachment = get_visible_attachment_or_404(
-            staff_user, facility, sample_event.pk, attachment.pk
-        )
-        assert found_event == sample_event
-        assert found_attachment == attachment
 
     def test_feld_sensitivity_wird_jetzt_zentral_gegatet(self, facility, assistant_user, staff_user, sample_event):
         """Vorher prueften Helfer und View die Feld-Sensitivity getrennt (der
@@ -145,7 +135,7 @@ class TestBestandsfunktionDelegiert:
         ft = _file_template(facility, sensitivity=DocumentType.Sensitivity.HIGH)
         attachment = _attach(sample_event, ft, staff_user)
         with pytest.raises(PermissionDenied):
-            get_visible_attachment_or_404(assistant_user, facility, sample_event.pk, attachment.pk)
+            get_visible_attachment_for_owner_or_404(assistant_user, sample_event, attachment.pk)
 
 
 @pytest.mark.django_db

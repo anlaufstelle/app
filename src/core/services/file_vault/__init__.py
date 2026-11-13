@@ -46,16 +46,17 @@ from core.services.file_vault.encryption import (
 from core.services.file_vault.rotation import rotate_all
 from core.services.file_vault.storage import (
     StagedUpload,
-    _facility_dir,  # noqa: F401 — verwendet in test_file_vault.py::TestStorageOrphanCleanup
     commit_staged_upload,
     delete_attachment_file,
     get_attachment_path,
-    get_current_entries_for_field,
     get_decrypted_file_stream,
     get_original_filename,
     prepare_encrypted_upload,
     soft_delete_attachment_chain,
     store_encrypted_file,
+)
+from core.services.file_vault.storage import (
+    _facility_dir as _facility_dir,
 )
 from core.services.file_vault.virus_scan import (
     ScanResult,
@@ -92,7 +93,6 @@ __all__ = [
     "filename_fingerprint",
     "generate_key",
     "get_attachment_path",
-    "get_current_entries_for_field",
     "get_decrypted_file_stream",
     "get_fernet",
     "get_original_filename",

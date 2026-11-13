@@ -718,16 +718,6 @@ class TestOtherViewsKeepTheFullChain:
         ]
         assert sum(1 for entry in entries if entry["is_current"]) == 1
 
-    def test_owner_field_view_still_resolves_the_head(self, versioned_client_attachment):
-        """Die Eigner-Ansicht (Datei-Feld am Datensatz) zeigt seit jeher nur
-        Ketten-Spitzen — sie war nie betroffen und bleibt es."""
-        from core.services.file_vault import get_current_entries_for_field
-
-        entries = get_current_entries_for_field(
-            versioned_client_attachment.owner, versioned_client_attachment.field_template
-        )
-        assert [entry.pk for entry in entries] == [versioned_client_attachment.versions[-1].pk]
-
     def test_download_of_a_superseded_version_still_works(self, client, staff_user, versioned_client_attachment):
         """Der Download bleibt owner-gebunden, nicht spitzen-gebunden: ein Link
         aus der Art.-15-Auskunft auf eine Vorversion darf nicht ins Leere gehen."""
