@@ -106,7 +106,7 @@
   "test_offline_announcements_acceptance.py": 17.742,
   "test_offline_apis.py": 14.72,
   "test_offline_auth_redirect_replay.py": 28.467,
-  "test_offline_client_list_journey.py": 7.806,
+  "test_offline_client_list_journey.py": 33.0,
   "test_offline_contract_integration.py": 32.195,
   "test_offline_create_shell_journeys.py": 32.368,
   "test_offline_deadletter_ui.py": 19.912,
