@@ -90,10 +90,8 @@ logger = logging.getLogger(__name__)
 
 # --- Dynamische Personen-Felder (M2 P7, Refs #1058) ------------------------
 #
-# Die drei Helfer unten sind das Personen-Pendant zu den Bausteinen in
-# ``views/events.py`` (``EventCreateView.post``/``EventFieldsPartialView``).
-# Sie sind bewusst klein und musterhaft gehalten — der Fall-Pfad (P8) spiegelt
-# sie 1:1 mit ``entity_type=case``.
+# Person-specific forms retain their own validation boundaries.
+# Owner-level file and type-switch helpers live in _owner_dynamic_fields.
 
 
 def _client_data_form(request, document_type, *, data=None, files=None, initial_data=None, existing_file_slugs=None):

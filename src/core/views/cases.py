@@ -79,13 +79,8 @@ from core.views.mixins import (
 
 logger = logging.getLogger(__name__)
 
-# --- Dynamische Fall-Felder (M2 P8, Refs #1058) ----------------------------
-#
-# 1:1-Spiegel der drei Helfer aus ``views/clients.py`` (P7) mit
-# ``entity_type=case``. Bewusst nicht generalisiert: die Unterschiede stecken in
-# den Modellen/Querysets, und eine gemeinsame Fabrik haette die drei
-# Sicherheitsgrenzen (Facility, entity_type, Sensitivity) hinter einer
-# Indirektion versteckt.
+# Keep the type-specific facility, entity-type and sensitivity checks explicit.
+# Identical owner-level helpers live in _owner_dynamic_fields.
 
 
 def _case_data_form(request, document_type, *, data=None, files=None, initial_data=None, existing_file_slugs=None):
