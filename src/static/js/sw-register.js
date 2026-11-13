@@ -94,6 +94,29 @@
         return typeof startedAt === "number" && Date.now() - startedAt < _LOGOUT_NAV_GRACE_MS;
     }
 
+    // Refs #2660: once a logout is under way the old document stays alive until
+    // the logout response arrives. An htmx request finishing in that window
+    // (e.g. a response with ``hx-push-url``) would write a fresh
+    // ``htmx-history-cache`` right after the tab storage was cleared. Same
+    // capture-phase lock as the quick-exit path. Bound to the freshness mark,
+    // so a logout that never navigated releases the page again after
+    // ``_LOGOUT_NAV_GRACE_MS``.
+    document.addEventListener(
+        "htmx:beforeRequest",
+        function (event) {
+            if (_logoutNavInFlight()) event.preventDefault();
+        },
+        true
+    );
+
+    document.addEventListener(
+        "htmx:beforeOnLoad",
+        function (event) {
+            if (_logoutNavInFlight()) event.preventDefault();
+        },
+        true
+    );
+
     // Refs #2730: a takeover reload aborts whatever request is under way. The
     // server still completes a native form POST or an HTMX write, but the
     // browser drops the answer and with it a renewed session cookie (seen when

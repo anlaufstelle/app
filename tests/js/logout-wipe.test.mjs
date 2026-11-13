@@ -341,3 +341,92 @@ describe("Tab storage on logout", () => {
         }
     });
 });
+
+describe("htmx lock after logout submit", () => {
+    // Mirrors htmx: a cancelled ``htmx:beforeOnLoad`` means the response is not
+    // swapped, so no history snapshot is written for it.
+    function deliverHtmxResponse(target) {
+        const ev = new CustomEvent("htmx:beforeOnLoad", {
+            bubbles: true,
+            cancelable: true,
+            detail: { elt: target },
+        });
+        const proceed = target.dispatchEvent(ev);
+        if (proceed) {
+            window.sessionStorage.setItem("htmx-history-cache", JSON.stringify([{ url: "/clients/?q=a" }]));
+        }
+        return ev;
+    }
+
+    function startHtmxRequest(target) {
+        const ev = new CustomEvent("htmx:beforeRequest", {
+            bubbles: true,
+            cancelable: true,
+            detail: { elt: target },
+        });
+        target.dispatchEvent(ev);
+        return ev;
+    }
+
+    function makeHtmxTarget() {
+        const el = document.createElement("div");
+        document.body.appendChild(el);
+        return el;
+    }
+
+    afterEach(() => {
+        window.sessionStorage.clear();
+    });
+
+    it("blocks new htmx requests once the logout form was submitted", async () => {
+        const target = makeHtmxTarget();
+        const form = makeLogoutForm();
+        dispatchSubmit(form);
+        await vi.waitFor(() => expect(form.submit).toHaveBeenCalledTimes(1));
+
+        expect(startHtmxRequest(target).defaultPrevented).toBe(true);
+    });
+
+    it("does not process a response arriving after the logout submit", async () => {
+        const target = makeHtmxTarget();
+        const form = makeLogoutForm();
+        dispatchSubmit(form);
+        await vi.waitFor(() => expect(form.submit).toHaveBeenCalledTimes(1));
+
+        const ev = deliverHtmxResponse(target);
+
+        expect(ev.defaultPrevented).toBe(true);
+        expect(window.sessionStorage.getItem("htmx-history-cache")).toBeNull();
+    });
+
+    it("also blocks htmx while the offline wipe is still running", () => {
+        window.crypto_session = { wipeOfflineState: vi.fn(() => new Promise(() => {})) };
+        const target = makeHtmxTarget();
+        dispatchSubmit(makeLogoutForm());
+
+        expect(startHtmxRequest(target).defaultPrevented).toBe(true);
+    });
+
+    it("leaves htmx untouched when no logout was submitted", () => {
+        const target = makeHtmxTarget();
+
+        expect(startHtmxRequest(target).defaultPrevented).toBe(false);
+        expect(deliverHtmxResponse(target).defaultPrevented).toBe(false);
+        expect(window.sessionStorage.getItem("htmx-history-cache")).not.toBeNull();
+    });
+
+    it("lets htmx run again once the freshness window has passed", async () => {
+        const target = makeHtmxTarget();
+        const form = makeLogoutForm();
+        dispatchSubmit(form);
+        await vi.waitFor(() => expect(form.submit).toHaveBeenCalledTimes(1));
+        expect(startHtmxRequest(target).defaultPrevented).toBe(true);
+
+        // The logout never navigated: after the grace window the page recovers.
+        const later = Date.now() + 10001;
+        vi.spyOn(Date, "now").mockReturnValue(later);
+
+        expect(startHtmxRequest(target).defaultPrevented).toBe(false);
+        expect(deliverHtmxResponse(target).defaultPrevented).toBe(false);
+    });
+});
