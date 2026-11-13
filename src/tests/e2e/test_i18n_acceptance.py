@@ -87,6 +87,7 @@ class TestDateFieldsInAppLanguage:
 
             # Leave and come back: format and values stay.
             page.goto(f"{base_url}/events/?date_from=2026-03-05&date_to=2026-03-20", wait_until="domcontentloaded")
+            page.locator("[data-filter-panel-toggle]").click()
             expect_date_value(page, "#event-date_from", "2026-03-05")
             expect_date_value(page, "#event-date_to", "2026-03-20")
             page.go_back(wait_until="domcontentloaded")
