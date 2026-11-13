@@ -1291,7 +1291,7 @@
 **Erwartetes Ergebnis:**
 - Schritt 1: SW liefert die pk-lose Aufgabenlisten-Shell **in-place** an `/workitems/` aus (kein Redirect, URL bleibt kanonisch). Gerendert wird `listOfflineWorkItemsAggregated()` — Aufgaben **aller** gültigen mitgenommenen Personen-Bundles **plus** personlose/anonyme Standalone-Aufgaben, klar als „ohne Person"/„Person offline entfernt" markiert; Titel, Status-/Prioritäts-Badges und Fälligkeit spiegeln `inbox_content.html`/`_workitem_row.html`.
 - Schritt 2: SW liefert die pk-lose Zeitstrom-Shell **in-place** an `/` aus. Gerendert wird `listOfflineEventsAggregated()` als chronologische „lokale Chronik" (neueste zuerst) über alle mitgenommenen Personen **plus** anonyme/personlose Einträge (als „Anonym" markiert); deutlicher Hinweis, dass nur die offline verfügbaren Vorgänge gezeigt werden, nicht die vollständige Historie der Einrichtung.
-- Schritt 3: **Online bleibt `/` der echte Zeitstrom-Cockpit** (kein Offline-Shell sichtbar) — der SW-Zweig (`isZeitstromRoot`) greift ausschließlich im `respondWith`-catch (Netzfehler), der Online-Login-Redirect an `/` ist unberührt.
+- Schritt 3: **Online zeigt `/` den Zeitstrom mit Tagesauswahl, Kennzahlenzeile und Feed** (keine Offline-Shell sichtbar) — der SW-Zweig (`isZeitstromRoot`) greift ausschließlich im `respondWith`-catch (Netzfehler), der Online-Login-Redirect an `/` ist unberührt.
 - Schritt 4: `/reports/` hat keine eigene Shell → Fallback auf `/offline/` (ENT-PWA-04) — die statische Seite „Keine lokale Ansicht verfügbar" mit Links zu `/clients/`, `/workitems/`, `/`.
 - Insgesamt: Mit ENT-PWA-04 (Rückbau) + diesem Test ist das Zielbild „Eine Welt" abgedeckt — Personen (`/clients/`), Aufgaben (`/workitems/`) und Zeitstrom (`/`) rendern offline in gewohnter Optik an ihrer kanonischen Adresse; `/offline/` ist reiner technischer Fallback ohne Produktpfad.
 
@@ -2938,23 +2938,23 @@
 
 **Schritte:**
 1. Über „Kontakte“ am Zeitstrom `/events/` öffnen.
-2. Zeitraum „Von“/„Bis“ setzen und „Filtern“ wählen.
-3. Zusätzlich einen Dokumentationstyp wählen und „Filtern“ wählen.
-4. Typ auf „Alle“ zurück, „Erfasst von“ eine Kollegin wählen, filtern.
-5. „Erfasst von“ auf „Alle“, „Nur meine“ ankreuzen, filtern.
+2. „Zeitraum“ öffnen und „Von“/„Bis“ setzen; jedes Datumsfeld mit Tab verlassen, damit die Änderung sofort filtert.
+3. Im offenen Filterpanel zusätzlich einen Dokumentationstyp wählen; die Auswahl filtert sofort.
+4. Typ auf „Alle Typen“ zurücksetzen und unter „Erfasst von“ eine Kollegin wählen; jede Änderung filtert sofort.
+5. „Erfasst von“ auf „Alle Erfassenden“ zurücksetzen und „Nur meine“ ankreuzen; jede Änderung filtert sofort.
 6. Die Adresszeile in einen neuen Tab derselben Sitzung kopieren.
 7. Im ersten Tab mehrfach die Zurück-Taste, danach die Vorwärts-Taste des Browsers drücken.
 8. Auf Seite 2 blättern (Pfeil „Nächste Seite“).
 
 **Erwartetes Ergebnis:**
-- Jeder Filterlauf tauscht nur die Ergebnistabelle (`#event-table`), die Adresszeile trägt den Filterzustand (`date_from`, `date_to`, `doc_type`, `created_by`, `mine`).
+- Jeder Filterlauf aktualisiert die Ergebniszeilen (`#event-table`), die Ergebniszahl und das Filterformular; die Adresszeile trägt den Filterzustand (`date_from`, `date_to`, `doc_type`, `created_by`, `mine`).
 - Die Kopie der Adresse zeigt dieselben Zeilen und dieselben Formularwerte.
 - Zurück/Vorwärts zeigen je Schritt Zeilen **und** Formularwerte des jeweiligen Zustands (nie Ergebnisse des einen und Auswahl eines anderen Zustands).
 - Die Paginierung behält alle Filter in der Adresse; Sortierung absteigend nach Zeitpunkt, 25 Zeilen je Seite.
-- Der Tastaturfokus bleibt nach „Filtern“ auf der Schaltfläche.
+- Das Filterpanel bleibt bei Änderungen offen; der Tastaturfokus bleibt im bedienten Feld beziehungsweise nach Tab im nächsten Feld. „Filtern“ erscheint als Absenden-Schaltfläche nur ohne HTMX.
 
 **DSGVO/Security-Note:**
-- Die Liste zeigt nur Metadaten (Zeitpunkt, Typ, Person, Fall, erfasst von), keine Feldwerte; Listenaufrufe erzeugen keinen Audit-Eintrag.
+- Die Liste zeigt rollenberechtigte Inhalte wie der Zeitstrom; Zeilen lassen sich zu Feldwerten aufklappen, „Zum Eintrag“ öffnet die Detailansicht. Listenaufrufe erzeugen keinen Audit-Eintrag.
 
 **Status:** ☐ Offen
 
