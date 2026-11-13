@@ -21,6 +21,7 @@ import pytest
 from playwright.sync_api import expect
 
 from ._helpers import django_shell
+from ._selectors import wait_for_transition_end
 from .test_config_ui import (
     _add_group,
     _assign_field,
@@ -65,6 +66,8 @@ class TestMoreMenuReach:
         page.locator("[data-testid='mobile-nav-more']").click()
         menu = page.locator("[data-testid='mobile-more-items']")
         expect(menu).to_be_visible()
+        # The menu fades in with a scale transition; measure the resting box, not the shrunken one.
+        wait_for_transition_end(menu)
 
         geometry = page.evaluate(
             """() => {
