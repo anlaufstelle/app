@@ -196,6 +196,7 @@ E2E_DEMO_SPECS := \
 	src/tests/e2e/test_demo_scenario_switch.py \
 	src/tests/e2e/test_demo_offline_key_notice.py \
 	src/tests/e2e/test_demo_offline_key_preparation.py \
+	src/tests/e2e/test_demo_preacceptance.py \
 	src/tests/e2e/test_i18n_locale.py::TestAnonymousLocale::test_demo_query_switch_error_and_start \
 	src/tests/e2e/test_system_compliance_maintenance_results.py::TestDemoCards \
 	src/tests/e2e/test_quick_exit_geometry.py::TestDemoNotice

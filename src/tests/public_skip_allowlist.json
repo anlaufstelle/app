@@ -2070,5 +2070,47 @@
     "reason": "Requires the demo profile (E2E_DEMO_MODE=1, E2E_SEED_SCALE=demo)",
     "requires_env": "E2E_DEMO_MODE=1",
     "rationale": "The demo suite is opt-in through the make test-e2e-demo gate with E2E_DEMO_MODE=1 and E2E_SEED_SCALE=demo."
+  },
+  {
+    "nodeid": "src/tests/e2e/test_demo_preacceptance.py::test_demo_pages_hold_up_for_each_role_and_width[chromium-staff-1280]",
+    "profile": "public",
+    "reason": "Requires demo profile (E2E_DEMO_MODE=1, E2E_SEED_SCALE=demo)",
+    "requires_env": "E2E_DEMO_MODE=1",
+    "rationale": "The demo suite is opt-in through the make test-e2e-demo gate with E2E_DEMO_MODE=1 and E2E_SEED_SCALE=demo."
+  },
+  {
+    "nodeid": "src/tests/e2e/test_demo_preacceptance.py::test_demo_pages_hold_up_for_each_role_and_width[chromium-staff-390]",
+    "profile": "public",
+    "reason": "Requires demo profile (E2E_DEMO_MODE=1, E2E_SEED_SCALE=demo)",
+    "requires_env": "E2E_DEMO_MODE=1",
+    "rationale": "The demo suite is opt-in through the make test-e2e-demo gate with E2E_DEMO_MODE=1 and E2E_SEED_SCALE=demo."
+  },
+  {
+    "nodeid": "src/tests/e2e/test_demo_preacceptance.py::test_demo_pages_hold_up_for_each_role_and_width[chromium-assistant-1280]",
+    "profile": "public",
+    "reason": "Requires demo profile (E2E_DEMO_MODE=1, E2E_SEED_SCALE=demo)",
+    "requires_env": "E2E_DEMO_MODE=1",
+    "rationale": "The demo suite is opt-in through the make test-e2e-demo gate with E2E_DEMO_MODE=1 and E2E_SEED_SCALE=demo."
+  },
+  {
+    "nodeid": "src/tests/e2e/test_demo_preacceptance.py::test_demo_pages_hold_up_for_each_role_and_width[chromium-assistant-390]",
+    "profile": "public",
+    "reason": "Requires demo profile (E2E_DEMO_MODE=1, E2E_SEED_SCALE=demo)",
+    "requires_env": "E2E_DEMO_MODE=1",
+    "rationale": "The demo suite is opt-in through the make test-e2e-demo gate with E2E_DEMO_MODE=1 and E2E_SEED_SCALE=demo."
+  },
+  {
+    "nodeid": "src/tests/e2e/test_demo_preacceptance.py::test_demo_quick_exit_leaves_and_ends_the_session[chromium-staff]",
+    "profile": "public",
+    "reason": "Requires demo profile (E2E_DEMO_MODE=1, E2E_SEED_SCALE=demo)",
+    "requires_env": "E2E_DEMO_MODE=1",
+    "rationale": "The demo suite is opt-in through the make test-e2e-demo gate with E2E_DEMO_MODE=1 and E2E_SEED_SCALE=demo."
+  },
+  {
+    "nodeid": "src/tests/e2e/test_demo_preacceptance.py::test_demo_quick_exit_leaves_and_ends_the_session[chromium-assistant]",
+    "profile": "public",
+    "reason": "Requires demo profile (E2E_DEMO_MODE=1, E2E_SEED_SCALE=demo)",
+    "requires_env": "E2E_DEMO_MODE=1",
+    "rationale": "The demo suite is opt-in through the make test-e2e-demo gate with E2E_DEMO_MODE=1 and E2E_SEED_SCALE=demo."
   }
 ]

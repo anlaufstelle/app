@@ -76,6 +76,7 @@ def test_demo_target_is_locked_and_selects_demo_specs():
         "test_demo_scenario_switch.py",
         "test_demo_offline_key_notice.py",
         "test_demo_offline_key_preparation.py",
+        "test_demo_preacceptance.py",
         "test_i18n_locale.py::TestAnonymousLocale::test_demo_query_switch_error_and_start",
         "test_system_compliance_maintenance_results.py::TestDemoCards",
         "test_quick_exit_geometry.py::TestDemoNotice",
@@ -144,6 +145,7 @@ def test_demo_gate_guard_turns_red_for_the_pre_2679_target(tmp_path):
     assert uncovered == {
         "src/tests/e2e/test_demo_offline_key_notice.py",
         "src/tests/e2e/test_demo_offline_key_preparation.py",
+        "src/tests/e2e/test_demo_preacceptance.py",
         "src/tests/e2e/test_i18n_locale.py::TestAnonymousLocale::test_demo_query_switch_error_and_start",
     }
 
