@@ -602,13 +602,20 @@ class TestOfflineEditReplay:
                     };
                     if (!(await idle())) return {ok: false, reason: 'busy before'};
                     const before = state.data;
+                    const formBefore = document.querySelector('[data-testid="offline-edit-form"]');
                     window.dispatchEvent(new CustomEvent('offline-unsynced-count', {detail: {count: 0}}));
                     const startedNow = state.loading;
                     if (!(await idle())) return {ok: false, reason: 'busy after'};
-                    return {ok: true, startedNow: startedNow, replaced: state.data !== before};
+                    await window.Alpine.nextTick();
+                    return {
+                        ok: true, startedNow: startedNow, replaced: state.data !== before,
+                        sameForm: formBefore === document.querySelector('[data-testid="offline-edit-form"]'),
+                    };
                 }"""
             )
-            assert rebuilt == {"ok": True, "startedNow": True, "replaced": True}, rebuilt
+            # Refs #2745: retaining values in a newly created form is not enough;
+            # detaching the old form can drop a click already in progress.
+            assert rebuilt == {"ok": True, "startedNow": True, "replaced": True, "sameForm": True}, rebuilt
 
             form = page.locator("[data-testid='offline-edit-form']")
             assert form.is_visible(), "The open edit form vanished after the counter rebuild"
