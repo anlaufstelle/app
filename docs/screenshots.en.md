@@ -29,6 +29,9 @@ the target does not terminate other servers.
 ### Timeline — the digital logbook
 ![Timeline](screenshots/zeitstrom-en.webp)
 
+### Contacts — filters, result count and day groups
+![Contacts](screenshots/kontakte-en.webp)
+
 ### Log an event
 ![Log an event](screenshots/ereignis-anlegen-en.webp)
 
@@ -87,11 +90,15 @@ accompaniment from the counselling-service package (Zweigstelle Nord).
 
 ## Mobile
 
-| Timeline (mobile) | Work hub (mobile) |
+| Timeline (mobile) | Contacts (mobile) |
 |:---:|:---:|
-| ![Timeline mobile](screenshots/zeitstrom-mobil-en.webp) | ![Work hub mobile](screenshots/arbeitszentrale-mobil-en.webp) |
+| ![Timeline mobile](screenshots/zeitstrom-mobil-en.webp) | ![Contacts mobile](screenshots/kontakte-mobil-en.webp) |
+
+| Handover (mobile) | Work hub (mobile) |
+|:---:|:---:|
+| ![Handover mobile](screenshots/uebergabe-mobil-en.webp) | ![Work hub mobile](screenshots/arbeitszentrale-mobil-en.webp) |
 
 <!-- translation-source: docs/screenshots.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- translation-date: 2026-09-18 -->
-<!-- source-hash: a0d31601483beda9cde161da29d264656acbc373 -->
+<!-- translation-date: 2026-11-13 -->
+<!-- source-hash: b44b66a499f5d8b6640416d136edeb25b5c4396f -->

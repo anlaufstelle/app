@@ -109,7 +109,8 @@ SHOTS: list[Shot] = [
     # 2026-09-06, siehe docs/screenshots.md "Alltag & Dokumentation").
     Shot("ereignis-anlegen-beratungsstelle", "core:event_create", role="emma_1"),
     Shot("fallakte", "core:case_detail", pk_kind="case", full_page=True),
-    Shot("uebergabe", "/?view=uebergabe"),
+    Shot("uebergabe", "/?view=uebergabe", mobile=True),
+    Shot("kontakte", "core:event_list", mobile=True),
     # Refs #2505: the former external report page is the "Allgemeine Kennzahlen"
     # report card now. The shot keeps its name: docs/screenshots.md links the file.
     Shot("statistik-extern", "/statistics/?ansicht=datensaetze&bericht=general-key-figures"),

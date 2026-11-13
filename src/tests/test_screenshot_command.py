@@ -951,3 +951,21 @@ def test_handle_rejects_a_service_worker_offline_fallback(tmp_path, monkeypatch,
         Command().handle(base_url="http://x", output_dir=str(tmp_path), only="", quality=82)
     assert not page.screenshot_called
     assert not list(tmp_path.glob("*.webp"))
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("name", ["kontakte", "uebergabe"])
+def test_handle_generates_contact_and_handover_shots_in_both_languages_and_sizes(tmp_path, monkeypatch, name):
+    """The documented contact and handover galleries need all four variants."""
+    monkeypatch.setattr(Command, "_resolve_pks", lambda self: {})
+    browser = _SessionFakeBrowser()
+    monkeypatch.setattr("playwright.sync_api.sync_playwright", lambda: _FakeBrowserLauncher(browser))
+
+    Command().handle(base_url="http://x", output_dir=str(tmp_path), only=name, quality=82)
+
+    assert {path.name for path in tmp_path.glob("*.webp")} == {
+        f"{name}.webp",
+        f"{name}-en.webp",
+        f"{name}-mobil.webp",
+        f"{name}-mobil-en.webp",
+    }

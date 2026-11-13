@@ -29,6 +29,9 @@ Terminal beenden; fremde Server werden vom Target nicht beendet.
 ### Zeitstrom — das digitale Dienstbuch
 ![Zeitstrom](screenshots/zeitstrom.webp)
 
+### Kontakte — Filter, Trefferzahl und Tagesgruppen
+![Kontakte](screenshots/kontakte.webp)
+
 ### Ereignis erfassen
 ![Ereignis erfassen](screenshots/ereignis-anlegen.webp)
 
@@ -87,6 +90,10 @@ Paket Beratungsstelle (Zweigstelle Nord).
 
 ## Mobil
 
-| Zeitstrom (Mobil) | Arbeitszentrale (Mobil) |
+| Zeitstrom (Mobil) | Kontakte (Mobil) |
 |:---:|:---:|
-| ![Zeitstrom mobil](screenshots/zeitstrom-mobil.webp) | ![Arbeitszentrale mobil](screenshots/arbeitszentrale-mobil.webp) |
+| ![Zeitstrom mobil](screenshots/zeitstrom-mobil.webp) | ![Kontakte mobil](screenshots/kontakte-mobil.webp) |
+
+| Übergabe (Mobil) | Arbeitszentrale (Mobil) |
+|:---:|:---:|
+| ![Übergabe mobil](screenshots/uebergabe-mobil.webp) | ![Arbeitszentrale mobil](screenshots/arbeitszentrale-mobil.webp) |
