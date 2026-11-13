@@ -130,3 +130,56 @@ def test_password_cancel_resolves_dialog_before_click_finishes(monkeypatch):
     assert login.call_count == 2
     for context in contexts:
         context.close.assert_called_once()
+
+
+@pytest.mark.parametrize("delay", [0, 120])
+def test_onboarding_second_factor_uses_device_window_after_boundary(monkeypatch, delay):
+    import base64
+    import io
+    import time
+    from contextlib import redirect_stdout
+
+    from django_otp import oath
+    from django_otp.oath import hotp
+
+    from core.models import EncryptedTOTPDevice
+    from tests.e2e import _helpers as helpers
+    from tests.e2e import test_onboarding_journey as onboarding
+
+    now = [3029.99]
+    monkeypatch.setattr(time, "time", lambda: now[0])
+    monkeypatch.setattr(oath, "time", lambda: now[0])
+    device = EncryptedTOTPDevice(key="3132333435363738393031323334353637383930", confirmed=True)
+    monkeypatch.setattr(device, "save", Mock())
+    secret = base64.b32encode(device.bin_key).decode().rstrip("=")
+    confirmation = onboarding._totp_code(secret)
+    now[0] = 3030.01
+    assert device.verify_token(confirmation)
+    assert device.drift == -1
+    assert device.last_t == 100
+    now[0] += delay
+
+    token_input = SimpleNamespace(fill=Mock())
+    page = Mock()
+    page.locator.return_value = token_input
+    token_input.click = Mock()
+    monkeypatch.setattr(onboarding, "expect", lambda locator: Mock())
+
+    get_device = Mock(return_value=device)
+    monkeypatch.setattr(EncryptedTOTPDevice.objects, "get", get_device)
+
+    def shell(env, script):
+        output = io.StringIO()
+        with redirect_stdout(output):
+            # Execute only the trusted helper snippet, with database lookup replaced (#2743).
+            exec(script, {})  # noqa: S102
+        return output.getvalue().splitlines()
+
+    monkeypatch.setattr(helpers, "django_shell", shell)
+    onboarding._verify_second_factor(page, "http://testserver", secret, {}, "invited-user")
+    get_device.assert_called_once_with(user__username="invited-user", confirmed=True)
+
+    token = token_input.fill.call_args.args[0]
+    expected_counter = max(device.last_t + 1, int(now[0] / device.step) + device.drift)
+    assert token == str(hotp(device.bin_key, expected_counter, digits=device.digits)).zfill(device.digits)
+    assert device.verify_token(token), "The second login must accept the code after confirmation crossed a window"

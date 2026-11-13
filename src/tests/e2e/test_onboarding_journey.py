@@ -49,7 +49,7 @@ from django_otp.oath import TOTP
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import expect
 
-from ._helpers import django_shell
+from ._helpers import django_shell, next_totp_code
 
 pytestmark = pytest.mark.e2e
 
@@ -71,20 +71,10 @@ def _marker_values(e2e_env, script, marker):
     return [line.removeprefix(marker) for line in django_shell(e2e_env, script) if line.startswith(marker)]
 
 
-def _totp_code(secret_b32: str, drift: int = 0) -> str:
-    """Sechsstelliger TOTP-Code aus dem im Setup angezeigten Base32-Secret.
-
-    ``pyotp`` ist nicht installiert; ``django_otp.oath.TOTP`` rechnet mit
-    demselben Schluessel. ``drift`` verschiebt um ganze 30-Sekunden-Fenster.
-
-    ``drift=1`` ist der Trick fuer den ZWEITEN Login: ``TOTPDevice.verify_token``
-    verlangt ``t > last_t`` (kein Token-Replay), akzeptiert aber ``tolerance``
-    Schritte Abweichung. Ein Code fuer das FOLGE-Fenster ist damit sofort
-    gueltig — ohne bis zu 30 s zu warten und ohne ``wait_for_timeout``.
-    """
+def _totp_code(secret_b32: str) -> str:
+    """Generate the setup token from the displayed Base32 secret."""
     padded = secret_b32 + "=" * (-len(secret_b32) % 8)
-    totp = TOTP(base64.b32decode(padded), drift=drift)
-    return f"{totp.token():06d}"
+    return f"{TOTP(base64.b32decode(padded)).token():06d}"
 
 
 def _create_invited_user(e2e_env, username):
@@ -268,10 +258,10 @@ def _logout(page):
         page.click("form[action='/logout/'] button[type='submit']")
 
 
-def _verify_second_factor(page, base_url, secret):
-    """Zweiten Faktor auf ``/mfa/verify/`` einloesen und auf dem Zeitstrom landen."""
+def _verify_second_factor(page, base_url, secret, e2e_env, username):
+    """Verify the next unused device token and reach the timeline."""
     expect(page.locator("#id_token_totp")).to_be_visible(timeout=10000)
-    page.locator("#id_token_totp").fill(_totp_code(secret, drift=1))
+    page.locator("#id_token_totp").fill(next_totp_code(e2e_env, username, secret))
     page.locator("[data-testid='mfa-verify-button']").click()
     page.wait_for_url(f"{base_url}/", timeout=20000)
     expect(page.locator("h1")).to_have_text("Zeitstrom", timeout=10000)
@@ -349,7 +339,7 @@ class TestInviteOnboardingJourney:
                 _login(page, base_url, username, NEUES_PASSWORT)
                 _erwarte_nach_login(page, base_url, re.compile(r"/mfa/verify/"))
                 assert "/mfa/setup/" not in page.url, "Bestaetigtes Geraet darf nicht erneut ins Setup fuehren"
-                _verify_second_factor(page, base_url, secret)
+                _verify_second_factor(page, base_url, secret, e2e_env, username)
             finally:
                 context.close()
         finally:
@@ -441,7 +431,7 @@ class TestInitialPasswordOnboardingJourney:
                 assert "/password-change/" not in page.url, (
                     "Nach dem Wechsel darf der Zwangswechsel nicht erneut greifen"
                 )
-                _verify_second_factor(page, base_url, secret)
+                _verify_second_factor(page, base_url, secret, e2e_env, username)
             finally:
                 context.close()
         finally:

@@ -30,7 +30,7 @@ import pytest
 from django_otp.oath import TOTP
 from playwright.sync_api import expect
 
-from ._helpers import SEED_PASSWORD
+from ._helpers import SEED_PASSWORD, next_totp_code
 from ._helpers import wait_for_active_service_worker as _wait_for_active_service_worker
 
 pytestmark = pytest.mark.e2e
@@ -273,7 +273,7 @@ class TestZZSessionRevocationOnFactorChange:
 
             # ... and after a second login of the same account elsewhere.
             context_c, page_c = _new_context(browser)
-            _login_with_totp(page_c, base_url, _totp_code(secret, steps_ahead=1))
+            _login_with_totp(page_c, base_url, next_totp_code(e2e_env, USERNAME, secret))
             assert _is_signed_in(page_c, base_url)
             assert _is_signed_in(page_a, base_url), "A must stay signed in after a second login"
             assert _is_signed_out(page_b, base_url), "B must stay signed out"
@@ -355,7 +355,7 @@ class TestZZOfflineClientKeepsUnsentWorkAcrossRevocation:
             assert _workitem_state(e2e_env, title) == "MISSING"
 
             # Signing in again: the work is still there -- transmitted exactly once or still queued.
-            _login_with_totp(page_b, base_url, _totp_code(secret, steps_ahead=1))
+            _login_with_totp(page_b, base_url, next_totp_code(e2e_env, USERNAME, secret))
             page_b.evaluate("async () => { await window.crypto_session.ready(); }")
             page_b.goto(f"{base_url}/", wait_until="domcontentloaded")
             _dispatch_online_and_await_sync(page_b)
@@ -385,7 +385,7 @@ class TestZZOfflineClientKeepsUnsentWorkAcrossRevocation:
             context_a, secret = _revoke_via_device_change(browser, base_url, codes, 2)
             assert _is_signed_out(page_b, base_url)
 
-            _login_with_totp(page_b, base_url, _totp_code(secret, steps_ahead=1))
+            _login_with_totp(page_b, base_url, next_totp_code(e2e_env, USERNAME, secret))
             page_b.evaluate("async () => { await window.crypto_session.ready(); }")
             page_b.goto(f"{base_url}/", wait_until="domcontentloaded")
             sync = _dispatch_online_and_await_sync(page_b)

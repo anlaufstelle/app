@@ -46,6 +46,21 @@ def django_shell(e2e_env, script):
     return [ln for ln in out.stdout.strip().splitlines() if ln.strip()]
 
 
+def next_totp_code(e2e_env, username: str, secret: str) -> str:
+    """Use the confirmed device's next unused window, including its stored drift."""
+    script = (
+        "import base64; "
+        "from core.models import EncryptedTOTPDevice; "
+        "from django_otp.oath import TOTP, hotp; "
+        f"d = EncryptedTOTPDevice.objects.get(user__username={username!r}, confirmed=True); "
+        f"assert d.bin_key == base64.b32decode({(secret + '=' * (-len(secret) % 8))!r}); "
+        "current = TOTP(d.bin_key, d.step, d.t0, d.digits, d.drift).t(); "
+        "counter = max(d.last_t + 1, current); "
+        "print('TOKEN|' + str(hotp(d.bin_key, counter, digits=d.digits)).zfill(d.digits))"
+    )
+    return next(line.removeprefix("TOKEN|") for line in django_shell(e2e_env, script) if line.startswith("TOKEN|"))
+
+
 def tally_tile(scope, name):
     """The tally tile of the document type called ``name``.
 

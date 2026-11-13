@@ -39,7 +39,7 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 from django_otp.oath import TOTP
 
-from ._helpers import SEED_PASSWORD
+from ._helpers import SEED_PASSWORD, next_totp_code
 
 pytestmark = pytest.mark.e2e
 
@@ -256,7 +256,7 @@ class TestZZMFAFactorChangeSudo:
             # Nach dem Wechsel: der Code des neuen Geraets meldet an ...
             context, page = _new_context(browser)
             try:
-                _login_with_totp(page, base_url, _totp_code(new_secret, steps_ahead=1))
+                _login_with_totp(page, base_url, next_totp_code(e2e_env, USERNAME, new_secret))
                 page.wait_for_url(lambda url: "/mfa/verify/" not in url, timeout=10000)
             finally:
                 context.close()
