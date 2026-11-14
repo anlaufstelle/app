@@ -735,6 +735,23 @@
             schedule();
         }
 
+        function onBanSlotsStale() {
+            // ban-details-toggle.js found the KPI slot and the ban slot out of step
+            // (or discarded an own answer that may be older than the page). Forget
+            // what the page is known to hold for both, drop a cycle in flight (its
+            // answers could be older) and ask again: the slots then come through
+            // the snapshot and generation checks of this watch, and the server
+            // answers with fresh validators instead of 304.
+            if (stopped) return;
+            clearTimer();
+            abortCycle(true);
+            delete validators.kpi;
+            delete validators.bans;
+            pageEtag = "";
+            failures = 0;
+            pollImmediately();
+        }
+
         function onQuickExitLeaving() {
             // ``stop`` bricht den laufenden fetch per AbortController ab und
             // raeumt den Timer; ``stopped`` verhindert jede Neuplanung.
@@ -767,6 +784,7 @@
             window.addEventListener("zeitstrom:filter-changed", onFilterChanged);
             window.addEventListener("zeitstrom:filter-transition", onFilterTransition);
             window.addEventListener("zeitstrom-changed", onZeitstromChanged);
+            window.addEventListener("zeitstrom:ban-slots-stale", onBanSlotsStale);
             document.body.addEventListener("htmx:configRequest", onHtmxConfigRequest);
             document.body.addEventListener("htmx:afterRequest", onHtmxAfterRequest);
             pollImmediately();
