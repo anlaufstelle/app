@@ -321,6 +321,43 @@ class TestTallyStrokeKeepsPlace:
         )
         expect(tile).to_be_in_viewport()
 
+    def test_live_watch_swap_with_the_number_form_open_keeps_the_page_in_place(
+        self, staff_page, base_url, e2e_env, long_feed, viewport_name
+    ):
+        """The number form opts out of the focus hand-over; the page must still stay where it is."""
+        page = staff_page
+        self._open(page, base_url, viewport_name)
+        _settle_first_watch_cycle(page)
+        self._wait_until_scrollable(page, viewport_name)
+        _stroke(page, tally_tile(page, "Spritzentausch"))
+        form = page.locator('#tally-number-form-slot [data-testid^="tally-inline-form-"]')
+        expect(form).to_be_visible()
+        wait_until_htmx_bound(page, form)
+        field = form.locator('input[name="ausgabe"]')
+        field.focus()
+        page.evaluate("() => window.scrollBy(0, 200)")
+        scroll_before = _settled_scroll_y(page)
+        assert scroll_before > 0, "the page did not scroll"
+
+        extra = _add_feed_events(e2e_env, 1)
+        try:
+            page.evaluate("() => { window.__feedChild = document.getElementById('feed-list').firstElementChild; }")
+            page.evaluate("() => window.zeitstromWatch.checkNow()")
+            assert wait_until(
+                page,
+                lambda: page.evaluate(
+                    "() => document.getElementById('feed-list').firstElementChild !== window.__feedChild"
+                ),
+            ), "the live watch did not swap the feed"
+            page.wait_for_timeout(300)
+
+            assert _scroll_y(page) == scroll_before, "the page moved after the live watch swap"
+            assert page.evaluate("() => !!document.activeElement.closest('#tally-number-form-slot')"), (
+                "the focus left the number form"
+            )
+        finally:
+            django_shell(e2e_env, _DELETE_FEED_EVENTS % {"pks": extra})
+
     def test_feed_filter_change_still_moves_the_focus_into_the_feed(
         self, staff_page, base_url, long_feed, viewport_name
     ):
