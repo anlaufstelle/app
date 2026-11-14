@@ -389,7 +389,8 @@ class TestFeedRowsAndGroups:
 
     def test_hour_groups_expand_with_keyboard(self, authenticated_page, base_url, feed_fixture):
         page = authenticated_page
-        page.goto(f"{base_url}/?date={FEED_DAY}&time_filter=all", wait_until="domcontentloaded")
+        # The first live-watch cycle swaps the feed list and drops keyboard focus on the toggle.
+        _open_settled_feed(page, base_url)
         groups = page.get_by_test_id("tally-group")
         expect(groups).to_have_count(2)
         assert sorted(int(g.get_attribute("data-total")) for g in groups.all()) == [1, 2]
