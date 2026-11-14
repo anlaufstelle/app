@@ -9723,6 +9723,10 @@ msgstr "Übergabe"
 msgid "Hausverbot:"
 msgstr "Hausverbot:"
 
+#: src/templates/core/zeitstrom/partials/bans_slot.html:27
+msgid "Hausverbot-Details ausblenden"
+msgstr "Hausverbot-Details ausblenden"
+
 #: src/templates/core/zeitstrom/index.html:103
 msgid "Ganzer Tag"
 msgstr "Ganzer Tag"

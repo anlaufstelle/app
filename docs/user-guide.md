@@ -186,7 +186,7 @@ Der Feed fasst vier Quellen des aktuellen Tages zusammen:
 - **Kontakte im Dienst** — dokumentierte Kontakte der gewählten Schicht und des gewählten Tages (ohne gewählte Schicht heißt die Zahl **Kontakte heute**, an einem früheren Tag **Kontakte an diesem Tag**). Der Link öffnet die Kontakte-Liste mit denselben Filtern und dem Zusatz „ohne Strichliste“; Striche zählen hier nicht mit.
 - **gezählt (Strichliste)** — Strichlisten-Einträge im Live-Fenster, einschließlich Einträgen inzwischen deaktivierter Typen; nur sichtbar, wenn die Strichliste sichtbar ist. Der Link öffnet die Kontakte-Liste mit „nur Strichliste“ und demselben Zeitfenster. Die Kacheln zählen weiterhin alle anonymen Kontakte ihres Typs; ihre Summe kann deshalb von dieser Zahl abweichen.
 - **meine Aufgaben** und **überfällig** — offene Aufgaben, die Ihnen zugewiesen sind (nicht die unzugewiesenen Teamaufgaben); „überfällig“ steht rot, sobald die Zahl größer als null ist.
-- **Hausverbote aktiv** — nur sichtbar, wenn Hausverbote bestehen; die Einzelheiten stehen direkt darunter.
+- **Hausverbote aktiv** — nur sichtbar, wenn Hausverbote bestehen; sie steht ganz vorn in der Zeile, damit sie auch am Handy ohne seitliches Scrollen zu sehen ist. Die Einzelheiten stehen direkt darunter und lassen sich über diese Zahl aus- und einblenden (siehe [Hausverbot-Banner](#hausverbot-banner)).
 
 Die Zeile gilt für alle Rollen mit Zeitstrom-Zugang. Die Zahlen aktualisieren sich mit jedem Strich, mit **Rückgängig**, beim Wechsel von Schicht oder Filter und im Hintergrund, wenn andere Personen etwas ändern. Die Übergabe zeigt stattdessen die vollständige Zusammenfassung der Schicht.
 
@@ -264,7 +264,16 @@ Filteränderungen laden nur den Feed neu (HTMX), ohne die ganze Seite zu aktuali
 
 ### Hausverbot-Banner
 
-Wenn aktive Hausverbote in Ihrer Einrichtung bestehen, steht in der Kennzahlenzeile die rot markierte Zahl **Hausverbote aktiv**, und direkt darunter erscheint je Hausverbot eine rote Zeile mit Pseudonym sowie, je nach Berechtigung und vorhandenem Inhalt, Grund und „Bis“-Datum. Die Detailzeilen stehen außerhalb der seitlich scrollbaren Kennzahlenzeile und bleiben auch am Handy sichtbar. Zahl und Details aktualisieren sich im Hintergrund, wenn ein Hausverbot angelegt, geändert oder gelöscht wird.
+Wenn aktive Hausverbote in Ihrer Einrichtung bestehen, steht ganz vorn in der Kennzahlenzeile die rot markierte Zahl **Hausverbote aktiv**, und direkt darunter erscheint je Hausverbot eine rote Zeile mit Pseudonym sowie, je nach Berechtigung und vorhandenem Inhalt, Grund und „Bis“-Datum. Die Detailzeilen stehen außerhalb der seitlich scrollbaren Kennzahlenzeile und sind zunächst sichtbar.
+
+- **Ausblenden:** Das **×** neben den Zeilen blendet den ganzen Block aus. Die Zahl bleibt rot stehen und ist dann der einzige Hinweis; der Fokus wechselt auf sie.
+- **Einblenden:** Ein Klick auf die Zahl blendet die Zeilen wieder ein (und aus). Die Zahl meldet Screenreadern, ob die Details aufgeklappt sind.
+- **Gespeichert:** Ihre Wahl gilt für Ihr Benutzerkonto und bleibt nach Neuladen, in neuen Tabs, nach der Abmeldung und auf anderen Geräten erhalten. Gespeichert wird nur ein Prüfwert der ausgeblendeten Liste (ein mit einem Servergeheimnis gebildeter Hash), keine Namen und keine Gründe.
+- **Änderung der Liste:** Wird ein Hausverbot angelegt, geändert, abgelaufen oder gelöscht, erscheinen die Zeilen wieder, auch in der geöffneten Seite im Hintergrund. Änderungen, die Ihre Rolle in der Liste nicht sieht (etwa ein Grund, den Sie nicht lesen dürfen), blenden nichts ein.
+- **Übergabe:** In der Übergabe stehen die Zeilen immer da, ohne **×**.
+- **Ohne JavaScript:** **×** und Zahl arbeiten als Formular-Knöpfe und laden die Seite neu.
+
+In der **Personenliste** (`/clients/`) trägt jede Person mit aktivem Hausverbot das rote Badge **Hausverbot** neben dem Pseudonym, in der Tabelle und in der Karte am Handy. Es nennt keinen Grund und folgt derselben Sichtbarkeitsregel wie die roten Zeilen im Zeitstrom.
 
 ---
 
@@ -490,6 +499,8 @@ Jede Person hat eine **Kontaktstufe**:
 4. Klicken Sie auf einen Eintrag, um die Detailansicht zu öffnen.
 
 > **Tipp:** Die Schnellsuche über das globale Suchfeld (Lupe oben) findet Personen und Ereignisse gleichzeitig.
+
+> **Hinweis:** Personen mit aktivem Hausverbot tragen in der Liste das rote Badge **Hausverbot** (siehe [Hausverbot-Banner](#hausverbot-banner)).
 
 ### Detailseite der Person und Chronik
 

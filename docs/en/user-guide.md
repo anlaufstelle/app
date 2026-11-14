@@ -188,7 +188,7 @@ The feed combines four sources for the current day:
 - **Contacts on shift** -- documented contacts of the selected shift and day (without a selected shift the figure reads **Contacts today**, on an earlier day **Contacts on this day**). The link opens the contacts list with the same filters plus "without tally"; tally marks do not count here.
 - **Counted (tally)** -- tally entries in the live window, including entries of types that have since been disabled; visible only when the tally is visible. The link opens the contacts list with "tally only" and the same time window. Tiles continue to count all anonymous contacts of their type, so their sum can differ from this figure.
 - **My tasks** and **overdue** -- open tasks assigned to you (not the unassigned team tasks); "overdue" is red as soon as the figure is above zero.
-- **Entry bans active** -- visible only while entry bans exist; the details are directly below.
+- **Entry bans active** -- visible only while entry bans exist; it comes first in the row so that it is visible on a phone without scrolling sideways. The details are directly below and can be hidden and shown again through this figure (see [Entry Ban banner](#entry-ban-banner)).
 
 The row applies to every role with Timeline access. The figures update with every tally mark, with **Undo**, when the shift or a filter changes, and in the background when other people change something. The handover shows the full summary of the shift instead.
 
@@ -266,7 +266,16 @@ Filter changes reload only the feed (HTMX), without a full page refresh.
 
 ### Entry Ban banner
 
-If there are active entry bans in your facility, the key figures row shows the red-marked figure **Entry bans active**, and directly below it one red row per ban appears with the pseudonym and, depending on permissions and available content, the reason and "Until" date. The detail rows sit outside the sideways-scrolling key figures row and remain visible on a phone. The figure and details update in the background when an entry ban is created, changed or deleted.
+If there are active entry bans in your facility, the red-marked figure **Entry bans active** comes first in the key figures row, and directly below it one red row per ban appears with the pseudonym and, depending on permissions and available content, the reason and "Until" date. The detail rows sit outside the sideways-scrolling key figures row and are visible at first.
+
+- **Hide:** The **×** next to the rows hides the whole block. The figure stays in red and is then the only notice; the focus moves to it.
+- **Show:** A click on the figure shows the rows again (and hides them). The figure tells screen readers whether the details are expanded.
+- **Saved:** Your choice belongs to your user account and stays after a reload, in new tabs, after signing out and on other devices. Only a check value of the hidden list is stored (a hash formed with a server secret), no names and no reasons.
+- **Change of the list:** When an entry ban is created, changed, expired or deleted, the rows reappear, also in the open page in the background. Changes that your role does not see in the list (for example a reason you may not read) do not show anything again.
+- **Handover:** In the handover the rows are always shown, without **×**.
+- **Without JavaScript:** **×** and the figure work as form buttons and reload the page.
+
+In the **people list** (`/clients/`) every person with an active entry ban carries the red badge **Facility ban** next to the pseudonym, in the table and in the card on a phone. It names no reason and follows the same visibility rule as the red rows in the Zeitstrom.
 
 ---
 
@@ -492,6 +501,8 @@ Each person has a **contact stage**:
 4. Click on an entry to open the detail view.
 
 > **Tip:** The quick search via the global search field (magnifying glass at the top) finds people and events simultaneously.
+
+> **Note:** People with an active entry ban carry the red badge **Facility ban** in the list (see [Entry Ban banner](#entry-ban-banner)).
 
 ### Person Detail Page and Chronology
 
@@ -1213,5 +1224,5 @@ Phone, email, date and address patterns are detected heuristically and locally o
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: 9c8129c443722167c40df61964803375bbcdd0bf -->
-<!-- translation-date: 2026-11-13 -->
+<!-- source-hash: 97289a489f708cfd86bc0dd3ad5b92025dffb63c -->
+<!-- translation-date: 2026-11-14 -->
