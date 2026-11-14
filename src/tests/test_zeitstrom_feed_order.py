@@ -168,6 +168,57 @@ def test_bans_in_one_minute_follow_recording_order(facility, staff_user, client_
     assert [recorded[item["object"].pk] for item in items] == ["last", "middle", "first"]
 
 
+def test_ban_and_contact_in_one_minute_follow_recording_order_in_the_mixed_feed(
+    facility, staff_user, doc_type_contact, client_identified
+):
+    """A ban is placed against a contact of its minute by when it was recorded."""
+    ban_type = make_document_type(facility=facility, name="Hausverbot", system_type="ban")
+    second = timedelta(seconds=1)
+    recorded = {}
+    # Insertion order (contact, late ban, early ban) differs from the expected
+    # display order (late ban, contact, early ban) and from its reverse.
+    for label, doc_type, offset in (
+        ("contact", doc_type_contact, 30),
+        ("late ban", ban_type, 50),
+        ("early ban", ban_type, 10),
+    ):
+        entry = _contact(
+            facility,
+            staff_user,
+            doc_type,
+            client_identified,
+            occurred_at=_MINUTE,
+            recorded_at=_MINUTE + offset * second,
+        )
+        recorded[entry.pk] = label
+
+    items = build_feed_items(facility, _DAY, "", user=staff_user)
+
+    assert [recorded[item["object"].pk] for item in items] == ["late ban", "contact", "early ban"]
+
+
+def test_ban_cap_keeps_the_last_recorded_bans(monkeypatch, facility, staff_user, client_identified):
+    monkeypatch.setattr("core.services.events.feed.FEED_MAX_PER_TYPE", 2)
+    ban_type = make_document_type(facility=facility, name="Hausverbot", system_type="ban")
+    second = timedelta(seconds=1)
+    recorded = {}
+    # Insert out of recording order so database row order cannot decide the cut.
+    for label, offset in (("middle", 25), ("first", 5), ("last", 45)):
+        ban = _contact(
+            facility,
+            staff_user,
+            ban_type,
+            client_identified,
+            occurred_at=_MINUTE,
+            recorded_at=_MINUTE + offset * second,
+        )
+        recorded[ban.pk] = label
+
+    items = build_feed_items(facility, _DAY, "bans", user=staff_user)
+
+    assert [recorded[item["object"].pk] for item in items] == ["last", "middle"]
+
+
 def test_contact_after_a_later_minute_deletion_stays_below_it(
     facility, staff_user, doc_type_contact, client_identified
 ):
