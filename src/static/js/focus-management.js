@@ -59,7 +59,11 @@
  * create) start from another element and keep their focus handling.
  * The value ``always`` (tally feed, offline replay and stroke reloads) lifts the
  * ``<body>`` condition: the reload then leaves the focus and the scroll position
- * alone even if nothing holds the focus.
+ * alone even if nothing holds the focus. If the focus sat on a control inside the
+ * target and the reload removed it, the focus moves to the same control in the new
+ * content (matched by id, aria-controls or href), else to the target, without
+ * scrolling. The scroll position from before such a reload is put back, because
+ * scroll anchoring can otherwise carry the page away with the replaced control.
  */
 (function () {
     "use strict";
@@ -166,6 +170,80 @@
         return null;
     }
 
+    // Keys that identify "the same control" before and after a reload, in order of
+    // preference. Feed cards have no id: their toggle button is addressed by the
+    // detail region it controls, links by their target.
+    var FOCUS_KEY_ATTRS = ["id", "aria-controls", "href"];
+
+    // State right before the swap, for the self-refreshing "always" targets: the
+    // scroll position and, when the focus sat inside the target, where it sat.
+    // Set by htmx:beforeSwap, consumed (and cleared) by htmx:afterSwap.
+    var pendingSwap = null;
+
+    // All keys the control carries, in order of preference.
+    function _focusKeys(el) {
+        var keys = [];
+        for (var i = 0; i < FOCUS_KEY_ATTRS.length; i++) {
+            var value = el.getAttribute(FOCUS_KEY_ATTRS[i]);
+            if (value) {
+                keys.push({ attr: FOCUS_KEY_ATTRS[i], value: value });
+            }
+        }
+        return keys;
+    }
+
+    function _handleBeforeSwap(event) {
+        var target = event && event.detail ? event.detail.target : null;
+        var active = document.activeElement;
+        pendingSwap = null;
+        if (!target || target.nodeType !== 1) {
+            return;
+        }
+        var focusInside =
+            !!active && active !== document.body && active !== target && target.contains(active);
+        pendingSwap = {
+            target: target,
+            focusInside: focusInside,
+            keys: focusInside ? _focusKeys(active) : [],
+            x: window.scrollX,
+            y: window.scrollY,
+        };
+    }
+
+    // A background reload must never move the reader. Chromium's scroll anchoring
+    // can jump the page when the focused control inside the target is replaced,
+    // so the position from before the swap is put back.
+    function _restoreScroll(pending) {
+        if ((window.scrollX !== pending.x || window.scrollY !== pending.y) && window.scrollTo) {
+            window.scrollTo(pending.x, pending.y);
+        }
+    }
+
+    // A background reload removed the control that held the focus: hand the focus
+    // to its twin in the new content, else to the container, and never scroll.
+    function _restoreFocusInside(container, pending) {
+        var twin = null;
+        for (var k = 0; k < pending.keys.length && !twin; k++) {
+            var key = pending.keys[k];
+            var candidates = container.querySelectorAll("[" + key.attr + "]");
+            for (var i = 0; i < candidates.length; i++) {
+                if (candidates[i].getAttribute(key.attr) === key.value) {
+                    twin = candidates[i];
+                    break;
+                }
+            }
+        }
+        if (!twin) {
+            twin = container;
+            _makeFocusable(twin);
+        }
+        try {
+            twin.focus({ preventScroll: true });
+        } catch (_e) {
+            // Focus can fail in edge cases; keep the starting state.
+        }
+    }
+
     function _handleAfterSwap(event) {
         var detail = event && event.detail ? event.detail : {};
         var replaced = detail.target || {};
@@ -190,14 +268,27 @@
         // reload took the focus away (the active element is <body>) does the
         // normal target choice below apply.
         var requestElt = detail.requestConfig ? detail.requestConfig.elt : null;
-        if (
-            requestElt &&
-            requestElt === replaced &&
-            target.hasAttribute(SELF_REFRESH_OPT_OUT_ATTR) &&
-            ((active && active !== document.body) ||
-                target.getAttribute(SELF_REFRESH_OPT_OUT_ATTR) === SELF_REFRESH_ALWAYS)
-        ) {
-            return;
+        var pending = pendingSwap && pendingSwap.target === replaced ? pendingSwap : null;
+        pendingSwap = null;
+        if (requestElt && requestElt === replaced && target.hasAttribute(SELF_REFRESH_OPT_OUT_ATTR)) {
+            var always = target.getAttribute(SELF_REFRESH_OPT_OUT_ATTR) === SELF_REFRESH_ALWAYS;
+            if (active && active !== document.body) {
+                if (always && pending) {
+                    _restoreScroll(pending);
+                }
+                return;
+            }
+            if (always) {
+                // The focus was inside the target and the reload took it away: keep
+                // it in the target. Otherwise nothing held it, so nothing takes it.
+                if (pending && pending.focusInside) {
+                    _restoreFocusInside(target, pending);
+                }
+                if (pending) {
+                    _restoreScroll(pending);
+                }
+                return;
+            }
         }
 
         // War der Fokus vor dem Swap bereits INNERHALB des getauschten Ziels
@@ -234,5 +325,6 @@
     // (Muster wie htmx-errors.js). Bewusst afterSwap statt afterSettle: der
     // Fokus soll sitzen, BEVOR eine evtl. Alpine-Reinitialisierung des Fragments
     // dazwischengrätscht.
+    document.body.addEventListener("htmx:beforeSwap", _handleBeforeSwap);
     document.body.addEventListener("htmx:afterSwap", _handleAfterSwap);
 })();

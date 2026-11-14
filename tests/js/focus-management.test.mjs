@@ -7,7 +7,7 @@
 // Dieser Test pinnt alle drei Stufen in ihrer Reihenfolge sowie die beiden
 // vorgelagerten Ausstiege (Opt-out, Live-Such-Schutz), damit die neue Stufe
 // die bestehenden Zusagen nicht verschiebt.
-import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 beforeAll(async () => {
     await import("../../src/static/js/focus-management.js");
@@ -279,6 +279,133 @@ describe("Self-refresh in the background (condition board after a field board ac
 
         expect(fieldBoard).not.toBe(document.activeElement);
         expect(document.activeElement).toBe(twin);
+    });
+});
+
+describe("Background reload of an 'always' feed with the focus inside it", () => {
+    const SELF_REFRESH_ATTR = "data-hx-no-focus-self-refresh";
+    let scrollToSpy;
+
+    beforeEach(() => {
+        scrollToSpy = vi.fn();
+        window.scrollTo = scrollToSpy;
+        Object.defineProperty(window, "scrollX", { configurable: true, value: 0 });
+        Object.defineProperty(window, "scrollY", { configurable: true, value: 640 });
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    function beforeSwapOn(target) {
+        document.body.dispatchEvent(
+            new CustomEvent("htmx:beforeSwap", { bubbles: true, detail: { target } })
+        );
+    }
+
+    function afterSwapFrom(target, requestElt) {
+        document.body.dispatchEvent(
+            new CustomEvent("htmx:afterSwap", {
+                bubbles: true,
+                detail: { target, requestConfig: { elt: requestElt } },
+            })
+        );
+    }
+
+    function feed(value) {
+        const el = document.createElement("div");
+        el.id = "feed-list";
+        el.setAttribute(SELF_REFRESH_ATTR, value);
+        el.innerHTML =
+            '<button id="other-card" aria-controls="detail-other">Other</button>' +
+            '<button id="the-card" aria-controls="detail-1">Card</button>';
+        document.body.appendChild(el);
+        return el;
+    }
+
+    /** What an innerHTML reload does: the old controls disappear, twins with the same keys arrive. */
+    function reload(el, html) {
+        beforeSwapOn(el);
+        el.innerHTML = html;
+        afterSwapFrom(el, el);
+    }
+
+    const TWIN_HTML =
+        '<button aria-controls="detail-other">Other</button><button aria-controls="detail-1">Card</button>';
+
+    it("hands the focus to the same control in the new content without scrolling", () => {
+        const el = feed("always");
+        el.querySelector('[aria-controls="detail-1"]').focus();
+        const focusSpy = vi.spyOn(HTMLElement.prototype, "focus");
+
+        reload(el, TWIN_HTML);
+
+        const twin = el.querySelector('[aria-controls="detail-1"]');
+        expect(document.activeElement).toBe(twin);
+        expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
+        expect(focusSpy).not.toHaveBeenCalledWith({ preventScroll: false });
+    });
+
+    it("falls back to the feed itself when the control is gone", () => {
+        const el = feed("always");
+        el.querySelector('[aria-controls="detail-1"]').focus();
+
+        reload(el, "<p>Nothing left</p>");
+
+        expect(document.activeElement).toBe(el);
+        expect(el.getAttribute("tabindex")).toBe("-1");
+    });
+
+    it("puts the scroll position from before the reload back", () => {
+        const el = feed("always");
+        el.querySelector('[aria-controls="detail-1"]').focus();
+        beforeSwapOn(el);
+        el.innerHTML = TWIN_HTML;
+        Object.defineProperty(window, "scrollY", { configurable: true, value: 2300 });
+
+        afterSwapFrom(el, el);
+
+        expect(scrollToSpy).toHaveBeenCalledWith(0, 640);
+    });
+
+    it("does not scroll when the position did not change", () => {
+        const el = feed("always");
+        el.querySelector('[aria-controls="detail-1"]').focus();
+
+        reload(el, TWIN_HTML);
+
+        expect(scrollToSpy).not.toHaveBeenCalled();
+    });
+
+    it("takes no focus when nothing held it before the reload", () => {
+        const el = feed("always");
+        expect(document.activeElement).toBe(document.body);
+
+        reload(el, TWIN_HTML);
+
+        expect(document.activeElement).toBe(document.body);
+    });
+
+    it("takes no focus when the focus sat outside the feed", () => {
+        const outside = document.createElement("button");
+        document.body.appendChild(outside);
+        const el = feed("always");
+        outside.focus();
+
+        reload(el, TWIN_HTML);
+
+        expect(document.activeElement).toBe(outside);
+    });
+
+    it("leaves the condition board as before: the focus lost inside it goes to the board", () => {
+        const el = feed("");
+        el.id = "condition-board";
+        el.querySelector('[aria-controls="detail-1"]').focus();
+
+        reload(el, TWIN_HTML);
+
+        expect(document.activeElement).toBe(el);
+        expect(scrollToSpy).not.toHaveBeenCalled();
     });
 });
 

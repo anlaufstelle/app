@@ -11,7 +11,15 @@ import re
 import pytest
 from playwright.sync_api import expect
 
-from ._helpers import django_shell, tally_tile, wait_until, wait_until_htmx_bound
+from ._helpers import (
+    django_shell,
+    do_real_login,
+    tally_tile,
+    wait_for_active_service_worker,
+    wait_until,
+    wait_until_htmx_bound,
+)
+from .test_offline_tally import _cleanup_offline_state, _reconnect_via_online_event
 
 pytestmark = pytest.mark.e2e
 
@@ -67,6 +75,20 @@ def long_feed(e2e_env):
 
 def _scroll_y(page):
     return page.evaluate("() => window.scrollY")
+
+
+def _settled_scroll_y(page):
+    """The scroll position once a smooth scroll has come to rest."""
+    previous = [None]
+
+    def at_rest():
+        current = _scroll_y(page)
+        settled = current == previous[0]
+        previous[0] = current
+        return settled
+
+    assert wait_until(page, at_rest, timeout_ms=5000, interval_ms=200), "the page keeps scrolling"
+    return previous[0]
 
 
 def _active_row_testid(page):
@@ -168,6 +190,41 @@ class TestTallyStrokeKeepsPlace:
         assert _scroll_y(page) == 0, "the page scrolled to the feed after a background reload"
         assert page.evaluate("() => document.activeElement === document.body"), "the feed took the focus"
 
+    def test_feed_reload_replacing_the_focused_card_keeps_the_focus_in_the_feed(
+        self, staff_page, base_url, long_feed, viewport_name
+    ):
+        """The focus on a feed card survives a background reload that replaces the card."""
+        page = staff_page
+        self._open(page, base_url, viewport_name)
+        controls = f"event-detail-{long_feed[0]}"
+        selector = f'#feed-list button[aria-controls="{controls}"]'
+        # The live watch refreshes the feed once right after the page load; focus the card after that.
+        page.wait_for_load_state("networkidle")
+        page.locator(selector).scroll_into_view_if_needed()
+        scroll_before = _settled_scroll_y(page)
+        assert scroll_before > 0
+        page.evaluate(
+            "(selector) => document.querySelector(selector).focus({ preventScroll: true })",
+            selector,
+        )
+        assert page.evaluate("(selector) => document.activeElement === document.querySelector(selector)", selector)
+
+        _wait_for_feed_reload(
+            page, lambda: page.evaluate("() => document.body.dispatchEvent(new CustomEvent('zeitstrom-changed'))")
+        )
+
+        assert _scroll_y(page) == scroll_before, "the page moved after the background reload"
+        focused = page.evaluate(
+            """() => {
+                const active = document.activeElement;
+                return {
+                    inFeed: !!active.closest('#feed-list'),
+                    controls: active.getAttribute('aria-controls'),
+                };
+            }"""
+        )
+        assert focused == {"inFeed": True, "controls": f"event-detail-{long_feed[0]}"}, focused
+
     def test_number_tile_save_keeps_scroll_and_focus_on_the_tile(self, staff_page, base_url, long_feed, viewport_name):
         page = staff_page
         self._open(page, base_url, viewport_name)
@@ -201,3 +258,43 @@ class TestTallyStrokeKeepsPlace:
         _wait_for_feed_reload(page, lambda: doc_type_filter.select_option(index=1))
 
         assert page.evaluate("() => document.activeElement && document.activeElement.id") == "feed-list"
+
+
+def test_offline_replay_reload_keeps_scroll_and_leaves_the_focus_alone(browser, base_url, long_feed):
+    """The reload after the offline replay (real queue, real reconnect) neither scrolls nor focuses."""
+    context = browser.new_context(locale="de-DE", viewport=VIEWPORTS["desktop"])
+    page = context.new_page()
+    page.set_default_timeout(30000)
+    try:
+        do_real_login(page, base_url)
+        page.goto(f"{base_url}/", wait_until="domcontentloaded")
+        page.wait_for_function(
+            "() => !!(window.crypto_session && window.offlineStore"
+            " && window.syncOrchestrator && window.offlineTallyUi)",
+            timeout=10000,
+        )
+        page.evaluate("async () => { await window.crypto_session.ready(); }")
+        wait_for_active_service_worker(page)
+        page.evaluate("async () => { await window.crypto_session.ready(); }")
+        page.evaluate("async () => window.offlineStore.revalidateCachedFacility()")
+        page.evaluate("async () => window.offlineTallyUi.refreshOnlinePanel({useSnapshot: true})")
+
+        tile = tally_tile(page, "Kontakt")
+        expect(tile).to_be_visible()
+        page.context.set_offline(True)
+        page.evaluate("window.dispatchEvent(new Event('offline'))")
+        _stroke(page, tile)
+        expect(tile.locator("[data-offline-tally-status]")).to_be_visible(timeout=15000)
+
+        page.evaluate("() => window.scrollTo(0, 0)")
+        page.evaluate("() => document.activeElement && document.activeElement.blur()")
+        assert page.evaluate("() => document.activeElement === document.body")
+
+        _wait_for_feed_reload(page, lambda: _reconnect_via_online_event(page))
+        page.wait_for_function("async () => (await window.offlineStore.count('queue')) === 0", timeout=30000)
+
+        assert _scroll_y(page) == 0, "the page scrolled to the feed after the offline replay"
+        assert page.evaluate("() => document.activeElement === document.body"), "the replay moved the focus"
+    finally:
+        _cleanup_offline_state(page)
+        context.close()
