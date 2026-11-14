@@ -266,7 +266,7 @@ Filteränderungen laden nur den Feed neu (HTMX), ohne die ganze Seite zu aktuali
 
 Wenn aktive Hausverbote in Ihrer Einrichtung bestehen, steht ganz vorn in der Kennzahlenzeile die rot markierte Zahl **Hausverbote aktiv**, und direkt darunter erscheint je Hausverbot eine rote Zeile mit Pseudonym sowie, je nach Berechtigung und vorhandenem Inhalt, Grund und „Bis“-Datum. Die Detailzeilen stehen außerhalb der seitlich scrollbaren Kennzahlenzeile und sind zunächst sichtbar.
 
-- **Ausblenden:** Das **×** neben den Zeilen blendet den ganzen Block aus. Die Zahl bleibt rot stehen und ist dann der einzige Hinweis; der Fokus wechselt auf sie.
+- **Ausblenden:** Das **×** neben den Zeilen blendet den ganzen Block aus, sobald der Server die Wahl bestätigt hat; ohne Antwort oder bei einer Änderung der Liste in der Zwischenzeit bleiben die Zeilen sichtbar. Die Zahl bleibt rot stehen und ist dann der einzige Hinweis; der Fokus wechselt auf sie.
 - **Einblenden:** Ein Klick auf die Zahl blendet die Zeilen wieder ein (und aus). Die Zahl meldet Screenreadern, ob die Details aufgeklappt sind.
 - **Gespeichert:** Ihre Wahl gilt für Ihr Benutzerkonto und bleibt nach Neuladen, in neuen Tabs, nach der Abmeldung und auf anderen Geräten erhalten. Gespeichert wird nur ein Prüfwert der ausgeblendeten Liste (ein mit einem Servergeheimnis gebildeter Hash), keine Namen und keine Gründe.
 - **Änderung der Liste:** Wird ein Hausverbot angelegt, geändert, abgelaufen oder gelöscht, erscheinen die Zeilen wieder, auch in der geöffneten Seite im Hintergrund. Änderungen, die Ihre Rolle in der Liste nicht sieht (etwa ein Grund, den Sie nicht lesen dürfen, oder Wörter hinter dem angezeigten Auszug des Grundes), blenden nichts ein.

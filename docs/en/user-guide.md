@@ -268,7 +268,7 @@ Filter changes reload only the feed (HTMX), without a full page refresh.
 
 If there are active entry bans in your facility, the red-marked figure **Entry bans active** comes first in the key figures row, and directly below it one red row per ban appears with the pseudonym and, depending on permissions and available content, the reason and "Until" date. The detail rows sit outside the sideways-scrolling key figures row and are visible at first.
 
-- **Hide:** The **×** next to the rows hides the whole block. The figure stays in red and is then the only notice; the focus moves to it.
+- **Hide:** The **×** next to the rows hides the whole block once the server has confirmed the choice; without an answer, or if the list changes in the meantime, the rows stay visible. The figure stays in red and is then the only notice; the focus moves to it.
 - **Show:** A click on the figure shows the rows again (and hides them). The figure tells screen readers whether the details are expanded.
 - **Saved:** Your choice belongs to your user account and stays after a reload, in new tabs, after signing out and on other devices. Only a check value of the hidden list is stored (a hash formed with a server secret), no names and no reasons.
 - **Change of the list:** When an entry ban is created, changed, expired or deleted, the rows reappear, also in the open page in the background. Changes that your role does not see in the list (for example a reason you may not read, or words behind the shown excerpt of the reason) do not show anything again.
@@ -1224,5 +1224,5 @@ Phone, email, date and address patterns are detected heuristically and locally o
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: a7d3154c31b00e7a3c36d504ec4018637b9a876c -->
+<!-- source-hash: a496246796e3105430ec71ac67c86f17fe5cbf85 -->
 <!-- translation-date: 2026-11-14 -->

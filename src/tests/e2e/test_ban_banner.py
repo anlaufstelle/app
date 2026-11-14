@@ -637,8 +637,8 @@ class TestBanDetailsToggle:
             _clear_ban_details_choice(e2e_env)
             _restore_ban_state(e2e_env, restore)
 
-    def test_a_late_watch_answer_for_an_empty_list_does_not_erase_a_newer_ban(self, staff_page, base_url, e2e_env):
-        """A watch cycle overtaken by a newer one (here: a refresh request) never writes its slots."""
+    def test_a_repair_waits_for_a_held_watch_cycle_and_then_brings_the_newer_ban(self, staff_page, base_url, e2e_env):
+        """A repair request does not abort a running cycle; after it, the newer ban arrives."""
         event_pk, _pseudonym, restore = self._prepare(e2e_env)
         second_pk = None
         context = None
@@ -669,27 +669,77 @@ class TestBanDetailsToggle:
             page.evaluate("() => { window.zeitstromWatch.checkNow(); }")
             _wait_until(page, lambda: len(held) == 2)
 
-            # A newer ban, delivered by a newer cycle.
+            # A newer ban and a repair request while that cycle still runs.
             hold["on"] = False
             second_pk = _add_second_ban(e2e_env)
             page.evaluate("() => window.dispatchEvent(new CustomEvent('zeitstrom:ban-slots-stale'))")
-            expect(page.locator("#zeitstrom-ban-details").get_by_role("link", name="Race-Ban-2")).to_be_visible(
-                timeout=30_000
+            for route, response in held:
+                route.fulfill(response=response)
+
+            details = page.locator("#zeitstrom-ban-details")
+            expect(details.get_by_role("link", name="Race-Ban-2")).to_be_visible(timeout=30_000)
+            expect(page.get_by_test_id("zeitstrom-kpi-bans")).to_be_visible()
+            expect(page.get_by_test_id("zeitstrom-kpi-bans")).to_have_attribute("aria-expanded", "true")
+        finally:
+            if context is not None:
+                context.close()
+            if second_pk:
+                _remove_second_ban(e2e_env, second_pk)
+            _clear_ban_details_choice(e2e_env)
+            _restore_ban_state(e2e_env, restore)
+
+    def test_a_hide_processed_after_the_list_went_back_does_not_come_back(self, staff_page, base_url, e2e_env):
+        """Hide(A) reaches the server only after A, A+B and A again were seen: visible, also after a reload."""
+        _event_pk, _pseudonym, restore = self._prepare(e2e_env)
+        second_pk = None
+        context = None
+        try:
+            context = staff_page.context.browser.new_context(
+                storage_state=staff_page.context.storage_state(), service_workers="block", locale="de-DE"
+            )
+            page = context.new_page()
+            page.set_default_timeout(30000)
+            held = []
+
+            def hold_first_post(route):
+                # Only the hide is held (not yet sent to the server); later posts pass.
+                if held:
+                    route.continue_()
+                else:
+                    held.append(route)
+
+            page.route("**/zeitstrom/ban-details/", hold_first_post)
+            _open_settled_zeitstrom(page, base_url)
+            before = int(page.get_by_test_id("zeitstrom-kpi-bans").get_attribute("data-count"))
+
+            page.get_by_role("button", name="Hausverbot-Details ausblenden").click()
+            _wait_until(page, lambda: bool(held))
+            expect(page.locator("#zeitstrom-ban-details")).to_be_visible()
+
+            second_pk = _add_second_ban(e2e_env)
+            page.evaluate("() => window.zeitstromWatch.checkNow()")
+            expect(page.get_by_test_id("zeitstrom-kpi-bans")).to_have_attribute(
+                "data-count", str(before + 1), timeout=30_000
+            )
+            _remove_second_ban(e2e_env, second_pk)
+            second_pk = None
+            page.evaluate("() => window.zeitstromWatch.checkNow()")
+            expect(page.get_by_test_id("zeitstrom-kpi-bans")).to_have_attribute(
+                "data-count", str(before), timeout=30_000
             )
 
-            for route, response in held:
-                # The newer cycle aborts the old requests; an aborted request takes no
-                # answer any more, which is the point. A late answer that still gets
-                # through must be dropped by the watch.
-                try:
-                    route.fulfill(response=response)
-                except Exception:  # noqa: BLE001 - aborted by the page
-                    pass
-            page.wait_for_timeout(1000)
-            page.evaluate("() => window.zeitstromWatch.checkNow()")
+            with page.expect_response(
+                lambda response: (
+                    "/zeitstrom/ban-details/" in response.url
+                    and response.request.post_data is not None
+                    and "ban_details=show" in response.request.post_data
+                )
+            ):
+                held[0].continue_()
 
-            expect(page.locator("#zeitstrom-ban-details").get_by_role("link", name="Race-Ban-2")).to_be_visible()
-            expect(page.get_by_test_id("zeitstrom-kpi-bans")).to_be_visible()
+            expect(page.locator("#zeitstrom-ban-details")).to_be_visible()
+            _open_settled_zeitstrom(page, base_url)
+            expect(page.locator("#zeitstrom-ban-details")).to_be_visible()
             expect(page.get_by_test_id("zeitstrom-kpi-bans")).to_have_attribute("aria-expanded", "true")
         finally:
             if context is not None:
