@@ -63,7 +63,7 @@ from core.services.dynamic_data import (
 from core.services.events import split_file_and_text_data
 from core.services.scoping import get_scoped_object
 from core.services.security import RequireSudoModeMixin
-from core.services.system import get_active_bans_for_client
+from core.services.system import active_ban_client_ids, get_active_bans_for_client
 from core.utils.downloads import safe_download_response
 from core.utils.ratelimit import ratelimit
 from core.views._dynamic_errors import add_dynamic_service_errors
@@ -226,6 +226,8 @@ class ClientListView(AssistantOrAboveRequiredMixin, FilteredPaginatedListMixin, 
             # Refs #1876: Merge-Antraege sind eine Teilmenge davon — die
             # Liste nennt sie beim Namen („Zusammenführung beantragt").
             "pending_merge_client_ids": pending_merge_client_ids(facility, clients),
+            # One query for the page, same visibility as the Zeitstrom banner.
+            "banned_client_ids": active_ban_client_ids(facility, clients),
             "q": self.get_search_term(request),
             "selected_stage": request.GET.get("stage"),
             "selected_age": request.GET.get("age"),

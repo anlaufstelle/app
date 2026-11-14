@@ -21,7 +21,7 @@ from core.services.system._db_admin import (
     has_rls_bypass_context,
     rls_bypass_for_read,
 )
-from core.services.system.bans import get_active_bans, get_active_bans_for_client
+from core.services.system.bans import active_ban_client_ids, get_active_bans, get_active_bans_for_client
 from core.services.system.export import (
     _build_event_row,
     _build_header,
@@ -107,6 +107,7 @@ __all__ = [
     "bypass_replication_triggers",
     "current_connection_owns",
     "export_events_csv",
+    "active_ban_client_ids",
     "get_active_bans",
     "get_form_field_cls_for_file",
     "get_active_bans_for_client",

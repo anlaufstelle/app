@@ -109,6 +109,31 @@ def get_active_bans(facility, user=None):
     return _collect_active_bans(events, user, include_client_in_result=True)
 
 
+def active_ban_client_ids(facility, clients):
+    """Return the pks of those *clients* that have an active ban.
+
+    Same visibility as :func:`get_active_bans` (active ban type, readable person,
+    live event, ``aktiv``/``bis`` projection), but restricted to the people of one
+    list page and answered with a single query. The reason is never read.
+    """
+    ids = [c.pk for c in clients]
+    if not ids:
+        return set()
+
+    ban_doc_types = DocumentType.objects.for_facility(facility).filter(system_type="ban", is_active=True)
+    events = Event.objects.for_facility(facility).filter(
+        readable_person_filter(), client_id__in=ids, document_type__in=ban_doc_types, is_deleted=False
+    )
+
+    today = timezone.localdate()
+    banned = set()
+    for client_id, data in events.values_list("client_id", "data_json"):
+        active, _bis, _grund = _project_ban_data(data or {}, today=today, may_see_grund=False)
+        if active:
+            banned.add(client_id)
+    return banned
+
+
 def get_active_bans_for_client(client, user=None):
     """Determine active bans for a single client.
 

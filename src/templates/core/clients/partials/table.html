@@ -60,6 +60,10 @@ steht.{% endcomment %}
                                   title="{% trans 'Lokal verfügbar' %}">
                                 {% trans "Offline" %}
                             </span>
+                            {% if client.pk in banned_client_ids %}
+                            <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[12px] font-semibold bg-ban text-white flex-shrink-0"
+                                  data-testid="client-row-ban-badge">{% trans "Hausverbot" %}</span>
+                            {% endif %}
                             {# Refs #1736 (A): laufender Vier-Augen-Löschantrag. #}
                             {# Refs #1876: Merge-Antraege laufen als derselbe   #}
                             {# Antragstyp — die Liste nennt die Art beim Namen. #}
