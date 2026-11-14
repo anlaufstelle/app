@@ -27,15 +27,19 @@ from django.db import DatabaseError, IntegrityError, close_old_connections, conn
 from django.utils import timezone
 
 from core.models import DocumentType, Event
-from core.models.document_type import BAN_PERSONLESS_EVENTS_MESSAGE
-from core.models.event import BAN_PERSON_TRIGGER_TAG, is_ban_person_violation
 from core.services.events.crud import create_event, update_event
 from tests._factories import insert_event_past_save
 from tests.test_rls_functional import as_rls_role, rls_test_role  # noqa: F401
 
 pytestmark = pytest.mark.postgres
 
+# Error prefixes of the triggers of migration 0199. Spelled out instead of
+# imported so the file also runs against a tree without the triggers.
+BAN_PERSON_TRIGGER_TAG = "event_ban_requires_person"
 TYPE_TRIGGER_TAG = "documenttype_ban_without_personless_events"
+PERSONLESS_EVENTS_MESSAGE = (
+    "Dieser Dokumentationstyp hat bereits Ereignisse ohne Person und kann deshalb kein Hausverbot werden."
+)
 
 
 def _type(facility, **overrides) -> DocumentType:
@@ -144,7 +148,7 @@ class TestStaleTypeInstance:
         stale.system_type = None
         stale.min_contact_stage = None
         monkeypatch.setattr(DocumentType, "refresh_from_db", lambda self, *args, **kwargs: None)
-        monkeypatch.setattr(Event, "_stored_type_is_ban", lambda self, save_kwargs: False)
+        monkeypatch.setattr(Event, "_stored_type_is_ban", lambda self, save_kwargs: False, raising=False)
 
         with pytest.raises(ValidationError) as excinfo:
             create_event(
@@ -155,6 +159,8 @@ class TestStaleTypeInstance:
                 data_json={},
                 client=None,
             )
+
+        from core.models.event import is_ban_person_violation
 
         assert isinstance(excinfo.value.__cause__, IntegrityError)
         assert is_ban_person_violation(excinfo.value.__cause__)
@@ -295,7 +301,7 @@ class TestTypeBecomesBan:
         with pytest.raises(ValidationError) as excinfo:
             plain.save()
 
-        assert excinfo.value.message_dict["system_type"] == [str(BAN_PERSONLESS_EVENTS_MESSAGE)]
+        assert excinfo.value.message_dict["system_type"] == [PERSONLESS_EVENTS_MESSAGE]
         assert DocumentType.objects.get(pk=plain.pk).system_type is None
 
     def test_clean_reports_the_personless_events_on_the_system_type_field(self, facility):
@@ -306,7 +312,7 @@ class TestTypeBecomesBan:
         with pytest.raises(ValidationError) as excinfo:
             plain.clean()
 
-        assert excinfo.value.message_dict["system_type"] == [str(BAN_PERSONLESS_EVENTS_MESSAGE)]
+        assert excinfo.value.message_dict["system_type"] == [PERSONLESS_EVENTS_MESSAGE]
 
     def test_a_partial_save_of_the_system_type_is_refused(self, facility):
         plain = self._type_with_a_personless_event(facility)
