@@ -16,6 +16,9 @@ from core.models.report_key import ReportKeyMixin
 #: Shown when a ban type has no minimum contact stage. Shared by the model
 #: backstop and the configuration form, so both layers speak with one voice.
 BAN_STAGE_REQUIRED_MESSAGE = _("Ein Hausverbot braucht eine Person: Bitte eine Mindest-Kontaktstufe wählen.")
+BAN_PERSONLESS_EVENTS_MESSAGE = _(
+    "Dieser Dokumentationstyp hat bereits Ereignisse ohne Person und kann deshalb kein Hausverbot werden."
+)
 
 
 class DocumentType(ReportKeyMixin, SluggedModel):
@@ -164,8 +167,13 @@ class DocumentType(ReportKeyMixin, SluggedModel):
             models.CheckConstraint(
                 # ``IN`` alone yields NULL for a missing stage, and a CHECK that
                 # evaluates to NULL passes; the explicit NOT NULL test rejects it.
+                # The stage list follows the choices; a new stage changes this
+                # condition and so needs a migration (``makemigrations --check``).
                 condition=~models.Q(system_type="ban")
-                | models.Q(min_contact_stage__isnull=False, min_contact_stage__in=["identified", "qualified"]),
+                | models.Q(
+                    min_contact_stage__isnull=False,
+                    min_contact_stage__in=[choice for choice, _label in CONTACT_STAGE_CHOICES],
+                ),
                 name="documenttype_ban_requires_contact_stage",
             ),
             models.CheckConstraint(
@@ -208,15 +216,37 @@ class DocumentType(ReportKeyMixin, SluggedModel):
     def _validate_ban_rules(self):
         """A ban names a person: its type needs a stage and must be an event type.
 
-        Backstop below the configuration form and the package schema: it
-        catches the Django admin (``clean``) and every service, import or
-        shell path that saves a type directly (``save``). The database
-        constraints of the same names catch the paths that skip both
-        (``QuerySet.update``, ``bulk_create``).
+        Backstop below the configuration form and the package schema for the
+        Django admin and model forms (``clean``). A stored type that becomes a
+        ban must not have events without a person yet. ``save`` checks the same
+        rules, the event rule under the configuration lock (``_save_context``).
+        The database constraints and triggers of migration ``0199`` catch the
+        paths that skip both (``QuerySet.update``, ``bulk_create``, raw SQL).
         """
         errors = self._ban_rule_errors(self.system_type, self.entity_type, self.min_contact_stage)
+        if not errors and self.system_type == self.SystemType.BAN and not self._state.adding:
+            stored = type(self)._base_manager.filter(pk=self.pk).values_list("system_type", flat=True).first()
+            errors = self._ban_transition_errors(stored, self.system_type)
         if errors:
             raise ValidationError(errors)
+
+    def _ban_transition_errors(self, stored_system_type, new_system_type) -> dict[str, ValidationError]:
+        """A stored type that becomes a ban must not have events without a person.
+
+        Those events would be personless bans the moment the type changes. The
+        trigger ``documenttype_ban_without_personless_events`` (migration
+        ``0199``) refuses the same change in the database; this check gives the
+        readable error.
+        """
+        from core.models.event import Event
+
+        if new_system_type != self.SystemType.BAN or stored_system_type == self.SystemType.BAN:
+            return {}
+        if self._state.adding or self.pk is None:
+            return {}
+        if Event._base_manager.filter(document_type_id=self.pk, client_id__isnull=True).exists():
+            return {"system_type": ValidationError(BAN_PERSONLESS_EVENTS_MESSAGE)}
+        return {}
 
     def save(self, *args, **kwargs):
         # A save that writes none of the three rule fields (``is_active``,
@@ -226,7 +256,9 @@ class DocumentType(ReportKeyMixin, SluggedModel):
         update_fields = kwargs.get("update_fields")
         rule_fields = {"system_type", "min_contact_stage", "entity_type"}
         if update_fields is None:
-            self._validate_ban_rules()
+            errors = self._ban_rule_errors(self.system_type, self.entity_type, self.min_contact_stage)
+            if errors:
+                raise ValidationError(errors)
         elif rule_fields & set(update_fields):
             values = {name: getattr(self, name) for name in rule_fields}
             stored = (
@@ -272,6 +304,15 @@ class DocumentType(ReportKeyMixin, SluggedModel):
                 .filter(pk=self.pk)
                 .first()
             )
+            if previous is not None:
+                # Under the exclusive configuration gate no event of this
+                # facility can be created until commit, so the check holds.
+                new_system_type = self.system_type
+                if update_fields is not None and "system_type" not in update_fields:
+                    new_system_type = previous.system_type
+                errors = self._ban_transition_errors(previous.system_type, new_system_type)
+                if errors:
+                    raise ValidationError(errors)
             level = self.sensitivity
             if previous is not None and update_fields is not None and "sensitivity" not in update_fields:
                 level = previous.sensitivity

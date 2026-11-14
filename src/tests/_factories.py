@@ -14,19 +14,31 @@ Zusatzobjekte, keine Seiteneffekte. Bestehende ``.count()``-Assertions
 bleiben deshalb unveraendert gueltig.
 """
 
+from django.db import connection, transaction
+
 from core.models import Client, DocumentType, Event
+
+# Trigger name of migration 0199 (``event_ban_requires_person_insert``).
+BAN_PERSON_INSERT_TRIGGER = "event_ban_requires_person_insert"
 
 
 def insert_event_past_save(**fields):
-    """Insert an event without ``Event.save()``.
+    """Insert an event without ``Event.save()`` and without the ban person trigger.
 
     Only for fixtures that need a state the rule forbids for new rows, for
     example an anonymous ban event that predates the person rule. What is
-    skipped is ``Event.save()`` and its person check (and the ``pre_save``
-    signals); the batch protection of ``Event.objects.bulk_create`` still
-    encrypts sensitive fields and computes ``search_text``.
+    skipped is ``Event.save()`` and its person check, the ``pre_save``
+    signals and the database trigger ``event_ban_requires_person_insert``
+    (migration ``0199``), which is switched off for this one insert inside a
+    transaction, so no other connection sees it off. The batch protection of
+    ``Event.objects.bulk_create`` still encrypts sensitive fields and computes
+    ``search_text``. Needs the table owner, which the test database user is.
     """
-    return Event.objects.bulk_create([Event(**fields)])[0]
+    with transaction.atomic(), connection.cursor() as cursor:
+        cursor.execute(f"ALTER TABLE {Event._meta.db_table} DISABLE TRIGGER {BAN_PERSON_INSERT_TRIGGER}")
+        event = Event.objects.bulk_create([Event(**fields)])[0]
+        cursor.execute(f"ALTER TABLE {Event._meta.db_table} ENABLE ALWAYS TRIGGER {BAN_PERSON_INSERT_TRIGGER}")
+    return event
 
 
 def make_event(*, facility, client, document_type, occurred_at, data_json, created_by, **overrides):

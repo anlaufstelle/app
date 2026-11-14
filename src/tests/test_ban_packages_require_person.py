@@ -15,6 +15,7 @@ from typing import Any
 
 import pytest
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from core.models import Client, DocumentType, Event
@@ -23,6 +24,7 @@ from core.packages.loader import load_package
 from core.seed.events import seed_events_bulk
 from core.seed.users import seed_users
 from core.services.events.crud import _validate_contact_stage, create_event, update_event
+from tests._factories import insert_event_past_save
 
 IDENTIFIED = Client.ContactStage.IDENTIFIED
 
@@ -114,19 +116,15 @@ class TestEventService:
 
     @staticmethod
     def _legacy_anonymous_ban(facility, staff_user, ban_type):
-        """An anonymous ban that predates the rule, inserted past ``save()``."""
-        return Event.objects.bulk_create(
-            [
-                Event(
-                    facility=facility,
-                    document_type=ban_type,
-                    occurred_at=timezone.now(),
-                    data_json={"grund": "Legacy reason", "aktiv": True},
-                    created_by=staff_user,
-                    is_anonymous=True,
-                )
-            ]
-        )[0]
+        """An anonymous ban that predates the rule, inserted past ``save()`` and the trigger."""
+        return insert_event_past_save(
+            facility=facility,
+            document_type=ban_type,
+            occurred_at=timezone.now(),
+            data_json={"grund": "Legacy reason", "aktiv": True},
+            created_by=staff_user,
+            is_anonymous=True,
+        )
 
     def test_existing_anonymous_ban_stays_editable_and_deactivatable(self, facility, staff_user, ban_type):
         legacy = self._legacy_anonymous_ban(facility, staff_user, ban_type)
@@ -164,9 +162,20 @@ class TestEventService:
 
         assert not Event.objects.filter(document_type=ban_type).exists()
 
-    @pytest.mark.parametrize("force_insert", [False, True], ids=["update-then-insert", "force-insert"])
-    def test_a_loaded_event_saved_as_a_new_ban_row_is_refused(self, facility, staff_user, ban_type, force_insert):
-        """A loaded instance with a new primary key is a new row, not an edit."""
+    @pytest.mark.parametrize(
+        ("force_insert", "refusal"),
+        [(False, IntegrityError), (True, ValidationError)],
+        ids=["update-then-insert", "force-insert"],
+    )
+    def test_a_loaded_event_saved_as_a_new_ban_row_is_refused(
+        self, facility, staff_user, ban_type, force_insert, refusal
+    ):
+        """A loaded instance with a new primary key is a new row, not an edit.
+
+        ``force_insert`` is a certain insert, so the model refuses it readably.
+        A plain ``save()`` is an UPDATE whose INSERT fallback only the database
+        sees; its trigger refuses the row.
+        """
         plain = DocumentType.objects.create(facility=facility, name="Plain contact")
         original = Event.objects.create(
             facility=facility,
@@ -180,7 +189,7 @@ class TestEventService:
         copied.pk = uuid.uuid4()
         copied.document_type = ban_type
 
-        with pytest.raises(ValidationError):
+        with pytest.raises(refusal), transaction.atomic():
             copied.save(force_insert=force_insert)
 
         assert not Event.objects.filter(pk=copied.pk).exists()

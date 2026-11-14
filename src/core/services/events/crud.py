@@ -19,12 +19,13 @@ from __future__ import annotations
 import json
 
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.utils.crypto import constant_time_compare, salted_hmac
 from django.utils.translation import gettext_lazy as _
 
 from core.models import Activity, AuditLog, Client, DocumentType, Event, EventHistory, FieldTemplate
+from core.models.event import is_ban_person_violation
 from core.services.attachments import crud as attachments_crud
 from core.services.audit import audit_event, changed_data_json_slugs
 from core.services.compliance import user_can_see_document_type
@@ -233,6 +234,12 @@ def create_event(
     if user is not None and not user_can_see_document_type(user, document_type):
         raise PermissionDenied(_("Diese Dokumentation darf von Ihrer Rolle nicht erstellt werden."))
 
+    # The person rule comes from the stored type row. A type instance loaded
+    # before this transaction can carry an old system type or stage; the
+    # facility gate above keeps the stored values stable until commit
+    # (configuration writes take the exclusive gate).
+    document_type.refresh_from_db(fields=["system_type", "min_contact_stage"])
+
     if client is None and not is_anonymous and not document_type.requires_person:
         is_anonymous = True
 
@@ -254,7 +261,20 @@ def create_event(
         idempotency_payload_hash=idempotency_payload_hash,
         created_via=created_via,
     )
-    event.save()
+    try:
+        event.save()
+    except IntegrityError as exc:
+        # The database refuses a personless ban the checks above let through
+        # (the type became a ban past the facility gate). Report it like the
+        # service check so the form shows the message instead of an error page.
+        if is_ban_person_violation(exc):
+            raise ValidationError(
+                _(
+                    "Für diesen Dokumentationstyp muss eine Person ausgewählt werden, "
+                    "da eine Mindest-Kontaktstufe vorausgesetzt wird."
+                )
+            ) from exc
+        raise
     EventHistory.objects.create(
         event=event,
         changed_by=user,

@@ -15234,6 +15234,14 @@ msgstr ""
 msgid "Ein Hausverbot braucht eine Person: Bitte eine Mindest-Kontaktstufe wählen."
 msgstr "A ban needs a person: please choose a minimum contact stage."
 
+#: src/core/models/document_type.py:20
+msgid ""
+"Dieser Dokumentationstyp hat bereits Ereignisse ohne Person und kann deshalb "
+"kein Hausverbot werden."
+msgstr ""
+"This documentation type already has events without a person and therefore "
+"cannot become a ban."
+
 #: src/templates/core/config/document_types/form.html:95
 msgid "Bei Systemtyp Hausverbot Pflicht."
 msgstr "Required for the system type Hausverbot (entry ban)."

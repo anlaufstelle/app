@@ -4,11 +4,20 @@ import uuid
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.db import models, router
+from django.db import IntegrityError, models, router
 from django.utils.translation import gettext_lazy as _
 
 from core.models.managers import EventManager
 from core.models.mixins import DynamicDataEncryptionMixin
+
+# Prefix of the error the ban person trigger of migration 0199 raises. The
+# message carries it because a trigger has no constraint name of its own.
+BAN_PERSON_TRIGGER_TAG = "event_ban_requires_person"
+
+
+def is_ban_person_violation(exc) -> bool:
+    """Whether this ``IntegrityError`` comes from the ban person trigger."""
+    return isinstance(exc, IntegrityError) and BAN_PERSON_TRIGGER_TAG in str(exc)
 
 
 class Event(DynamicDataEncryptionMixin):
@@ -162,33 +171,53 @@ class Event(DynamicDataEncryptionMixin):
     def __str__(self):
         return f"{self.document_type} – {self.occurred_at:%d.%m.%Y %H:%M}"
 
-    def _save_inserts_a_row(self, save_kwargs) -> bool:
-        """Whether the pending ``save()`` writes a new row instead of updating one.
+    def _is_certain_personless_insert(self, save_kwargs) -> bool:
+        """Whether the pending ``save()`` certainly writes a new row without a person.
 
-        Mirrors Django's decision in ``Model._save_table``: ``force_insert`` and an
-        instance that was never stored (``_state.adding``, the primary key has a
-        default) always INSERT; ``force_update`` and ``update_fields`` never do.
-        Otherwise Django runs an UPDATE and falls back to an INSERT when no row
-        carries this primary key, which is the case for a loaded instance whose
-        primary key was replaced. That last case is decided by asking the
-        database, so a re-save of a row that really exists stays an update.
+        Decided from the arguments alone, so no query runs: ``force_insert``
+        and an instance that was never stored (``_state.adding``, or no primary
+        key) INSERT. Everything else is left out on purpose: ``force_update``
+        and ``update_fields`` never insert, and a plain ``save()`` of a loaded
+        instance is an UPDATE whose INSERT fallback (primary key replaced, or
+        the row deleted meanwhile) only the database sees at the moment it
+        happens. The trigger ``event_ban_requires_person_insert`` (migration
+        ``0199``) refuses that INSERT, and ``event_ban_requires_person_update``
+        refuses an UPDATE that turns a row into a personless ban.
         """
+        if self.client_id is not None:
+            return False
         if save_kwargs.get("force_insert"):
             return True
         if save_kwargs.get("force_update") or save_kwargs.get("update_fields") is not None:
             return False
-        if self._state.adding or self.pk is None:
-            return True
+        return self._state.adding or self.pk is None
+
+    def _stored_type_is_ban(self, save_kwargs) -> bool:
+        """Read the system type of the stored type row, not of a loaded instance.
+
+        A ``DocumentType`` instance loaded earlier can still carry an old system
+        type after another save made the type a ban.
+        """
+        from core.models.document_type import DocumentType
+
+        if self.document_type_id is None:
+            return False
         using = save_kwargs.get("using") or self._state.db or router.db_for_write(type(self), instance=self)
-        return not type(self)._base_manager.using(using).filter(pk=self.pk).exists()
+        system_type = (
+            DocumentType._base_manager.using(using)
+            .filter(pk=self.document_type_id)
+            .values_list("system_type", flat=True)
+            .first()
+        )
+        return system_type == DocumentType.SystemType.BAN
 
     def save(self, *args, **kwargs):
         from core.services.dynamic_protection import dynamic_data_write
 
         update_fields = kwargs.get("update_fields")
-        if self.client_id is None and self.document_type.system_type == "ban" and self._save_inserts_a_row(kwargs):
-            # A new ban names a person. Existing anonymous bans stay editable:
-            # this only runs when the save writes a new row.
+        if self._is_certain_personless_insert(kwargs) and self._stored_type_is_ban(kwargs):
+            # A new ban names a person. This check only gives a readable error;
+            # the database triggers of migration 0199 carry the guarantee.
             raise ValidationError(
                 _(
                     "Für diesen Dokumentationstyp muss eine Person ausgewählt werden, "

@@ -15322,6 +15322,14 @@ msgstr ""
 msgid "Ein Hausverbot braucht eine Person: Bitte eine Mindest-Kontaktstufe wählen."
 msgstr "Ein Hausverbot braucht eine Person: Bitte eine Mindest-Kontaktstufe wählen."
 
+#: src/core/models/document_type.py:20
+msgid ""
+"Dieser Dokumentationstyp hat bereits Ereignisse ohne Person und kann deshalb "
+"kein Hausverbot werden."
+msgstr ""
+"Dieser Dokumentationstyp hat bereits Ereignisse ohne Person und kann deshalb "
+"kein Hausverbot werden."
+
 #: src/templates/core/config/document_types/form.html:95
 msgid "Bei Systemtyp Hausverbot Pflicht."
 msgstr "Bei Systemtyp Hausverbot Pflicht."
