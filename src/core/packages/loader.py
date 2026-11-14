@@ -52,8 +52,9 @@ Semantik-Entscheide (verbindlich, E13–E15):
   key missing => a default maintained in the configuration UI stays untouched,
   ``null``/``""`` => deliberately cleared, a value => set. Before, every run
   overwrote a maintained default with the model default ``""`` whenever the
-  package did not carry the key; now omitting it never clears anything, while
-  an explicit ``null`` clears exactly as before. A package **value** is an
+  package did not carry the key; now omitting it never clears anything, and
+  an explicit ``null`` is accepted as the deliberate clear value (the schema
+  used to reject it for this key). A package **value** is an
   ordinary sync-back and always wins: re-applying a package that carries a
   default resets a default that differs from it (for example one changed in the
   configuration UI) to the package value, and a dry run reports that as

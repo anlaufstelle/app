@@ -162,8 +162,8 @@ class TestShippedPackageResetsDefaultsOnReapply:
         raw = load_package_data("default")
         load_package(facility, parse_package(raw))
         _set_in_ui(facility, "dauer", default_value="30")
-        dauer = next(template for template in raw["field_templates"] if template["slug"] == "dauer")
-        del dauer["default_value"]
+        duration_template = next(template for template in raw["field_templates"] if template["slug"] == "dauer")
+        del duration_template["default_value"]
 
         report = load_package(facility, parse_package(raw))
 

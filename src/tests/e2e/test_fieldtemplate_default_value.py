@@ -39,7 +39,7 @@ def _set_default_value(slug, value, env):
 
 
 # The shipped "default" package pre-fills the duration; later specs of the same session rely on it.
-SHIPPED_DAUER_DEFAULT = "15"
+SHIPPED_DURATION_DEFAULT = "15"
 
 
 def _clear_default_value(slug, env):
@@ -50,7 +50,8 @@ class TestDefaultValuePrefill:
     """Bei Neu-Anlage eines Events zeigt ein FieldTemplate mit default_value den Wert vorausgefüllt."""
 
     def test_number_default_appears_in_create_form(self, authenticated_page, base_url, e2e_env):
-        _set_default_value("dauer", "15", e2e_env)
+        # A value that differs from the shipped one, so the check proves the stored default is used.
+        _set_default_value("dauer", "20", e2e_env)
         try:
             page = authenticated_page
             page.goto(f"{base_url}/events/new/", wait_until="domcontentloaded")
@@ -58,10 +59,10 @@ class TestDefaultValuePrefill:
             page.select_option("select[name='document_type']", label="Kontakt")
             page.wait_for_selector("input[name='dauer']", state="visible", timeout=5000)
 
-            dauer_value = page.locator("input[name='dauer']").input_value()
-            assert dauer_value == "15", f"Erwartet '15', bekam '{dauer_value}'"
+            duration_value = page.locator("input[name='dauer']").input_value()
+            assert duration_value == "20", f"Expected '20', got '{duration_value}'"
         finally:
-            _set_default_value("dauer", SHIPPED_DAUER_DEFAULT, e2e_env)
+            _set_default_value("dauer", SHIPPED_DURATION_DEFAULT, e2e_env)
 
     def test_default_not_set_when_empty(self, authenticated_page, base_url, e2e_env):
         _clear_default_value("dauer", e2e_env)
@@ -71,7 +72,7 @@ class TestDefaultValuePrefill:
             page.select_option("select[name='document_type']", label="Kontakt")
             page.wait_for_selector("input[name='dauer']", state="visible", timeout=5000)
 
-            dauer_value = page.locator("input[name='dauer']").input_value()
-            assert dauer_value == "", f"Erwartet leer, bekam '{dauer_value}'"
+            duration_value = page.locator("input[name='dauer']").input_value()
+            assert duration_value == "", f"Expected empty, got '{duration_value}'"
         finally:
-            _set_default_value("dauer", SHIPPED_DAUER_DEFAULT, e2e_env)
+            _set_default_value("dauer", SHIPPED_DURATION_DEFAULT, e2e_env)
