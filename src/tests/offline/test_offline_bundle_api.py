@@ -76,6 +76,22 @@ class TestBuildClientOfflineBundleService:
         assert bundle["ttl"] == 48 * 3600
         assert bundle["client"]["pk"] == str(client_identified.pk)
 
+    def test_bundle_events_carry_the_recording_time(self, facility, client_identified, doc_type_contact, staff_user):
+        """The offline view breaks ties between contacts of one minute by when they were entered."""
+        event = make_event(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 5},
+            created_by=staff_user,
+        )
+
+        bundle = build_client_offline_bundle(staff_user, facility, client_identified)
+
+        serialized = next(e for e in bundle["events"] if e["pk"] == str(event.pk))
+        assert serialized["created_at"] == event.created_at.isoformat()
+
     def test_bundle_schema_version_is_3(self, facility, client_identified, staff_user):
         """Refs #1529, #1499: Schema-Bump 1->2 zwingt den JS-Lesepfad, alte
         v1-Bundles zu purgen (``_isSchemaMismatch`` in offline-db.js — seit

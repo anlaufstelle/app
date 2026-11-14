@@ -467,10 +467,15 @@
         // be offered for correction (the flag is never invented client-side).
         const existingData = (existing && existing.data) || {};
         const canEdit = existingData.can_edit === true || existingData.canEdit === true;
+        // Refs #2798: Keep the recording time for the feed order. A synced
+        // contact brings the server's created_at, a re-edit keeps the copy,
+        // and a new entry keeps the time of its first save.
+        const createdAt = previous.createdAt || existingData.createdAt || existingData.created_at || "";
         const data = {
             formData: formData,
             expectedUpdatedAt: token,
             canEdit: canEdit,
+            createdAt: createdAt,
             // Snapshot a few metadata fields so the list/review UI can
             // label the edit without cross-referencing the cache. Refs
             // #1111: ``documentTypePk`` + ``occurredAt`` let the offline
@@ -541,6 +546,8 @@
                 // Replay sendet sie als ``case`` an /events/new/ (wie online).
                 casePk: opts.casePk || "",
                 occurredAt: opts.occurredAt || "",
+                // Refs #2798: Recording time for the feed order, set once.
+                createdAt: new Date().toISOString(),
                 idempotencyKey: opts.idempotencyKey || _uuid(),
                 lastEditedAt: Date.now(),
             },

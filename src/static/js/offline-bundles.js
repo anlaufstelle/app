@@ -201,6 +201,11 @@
             // ist. formData enthaelt keine FILE-Felder (nicht offline-editierbar).
             data_fields: Object.assign({}, data.formData || {}, data.fileMarkers || {}),
             updated_at: data.expectedUpdatedAt || "",
+            // Refs #2798: Recording time for the feed order. A copy of the
+            // server's created_at, or the save time of an entry that was
+            // created offline (envelopes written before the copy existed fall
+            // back to the last save of a new entry).
+            created_at: data.createdAt || (localStatus === "new" && data.lastEditedAt ? new Date(data.lastEditedAt).toISOString() : ""),
             localStatus: localStatus,
             // Refs #1351/#1385 (M8/Task 4): deadReason aus dem Envelope
             // durchreichen — der Offline-Viewer braucht ihn fuers dead-Badge
@@ -217,6 +222,29 @@
             was_new: data.wasNew === true,
             last_error: data.lastError || "",
         };
+    }
+
+    /*
+     * Refs #2798: Same order as the online feed. The minute shown on the card
+     * decides first (newest first), the recording time breaks ties inside one
+     * minute (last recorded first). Contact times come from the form at minute
+     * precision, so several contacts share a minute; a back-dated contact keeps
+     * its contact time. Unparseable values sort last, and the primary key keeps
+     * the order stable when nothing else tells two entries apart.
+     */
+    function _feedTime(value) {
+        const t = Date.parse(value || "");
+        return Number.isNaN(t) ? -Infinity : t;
+    }
+
+    function compareFeedEvents(a, b) {
+        const minuteA = Math.floor(_feedTime(a.occurred_at) / 60000);
+        const minuteB = Math.floor(_feedTime(b.occurred_at) / 60000);
+        if (minuteA !== minuteB) return minuteA < minuteB ? 1 : -1;
+        const recordedA = _feedTime(a.created_at);
+        const recordedB = _feedTime(b.created_at);
+        if (recordedA !== recordedB) return recordedA < recordedB ? 1 : -1;
+        return String(a.pk || "").localeCompare(String(b.pk || ""));
     }
 
     /*
@@ -380,7 +408,7 @@
             // or conflicting edits without another IndexedDB round-trip.
             events: eventRows
                 .map((r) => normalizeOfflineEventRecord(r))
-                .sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1)),
+                .sort(compareFeedEvents),
         };
     }
 
@@ -512,7 +540,7 @@
      *     eigentliche lokale Arbeit. Personlose (`clientPk===""`) Eintraege sind
      *     stets unsynced-new und werden als anonym markiert (ohne Pseudonym).
      *
-     * Sortierung: `occurred_at` absteigend (neueste zuerst), wie der Online-Feed.
+     * Sortierung wie der Online-Feed: angezeigte Minute absteigend, dann Erfassungszeit (Refs #2798).
      */
     async function listOfflineEventsAggregated() {
         const bundles = await _validClientBundles();
@@ -530,7 +558,7 @@
                 clientPk && bundles.has(clientPk) ? bundles.get(clientPk).pseudonym : "";
             out.push(ev);
         }
-        out.sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1));
+        out.sort(compareFeedEvents);
         return out;
     }
 

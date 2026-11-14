@@ -198,6 +198,8 @@ class TestSerializeEvent:
         assert set(out.keys()) == {
             "pk",
             "occurred_at",
+            # Refs #2798: recording time, breaks ties between contacts of one minute.
+            "created_at",
             # Refs #1109 (F-07): Optimistic-Lock-Token fürs Offline-Replay.
             "updated_at",
             "document_type_pk",
