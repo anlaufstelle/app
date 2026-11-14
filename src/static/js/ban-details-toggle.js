@@ -5,34 +5,37 @@
  * button of the detail block (#zeitstrom-ban-details-close) are submit buttons
  * of the form #zeitstrom-ban-details-form. Without this script they post that
  * form and the server redirects back, so the feature works without script. With
- * the script the click is answered at once and sent in the background; the
- * server keeps the choice per user and facility and answers with the state that
- * applies.
+ * the script the click is sent in the background; the server keeps the choice
+ * per user and facility and answers with the state that applies.
  *
- * The focus is not touched by a swap here: the guard in focus-management.js hands
- * it to the same control (the controls carry stable ids). When the details are
- * hidden while the close button holds the focus, the focus moves to the figure
- * first, so it never falls to <body>.
+ * Fail-closed rule. The details are visible unless ALL of these hold at once
+ * (``shouldHideDetails``, re-evaluated on every event):
+ *  - no own hide or show request is open;
+ *  - both slots carry the same, non-empty list;
+ *  - the ban figure is actually on the page;
+ *  - the last confirmed choice is "hidden" and was made for exactly this list.
+ * A confirmed "hidden" comes only from the first page render or from an own hide
+ * answer that started after the previous confirmed choice and saw no replaced slot
+ * while it ran (``choiceGeneration``, ``slotGeneration``). Every confirmed show,
+ * and every newly inserted slot that shows another list or says "shown", ends a
+ * confirmed "hidden" and raises ``choiceGeneration``. A slot that arrives later
+ * therefore never hides anything, whatever it says and however old it is.
  *
- * Freshness. The KPI slot and the ban slot each carry what the server said when it
- * rendered them: the fingerprint of the list and whether the details are hidden
- * (data-ban-fingerprint / data-fingerprint, data-ban-details-hidden). This script
- * never rewrites those statements except with an own answer it has proven to be
- * newer than both slots. What is displayed follows from them:
- *  - The details are hidden only while both slots say "hidden" for the same list.
- *    If the slots disagree (another list, or one hidden and one shown) the details
- *    are shown, and when the disagreement outlasts a short grace period the live
- *    watch is asked for both slots again.
- *  - The page counts every replaced slot (``slotGeneration``). The answer to an
- *    own request (hide or show) is used only if no slot was replaced since the
- *    request started; equal fingerprints are no proof, a list can change and come
- *    back. A discarded answer, and any failed request, leaves the details visible
- *    and asks the live watch for both slots again.
- *  - "Asking the live watch" (event ``zeitstrom:ban-slots-stale``) makes it drop
- *    its validators for both slots, abort a cycle in flight and poll at once. The
- *    slots then come through the watch's own snapshot and generation checks, so an
- *    older answer can never overwrite a newer one, and the server answers 200
- *    instead of 304 until the page holds both slots again.
+ * Server side. An own hide that the page does not accept (a late or failed
+ * answer) is compensated by a "show" sent after it, so the stored choice cannot
+ * come back after a reload.
+ *
+ * Repair. When the KPI slot and the ban slot show different lists for longer than
+ * a short grace period, the script asks the live watch for both slots again
+ * (event ``zeitstrom:ban-slots-stale``); the watch queues that behind a running
+ * cycle or filter transition and then fetches both through its own snapshot and
+ * generation checks. The repair only fixes the slots; visibility never waits for
+ * it.
+ *
+ * Focus. Swaps are handled by the guard in focus-management.js. After the final
+ * evaluation, a figure or close button that held the focus before its slot was
+ * replaced gets it back if it is visible again; when the details are hidden while
+ * the focus is inside them, the focus moves to the figure first.
  */
 (function () {
     "use strict";
@@ -50,35 +53,72 @@
     var REFRESH_GRACE_MS = 1500;
     var MAX_REFRESH_ROUNDS = 2;
 
-    var pending = false;
+    // The only mutable decision input besides the slots on the page.
+    var state = {
+        pending: false,
+        confirmedHidden: false,
+        confirmedList: "",
+        choiceGeneration: 0,
+        slotGeneration: 0,
+    };
     var knownKpiSlot = null;
     var knownBansSlot = null;
-    // Rises with every replaced KPI or ban slot.
-    var slotGeneration = 0;
+    // A new #zeitstrom-live-watch root is a new first render (a new page).
+    var knownRoot = null;
+    var pageGeneration = 0;
     var refreshTimer = null;
     var refreshRounds = 0;
+    // Id of the figure or close button while it holds the focus.
+    var focusedControlId = "";
 
     function byId(id) {
         return document.getElementById(id);
     }
 
-    // The list on screen: the fingerprint of the ban block ("" without bans).
-    function listFingerprint() {
+    // What the page shows right now, read from the slots.
+    function readSlots() {
+        var kpiSlot = byId(KPI_SLOT_ID);
         var bansSlot = byId(BANS_SLOT_ID);
-        return (bansSlot && bansSlot.getAttribute("data-fingerprint")) || "";
+        var toggle = byId(TOGGLE_ID);
+        return {
+            kpiList: kpiSlot && kpiSlot.hasAttribute("data-ban-fingerprint") ? kpiSlot.getAttribute("data-ban-fingerprint") || "" : null,
+            bansList: (bansSlot && bansSlot.getAttribute("data-fingerprint")) || "",
+            figurePresent: !!toggle && !!kpiSlot && kpiSlot.contains(toggle),
+        };
     }
 
-    function saysHidden(slot) {
-        return !!slot && slot.getAttribute(HIDDEN_ATTR) === "true";
+    /**
+     * The single decision: hide the details only if every condition holds.
+     * Pure; the inputs are the slots on the page and the confirmed choice.
+     */
+    function shouldHideDetails(input) {
+        return (
+            !input.pending &&
+            input.bansList !== "" &&
+            input.kpiList === input.bansList &&
+            input.figurePresent &&
+            input.confirmedHidden &&
+            input.confirmedList === input.bansList
+        );
     }
 
-    // Show or hide the block and bring the figure and the close button in line.
-    // Changes only what is displayed, never the slots' own statements.
+    function decisionInput() {
+        var slots = readSlots();
+        return {
+            pending: state.pending,
+            kpiList: slots.kpiList,
+            bansList: slots.bansList,
+            figurePresent: slots.figurePresent,
+            confirmedHidden: state.confirmedHidden,
+            confirmedList: state.confirmedList,
+        };
+    }
+
     function display(hidden) {
         var details = byId(DETAILS_ID);
         var toggle = byId(TOGGLE_ID);
         var close = byId(CLOSE_ID);
-        var fingerprint = listFingerprint();
+        var fingerprint = readSlots().bansList;
 
         if (hidden && details && toggle && details.contains(document.activeElement)) {
             toggle.focus({ preventScroll: true });
@@ -97,53 +137,78 @@
         }
     }
 
-    // Record an own answer that is proven newer than both slots.
-    function recordAnswer(hidden) {
-        [byId(BANS_SLOT_ID), byId(KPI_SLOT_ID)].forEach(function (slot) {
-            if (slot && slot.hasAttribute(HIDDEN_ATTR)) {
-                slot.setAttribute(HIDDEN_ATTR, hidden ? "true" : "false");
-            }
-        });
+    // A control that held the focus before its slot was replaced gets it back once
+    // it is visible again (the guard may have parked the focus on the slot).
+    function restoreFocus() {
+        if (!focusedControlId) {
+            return;
+        }
+        var active = document.activeElement;
+        var parked = !active || active === document.body || active.id === KPI_SLOT_ID || active.id === BANS_SLOT_ID;
+        var control = byId(focusedControlId);
+        if (!parked || !control || control === active) {
+            return;
+        }
+        var details = byId(DETAILS_ID);
+        if (focusedControlId === CLOSE_ID && details && details.hidden) {
+            return;
+        }
+        control.focus({ preventScroll: true });
     }
 
-    // Why the two slots cannot both be right: "list" when they were rendered for
-    // different lists, "state" when one says hidden and the other shown, "" when
-    // they agree (or there is no KPI slot, as in the handover).
-    function disagreement() {
-        var kpiSlot = byId(KPI_SLOT_ID);
-        var bansSlot = byId(BANS_SLOT_ID);
-        if (!kpiSlot || !kpiSlot.hasAttribute("data-ban-fingerprint")) {
-            return "";
-        }
-        if ((kpiSlot.getAttribute("data-ban-fingerprint") || "") !== listFingerprint()) {
-            return "list";
-        }
-        if (bansSlot && bansSlot.hasAttribute(HIDDEN_ATTR) && saysHidden(kpiSlot) !== saysHidden(bansSlot)) {
-            return "state";
-        }
-        return "";
+    function evaluate() {
+        display(shouldHideDetails(decisionInput()));
+        restoreFocus();
     }
 
-    // What the slots say together: hidden only if the ban slot says so and the
-    // KPI slot (if there is one with a statement) says so as well.
-    function slotsSayHidden() {
-        var kpiSlot = byId(KPI_SLOT_ID);
-        var kpiSays = !kpiSlot || !kpiSlot.hasAttribute(HIDDEN_ATTR) || saysHidden(kpiSlot);
-        return saysHidden(byId(BANS_SLOT_ID)) && kpiSays;
+    function endConfirmedHidden() {
+        if (state.confirmedHidden) {
+            state.confirmedHidden = false;
+            state.choiceGeneration += 1;
+        }
     }
 
-    // Count replaced slots.
+    // A newly inserted slot can end a confirmed "hidden" (another list, or it says
+    // "shown"), never start one.
+    function takeSlotStatement(slot, listAttr) {
+        if (!slot || !slot.hasAttribute(listAttr)) {
+            return;
+        }
+        var list = slot.getAttribute(listAttr) || "";
+        var saysHidden = slot.getAttribute(HIDDEN_ATTR) === "true";
+        if (list !== state.confirmedList || !saysHidden) {
+            endConfirmedHidden();
+        }
+    }
+
+    // Count replaced slots and take what new ones say. A new page root starts over.
     function observeSlots() {
+        if (byId("zeitstrom-live-watch") !== knownRoot) {
+            initFromPage();
+            return;
+        }
         var kpiSlot = byId(KPI_SLOT_ID);
         var bansSlot = byId(BANS_SLOT_ID);
-        if (kpiSlot !== knownKpiSlot || bansSlot !== knownBansSlot) {
-            slotGeneration += 1;
-        }
+        var kpiFresh = kpiSlot !== knownKpiSlot;
+        var bansFresh = bansSlot !== knownBansSlot;
         knownKpiSlot = kpiSlot;
         knownBansSlot = bansSlot;
+        if (kpiFresh || bansFresh) {
+            state.slotGeneration += 1;
+        }
+        if (kpiFresh) {
+            takeSlotStatement(kpiSlot, "data-ban-fingerprint");
+        }
+        if (bansFresh) {
+            takeSlotStatement(bansSlot, "data-fingerprint");
+        }
     }
 
-    // Ask the live watch for both slots again (see the header).
+    function listsDisagree() {
+        var slots = readSlots();
+        return slots.kpiList !== null && slots.kpiList !== slots.bansList;
+    }
+
     function requestWatchRefresh() {
         window.dispatchEvent(new CustomEvent(STALE_EVENT));
     }
@@ -155,36 +220,22 @@
         }
     }
 
-    function armRefresh() {
+    function scheduleRepair() {
+        if (!listsDisagree()) {
+            clearRefreshTimer();
+            refreshRounds = 0;
+            return;
+        }
         if (refreshTimer !== null || refreshRounds >= MAX_REFRESH_ROUNDS) {
             return;
         }
         refreshTimer = window.setTimeout(function () {
             refreshTimer = null;
-            if (disagreement()) {
+            if (listsDisagree()) {
                 refreshRounds += 1;
                 requestWatchRefresh();
             }
         }, REFRESH_GRACE_MS);
-    }
-
-    // Bring the display in line with what the slots say.
-    function settle() {
-        if (disagreement()) {
-            display(false);
-            armRefresh();
-            return;
-        }
-        clearRefreshTimer();
-        refreshRounds = 0;
-        display(slotsSayHidden());
-    }
-
-    // An own answer that may be older than the page, or a failed request: keep the
-    // details visible and let the live watch bring both slots.
-    function giveUpAnswer() {
-        display(false);
-        requestWatchRefresh();
     }
 
     function requestBody(form, choice) {
@@ -206,6 +257,15 @@
         return response.json();
     }
 
+    // The page did not accept an own hide: make sure the server forgets it too.
+    // Sent after the hide's answer (or failure), so the server sees it later.
+    function compensateHide(form) {
+        send(form, "show").catch(function () {
+            // Offline: the details stay visible here; the stored choice may apply
+            // again after a reload (see the guide).
+        });
+    }
+
     async function onClick(event) {
         var button = event.target && event.target.closest ? event.target.closest('button[form="' + FORM_ID + '"]') : null;
         var form = byId(FORM_ID);
@@ -213,59 +273,107 @@
             return;
         }
         event.preventDefault();
-        if (pending) {
+        if (state.pending) {
             return;
         }
 
         var wantsHide = button.value.indexOf(HIDE_PREFIX) === 0;
-        var requestedList = wantsHide ? listFingerprint() || button.value.slice(HIDE_PREFIX.length) : "";
-        var choice = wantsHide ? HIDE_PREFIX + requestedList : "show";
-
+        var requestedList = wantsHide ? readSlots().bansList || button.value.slice(HIDE_PREFIX.length) : "";
         observeSlots();
-        var startGeneration = slotGeneration;
-        pending = true;
-        display(wantsHide);
+        var startSlots = state.slotGeneration;
+        var startChoice = state.choiceGeneration;
+        var startPage = pageGeneration;
+
+        state.pending = true;
+        evaluate();
         var answer = null;
         try {
-            answer = await send(form, choice);
+            answer = await send(form, wantsHide ? HIDE_PREFIX + requestedList : "show");
         } catch (_e) {
             answer = null;
         }
-        pending = false;
-        observeSlots();
-        if (answer === null || slotGeneration !== startGeneration) {
-            giveUpAnswer();
+        if (startPage !== pageGeneration) {
             return;
         }
-        // No slot was replaced while the request ran, so the answer is newer than
-        // both. A hide counts only for the list that was asked for.
-        if (wantsHide && listFingerprint() === requestedList && answer.fingerprint === requestedList) {
-            recordAnswer(!!answer.hidden);
+        state.pending = false;
+        observeSlots();
+
+        var fresh = state.slotGeneration === startSlots && state.choiceGeneration === startChoice;
+        if (wantsHide) {
+            var accepted =
+                answer !== null &&
+                fresh &&
+                !!answer.hidden &&
+                answer.fingerprint === requestedList &&
+                readSlots().bansList === requestedList;
+            if (accepted) {
+                state.confirmedHidden = true;
+                state.confirmedList = requestedList;
+                state.choiceGeneration += 1;
+            } else if (answer === null || answer.hidden) {
+                compensateHide(form);
+            }
+        } else if (answer !== null) {
+            endConfirmedHidden();
+            state.choiceGeneration += 1;
         } else {
-            recordAnswer(false);
+            // A failed show: the details stay visible, nothing is confirmed.
+            endConfirmedHidden();
         }
-        settle();
+        evaluate();
+        scheduleRepair();
     }
 
-    // A slot was replaced (live watch, feed refresh): count it and, unless an own
-    // request is in flight, display what the slots say together.
+    // Read the first render of a page: it is the first confirmed choice.
+    function initFromPage() {
+        var kpiSlot = byId(KPI_SLOT_ID);
+        var bansSlot = byId(BANS_SLOT_ID);
+        var slots = readSlots();
+        knownRoot = byId("zeitstrom-live-watch");
+        knownKpiSlot = kpiSlot;
+        knownBansSlot = bansSlot;
+        pageGeneration += 1;
+        state.pending = false;
+        clearRefreshTimer();
+        refreshRounds = 0;
+        state.confirmedHidden =
+            slots.bansList !== "" &&
+            slots.kpiList === slots.bansList &&
+            slots.figurePresent &&
+            !!kpiSlot &&
+            kpiSlot.getAttribute(HIDDEN_ATTR) === "true" &&
+            !!bansSlot &&
+            bansSlot.getAttribute(HIDDEN_ATTR) === "true";
+        state.confirmedList = state.confirmedHidden ? slots.bansList : "";
+        state.choiceGeneration += 1;
+    }
+
     function reconcile() {
         observeSlots();
-        if (pending) {
+        evaluate();
+        scheduleRepair();
+    }
+
+    function onFocusIn(event) {
+        var target = event.target;
+        if (!target || target === document.body || target.id === KPI_SLOT_ID || target.id === BANS_SLOT_ID) {
             return;
         }
-        settle();
+        focusedControlId = target.id === TOGGLE_ID || target.id === CLOSE_ID ? target.id : "";
     }
 
     function start() {
-        knownKpiSlot = byId(KPI_SLOT_ID);
-        knownBansSlot = byId(BANS_SLOT_ID);
+        initFromPage();
         document.addEventListener("click", onClick);
-        var root = byId("zeitstrom-live-watch") || document.body;
+        document.addEventListener("focusin", onFocusIn);
         if (window.MutationObserver) {
-            new MutationObserver(reconcile).observe(root, { childList: true, subtree: true });
+            new MutationObserver(reconcile).observe(knownRoot || document.body, { childList: true, subtree: true });
         }
+        evaluate();
     }
+
+    // Test hook: the decision function itself, without page state.
+    window.__banDetailsShouldHide = shouldHideDetails;
 
     if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", start);

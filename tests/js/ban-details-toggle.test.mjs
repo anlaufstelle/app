@@ -1,5 +1,7 @@
 // Hiding the ban details of the Zeitstrom: the figure in the KPI row and the close
-// button of the detail block, the state kept across slot swaps, the focus contract.
+// button of the detail block. The details are visible unless every condition of
+// shouldHideDetails holds; each describe block below is one part of the state
+// table in the lane report (event x state => decision).
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 beforeAll(async () => {
@@ -28,6 +30,7 @@ function bansSlot({ hidden = false, fp = "fp1", handover = false } = {}) {
     </div>`;
 }
 
+// The KPI row without a ban figure (no active ban when it was rendered).
 function emptyKpiSlot() {
     return '<div id="zeitstrom-kpi-slot" data-ban-fingerprint="" data-ban-details-hidden="false"><ul></ul></div>';
 }
@@ -36,7 +39,7 @@ function emptyBansSlot() {
     return '<div id="zeitstrom-bans-slot" data-fingerprint="" data-ban-details-hidden="false"></div>';
 }
 
-// Records every request of the toggle module to the live watch.
+// Records every repair request of the toggle script to the live watch.
 function staleRequests() {
     const seen = [];
     const listener = () => seen.push(Date.now());
@@ -69,28 +72,78 @@ function answer(body, ok = true) {
     return { ok, json: async () => body };
 }
 
+// A request whose answer the test hands out (or withholds) itself.
+function heldRequest() {
+    const held = {};
+    held.promise = new Promise((resolve, reject) => {
+        held.release = resolve;
+        held.fail = reject;
+    });
+    return held;
+}
+
+function sentChoices() {
+    return fetch.mock.calls.map((call) => call[1].body.get("ban_details"));
+}
+
 const details = () => document.getElementById("zeitstrom-ban-details");
 const toggle = () => document.getElementById("zeitstrom-ban-details-toggle");
 const close = () => document.getElementById("zeitstrom-ban-details-close");
+const isHidden = () => !!details() && details().hidden;
 
-beforeEach(() => {
+beforeEach(async () => {
     globalThis.fetch = vi.fn();
     renderPage();
+    await settle();
 });
 
 afterEach(() => {
     vi.restoreAllMocks();
+    vi.useRealTimers();
 });
 
-describe("close button and figure", () => {
-    it("hides the block, moves the focus to the figure and posts the fingerprint", async () => {
-        fetch.mockResolvedValue(answer({ hidden: true, fingerprint: "fp1" }));
+describe("shouldHideDetails (the decision itself)", () => {
+    const all = {
+        pending: false,
+        kpiList: "fp1",
+        bansList: "fp1",
+        figurePresent: true,
+        confirmedHidden: true,
+        confirmedList: "fp1",
+    };
+
+    it("hides only when every condition holds", () => {
+        expect(window.__banDetailsShouldHide(all)).toBe(true);
+    });
+
+    it.each([
+        ["an own request is open", { pending: true }],
+        ["the slots carry different lists", { kpiList: "fp2" }],
+        ["there is no KPI slot statement", { kpiList: null }],
+        ["the list is empty", { kpiList: "", bansList: "" }],
+        ["the ban figure is missing", { figurePresent: false }],
+        ["the confirmed choice is shown", { confirmedHidden: false }],
+        ["the confirmed choice was for another list", { confirmedList: "fp2" }],
+    ])("shows the details when %s", (_name, change) => {
+        expect(window.__banDetailsShouldHide({ ...all, ...change })).toBe(false);
+    });
+});
+
+describe("own requests", () => {
+    it("keeps the details visible while the hide request is open, then hides and moves the focus", async () => {
+        const held = heldRequest();
+        fetch.mockReturnValue(held.promise);
         close().focus();
 
         close().click();
         await settle();
+        expect(isHidden()).toBe(false);
+        expect(document.activeElement).toBe(close());
 
-        expect(details().hidden).toBe(true);
+        held.release(answer({ hidden: true, fingerprint: "fp1" }));
+        await settle();
+
+        expect(isHidden()).toBe(true);
         expect(toggle().getAttribute("aria-expanded")).toBe("false");
         expect(toggle().value).toBe("show");
         expect(document.activeElement).toBe(toggle());
@@ -100,21 +153,26 @@ describe("close button and figure", () => {
         expect(init.body.get("ban_details")).toBe("hide:fp1");
         expect(init.body.get("csrfmiddlewaretoken")).toBe("token-1");
         expect(init.headers.Accept).toBe("application/json");
-        expect(document.getElementById("zeitstrom-bans-slot").dataset.banDetailsHidden).toBe("true");
-        expect(document.getElementById("zeitstrom-kpi-slot").dataset.banDetailsHidden).toBe("true");
     });
 
-    it("shows the block again through the figure and tells the server", async () => {
+    it("shows at once on the figure and tells the server", async () => {
         renderPage({ hidden: true });
-        fetch.mockResolvedValue(answer({ hidden: false, fingerprint: "fp1" }));
+        await settle();
+        expect(isHidden()).toBe(true);
+        const held = heldRequest();
+        fetch.mockReturnValue(held.promise);
 
         toggle().click();
         await settle();
+        expect(isHidden()).toBe(false);
 
-        expect(details().hidden).toBe(false);
+        held.release(answer({ hidden: false, fingerprint: "fp1" }));
+        await settle();
+
+        expect(isHidden()).toBe(false);
         expect(toggle().getAttribute("aria-expanded")).toBe("true");
         expect(toggle().value).toBe("hide:fp1");
-        expect(fetch.mock.calls[0][1].body.get("ban_details")).toBe("show");
+        expect(sentChoices()).toEqual(["show"]);
     });
 
     it("hides with the fingerprint of the list on screen, not a stale button value", async () => {
@@ -124,45 +182,60 @@ describe("close button and figure", () => {
         toggle().click();
         await settle();
 
-        expect(fetch.mock.calls[0][1].body.get("ban_details")).toBe("hide:fp1");
+        expect(sentChoices()[0]).toBe("hide:fp1");
     });
 
-    it("takes the server's word when the list changed meanwhile", async () => {
+    it("stays visible when the server did not store the choice (list changed there)", async () => {
         fetch.mockResolvedValue(answer({ hidden: false, fingerprint: "fp2" }));
 
         close().click();
         await settle();
 
-        expect(details().hidden).toBe(false);
-        expect(toggle().getAttribute("aria-expanded")).toBe("true");
+        expect(isHidden()).toBe(false);
+        expect(sentChoices()).toEqual(["hide:fp1"]);
     });
 
-    it("takes the block back when the request fails", async () => {
+    it("stays visible on a failed hide and tells the server to forget it", async () => {
+        fetch.mockRejectedValueOnce(new Error("offline")).mockResolvedValue(answer({ hidden: false, fingerprint: "fp1" }));
+
+        close().click();
+        await settle();
+
+        expect(isHidden()).toBe(false);
+        expect(sentChoices()).toEqual(["hide:fp1", "show"]);
+    });
+
+    it("stays visible when the server refuses", async () => {
+        fetch.mockResolvedValueOnce(answer({}, false)).mockResolvedValue(answer({ hidden: false, fingerprint: "fp1" }));
+
+        close().click();
+        await settle();
+
+        expect(isHidden()).toBe(false);
+        expect(sentChoices()).toEqual(["hide:fp1", "show"]);
+    });
+
+    it("stays visible on a failed show and keeps no old hidden state", async () => {
+        renderPage({ hidden: true });
+        await settle();
         fetch.mockRejectedValue(new Error("offline"));
 
-        close().click();
+        toggle().click();
+        await settle();
+        swap("zeitstrom-kpi-slot", kpiSlot({ hidden: true }));
+        swap("zeitstrom-bans-slot", bansSlot({ hidden: true }));
         await settle();
 
-        expect(details().hidden).toBe(false);
-        expect(toggle().getAttribute("aria-expanded")).toBe("true");
-    });
-
-    it("takes the block back when the server refuses", async () => {
-        fetch.mockResolvedValue(answer({}, false));
-
-        close().click();
-        await settle();
-
-        expect(details().hidden).toBe(false);
+        expect(isHidden()).toBe(false);
     });
 
     it("sends one request while another is in flight", async () => {
-        let release;
-        fetch.mockReturnValue(new Promise((resolve) => (release = resolve)));
+        const held = heldRequest();
+        fetch.mockReturnValue(held.promise);
 
         close().click();
         toggle().click();
-        release(answer({ hidden: true, fingerprint: "fp1" }));
+        held.release(answer({ hidden: true, fingerprint: "fp1" }));
         await settle();
 
         expect(fetch).toHaveBeenCalledTimes(1);
@@ -180,133 +253,26 @@ describe("close button and figure", () => {
     });
 });
 
-describe("state across slot swaps", () => {
-    it("keeps the hidden state when both slots are swapped with the stored choice", async () => {
-        renderPage({ hidden: true });
-
-        swap("zeitstrom-kpi-slot", kpiSlot({ hidden: true }));
-        swap("zeitstrom-bans-slot", bansSlot({ hidden: true }));
-        await settle();
-
-        expect(details().hidden).toBe(true);
-        expect(toggle().getAttribute("aria-expanded")).toBe("false");
-    });
-
-    it("does not hide on the word of a single replaced KPI slot and asks the watch for both", async () => {
-        vi.useFakeTimers();
-        const asked = staleRequests();
-        renderPage({ hidden: false });
-        await settle();
-
-        swap("zeitstrom-kpi-slot", kpiSlot({ hidden: true }));
-        await settle();
-        await vi.advanceTimersByTimeAsync(2000);
-
-        expect(details().hidden).toBe(false);
-        expect(toggle().getAttribute("aria-expanded")).toBe("true");
-        expect(close().getAttribute("value")).toBe("hide:fp1");
-        expect(asked.length).toBe(1);
-        asked.stop();
-        vi.useRealTimers();
-    });
-
-    it("lets the figure follow a swapped ban block", async () => {
-        renderPage({ hidden: true });
-        await settle();
-
-        swap("zeitstrom-bans-slot", bansSlot({ hidden: false }));
-        await settle();
-
-        expect(toggle().getAttribute("aria-expanded")).toBe("true");
-        expect(toggle().value).toBe("hide:fp1");
-    });
-
-    it("shows the details again when a changed list arrives in both slots", async () => {
-        renderPage({ hidden: true });
-        await settle();
-
-        swap("zeitstrom-kpi-slot", kpiSlot({ hidden: false, fp: "fp2", count: 3 }));
-        swap("zeitstrom-bans-slot", bansSlot({ hidden: false, fp: "fp2" }));
-        await settle();
-
-        expect(details().hidden).toBe(false);
-        expect(toggle().getAttribute("aria-expanded")).toBe("true");
-        expect(toggle().value).toBe("hide:fp2");
-    });
-
-    it("shows the details again when the changed KPI slot arrives before the ban block", async () => {
-        renderPage({ hidden: true });
-        await settle();
-
-        swap("zeitstrom-kpi-slot", kpiSlot({ hidden: false, fp: "fp2", count: 3 }));
-        await settle();
-
-        expect(details().hidden).toBe(false);
-    });
-
-    it("discards the answer of a request during which a slot was replaced, even for the same list", async () => {
-        const asked = staleRequests();
-        let release;
-        fetch.mockReturnValue(new Promise((resolve) => (release = resolve)));
-        close().click();
-
-        swap("zeitstrom-kpi-slot", kpiSlot({ hidden: false }));
-        await settle();
-        expect(details().hidden).toBe(true);
-
-        release(answer({ hidden: true, fingerprint: "fp1" }));
-        await settle();
-
-        expect(details().hidden).toBe(false);
-        expect(asked.length).toBe(1);
-        asked.stop();
-    });
-
-    it("hides through slots that both come hidden at once (the watch's answer)", async () => {
-        renderPage({ hidden: false });
-        await settle();
-
-        swap("zeitstrom-kpi-slot", kpiSlot({ hidden: true }));
-        swap("zeitstrom-bans-slot", bansSlot({ hidden: true }));
-        await settle();
-
-        expect(details().hidden).toBe(true);
-        expect(toggle().getAttribute("aria-expanded")).toBe("false");
-    });
-
-    it("hides once the second slot catches up with a hidden state", async () => {
-        renderPage({ hidden: false });
-        await settle();
-
-        swap("zeitstrom-kpi-slot", kpiSlot({ hidden: true }));
-        await settle();
-        expect(details().hidden).toBe(false);
-        swap("zeitstrom-bans-slot", bansSlot({ hidden: true }));
-        await settle();
-
-        expect(details().hidden).toBe(true);
-    });
-});
-
-// One row per request kind x incoming change: an answer must never hide a list
-// that is not provably the one the request was about.
-describe("freshness of own answers", () => {
-    let asked;
-    let release;
-    let rejectRequest;
+// Events while an own request is open: every uncertainty shows the details at
+// once, the answer is used only if nothing was replaced meanwhile.
+describe("while a request is open", () => {
+    let held;
 
     beforeEach(() => {
-        asked = staleRequests();
-        fetch.mockReturnValue(
-            new Promise((resolve, reject) => {
-                release = resolve;
-                rejectRequest = reject;
-            }),
-        );
+        held = heldRequest();
+        fetch.mockReturnValue(held.promise);
     });
 
-    afterEach(() => {
-        asked.stop();
+    it("shows the details at once when an old KPI slot without the figure arrives (review run 3)", async () => {
+        close().click();
+        await settle();
+
+        swap("zeitstrom-kpi-slot", emptyKpiSlot());
+        await settle();
+
+        // Still open: the notice must not depend on the answer.
+        expect(isHidden()).toBe(false);
+        expect(details().textContent).toContain("Hausverbot");
     });
 
     const changes = {
@@ -327,32 +293,36 @@ describe("freshness of own answers", () => {
         "a filter change (feed refresh with the KPI slot)": () => {
             swap("zeitstrom-kpi-slot", kpiSlot({ fp: "fp1" }));
         },
+        "an old hidden pair of the same list": () => {
+            swap("zeitstrom-kpi-slot", kpiSlot({ fp: "fp1", hidden: true }));
+            swap("zeitstrom-bans-slot", bansSlot({ fp: "fp1", hidden: true }));
+        },
     };
 
     for (const [change, happen] of Object.entries(changes)) {
-        it(`a late hide answer after ${change} hides nothing and asks the watch`, async () => {
+        it(`a late hide answer after ${change} hides nothing and is taken back at the server`, async () => {
             close().click();
             happen();
             await settle();
+            expect(isHidden()).toBe(false);
 
-            release(answer({ hidden: true, fingerprint: "fp1" }));
+            held.release(answer({ hidden: true, fingerprint: "fp1" }));
             await settle();
 
-            expect(details() ? details().hidden : false).toBe(false);
-            expect(document.getElementById("zeitstrom-bans-slot").dataset.banDetailsHidden).toBe("false");
-            expect(asked.length).toBeGreaterThanOrEqual(1);
+            expect(isHidden()).toBe(false);
+            expect(sentChoices()).toEqual(["hide:fp1", "show"]);
         });
 
-        it(`a failed hide request after ${change} hides nothing`, async () => {
+        it(`a failed hide request after ${change} hides nothing and is taken back`, async () => {
             close().click();
             happen();
             await settle();
 
-            rejectRequest(new Error("offline"));
+            held.fail(new Error("offline"));
             await settle();
 
-            expect(details() ? details().hidden : false).toBe(false);
-            expect(asked.length).toBeGreaterThanOrEqual(1);
+            expect(isHidden()).toBe(false);
+            expect(sentChoices()[1]).toBe("show");
         });
 
         it(`a late show answer after ${change} keeps the details visible`, async () => {
@@ -362,47 +332,87 @@ describe("freshness of own answers", () => {
             happen();
             await settle();
 
-            release(answer({ hidden: false, fingerprint: "fp1" }));
+            held.release(answer({ hidden: false, fingerprint: "fp1" }));
             await settle();
 
-            expect(details() ? details().hidden : false).toBe(false);
+            expect(isHidden()).toBe(false);
         });
     }
 
-    it("a failed show request does not bring the old hidden state back", async () => {
-        renderPage({ hidden: true });
-        await settle();
-        toggle().click();
-
-        rejectRequest(new Error("offline"));
-        await settle();
-
-        expect(details().hidden).toBe(false);
-        expect(asked.length).toBe(1);
-    });
-
-    it("an answer without any replaced slot still applies (unchanged path)", async () => {
+    it("an answer without any replaced slot still applies (control)", async () => {
         close().click();
 
-        release(answer({ hidden: true, fingerprint: "fp1" }));
+        held.release(answer({ hidden: true, fingerprint: "fp1" }));
         await settle();
 
-        expect(details().hidden).toBe(true);
-        expect(asked.length).toBe(0);
+        expect(isHidden()).toBe(true);
+        expect(sentChoices()).toEqual(["hide:fp1"]);
     });
 });
 
-describe("slots that disagree", () => {
-    let asked;
+// Slots that arrive after a confirmed choice: they may end a confirmed "hidden",
+// never start one.
+describe("slots after a confirmed choice", () => {
+    it("keeps the hidden state when both slots come again with the same list and choice", async () => {
+        renderPage({ hidden: true });
+        await settle();
 
-    beforeEach(() => {
-        vi.useFakeTimers();
-        asked = staleRequests();
+        swap("zeitstrom-kpi-slot", kpiSlot({ hidden: true }));
+        swap("zeitstrom-bans-slot", bansSlot({ hidden: true }));
+        await settle();
+
+        expect(isHidden()).toBe(true);
+        expect(toggle().getAttribute("aria-expanded")).toBe("false");
     });
 
-    afterEach(() => {
-        asked.stop();
-        vi.useRealTimers();
+    it("keeps the hidden state when only the KPI slot comes again with the same list and choice", async () => {
+        renderPage({ hidden: true });
+        await settle();
+
+        swap("zeitstrom-kpi-slot", kpiSlot({ hidden: true, count: 2 }));
+        await settle();
+
+        expect(isHidden()).toBe(true);
+    });
+
+    it("shows the details when a slot says shown for the list, and a later hidden pair does not hide again", async () => {
+        renderPage({ hidden: true });
+        await settle();
+
+        swap("zeitstrom-bans-slot", bansSlot({ hidden: false }));
+        await settle();
+        expect(isHidden()).toBe(false);
+
+        swap("zeitstrom-kpi-slot", kpiSlot({ hidden: true }));
+        swap("zeitstrom-bans-slot", bansSlot({ hidden: true }));
+        await settle();
+        expect(isHidden()).toBe(false);
+    });
+
+    it("ends the choice on a new list and does not hide when the old list comes back", async () => {
+        renderPage({ hidden: true });
+        await settle();
+
+        swap("zeitstrom-kpi-slot", kpiSlot({ fp: "fp2", count: 3 }));
+        swap("zeitstrom-bans-slot", bansSlot({ fp: "fp2" }));
+        await settle();
+        expect(isHidden()).toBe(false);
+        expect(toggle().value).toBe("hide:fp2");
+
+        swap("zeitstrom-kpi-slot", kpiSlot({ fp: "fp1", hidden: true }));
+        swap("zeitstrom-bans-slot", bansSlot({ fp: "fp1", hidden: true }));
+        await settle();
+        expect(isHidden()).toBe(false);
+    });
+
+    it("shows the details when the changed KPI slot arrives before the ban block", async () => {
+        renderPage({ hidden: true });
+        await settle();
+
+        swap("zeitstrom-kpi-slot", kpiSlot({ hidden: false, fp: "fp2", count: 3 }));
+        await settle();
+
+        expect(isHidden()).toBe(false);
     });
 
     it("keeps a newer ban block visible when an older KPI slot arrives hidden", async () => {
@@ -414,11 +424,59 @@ describe("slots that disagree", () => {
         swap("zeitstrom-kpi-slot", kpiSlot({ hidden: true, fp: "fp1" }));
         await settle();
 
-        expect(details().hidden).toBe(false);
+        expect(isHidden()).toBe(false);
         expect(toggle().getAttribute("aria-expanded")).toBe("true");
     });
 
-    it("asks the live watch, not the server directly, when they still disagree after a short while", async () => {
+    it("shows the details when the KPI slot loses the figure", async () => {
+        renderPage({ hidden: true });
+        await settle();
+
+        swap("zeitstrom-kpi-slot", emptyKpiSlot());
+        await settle();
+
+        expect(isHidden()).toBe(false);
+    });
+
+    it("never hides on a hidden pair that arrives on a page whose choice is shown", async () => {
+        swap("zeitstrom-kpi-slot", kpiSlot({ hidden: true }));
+        swap("zeitstrom-bans-slot", bansSlot({ hidden: true }));
+        await settle();
+
+        expect(isHidden()).toBe(false);
+    });
+
+    it("an old hidden pair after a confirmed show does not hide again and gives the close button its focus back (review run 4)", async () => {
+        renderPage({ hidden: true });
+        await settle();
+        fetch.mockResolvedValue(answer({ hidden: false, fingerprint: "fp1" }));
+        toggle().click();
+        await settle();
+        expect(isHidden()).toBe(false);
+        close().focus();
+
+        swap("zeitstrom-kpi-slot", kpiSlot({ hidden: true }));
+        swap("zeitstrom-bans-slot", bansSlot({ hidden: true }));
+        await settle();
+
+        expect(isHidden()).toBe(false);
+        expect(document.activeElement).toBe(close());
+    });
+});
+
+describe("repair requests", () => {
+    let asked;
+
+    beforeEach(() => {
+        vi.useFakeTimers();
+        asked = staleRequests();
+    });
+
+    afterEach(() => {
+        asked.stop();
+    });
+
+    it("asks the live watch, not the server directly, when the lists still differ after a short while", async () => {
         renderPage({ hidden: true });
         await settle();
         swap("zeitstrom-bans-slot", bansSlot({ hidden: false, fp: "fp2" }));
@@ -429,17 +487,16 @@ describe("slots that disagree", () => {
 
         expect(asked.length).toBe(1);
         expect(fetch).not.toHaveBeenCalled();
-        expect(details().hidden).toBe(false);
+        expect(isHidden()).toBe(false);
     });
 
     it("does not ask when the other slot catches up within the grace period", async () => {
         renderPage({ hidden: true });
         await settle();
 
-        swap("zeitstrom-kpi-slot", kpiSlot({ hidden: false, fp: "fp2", count: 3 }));
+        swap("zeitstrom-kpi-slot", kpiSlot({ fp: "fp2", count: 3 }));
         await settle();
-        expect(details().hidden).toBe(false);
-        swap("zeitstrom-bans-slot", bansSlot({ hidden: false, fp: "fp2" }));
+        swap("zeitstrom-bans-slot", bansSlot({ fp: "fp2" }));
         await settle();
         await vi.advanceTimersByTimeAsync(5000);
 
@@ -453,21 +510,33 @@ describe("slots that disagree", () => {
         await settle();
         for (let round = 0; round < 4; round++) {
             await vi.advanceTimersByTimeAsync(2000);
-            // The watch answers again with the same disagreeing pair.
             swap("zeitstrom-kpi-slot", kpiSlot({ hidden: true, fp: "fp1" }));
             await settle();
         }
         await vi.advanceTimersByTimeAsync(5000);
 
         expect(asked.length).toBe(2);
-        expect(details().hidden).toBe(false);
+        expect(isHidden()).toBe(false);
     });
 });
 
-// The refresh runs through the live watch: its snapshot and generation checks
-// drop every answer that a newer trigger has overtaken (the late empty pair of the
-// review), and the next cycle sends no validator for the two slots.
-describe("refresh through the live watch", () => {
+describe("the handover and the missing form", () => {
+    it("has no close button and nothing to do in the handover", async () => {
+        document.body.innerHTML = `<main id="zeitstrom-live-watch">${bansSlot({ handover: true })}</main>`;
+        await settle();
+
+        document.getElementById("zeitstrom-ban-details").click();
+        await settle();
+
+        expect(close()).toBeNull();
+        expect(fetch).not.toHaveBeenCalled();
+        expect(isHidden()).toBe(false);
+    });
+});
+
+// The repair runs through the live watch: it waits for a running cycle instead of
+// aborting it, and the next cycle sends no validator for the two slots.
+describe("repair through the live watch", () => {
     function response({ status = 200, json = null, text = "", headers = {} }) {
         const normalized = new Map(Object.entries(headers).map(([name, value]) => [name.toLowerCase(), value]));
         return {
@@ -498,61 +567,98 @@ describe("refresh through the live watch", () => {
         return { promise, resolve };
     }
 
-    const triggers = {
-        "another refresh request": () => window.dispatchEvent(new CustomEvent("zeitstrom:ban-slots-stale")),
-        "a filter change": () =>
-            window.dispatchEvent(new CustomEvent("zeitstrom:filter-changed", { detail: { name: "type" } })),
-    };
-
-    for (const [trigger, fire] of Object.entries(triggers)) {
-        it(`drops a late empty pair that ${trigger} has overtaken`, async () => {
-            renderPage({ hidden: true });
-            await settle();
-            const lateKpi = deferredValue();
-            const lateBans = deferredValue();
-            let cycle = 0;
-            const fetchMock = vi.fn((url) => {
-                const path = new URL(url, "https://example.test").pathname;
-                if (path === "/w/") {
-                    cycle += 1;
-                    return Promise.resolve(watchAnswer(cycle));
-                }
-                if (cycle === 1) {
-                    return path.includes("/kpi/") ? lateKpi.promise : lateBans.promise;
-                }
-                return Promise.resolve(
-                    path.includes("/kpi/")
-                        ? slotAnswer(kpiSlot({ fp: "fp2", count: 3 }), `"kpi-${cycle}"`)
-                        : slotAnswer(bansSlot({ fp: "fp2" }), `"bans-${cycle}"`),
-                );
-            });
-            const watcher = window.createZeitstromLiveWatch(document.getElementById("zeitstrom-live-watch"), {
-                fetch: fetchMock,
-                navigate: vi.fn(),
-            });
-
-            watcher.start();
-            const first = watcher.checkNow();
-            // The old cycle has asked for both slots; its answers are held back.
-            await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
-            fire();
-            await watcher.checkNow();
-            await settle();
-            expect(document.getElementById("zeitstrom-kpi-slot").dataset.banFingerprint).toBe("fp2");
-
-            lateKpi.resolve(slotAnswer(emptyKpiSlot(), '"kpi-1"'));
-            lateBans.resolve(slotAnswer(emptyBansSlot(), '"bans-1"'));
-            await first;
-            await settle();
-
-            expect(document.getElementById("zeitstrom-kpi-slot").dataset.banFingerprint).toBe("fp2");
-            expect(document.getElementById("zeitstrom-bans-slot").dataset.fingerprint).toBe("fp2");
-            expect(details().hidden).toBe(false);
-            watcher.stop();
+    it("lets a running cycle finish, then brings the newer list (review run 2, watch design)", async () => {
+        renderPage({ hidden: true });
+        await settle();
+        const firstKpi = deferredValue();
+        const firstBans = deferredValue();
+        const sent = [];
+        let cycle = 0;
+        const fetchMock = vi.fn((url, init) => {
+            const path = new URL(url, "https://example.test").pathname;
+            if (path === "/w/") {
+                cycle += 1;
+                sent.push(JSON.parse((init.headers && init.headers["X-Zeitstrom-Validators"]) || "{}"));
+                return Promise.resolve(watchAnswer(cycle));
+            }
+            if (cycle === 1) {
+                return path.includes("/kpi/") ? firstKpi.promise : firstBans.promise;
+            }
+            return Promise.resolve(
+                path.includes("/kpi/")
+                    ? slotAnswer(kpiSlot({ fp: "fp2", count: 3 }), `"kpi-${cycle}"`)
+                    : slotAnswer(bansSlot({ fp: "fp2" }), `"bans-${cycle}"`),
+            );
         });
-    }
+        const watcher = window.createZeitstromLiveWatch(document.getElementById("zeitstrom-live-watch"), {
+            fetch: fetchMock,
+            navigate: vi.fn(),
+        });
 
-    it("sends no validator for the two slots after a refresh request, so the server answers 200", async () => {
+        watcher.start();
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+        window.dispatchEvent(new CustomEvent("zeitstrom:ban-slots-stale"));
+        await settle();
+        expect(fetchMock).toHaveBeenCalledTimes(3);
+
+        firstKpi.resolve(slotAnswer(emptyKpiSlot(), '"kpi-1"'));
+        firstBans.resolve(slotAnswer(emptyBansSlot(), '"bans-1"'));
+        await vi.waitFor(() =>
+            expect(document.getElementById("zeitstrom-kpi-slot").dataset.banFingerprint).toBe("fp2"),
+        );
+
+        expect(document.getElementById("zeitstrom-bans-slot").dataset.fingerprint).toBe("fp2");
+        expect(isHidden()).toBe(false);
+        expect(sent.at(-1).kpi).toBeUndefined();
+        expect(sent.at(-1).bans).toBeUndefined();
+        watcher.stop();
+    });
+
+    it("drops a late empty pair that a filter change has overtaken (control: also on the old code)", async () => {
+        renderPage({ hidden: true });
+        await settle();
+        const lateKpi = deferredValue();
+        const lateBans = deferredValue();
+        let cycle = 0;
+        const fetchMock = vi.fn((url) => {
+            const path = new URL(url, "https://example.test").pathname;
+            if (path === "/w/") {
+                cycle += 1;
+                return Promise.resolve(watchAnswer(cycle));
+            }
+            if (cycle === 1) {
+                return path.includes("/kpi/") ? lateKpi.promise : lateBans.promise;
+            }
+            return Promise.resolve(
+                path.includes("/kpi/")
+                    ? slotAnswer(kpiSlot({ fp: "fp2", count: 3 }), `"kpi-${cycle}"`)
+                    : slotAnswer(bansSlot({ fp: "fp2" }), `"bans-${cycle}"`),
+            );
+        });
+        const watcher = window.createZeitstromLiveWatch(document.getElementById("zeitstrom-live-watch"), {
+            fetch: fetchMock,
+            navigate: vi.fn(),
+        });
+
+        watcher.start();
+        const first = watcher.checkNow();
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+        window.dispatchEvent(new CustomEvent("zeitstrom:filter-changed", { detail: { name: "type" } }));
+        await watcher.checkNow();
+        await settle();
+        expect(document.getElementById("zeitstrom-kpi-slot").dataset.banFingerprint).toBe("fp2");
+
+        lateKpi.resolve(slotAnswer(emptyKpiSlot(), '"kpi-1"'));
+        lateBans.resolve(slotAnswer(emptyBansSlot(), '"bans-1"'));
+        await first;
+        await settle();
+
+        expect(document.getElementById("zeitstrom-kpi-slot").dataset.banFingerprint).toBe("fp2");
+        expect(document.getElementById("zeitstrom-bans-slot").dataset.fingerprint).toBe("fp2");
+        watcher.stop();
+    });
+
+    it("sends no validator for the two slots after a repair request, so the server answers 200", async () => {
         const sent = [];
         const fetchMock = vi.fn((url, init) => {
             const path = new URL(url, "https://example.test").pathname;
@@ -582,23 +688,9 @@ describe("refresh through the live watch", () => {
         await watcher.checkNow();
         await settle();
 
-        const last = sent.at(-1);
-        expect(last.kpi).toBeUndefined();
-        expect(last.bans).toBeUndefined();
+        expect(sent.at(-1).kpi).toBeUndefined();
+        expect(sent.at(-1).bans).toBeUndefined();
         watcher.stop();
-    });
-});
-
-describe("the handover and the missing form", () => {
-    it("has no close button and nothing to do in the handover", async () => {
-        document.body.innerHTML = `<main id="zeitstrom-live-watch">${bansSlot({ handover: true })}</main>`;
-
-        document.getElementById("zeitstrom-ban-details").click();
-        await settle();
-
-        expect(close()).toBeNull();
-        expect(fetch).not.toHaveBeenCalled();
-        expect(details().hidden).toBe(false);
     });
 });
 
@@ -668,7 +760,7 @@ describe("live watch swaps keep the focus", () => {
         await watchSwap("kpi", kpiSlot({ hidden: true }));
         await watchSwap("bans", bansSlot({ hidden: true }));
 
-        expect(details().hidden).toBe(true);
+        expect(isHidden()).toBe(true);
         expect(toggle().getAttribute("aria-expanded")).toBe("false");
     });
 
@@ -679,7 +771,7 @@ describe("live watch swaps keep the focus", () => {
         await watchSwap("kpi", kpiSlot({ hidden: false, fp: "fp2", count: 3 }));
         await watchSwap("bans", bansSlot({ hidden: false, fp: "fp2" }));
 
-        expect(details().hidden).toBe(false);
+        expect(isHidden()).toBe(false);
         expect(toggle().getAttribute("aria-expanded")).toBe("true");
     });
 
