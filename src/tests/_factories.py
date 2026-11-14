@@ -33,11 +33,30 @@ def insert_event_past_save(**fields):
     transaction, so no other connection sees it off. The batch protection of
     ``Event.objects.bulk_create`` still encrypts sensitive fields and computes
     ``search_text``. Needs the table owner, which the test database user is.
+
+    Constraint mode and trigger state are handled on purpose. The foreign keys
+    of ``core_event`` are ``DEFERRABLE INITIALLY DEFERRED`` (migration
+    ``0166``), so an earlier event insert in the same transaction leaves
+    pending constraint trigger events, and so does the insert below. While such
+    events are pending, PostgreSQL refuses ``ALTER TABLE`` on the table
+    (``pending trigger events``). The helper therefore runs
+    ``SET CONSTRAINTS ALL IMMEDIATE`` before the first DDL, which fires the
+    queued checks, and keeps the mode immediate across the insert, so the new
+    row is checked at once and nothing is queued before the trigger is
+    re-enabled. Afterwards it sets ``SET CONSTRAINTS ALL DEFERRED``, which is
+    the initial mode of every deferrable constraint in this schema (none is
+    ``INITIALLY IMMEDIATE``), so the surrounding transaction behaves as before.
+    Both statements and the DDL are transactional: a failure rolls the whole
+    block back and leaves the trigger enabled. ``session_replication_role``
+    is not used: it needs a superuser and would also skip every other trigger.
     """
     with transaction.atomic(), connection.cursor() as cursor:
-        cursor.execute(f"ALTER TABLE {Event._meta.db_table} DISABLE TRIGGER {BAN_PERSON_INSERT_TRIGGER}")
+        table = Event._meta.db_table
+        cursor.execute("SET CONSTRAINTS ALL IMMEDIATE")
+        cursor.execute(f"ALTER TABLE {table} DISABLE TRIGGER {BAN_PERSON_INSERT_TRIGGER}")
         event = Event.objects.bulk_create([Event(**fields)])[0]
-        cursor.execute(f"ALTER TABLE {Event._meta.db_table} ENABLE ALWAYS TRIGGER {BAN_PERSON_INSERT_TRIGGER}")
+        cursor.execute(f"ALTER TABLE {table} ENABLE ALWAYS TRIGGER {BAN_PERSON_INSERT_TRIGGER}")
+        cursor.execute("SET CONSTRAINTS ALL DEFERRED")
     return event
 
 
