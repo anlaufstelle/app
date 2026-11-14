@@ -11,7 +11,7 @@ import re
 import pytest
 from playwright.sync_api import expect
 
-from ._helpers import django_shell, tally_tile, wait_until
+from ._helpers import django_shell, tally_tile, wait_until, wait_until_htmx_bound
 
 pytestmark = pytest.mark.e2e
 
@@ -148,6 +148,44 @@ class TestTallyStrokeKeepsPlace:
         assert _scroll_y(page) == 0, "the page scrolled away from the tiles after the undo"
         assert wait_until(page, lambda: _active_row_testid(page) == tile_testid), (
             f"the focus is on {_active_row_testid(page)} after the undo, not on the tile"
+        )
+        expect(tile).to_be_in_viewport()
+
+    def test_feed_reload_without_a_focused_element_neither_focuses_nor_scrolls(
+        self, staff_page, base_url, long_feed, viewport_name
+    ):
+        """A background reload (offline replay, fresh page) must not pull the page to the feed."""
+        page = staff_page
+        self._open(page, base_url, viewport_name)
+        page.evaluate("() => document.activeElement && document.activeElement.blur()")
+        assert page.evaluate("() => document.activeElement === document.body")
+
+        # The same trigger the offline replay fires after it synced a stroke.
+        _wait_for_feed_reload(
+            page, lambda: page.evaluate("() => document.body.dispatchEvent(new CustomEvent('zeitstrom-changed'))")
+        )
+
+        assert _scroll_y(page) == 0, "the page scrolled to the feed after a background reload"
+        assert page.evaluate("() => document.activeElement === document.body"), "the feed took the focus"
+
+    def test_number_tile_save_keeps_scroll_and_focus_on_the_tile(self, staff_page, base_url, long_feed, viewport_name):
+        page = staff_page
+        self._open(page, base_url, viewport_name)
+        tile = tally_tile(page, "Spritzentausch")
+        tile_testid = tile.get_attribute("data-testid")
+        _stroke(page, tile)
+
+        form = page.locator('#tally-number-form-slot [data-testid^="tally-inline-form-"]')
+        expect(form).to_be_visible()
+        wait_until_htmx_bound(page, form)
+        form.locator('input[name="ausgabe"]').fill("5")
+        form.locator('input[name="rueckgabe"]').fill("2")
+        _wait_for_feed_reload(page, form.locator('[data-testid^="tally-submit-"]').click)
+
+        expect(form).to_have_count(0)
+        assert _scroll_y(page) == 0, "the page scrolled away from the tiles after saving a number tile"
+        assert wait_until(page, lambda: _active_row_testid(page) == tile_testid), (
+            f"the focus is on {_active_row_testid(page)} after saving, not on the tile"
         )
         expect(tile).to_be_in_viewport()
 

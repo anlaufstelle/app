@@ -57,6 +57,9 @@
  * ``refresh-conditions``; without this exception the focus (and, with the section
  * out of view, the viewport) jumped there. Actions inside the board (delete,
  * create) start from another element and keep their focus handling.
+ * The value ``always`` (tally feed, offline replay and stroke reloads) lifts the
+ * ``<body>`` condition: the reload then leaves the focus and the scroll position
+ * alone even if nothing holds the focus.
  */
 (function () {
     "use strict";
@@ -70,6 +73,10 @@
     // inside it) no longer pulls the focus. Actions INSIDE the target (other
     // triggering elements) keep their focus handling.
     var SELF_REFRESH_OPT_OUT_ATTR = "data-hx-no-focus-self-refresh";
+    // Attribute value that extends the exception to a focus resting on <body>: the
+    // feed is a live region that announces itself, so its reload never needs to
+    // pull the focus or the viewport, whatever holds the focus.
+    var SELF_REFRESH_ALWAYS = "always";
     // Explizites Opt-in: markiert im getauschten Fragment das gewuenschte
     // Fokus-Ziel (hat Vorrang vor der generischen Heuristik).
     var OPT_IN_SELECTOR = "[autofocus], [data-hx-focus]";
@@ -187,8 +194,8 @@
             requestElt &&
             requestElt === replaced &&
             target.hasAttribute(SELF_REFRESH_OPT_OUT_ATTR) &&
-            active &&
-            active !== document.body
+            ((active && active !== document.body) ||
+                target.getAttribute(SELF_REFRESH_OPT_OUT_ATTR) === SELF_REFRESH_ALWAYS)
         ) {
             return;
         }

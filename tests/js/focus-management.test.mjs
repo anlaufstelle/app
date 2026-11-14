@@ -243,6 +243,34 @@ describe("Self-refresh in the background (condition board after a field board ac
         expect(twin.getAttribute("tabindex")).toBe("-1");
     });
 
+    it("keeps the focus where it is when a feed marked 'always' reloads with the focus on the body", () => {
+        const { old, twin } = swappedBoard({ [SELF_REFRESH_ATTR]: "always" });
+        expect(document.activeElement).toBe(document.body);
+
+        afterSwapFrom(old, old);
+
+        expect(document.activeElement).toBe(document.body);
+        expect(twin.hasAttribute("tabindex")).toBe(false);
+    });
+
+    it("keeps the focus on a control outside a feed marked 'always' as well", () => {
+        const fieldBoard = fieldBoardWithFocus();
+        const { old } = swappedBoard({ [SELF_REFRESH_ATTR]: "always" });
+
+        afterSwapFrom(old, old);
+
+        expect(document.activeElement).toBe(fieldBoard);
+    });
+
+    it("an 'always' feed still guides the focus for a swap started from another element", () => {
+        const { old, twin } = swappedBoard({ [SELF_REFRESH_ATTR]: "always" });
+        const select = document.createElement("select");
+
+        afterSwapFrom(old, select);
+
+        expect(document.activeElement).toBe(twin);
+    });
+
     it("only a target with the attribute is exempt from the reload rule", () => {
         const fieldBoard = fieldBoardWithFocus();
         const { old, twin } = swappedBoard({});
