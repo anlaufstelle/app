@@ -44,7 +44,7 @@ Das ist besonders beim wiederverwendeten Feld `leistungen` wichtig: Die Jugend-O
 | `hausverbot-jugend` | `grund` (Pflichtfeld), `bis`, `aktiv`; die Slugs entsprechen exakt der Hausverbots-Projektion |
 | `notiz` | `notiz` |
 
-Die Vorbelegung von `dauer` (15 Minuten) und `teilnehmende` (1) kommt aus dem Paket: Wird sie in der Konfigurationsoberfläche geändert, setzt ein erneutes Anwenden des Pakets mit `load_package` sie auf den Paketwert zurück (Details: [Paket-Referenz](packages.md#was-der-loader-anfasst--und-was-nicht)).
+Die Vorbelegung neuer Einträge von `dauer` (15 Minuten) und `teilnehmende` (1) kommt aus dem Paket: Wird sie in der Konfigurationsoberfläche geändert, setzt ein erneutes Anwenden des Pakets mit `load_package` sie auf den Paketwert zurück (Details: [Paket-Referenz](packages.md#was-der-loader-anfasst--und-was-nicht)).
 
 Das Paket enthält bewusst **kein Datei-Feld**. `teilnehmende` ist ausschließlich eine Kopfzahl; Gruppenangebote führen keine Liste von Pseudonymen.
 

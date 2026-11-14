@@ -19,6 +19,8 @@ from typing import Any
 
 import pytest
 from django.template.loader import render_to_string
+from django.urls import reverse
+from django.utils import timezone, translation
 
 from core.forms.events import DynamicEventDataForm
 from core.forms.tally import TallyNumberDataForm
@@ -26,6 +28,7 @@ from core.models import DocumentType, FieldTemplate
 from core.packages.catalog import list_packages, load_package_data, parse_catalog_package
 from core.packages.loader import PackageLoadError, PackageReport, load_package
 from core.packages.schema import parse_package
+from core.services.events import create_event
 
 # Number fields of the shipped packages and the default each one must carry.
 EXPECTED_NUMBER_DEFAULTS: dict[str, dict[str, str]] = {
@@ -260,16 +263,25 @@ class TestDefaultValueTriState:
 
 @pytest.mark.django_db
 class TestPackageDefaultAgainstBounds:
+    @staticmethod
+    def _bounds_error(facility, raw, *, dry_run=False):
+        """Run the package and return the loader error; its text is pinned in German."""
+        with translation.override("de"), pytest.raises(PackageLoadError) as excinfo:
+            _load(facility, raw, dry_run=dry_run)
+        assert [identifier for identifier, _message in excinfo.value.report.errors] == ["menge"]
+        message = str(excinfo.value)
+        assert message.startswith("menge: Der Default-Wert ")
+        assert "liegt außerhalb der Grenzen dieser Feldvorlage" in message
+        return message
+
     def test_default_below_the_ui_maintained_minimum_is_a_clear_error(self, facility):
         _load(facility, _raw())
         _set_in_ui(facility, "menge", min_value=5)
 
-        with pytest.raises(PackageLoadError) as excinfo:
-            _load(facility, _raw(default_value="1"))
+        message = self._bounds_error(facility, _raw(default_value="1"))
 
-        message = str(excinfo.value)
-        assert "menge" in message
-        assert "min_value" in message or "mindestens 5" in message
+        assert "Der Default-Wert 1 " in message
+        assert "min_value=5, max_value=None" in message
         template = FieldTemplate.objects.get(facility=facility, slug="menge")
         assert (template.min_value, template.default_value) == (5, "")
 
@@ -277,35 +289,33 @@ class TestPackageDefaultAgainstBounds:
         _load(facility, _raw())
         _set_in_ui(facility, "menge", min_value=5)
 
-        with pytest.raises(PackageLoadError) as excinfo:
-            _load(facility, _raw(default_value="1"), dry_run=True)
+        message = self._bounds_error(facility, _raw(default_value="1"), dry_run=True)
 
-        assert [identifier for identifier, _message in excinfo.value.report.errors] == ["menge"]
+        assert "min_value=5" in message
 
     def test_default_above_the_ui_maintained_maximum_is_a_clear_error(self, facility):
         _load(facility, _raw())
         _set_in_ui(facility, "menge", max_value=3)
 
-        with pytest.raises(PackageLoadError) as excinfo:
-            _load(facility, _raw(default_value="9"))
+        message = self._bounds_error(facility, _raw(default_value="9"))
 
-        assert "menge" in str(excinfo.value)
+        assert "Der Default-Wert 9 " in message
+        assert "max_value=3" in message
         assert FieldTemplate.objects.get(facility=facility, slug="menge").default_value == ""
 
     def test_default_outside_the_package_bounds_is_an_error_on_create(self, facility):
-        with pytest.raises(Exception) as excinfo:
-            _load(facility, _raw(min_value=5, default_value="1"))
+        message = self._bounds_error(facility, _raw(min_value=5, default_value="1"))
 
-        assert "menge" in str(excinfo.value)
+        assert "min_value=5" in message
         assert not FieldTemplate.objects.filter(facility=facility, slug="menge").exists()
 
     def test_package_bound_that_excludes_the_existing_ui_default_is_an_error(self, facility):
         _load(facility, _raw())
         _set_in_ui(facility, "menge", default_value="1")
 
-        with pytest.raises(PackageLoadError):
-            _load(facility, _raw(min_value=5))
+        message = self._bounds_error(facility, _raw(min_value=5))
 
+        assert "Der Default-Wert 1 " in message
         template = FieldTemplate.objects.get(facility=facility, slug="menge")
         assert (template.min_value, template.default_value) == (None, "1")
 
@@ -317,3 +327,74 @@ class TestPackageDefaultAgainstBounds:
 
         assert report.errors == []
         assert FieldTemplate.objects.get(facility=facility, slug="menge").default_value == "5"
+
+
+@pytest.mark.django_db
+class TestEditFormDoesNotInventDefaults:
+    """Package defaults pre-fill new entries only; editing never invents a stored value."""
+
+    @staticmethod
+    def _event_without_duration(facility, staff_user, client_identified):
+        load_package(facility, parse_catalog_package("default"))
+        document_type = DocumentType.objects.get(facility=facility, slug="kontakt")
+        event = create_event(
+            facility, staff_user, document_type, timezone.now(), {"notiz": "tally-like entry"}, client=client_identified
+        )
+        assert "dauer" not in event.data_json
+        return event
+
+    def test_edit_form_shows_no_initial_for_a_missing_value(self, client, facility, staff_user, client_identified):
+        event = self._event_without_duration(facility, staff_user, client_identified)
+        client.force_login(staff_user)
+
+        response = client.get(reverse("core:event_update", kwargs={"pk": event.pk}))
+
+        assert response.status_code == 200
+        assert response.context["data_form"].fields["dauer"].initial is None
+        assert 'name="dauer" value="15"' not in response.content.decode()
+
+    def test_saving_an_edit_does_not_write_the_default(self, client, facility, staff_user, client_identified):
+        event = self._event_without_duration(facility, staff_user, client_identified)
+        client.force_login(staff_user)
+        # Submit what the browser would send: the value the edit form renders for "dauer".
+        rendered = (
+            client.get(reverse("core:event_update", kwargs={"pk": event.pk})).context["data_form"]["dauer"].value()
+        )
+
+        response = client.post(
+            reverse("core:event_update", kwargs={"pk": event.pk}),
+            {
+                "document_type": str(event.document_type.pk),
+                "occurred_at": timezone.localtime(event.occurred_at).strftime("%Y-%m-%dT%H:%M"),
+                "notiz": "edited note",
+                "dauer": "" if rendered is None else str(rendered),
+                "expected_updated_at": event.updated_at.isoformat(),
+            },
+        )
+
+        assert response.status_code == 302
+        event.refresh_from_db()
+        assert event.data_json.get("dauer") in (None, "")
+        assert event.data_json["notiz"] == "edited note"
+
+    def test_stored_value_is_still_shown_when_editing(self, client, facility, staff_user, client_identified):
+        load_package(facility, parse_catalog_package("default"))
+        document_type = DocumentType.objects.get(facility=facility, slug="kontakt")
+        event = create_event(
+            facility, staff_user, document_type, timezone.now(), {"dauer": 40}, client=client_identified
+        )
+        client.force_login(staff_user)
+
+        response = client.get(reverse("core:event_update", kwargs={"pk": event.pk}))
+
+        assert response.context["data_form"].fields["dauer"].initial == 40
+
+    def test_new_event_form_still_prefills(self, client, facility, staff_user):
+        load_package(facility, parse_catalog_package("default"))
+        document_type = DocumentType.objects.get(facility=facility, slug="kontakt")
+        client.force_login(staff_user)
+
+        response = client.get(reverse("core:event_create"), {"document_type": str(document_type.pk)})
+
+        assert response.status_code == 200
+        assert response.context["data_form"].fields["dauer"].initial == 15

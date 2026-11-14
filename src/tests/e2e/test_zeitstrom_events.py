@@ -285,6 +285,7 @@ class TestEventErstellung:
         # The package pre-fills "Dauer" with its default (15); this case needs it
         # emptied again, so the field is cleared on purpose before saving.
         _fill_after_htmx_swap(page, "textarea[name='notiz']", "E2E ohne Dauer")
+        expect(page.locator("input[name='dauer']")).to_have_value("15")
         page.locator("input[name='dauer']").fill("")
         expect(page.locator("input[name='dauer']")).to_have_value("")
 

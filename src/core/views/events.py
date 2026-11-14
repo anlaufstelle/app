@@ -1274,6 +1274,7 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
             document_type=event.document_type,
             initial_data=initial_data,
             facility=request.current_facility,
+            apply_defaults=False,
             # E17 (Refs #1057): Marker werden von decrypt_event_text_data gestrippt —
             # die FILE-Slugs mit bestehendem Anhang separat durchreichen, damit ein
             # vorhandener Anhang beim Bearbeiten als „gefüllt" zählt.
@@ -1310,6 +1311,7 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
             document_type=event.document_type,
             initial_data=existing_data,
             facility=facility,
+            apply_defaults=False,
             # E17 (Refs #1057): bestehende FILE-Anhänge zählen bei der
             # Hidden-Required-Prüfung als „gefüllt" (Marker aus data_json).
             existing_file_slugs=file_marker_slugs(event.data_json),
@@ -1392,6 +1394,7 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
                         document_type=current.document_type,
                         initial_data=decrypt_event_text_data(current),
                         facility=facility,
+                        apply_defaults=False,
                         existing_file_slugs=file_marker_slugs(current.data_json),
                     )
                     remove_restricted_fields(request.user, current.document_type, current_data_form)

@@ -920,11 +920,11 @@ def _number_default_bounds_conflict(existing: FieldTemplate | None, desired: dic
         return None
     return str(
         _(
-            "Der Default-Wert %(wert)s liegt außerhalb der Grenzen dieser Feldvorlage "
+            "Der Default-Wert %(value)s liegt außerhalb der Grenzen dieser Feldvorlage "
             "(min_value=%(minimum)s, max_value=%(maximum)s). Entweder die Grenzen in der "
             "Einrichtung anpassen oder den Default-Wert im Paket ändern."
         )
-        % {"wert": value, "minimum": minimum, "maximum": maximum}
+        % {"value": value, "minimum": minimum, "maximum": maximum}
     )
 
 

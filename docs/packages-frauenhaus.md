@@ -44,7 +44,7 @@ Das Frauenhaus-Paket ist **Ersatz, nicht Zusatz**. Es wird in eine neue, katalog
 | `vermittlung` | `vermittelt-an` (Rechtsberatung, Jugendamt, Jobcenter, ärztlich, Therapie, Sonstiges) |
 | `notiz` | `notiz` |
 
-Die Vorbelegung von `dauer` (15 Minuten) kommt aus dem Paket: Wird sie in der Konfigurationsoberfläche geändert, setzt ein erneutes Anwenden des Pakets mit `load_package` sie auf den Paketwert zurück (Details: [Paket-Referenz](packages.md#was-der-loader-anfasst--und-was-nicht)).
+Die Vorbelegung neuer Einträge von `dauer` (15 Minuten) kommt aus dem Paket: Wird sie in der Konfigurationsoberfläche geändert, setzt ein erneutes Anwenden des Pakets mit `load_package` sie auf den Paketwert zurück (Details: [Paket-Referenz](packages.md#was-der-loader-anfasst--und-was-nicht)).
 
 `scan-dokument` ist das **einzige Datei-Feld** des Pakets. Dateien werden im File-Vault verschlüsselt gespeichert. Neue JPG- und PNG-Uploads durchlaufen außerdem die Metadaten-Bereinigung aus #2128; Dokumenteigenschaften in PDF-Dateien werden davon nicht bereinigt und müssen vor dem Upload organisatorisch geprüft werden.
 

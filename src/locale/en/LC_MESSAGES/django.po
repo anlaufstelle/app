@@ -15214,3 +15214,14 @@ msgstr "\"Contacts\" is directly below \"Timeline\" in the sidebar, or \"More �
 #: src/core/views/help.py:84
 msgid "Zeilen lassen sich für rollenberechtigte Feldwerte aufklappen; „Zum Eintrag“ öffnet die Detailansicht. Die Liste bietet keinen Export und keine Massenaktionen."
 msgstr "Expand rows to see field values permitted for your role; \"Go to entry\" opens the detail view. The list offers no export or bulk actions."
+
+#: src/core/packages/loader.py:923
+#, python-format
+msgid ""
+"Der Default-Wert %(value)s liegt außerhalb der Grenzen dieser Feldvorlage (min_value="
+"%(minimum)s, max_value=%(maximum)s). Entweder die Grenzen in der Einrichtung "
+"anpassen oder den Default-Wert im Paket ändern."
+msgstr ""
+"The default value %(value)s is outside the bounds of this field template "
+"(min_value=%(minimum)s, max_value=%(maximum)s). Either adjust the bounds in the "
+"facility or change the default value in the package."

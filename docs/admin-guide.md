@@ -966,7 +966,7 @@ Die Detailansichten zeigen die Bezeichnungen einer Mehrfachauswahl jeweils auf e
 
 #### Default-Werte (`default_value`)
 
-Im Feld **Default-Wert** einer Feldvorlage kann ein Vorgabewert hinterlegt werden, der beim **Neu-Anlegen** eines Ereignisses vorgeblendet wird. Beim **Bearbeiten** eines bestehenden Ereignisses hat der gespeicherte Wert immer Vorrang.
+Im Feld **Default-Wert** einer Feldvorlage kann ein Vorgabewert hinterlegt werden, der beim **Neu-Anlegen** eines Ereignisses vorgeblendet wird. Beim **Bearbeiten** eines bestehenden Ereignisses hat der gespeicherte Wert immer Vorrang; fehlt er, bleibt das Feld leer und der Default wird nicht nachträglich gespeichert.
 
 | Feldtyp | Format | Beispiel |
 |---|---|---|
@@ -981,7 +981,7 @@ Im Feld **Default-Wert** einer Feldvorlage kann ein Vorgabewert hinterlegt werde
 
 Vorrangregel beim Neu-Anlegen: **Quick-Template > Default-Wert > leer**. Ungültige Werte werden in `FieldTemplate.clean()` beim Speichern im Admin abgelehnt.
 
-Die mitgelieferten Pakete tragen für ihre Zahlenfelder einen Default (Dauer 15 Minuten; Ausgabe, Rückgabe und Teilnehmende 1). Ändern Sie ihn hier, setzt ein ausdrücklich erneutes Anwenden des Pakets (`load_package`) ihn auf den Paketwert zurück; die Ersteinrichtung und `setup_facility` lassen eine Einrichtung mit vorhandenem Katalog unangetastet. Einzelne Felder lassen sich nicht ausnehmen — Details und Ausweg in der [Paket-Referenz](packages.md#was-der-loader-anfasst--und-was-nicht).
+Die mitgelieferten Pakete tragen für ihre Zahlenfelder einen Default (Dauer 15 Minuten; Ausgabe, Rückgabe und Teilnehmende 1); bestehende Einrichtungen erhalten ihn erst mit einem erneuten `load_package`. Ändern Sie ihn hier, setzt ein ausdrücklich erneutes Anwenden des Pakets (`load_package`) ihn auf den Paketwert zurück; die Ersteinrichtung und `setup_facility` lassen eine Einrichtung mit vorhandenem Katalog unangetastet. Einzelne Felder lassen sich nicht ausnehmen — Details und Ausweg in der [Paket-Referenz](packages.md#was-der-loader-anfasst--und-was-nicht).
 
 **Schema einer Option:**
 

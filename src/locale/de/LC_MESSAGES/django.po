@@ -15302,3 +15302,14 @@ msgstr "„Kontakte“ steht direkt unter „Zeitstrom“ in der Seitenleiste, m
 #: src/core/views/help.py:84
 msgid "Zeilen lassen sich für rollenberechtigte Feldwerte aufklappen; „Zum Eintrag“ öffnet die Detailansicht. Die Liste bietet keinen Export und keine Massenaktionen."
 msgstr "Zeilen lassen sich für rollenberechtigte Feldwerte aufklappen; „Zum Eintrag“ öffnet die Detailansicht. Die Liste bietet keinen Export und keine Massenaktionen."
+
+#: src/core/packages/loader.py:923
+#, python-format
+msgid ""
+"Der Default-Wert %(value)s liegt außerhalb der Grenzen dieser Feldvorlage (min_value="
+"%(minimum)s, max_value=%(maximum)s). Entweder die Grenzen in der Einrichtung "
+"anpassen oder den Default-Wert im Paket ändern."
+msgstr ""
+"Der Default-Wert %(value)s liegt außerhalb der Grenzen dieser Feldvorlage (min_value="
+"%(minimum)s, max_value=%(maximum)s). Entweder die Grenzen in der Einrichtung "
+"anpassen oder den Default-Wert im Paket ändern."

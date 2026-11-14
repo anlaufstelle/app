@@ -239,7 +239,7 @@ class Command(BaseCommand):
         # das im Normalfall (Paket verwaltet keine Grenze) jeden Lauf
         # zuspammen. Kein ``style``-Callable: die Zeile ist Information, kein
         # Alarm.
-        self._write_messages("Unangetastete Bestandsgrenzen", report.preserved, None)
+        self._write_messages("Unangetastete Bestandswerte", report.preserved, None)
         self._write_messages("Warnungen", report.warnings, self.style.WARNING)
         self._write_messages("Fehler", report.errors, self.style.ERROR)
 

@@ -38,6 +38,10 @@ def _set_default_value(slug, value, env):
     _run_shell(script, env)
 
 
+# The shipped "default" package pre-fills the duration; later specs of the same session rely on it.
+SHIPPED_DAUER_DEFAULT = "15"
+
+
 def _clear_default_value(slug, env):
     _set_default_value(slug, "", env)
 
@@ -57,14 +61,17 @@ class TestDefaultValuePrefill:
             dauer_value = page.locator("input[name='dauer']").input_value()
             assert dauer_value == "15", f"Erwartet '15', bekam '{dauer_value}'"
         finally:
-            _clear_default_value("dauer", e2e_env)
+            _set_default_value("dauer", SHIPPED_DAUER_DEFAULT, e2e_env)
 
     def test_default_not_set_when_empty(self, authenticated_page, base_url, e2e_env):
         _clear_default_value("dauer", e2e_env)
-        page = authenticated_page
-        page.goto(f"{base_url}/events/new/", wait_until="domcontentloaded")
-        page.select_option("select[name='document_type']", label="Kontakt")
-        page.wait_for_selector("input[name='dauer']", state="visible", timeout=5000)
+        try:
+            page = authenticated_page
+            page.goto(f"{base_url}/events/new/", wait_until="domcontentloaded")
+            page.select_option("select[name='document_type']", label="Kontakt")
+            page.wait_for_selector("input[name='dauer']", state="visible", timeout=5000)
 
-        dauer_value = page.locator("input[name='dauer']").input_value()
-        assert dauer_value == "", f"Erwartet leer, bekam '{dauer_value}'"
+            dauer_value = page.locator("input[name='dauer']").input_value()
+            assert dauer_value == "", f"Erwartet leer, bekam '{dauer_value}'"
+        finally:
+            _set_default_value("dauer", SHIPPED_DAUER_DEFAULT, e2e_env)

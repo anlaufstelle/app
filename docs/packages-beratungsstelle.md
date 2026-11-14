@@ -30,7 +30,7 @@ Das Paket richtet Anlaufstelle für eine offene Sprechstunde und Sozialberatung 
 | Notiz | `notiz` |
 | Hausverbot | `grund` (Pflicht), `bis`, `aktiv` |
 
-Das Zahlenfeld `dauer` (Minuten) ist in allen Typen mit 15 vorbelegt und lässt sich in der Konfigurationsoberfläche ändern; ein erneutes Anwenden des Pakets mit `load_package` setzt es auf 15 zurück (siehe [Paket-Referenz](packages.md#was-der-loader-anfasst--und-was-nicht)).
+Das Zahlenfeld `dauer` (Minuten) ist bei neuen Einträgen in allen Typen mit 15 vorbelegt und lässt sich in der Konfigurationsoberfläche ändern; ein erneutes Anwenden des Pakets mit `load_package` setzt es auf 15 zurück (siehe [Paket-Referenz](packages.md#was-der-loader-anfasst--und-was-nicht)).
 
 Die Auswahlwerte sind auf die Beratungs-Domäne zugeschnitten:
 

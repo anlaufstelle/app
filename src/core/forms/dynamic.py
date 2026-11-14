@@ -177,13 +177,17 @@ def _select_choices(ft, initial_data, select_type):
     return choices
 
 
-def build_dynamic_form_field(ft, initial_data):
+def build_dynamic_form_field(ft, initial_data, *, apply_defaults=True):
     """Refs #1160: Ein einzelnes Formularfeld aus einem ``FieldTemplate`` bauen.
 
     Aus :meth:`DynamicDataForm.__init__` herausgezogen — kapselt die
     Field-Klassen-/Widget-/CSS-/Choices-/Initial-Auswahl pro Feldtyp.
     Wirkungs-identisch; FILE -> ``MultipleFileField`` (Refs #622), die
     SELECT/MULTI_SELECT-Choices stammen aus :func:`_select_choices`.
+
+    ``apply_defaults=False`` (editing an existing record): the field-template
+    default is not pre-filled, so a slug without a stored value stays empty and
+    saving never invents one.
     """
     from core.services.system import (
         FILE,
@@ -242,7 +246,7 @@ def build_dynamic_form_field(ft, initial_data):
 
     if initial_data and ft.slug in initial_data:
         field.initial = initial_data[ft.slug]
-    elif spec.allows_default:
+    elif apply_defaults and spec.allows_default:
         default_initial = ft.get_default_initial()
         if default_initial is not None:
             field.initial = default_initial
@@ -342,7 +346,16 @@ class DynamicDataForm(forms.Form):
     Lognamen (``type(form).__name__``).
     """
 
-    def __init__(self, *args, document_type=None, initial_data=None, facility=None, existing_file_slugs=None, **kwargs):
+    def __init__(
+        self,
+        *args,
+        document_type=None,
+        initial_data=None,
+        facility=None,
+        existing_file_slugs=None,
+        apply_defaults=True,
+        **kwargs,
+    ):
         self.facility = facility
         self.document_type = document_type
         # M0/P4 (Refs #1056): slug -> FieldGroup | None. Aus dem select_related
@@ -386,7 +399,7 @@ class DynamicDataForm(forms.Form):
 
         for dtf in dtf_qs:
             ft = dtf.field_template
-            self.fields[ft.slug] = build_dynamic_form_field(ft, initial_data)
+            self.fields[ft.slug] = build_dynamic_form_field(ft, initial_data, apply_defaults=apply_defaults)
             self._field_group_of[ft.slug] = dtf.field_group
             self._field_templates[ft.slug] = ft
             self._block_position[ft.slug] = dtf.sort_order

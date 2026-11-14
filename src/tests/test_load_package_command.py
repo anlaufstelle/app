@@ -111,7 +111,7 @@ class TestRoundtrip:
 
         output = _run(file=path, facility=facility.id)
 
-        assert "Unangetastete Bestandsgrenzen (1):" in output
+        assert "Unangetastete Bestandswerte (1):" in output
         assert "dauer: " in output
         assert "min_value=5" in output
         assert "Warnungen" not in output

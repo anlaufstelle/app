@@ -40,7 +40,7 @@ Keiner der sieben Typen verlangt eine Mindest-Kontaktstufe. Auch Gewaltvorfall u
 | `vermittlung` | `vermittelt-an` (Sanität, Psy-Support, Security, Taxi / Safe Home, Sonstiges), `veranstaltung` |
 | `notiz` | `notiz` |
 
-Die Vorbelegung von `dauer` (15 Minuten) kommt aus dem Paket: Wird sie in der Konfigurationsoberfläche geändert, setzt ein erneutes Anwenden des Pakets mit `load_package` sie auf den Paketwert zurück (Details: [Paket-Referenz](packages.md#was-der-loader-anfasst--und-was-nicht)).
+Die Vorbelegung neuer Einträge von `dauer` (15 Minuten) kommt aus dem Paket: Wird sie in der Konfigurationsoberfläche geändert, setzt ein erneutes Anwenden des Pakets mit `load_package` sie auf den Paketwert zurück (Details: [Paket-Referenz](packages.md#was-der-loader-anfasst--und-was-nicht)).
 
 Das gesamte Paket enthält bewusst **kein Datei-Feld**. Fotos von betroffenen Personen dürfen nicht gespeichert werden; Vorfälle werden kategorisiert und notwendige Freitexte verschlüsselt dokumentiert.
 
