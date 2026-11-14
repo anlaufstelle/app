@@ -15,6 +15,12 @@
  * guard in focus-management.js hands it to the same control (the controls carry
  * stable ids). When the details are hidden while the close button holds the focus,
  * the focus moves to the figure first, so it never falls to <body>.
+ *
+ * Every state belongs to one list, named by its fingerprint (the KPI slot and the
+ * ban slot both carry it). A hide answer is applied only to the list it was asked
+ * for, and a slot that arrives late with another list than the one on screen never
+ * hides anything: both slots are shown (the safe side) and, if they still disagree
+ * after a short while, both are fetched again from the server.
  */
 (function () {
     "use strict";
@@ -27,9 +33,14 @@
     var CLOSE_ID = "zeitstrom-ban-details-close";
     var HIDE_PREFIX = "hide:";
 
+    var RELOAD_GRACE_MS = 1500;
+    var MAX_RELOAD_ROUNDS = 2;
+
     var pending = false;
     var knownKpiSlot = null;
     var knownBansSlot = null;
+    var reloadTimer = null;
+    var reloadRounds = 0;
 
     function byId(id) {
         return document.getElementById(id);
@@ -91,6 +102,91 @@
         return response.json();
     }
 
+    // The list on screen: the fingerprint of the ban block ("" without bans).
+    function listFingerprint() {
+        var bansSlot = byId(BANS_SLOT_ID);
+        return (bansSlot && bansSlot.getAttribute("data-fingerprint")) || "";
+    }
+
+    // True when the KPI slot was rendered for another list than the ban block.
+    function slotsDisagree() {
+        var kpiSlot = byId(KPI_SLOT_ID);
+        if (!kpiSlot || !kpiSlot.hasAttribute("data-ban-fingerprint")) {
+            return false;
+        }
+        return (kpiSlot.getAttribute("data-ban-fingerprint") || "") !== listFingerprint();
+    }
+
+    function swapSlot(id, html) {
+        var template = document.createElement("template");
+        template.innerHTML = html.trim();
+        var fresh = template.content.querySelector("#" + id);
+        var current = byId(id);
+        if (!fresh || !current) {
+            return;
+        }
+        var guard = window.backgroundSwapGuard;
+        var snapshot = guard ? guard.capture(current) : null;
+        if (window.htmx && typeof window.htmx.swap === "function") {
+            window.htmx.swap(current, fresh.outerHTML, { swapStyle: "outerHTML", settleDelay: 0 });
+        } else {
+            current.replaceWith(fresh);
+        }
+        if (snapshot) {
+            guard.restore(current, snapshot);
+        }
+    }
+
+    // Both slots again from the server, for the filter state of the page.
+    async function reloadSlots() {
+        var root = byId("zeitstrom-live-watch");
+        if (!root || !root.dataset.kpiUrl || !root.dataset.bansUrl) {
+            return;
+        }
+        var state = byId("zeitstrom-filter-state");
+        var query = state ? new URLSearchParams(new FormData(state)).toString() : "";
+        function load(url) {
+            return fetch(url + (query ? "?" + query : ""), {
+                credentials: "same-origin",
+                headers: { Accept: "text/html" },
+            }).then(function (response) {
+                return response.ok && response.status === 200 ? response.text() : null;
+            });
+        }
+        var pages;
+        try {
+            pages = await Promise.all([load(root.dataset.kpiUrl), load(root.dataset.bansUrl)]);
+        } catch (_e) {
+            return;
+        }
+        if (pages[0] !== null) {
+            swapSlot(KPI_SLOT_ID, pages[0]);
+        }
+        if (pages[1] !== null) {
+            swapSlot(BANS_SLOT_ID, pages[1]);
+        }
+    }
+
+    function armReload() {
+        if (reloadTimer !== null || reloadRounds >= MAX_RELOAD_ROUNDS) {
+            return;
+        }
+        reloadTimer = window.setTimeout(function () {
+            reloadTimer = null;
+            if (slotsDisagree()) {
+                reloadRounds += 1;
+                reloadSlots();
+            }
+        }, RELOAD_GRACE_MS);
+    }
+
+    // The two slots describe different lists: show the details (never hide on the
+    // word of a slot that may be older) and let the server settle it.
+    function resolveDisagreement() {
+        apply(false);
+        armReload();
+    }
+
     async function onClick(event) {
         var button = event.target && event.target.closest ? event.target.closest('button[form="' + FORM_ID + '"]') : null;
         var form = byId(FORM_ID);
@@ -103,24 +199,35 @@
         }
 
         var wasHidden = isHidden();
-        var bansSlot = byId(BANS_SLOT_ID);
         var wantsHide = button.value.indexOf(HIDE_PREFIX) === 0;
-        var choice = wantsHide ? HIDE_PREFIX + ((bansSlot && bansSlot.getAttribute("data-fingerprint")) || button.value.slice(HIDE_PREFIX.length)) : "show";
+        var requestedList = wantsHide ? listFingerprint() || button.value.slice(HIDE_PREFIX.length) : "";
+        var choice = wantsHide ? HIDE_PREFIX + requestedList : "show";
 
         pending = true;
         apply(wantsHide);
         try {
             var answer = await send(form, choice);
-            apply(!!answer.hidden);
+            if (!wantsHide) {
+                apply(!!answer.hidden);
+            } else if (listFingerprint() === requestedList) {
+                // Only the list that was asked for may be hidden.
+                apply(!!answer.hidden && answer.fingerprint === requestedList);
+            }
         } catch (_e) {
-            apply(wasHidden);
+            if (!wantsHide || listFingerprint() === requestedList) {
+                apply(wasHidden);
+            }
         } finally {
             pending = false;
+            if (slotsDisagree()) {
+                resolveDisagreement();
+            }
         }
     }
 
     // After the live watch (or a feed refresh) replaced one of the two slots, the
-    // other follows the replaced one. Replaced slots are told apart by identity.
+    // other follows the replaced one as long as both describe the same list.
+    // Replaced slots are told apart by identity.
     function reconcile() {
         var kpiSlot = byId(KPI_SLOT_ID);
         var bansSlot = byId(BANS_SLOT_ID);
@@ -128,6 +235,15 @@
         var bansFresh = bansSlot !== knownBansSlot;
         knownKpiSlot = kpiSlot;
         knownBansSlot = bansSlot;
+        if (slotsDisagree()) {
+            resolveDisagreement();
+            return;
+        }
+        if (reloadTimer !== null) {
+            window.clearTimeout(reloadTimer);
+            reloadTimer = null;
+        }
+        reloadRounds = 0;
         if (pending || kpiFresh === bansFresh) {
             return;
         }

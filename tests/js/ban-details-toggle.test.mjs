@@ -246,6 +246,124 @@ describe("state across slot swaps", () => {
     });
 });
 
+describe("late answers and stale slots", () => {
+    function textResponse(html) {
+        return { ok: true, status: 200, text: async () => html };
+    }
+
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it("ignores a late hide answer for a list that has been replaced by a live swap", async () => {
+        let release;
+        fetch.mockReturnValue(new Promise((resolve) => (release = resolve)));
+        close().click();
+        expect(details().hidden).toBe(true);
+
+        swap("zeitstrom-kpi-slot", kpiSlot({ hidden: false, fp: "fp2", count: 3 }));
+        swap("zeitstrom-bans-slot", bansSlot({ hidden: false, fp: "fp2" }));
+        await settle();
+        expect(details().hidden).toBe(false);
+
+        release(answer({ hidden: true, fingerprint: "fp1" }));
+        await settle();
+
+        expect(details().hidden).toBe(false);
+        expect(toggle().getAttribute("aria-expanded")).toBe("true");
+        expect(toggle().value).toBe("hide:fp2");
+    });
+
+    it("ignores a late hide answer when only the ban block has been replaced", async () => {
+        let release;
+        fetch.mockReturnValue(new Promise((resolve) => (release = resolve)));
+        close().click();
+
+        swap("zeitstrom-bans-slot", bansSlot({ hidden: false, fp: "fp2" }));
+        await settle();
+        release(answer({ hidden: true, fingerprint: "fp1" }));
+        await settle();
+
+        expect(details().hidden).toBe(false);
+    });
+
+    it("keeps a newer ban block visible when an older KPI slot arrives hidden", async () => {
+        vi.useFakeTimers();
+        renderPage({ hidden: true });
+        await settle();
+        swap("zeitstrom-bans-slot", bansSlot({ hidden: false, fp: "fp2" }));
+        await settle();
+
+        swap("zeitstrom-kpi-slot", kpiSlot({ hidden: true, fp: "fp1" }));
+        await settle();
+
+        expect(details().hidden).toBe(false);
+        expect(toggle().getAttribute("aria-expanded")).toBe("true");
+    });
+
+    it("reloads both slots when they still disagree after a short while", async () => {
+        vi.useFakeTimers();
+        renderPage({ hidden: true });
+        await settle();
+        swap("zeitstrom-bans-slot", bansSlot({ hidden: false, fp: "fp2" }));
+        swap("zeitstrom-kpi-slot", kpiSlot({ hidden: true, fp: "fp1", count: 2 }));
+        await settle();
+        fetch.mockImplementation(async (url) =>
+            textResponse(
+                String(url).includes("/kpi/")
+                    ? kpiSlot({ hidden: false, fp: "fp2", count: 3 })
+                    : bansSlot({ hidden: false, fp: "fp2" }),
+            ),
+        );
+
+        await vi.advanceTimersByTimeAsync(2000);
+        await settle();
+
+        const urls = fetch.mock.calls.map((call) => String(call[0]));
+        expect(urls.some((url) => url.includes("/partials/zeitstrom/kpi/"))).toBe(true);
+        expect(urls.some((url) => url.includes("/partials/zeitstrom/bans/"))).toBe(true);
+        expect(document.getElementById("zeitstrom-kpi-slot").dataset.banFingerprint).toBe("fp2");
+        expect(toggle().textContent).toContain("3 Hausverbote");
+        expect(details().hidden).toBe(false);
+    });
+
+    it("does not reload when the other slot catches up within the grace period", async () => {
+        vi.useFakeTimers();
+        renderPage({ hidden: true });
+        await settle();
+
+        swap("zeitstrom-kpi-slot", kpiSlot({ hidden: false, fp: "fp2", count: 3 }));
+        await settle();
+        expect(details().hidden).toBe(false);
+        swap("zeitstrom-bans-slot", bansSlot({ hidden: false, fp: "fp2" }));
+        await settle();
+        await vi.advanceTimersByTimeAsync(5000);
+
+        expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it("gives up reloading after two rounds and leaves the details visible", async () => {
+        vi.useFakeTimers();
+        renderPage({ hidden: true });
+        await settle();
+        swap("zeitstrom-bans-slot", bansSlot({ hidden: false, fp: "fp2" }));
+        await settle();
+        fetch.mockImplementation(async (url) =>
+            textResponse(
+                String(url).includes("/kpi/")
+                    ? kpiSlot({ hidden: true, fp: "fp1" })
+                    : bansSlot({ hidden: false, fp: "fp2" }),
+            ),
+        );
+
+        await vi.advanceTimersByTimeAsync(20000);
+        await settle();
+
+        expect(fetch).toHaveBeenCalledTimes(4);
+        expect(details().hidden).toBe(false);
+    });
+});
+
 describe("the handover and the missing form", () => {
     it("has no close button and nothing to do in the handover", async () => {
         document.body.innerHTML = `<main id="zeitstrom-live-watch">${bansSlot({ handover: true })}</main>`;
