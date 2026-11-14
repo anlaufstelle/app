@@ -140,7 +140,6 @@ def test_undo_button_shows_a_space_before_the_countdown(staff_page, base_url, vi
     expect(undo).to_have_text(re.compile(r"^Rückgängig · \d+ s$"), use_inner_text=True)
 
 
-@pytest.mark.parametrize("viewport_name", sorted(VIEWPORTS))
 def _settle_first_watch_cycle(page):
     """Wait for the live watch's first cycle, which always replaces the feed list.
 
@@ -153,6 +152,7 @@ def _settle_first_watch_cycle(page):
     page.evaluate("() => window.zeitstromWatch.checkNow()")
 
 
+@pytest.mark.parametrize("viewport_name", sorted(VIEWPORTS))
 class TestTallyStrokeKeepsPlace:
     @staticmethod
     def _wait_until_scrollable(page, viewport_name):
