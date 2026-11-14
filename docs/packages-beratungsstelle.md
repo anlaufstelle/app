@@ -2,7 +2,7 @@
 
 **Refs:** #2145 · #1141
 
-Das Paket richtet Anlaufstelle für eine offene Sprechstunde und Sozialberatung ein. Menschen kommen ohne Termin und ohne Klarnamen; die Kurzberatung bleibt deshalb anonym dokumentierbar. Ein Beratungsgespräch beginnt ab einem stabilen Pseudonym, damit die Einrichtung Folgetermine und Vereinbarungen sicher zuordnen kann. Krisen, Begleitungen zu Behörden oder Ämtern und Vermittlungen sind eigene Typen. Ein Hausverbot ist mitgeliefert, kann aber von der Einrichtung deaktiviert werden.
+Das Paket richtet Anlaufstelle für eine offene Sprechstunde und Sozialberatung ein. Menschen kommen ohne Termin und ohne Klarnamen; die Kurzberatung bleibt deshalb anonym dokumentierbar. Ein Beratungsgespräch beginnt ab einem stabilen Pseudonym, damit die Einrichtung Folgetermine und Vereinbarungen sicher zuordnen kann. Krisen, Begleitungen zu Behörden oder Ämtern und Vermittlungen sind eigene Typen. Ein Hausverbot ist mitgeliefert, braucht aber immer eine Person und kann von der Einrichtung deaktiviert werden.
 
 ## Dokumentationstypen
 
@@ -15,7 +15,7 @@ Das Paket richtet Anlaufstelle für eine offene Sprechstunde und Sozialberatung 
 | `begleitung` | Begleitung | normal | nein | `identified` | — | `accompaniment` |
 | `vermittlung` | Vermittlung | normal | ja | — | — | `referral` |
 | `notiz` | Notiz | normal | ja | — | — | `excluded` |
-| `hausverbot` | Hausverbot | erhöht | nein | — | `ban` | `excluded` |
+| `hausverbot` | Hausverbot | erhöht | nein | `identified` | `ban` | `excluded` |
 
 ## Felder
 
@@ -66,7 +66,7 @@ Konkret bedeuten die Ebenen:
 - Zeitfenster: „Sprechstunde Vormittag“ (08:00–12:00), „Sprechstunde Nachmittag“ (13:00–17:00) und „Termine“ (17:00–20:00) sind vorbereitet und können angepasst werden.
 - Schnellvorlagen: „Kurzinfo Sprechstunde“, „Formularhilfe“ und „Telefonische Kurzberatung“ sind vorbereitet.
 - Rollen: Empfang sollte nur die niedrigschwelligen Typen sehen; Fachkraft übernimmt Beratungs- und Krisengespräche; Leitung prüft hochsensible Inhalte und Hausverbote.
-- Hausverbot: der Typ ist bewusst mitgeliefert und kann deaktiviert werden, wenn die Einrichtung keine Hausverbote dokumentiert.
+- Hausverbot: der Typ ist bewusst mitgeliefert und kann deaktiviert werden, wenn die Einrichtung keine Hausverbote dokumentiert. Ein Hausverbot braucht immer eine Person (`identified`, „Nur Pseudonym“ genügt); anonym lässt es sich nicht erfassen. Bereits vorhandene anonyme Hausverbote bleiben bearbeitbar und deaktivierbar.
 
 ## Entscheide
 

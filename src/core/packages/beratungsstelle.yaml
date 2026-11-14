@@ -355,6 +355,7 @@ document_types:
     system_type: ban
     report_key: excluded
     sensitivity: elevated
+    min_contact_stage: identified
     icon: slash
     color: red
     sort_order: 7

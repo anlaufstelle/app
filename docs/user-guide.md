@@ -275,6 +275,8 @@ Wenn aktive Hausverbote in Ihrer Einrichtung bestehen, steht ganz vorn in der Ke
 
 In der **Personenliste** (`/clients/`) trägt jede Person mit aktivem Hausverbot das rote Badge **Hausverbot** neben dem Pseudonym, in der Tabelle und in der Karte am Handy. Es nennt keinen Grund und folgt derselben Sichtbarkeitsregel wie die roten Zeilen im Zeitstrom.
 
+**Ein Hausverbot anlegen:** Wählen Sie als Dokumentationstyp „Hausverbot“ und ordnen Sie eine Person zu; ohne Person lehnt die Anwendung das Hausverbot ab. „Nur Pseudonym“ genügt als Kontaktstufe. Bereits vorhandene Hausverbote ohne Person bleiben bearbeitbar und lassen sich deaktivieren.
+
 ---
 
 ### Kontakte-Liste

@@ -1287,7 +1287,7 @@ EXPECTED_DOCUMENT_TYPES = {
     ),
     "vermittlung": ("Vermittlung", None, "normal", "share-2", "blue", 6, None),
     "notiz": ("Notiz", None, "normal", "file-text", "gray", 7, None),
-    "hausverbot": ("Hausverbot", "ban", "elevated", "slash", "red", 8, None),
+    "hausverbot": ("Hausverbot", "ban", "elevated", "slash", "red", 8, "identified"),
 }
 
 

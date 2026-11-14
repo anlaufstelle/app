@@ -16,7 +16,7 @@ Das Awareness-Paket ist **Ersatz, nicht Zusatz**. Es wird in eine neue, katalogf
 
 ## Dokumentationstypen
 
-Keiner der sieben Typen verlangt eine Mindest-Kontaktstufe. Auch Gewaltvorfall und Krisensituation bleiben ohne `min_contact_stage`, weil betroffene Personen häufig anonym bleiben müssen. `tally` kennzeichnet Typen, die zusätzlich für eine personenlose Strichliste vorgesehen sind.
+Sechs der sieben Typen verlangen keine Mindest-Kontaktstufe. Einzige Ausnahme ist die Orga-Meldung (Platzverweis): Als Typ mit Systemtyp `ban` braucht sie `min_contact_stage: identified`, weil jeder Platzverweis eine Person nennt; bei einer unbekannten Person genügt ein Kurz-Pseudonym, etwa „Rotes Shirt Bühne 2“. Gewaltvorfall und Krisensituation bleiben ohne `min_contact_stage`, weil betroffene Personen häufig anonym bleiben müssen. `tally` kennzeichnet Typen, die zusätzlich für eine personenlose Strichliste vorgesehen sind.
 
 | Slug | Name | Sensitivität | tally | min_contact_stage | system_type | report_key |
 |---|---|---|:---:|---|---|---|
@@ -24,7 +24,7 @@ Keiner der sieben Typen verlangt eine Mindest-Kontaktstufe. Auch Gewaltvorfall u
 | `versorgung` | Versorgung | normal | ja | — | — | `supply` |
 | `gewaltvorfall` | Gewaltvorfall | elevated | nein | — | — | `incident` |
 | `krisensituation` | Krisensituation | elevated | nein | — | `crisis` | `crisis` |
-| `orga-meldung` | Orga-Meldung (Platzverweis) | elevated | nein | — | `ban` | `excluded` |
+| `orga-meldung` | Orga-Meldung (Platzverweis) | elevated | nein | `identified` | `ban` | `excluded` |
 | `vermittlung` | Vermittlung | normal | ja | — | — | `referral` |
 | `notiz` | Notiz | normal | ja | — | — | `excluded` |
 
@@ -89,7 +89,7 @@ Es gibt keine Seed-Automatik für Betreiber-Settings oder Rollen. Retention, erl
 
 ## Fachliche Entscheide
 
-- Alle Typen bleiben anonym nutzbar; auch bei Gewalt- und Krisensituationen wird keine Identifizierung erzwungen.
+- Alle Typen außer der Orga-Meldung bleiben anonym nutzbar; auch bei Gewalt- und Krisensituationen wird keine Identifizierung erzwungen. Die Orga-Meldung nennt immer eine Person, bei Unbekannten über ein Kurz-Pseudonym — nur so lässt sich die Person beim nächsten Kontakt zuordnen.
 - `orga-meldung` verwendet `system_type: ban` und exakt `grund`/`bis`/`aktiv`, damit Banner und Hausverbots-Auswertung funktionieren.
 - Die Veranstaltung wird als Datumsbereich dokumentiert, nicht als Facility oder TimeFilter-Container; nur Awareness-Kontakt, Versorgung und Vermittlung führen zusätzlich den Feldwert `veranstaltung`.
 - Es gibt kein `leistungen`-Feld und damit keinen Leistungs-Bericht; Versorgung hat die eigene Berichtskategorie `supply`.

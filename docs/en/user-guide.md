@@ -277,6 +277,8 @@ If there are active entry bans in your facility, the red-marked figure **Entry b
 
 In the **people list** (`/clients/`) every person with an active entry ban carries the red badge **Facility ban** next to the pseudonym, in the table and in the card on a phone. It names no reason and follows the same visibility rule as the red rows in the Timeline.
 
+**Creating an entry ban:** Choose the documentation type "Hausverbot" and assign a person; without a person the application rejects the ban. "Pseudonym only" is enough as a contact stage. Existing bans without a person stay editable and can be deactivated.
+
 ---
 
 ### Contacts list
@@ -1224,5 +1226,5 @@ Phone, email, date and address patterns are detected heuristically and locally o
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: a496246796e3105430ec71ac67c86f17fe5cbf85 -->
+<!-- source-hash: ea9baac31a44c91d444e94bf80c75796b36ee12e -->
 <!-- translation-date: 2026-11-14 -->

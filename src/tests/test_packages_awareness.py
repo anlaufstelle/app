@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.urls import reverse
 from django.utils import timezone
@@ -102,7 +103,10 @@ def test_awareness_package_parses_strictly_with_exact_catalog_contract():
         if item.entity_type == "event"
     } == EXPECTED_TYPES
     assert {item.entity_type for item in package.document_types} == {"event", "client", "case", "episode", "workitem"}
-    assert all(item.min_contact_stage is None for item in package.document_types)
+    # Only the ban type names a person; every other type stays anonymous-capable.
+    assert {item.slug: item.min_contact_stage for item in package.document_types if item.min_contact_stage} == {
+        "orga-meldung": "identified"
+    }
     assert all(item.field_type != "file" for item in package.field_templates)
     assert _option_slugs(package, "art-des-vorfalls") == [
         "sexualisierte-gewalt",
@@ -247,22 +251,48 @@ def test_every_awareness_type_is_known_to_sample_report(facility, staff_user):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("slug", EXPECTED_TYPES)
-def test_every_awareness_type_accepts_an_anonymous_event(facility, staff_user, slug):
+@pytest.mark.parametrize("slug", [slug for slug in EXPECTED_TYPES if slug != "orga-meldung"])
+def test_every_awareness_type_but_the_ban_accepts_an_anonymous_event(facility, staff_user, slug):
     doc_type = _loaded_types(facility)[slug]
-    required_data = {"grund": "Platzverweis"} if slug == "orga-meldung" else {}
 
     event = create_event(
         facility=facility,
         user=staff_user,
         document_type=doc_type,
         occurred_at=timezone.now(),
-        data_json=required_data,
+        data_json={},
         client=None,
         is_anonymous=False,
     )
 
     assert event.is_anonymous is True
+
+
+@pytest.mark.django_db
+def test_orga_meldung_needs_a_person_but_a_short_pseudonym_is_enough(facility, staff_user):
+    doc_type = _loaded_types(facility)["orga-meldung"]
+    with pytest.raises(ValidationError):
+        create_event(
+            facility=facility,
+            user=staff_user,
+            document_type=doc_type,
+            occurred_at=timezone.now(),
+            data_json={"grund": "Platzverweis"},
+            client=None,
+            is_anonymous=False,
+        )
+    person = Client.objects.create(facility=facility, pseudonym="Rotes Shirt Bühne 2", created_by=staff_user)
+
+    event = create_event(
+        facility=facility,
+        user=staff_user,
+        document_type=doc_type,
+        occurred_at=timezone.now(),
+        data_json={"grund": "Platzverweis"},
+        client=person,
+    )
+
+    assert event.client_id == person.pk
 
 
 @pytest.mark.django_db
