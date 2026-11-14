@@ -162,7 +162,10 @@ class DocumentType(ReportKeyMixin, SluggedModel):
             # (bulk writes and ``QuerySet.update`` included), and the ban
             # system type only exists on event types, where the stage acts.
             models.CheckConstraint(
-                condition=~models.Q(system_type="ban") | models.Q(min_contact_stage__in=["identified", "qualified"]),
+                # ``IN`` alone yields NULL for a missing stage, and a CHECK that
+                # evaluates to NULL passes; the explicit NOT NULL test rejects it.
+                condition=~models.Q(system_type="ban")
+                | models.Q(min_contact_stage__isnull=False, min_contact_stage__in=["identified", "qualified"]),
                 name="documenttype_ban_requires_contact_stage",
             ),
             models.CheckConstraint(
