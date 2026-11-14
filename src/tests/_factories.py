@@ -17,6 +17,15 @@ bleiben deshalb unveraendert gueltig.
 from core.models import Client, DocumentType, Event
 
 
+def insert_event_past_save(**fields):
+    """Insert an event without ``Event.save()``.
+
+    Only for fixtures that need a state the rule forbids for new rows, for
+    example an anonymous ban event that predates the person rule.
+    """
+    return Event.objects.bulk_create([Event(**fields)])[0]
+
+
 def make_event(*, facility, client, document_type, occurred_at, data_json, created_by, **overrides):
     """Erstellt ein ``Event`` mit den sechs praktisch immer gesetzten
     Kernfeldern (facility, client, document_type, occurred_at, data_json,

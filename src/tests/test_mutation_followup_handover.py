@@ -28,6 +28,7 @@ from django.utils import timezone
 
 from core.models import Client, DocumentType, DocumentTypeField, Event, FieldTemplate, WorkItem
 from core.services.case import _collect_highlights, _collect_stats, build_handover_summary
+from tests._factories import insert_event_past_save
 
 # ---------------------------------------------------------------------------
 # Helper-Factories — bewusst klein, damit Tests nicht von komplexen
@@ -57,7 +58,8 @@ def _make_event(
     offset_minutes: int = 0,
 ) -> Event:
     """Event mit ``occurred_at = now + offset_minutes`` (oft negativ)."""
-    return Event.objects.create(
+    create = insert_event_past_save if doc_type.system_type == "ban" and client is None else Event.objects.create
+    return create(
         facility=facility,
         client=client,
         document_type=doc_type,

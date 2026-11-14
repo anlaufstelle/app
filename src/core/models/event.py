@@ -3,6 +3,7 @@
 import uuid
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
@@ -165,6 +166,15 @@ class Event(DynamicDataEncryptionMixin):
         from core.services.dynamic_protection import dynamic_data_write
 
         update_fields = kwargs.get("update_fields")
+        if self._state.adding and self.client_id is None and self.document_type.system_type == "ban":
+            # A new ban names a person. Existing anonymous bans stay editable:
+            # this only runs when the row is first inserted.
+            raise ValidationError(
+                _(
+                    "Für diesen Dokumentationstyp muss eine Person ausgewählt werden, "
+                    "da eine Mindest-Kontaktstufe vorausgesetzt wird."
+                )
+            )
         with dynamic_data_write(self, update_fields):
             if update_fields is None or "data_json" in update_fields:
                 self._encrypt_sensitive_fields()

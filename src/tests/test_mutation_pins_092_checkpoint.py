@@ -59,6 +59,7 @@ from core.services.events import (
     tally_request_matches_live_context,
 )
 from core.services.events.feed import _build_event_preview_fields
+from tests._factories import insert_event_past_save
 
 # ── core.services.dashboard.search ────────────────────────────────────────────
 #
@@ -530,7 +531,8 @@ def _noon(target_date):
 
 
 def _make_event(facility, doc_type, user, when, data=None, *, client=None):
-    return Event.objects.create(
+    create = insert_event_past_save if doc_type.system_type == "ban" and client is None else Event.objects.create
+    return create(
         facility=facility,
         client=client,
         document_type=doc_type,

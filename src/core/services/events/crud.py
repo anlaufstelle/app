@@ -101,8 +101,12 @@ def _validate_contact_stage(document_type, client, is_anonymous):
 
     Wirkungs-identisch zum frueheren Inline-Block — die Reihenfolge der
     Checks (anonym -> fehlende Person -> Stufe zu niedrig) bleibt erhalten.
+
+    A ban type needs a person even when its own minimum stage is missing
+    (a type that predates the stage rule); only the stage comparison depends
+    on the stage.
     """
-    if not document_type.min_contact_stage:
+    if not document_type.requires_person:
         return
     if is_anonymous:
         raise ValidationError(
@@ -118,6 +122,8 @@ def _validate_contact_stage(document_type, client, is_anonymous):
                 "da eine Mindest-Kontaktstufe vorausgesetzt wird."
             )
         )
+    if not document_type.min_contact_stage:
+        return
     required = stage_index(document_type.min_contact_stage)
     actual = stage_index(client.contact_stage)
     if actual < required:
@@ -227,7 +233,7 @@ def create_event(
     if user is not None and not user_can_see_document_type(user, document_type):
         raise PermissionDenied(_("Diese Dokumentation darf von Ihrer Rolle nicht erstellt werden."))
 
-    if client is None and not is_anonymous and not document_type.min_contact_stage:
+    if client is None and not is_anonymous and not document_type.requires_person:
         is_anonymous = True
 
     _validate_contact_stage(document_type, client, is_anonymous)

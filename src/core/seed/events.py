@@ -306,9 +306,10 @@ def _seed_standard_events_bulk(
     eligible_clients_by_slug: dict[str, list[Client]] = {}
     unsatisfiable_slugs: set[str] = set()
     for dt in doc_types:
-        if not dt.min_contact_stage:
+        if not dt.requires_person:
             continue
-        required = stage_index(dt.min_contact_stage)
+        # A ban type without a stage still needs a person; any stage qualifies.
+        required = stage_index(dt.min_contact_stage) if dt.min_contact_stage else 0
         eligible = [c for c in clients if stage_index(c.contact_stage) >= required]
         if eligible:
             eligible_clients_by_slug[dt.slug] = eligible
@@ -356,7 +357,7 @@ def _seed_standard_events_bulk(
         TYPS ist in Phase 1 nicht mehr zufaellig.
         """
         client: Client | None
-        if doc_type.min_contact_stage:
+        if doc_type.requires_person:
             # Refs #2270: nie anonym, nur Personen aus dem vorab bestimmten
             # zulaessigen Pool (siehe oben) — der Typ waere sonst gar nicht
             # mehr im Ziehungstopf.

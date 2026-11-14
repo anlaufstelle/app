@@ -6,6 +6,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import Activity, DocumentType, Event, WorkItem
+from tests._factories import insert_event_past_save
 from tests.test_a11y_board_navigation import TreeParser
 from tests.test_zeitstrom_watch import _watch
 
@@ -53,7 +54,7 @@ def test_mixed_feed_uses_the_same_columns_for_all_card_kinds(client, staff_user,
     doc_type_ban = DocumentType.objects.create(
         facility=facility, name="Ban", system_type="ban", min_contact_stage="identified"
     )
-    ban = Event.objects.create(
+    ban = insert_event_past_save(
         facility=facility, document_type=doc_type_ban, occurred_at=timezone.now(), created_by=staff_user
     )
     task = WorkItem.objects.create(facility=facility, title="Column task", created_by=staff_user)

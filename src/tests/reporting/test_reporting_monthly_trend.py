@@ -18,6 +18,7 @@ from core.models import DocumentType, Event, Facility, Organization, Settings
 from core.reporting import registry
 from core.reporting.base import CompletenessIssue, DatasetResult
 from core.reporting.data_source import MAPPED_EVENTS
+from tests._factories import insert_event_past_save
 
 pytestmark = pytest.mark.django_db
 
@@ -92,7 +93,8 @@ def doc_type_hausverbot(facility):
 
 
 def _event(facility, doc_type, user, when):
-    return Event.objects.create(
+    create = insert_event_past_save if doc_type.system_type == "ban" else Event.objects.create
+    return create(
         facility=facility,
         document_type=doc_type,
         occurred_at=when,

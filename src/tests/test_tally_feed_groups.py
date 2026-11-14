@@ -11,6 +11,7 @@ from core.constants import FEED_MAX_PER_TYPE
 from core.models import DocumentType, Event
 from core.services.events.feed import build_feed_items
 from core.services.events.tally import build_tally_summary
+from tests._factories import insert_event_past_save
 from tests.test_a11y_board_navigation import TreeParser
 from tests.test_zeitstrom_watch import _watch
 
@@ -22,7 +23,8 @@ def _at(day, hour, minute=0):
 
 
 def _event(facility, user, doc_type, when, **kwargs):
-    return Event.objects.create(
+    create = insert_event_past_save if doc_type.system_type == "ban" else Event.objects.create
+    return create(
         facility=facility,
         document_type=doc_type,
         created_by=user,
