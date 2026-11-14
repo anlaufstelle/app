@@ -365,13 +365,31 @@
     document.body.addEventListener("htmx:swapError", _handleSwapAborted);
     document.body.addEventListener("htmx:responseError", _handleSwapAborted);
 
+    // True when the data-hx-no-focus opt-out applies to a swap of ``container``: on the
+    // container or one of its ancestors, or on the control that holds the focus.
+    function _optedOut(container) {
+        var active = document.activeElement;
+        if (container && container.closest && container.closest("[" + OPT_OUT_ATTR + "]")) {
+            return true;
+        }
+        return !!(active && active.closest && active.closest("[" + OPT_OUT_ATTR + "]"));
+    }
+
     // Swaps that do not go through a request (the live watch inserts fetched HTML
     // with htmx.swap) take the snapshot and restore themselves around the swap.
+    // The guard acts for EVERY region the live watch swaps, not only the feed: the
+    // feed, the handover note, the KPI row, the ban block and the focus box all
+    // pass through it, whatever their own attributes say. It therefore honours
+    // the same data-hx-no-focus opt-out as the afterSwap path and then leaves focus
+    // and scroll position entirely alone.
     window.backgroundSwapGuard = {
         capture: _snapshot,
         restore: function (target, snapshot) {
             var container = _resolveConnectedContainer(target);
             if (!snapshot) {
+                return;
+            }
+            if (_optedOut(container || target)) {
                 return;
             }
             if (!container || container.nodeType !== 1) {

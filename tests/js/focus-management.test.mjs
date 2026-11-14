@@ -495,6 +495,37 @@ describe("Background reload of an 'always' feed with the focus inside it", () =>
         expect(document.activeElement).toBe(outside);
     });
 
+    it("lets the live watch respect the data-hx-no-focus opt-out on the region", () => {
+        const el = feed("always");
+        el.setAttribute("data-hx-no-focus", "");
+        el.querySelector('[aria-controls="detail-1"]').focus();
+        const snapshot = window.backgroundSwapGuard.capture(el);
+        el.innerHTML = TWIN_HTML;
+        Object.defineProperty(window, "scrollY", { configurable: true, value: 2300 });
+
+        window.backgroundSwapGuard.restore(el, snapshot);
+
+        expect(document.activeElement).toBe(document.body);
+        expect(scrollToSpy).not.toHaveBeenCalled();
+    });
+
+    it("lets the live watch respect the opt-out on the control that holds the focus", () => {
+        const holder = document.createElement("div");
+        holder.setAttribute("data-hx-no-focus", "");
+        holder.innerHTML = '<button id="opted-out">Trigger</button>';
+        document.body.appendChild(holder);
+        const el = feed("always");
+        holder.querySelector("button").focus();
+        const snapshot = window.backgroundSwapGuard.capture(el);
+        el.innerHTML = TWIN_HTML;
+        Object.defineProperty(window, "scrollY", { configurable: true, value: 2300 });
+
+        window.backgroundSwapGuard.restore(el, snapshot);
+
+        expect(document.activeElement.id).toBe("opted-out");
+        expect(scrollToSpy).not.toHaveBeenCalled();
+    });
+
     it("leaves the condition board as before: the focus lost inside it goes to the board", () => {
         const el = feed("");
         el.id = "condition-board";
