@@ -353,13 +353,74 @@ def _clear_ban_details_choice(e2e_env: dict[str, str]) -> None:
     assert result.returncode == 0, f"Choice reset failed:\n{result.stderr}"
 
 
+_ADD_SECOND_BAN_SHELL = r"""
+from datetime import date, datetime, timezone as dt_timezone
+from django.utils import timezone
+from core.models import Client, DocumentType, Facility, User
+from core.services.events import create_event
+
+facility = Facility.objects.get(name="Hauptstelle")
+actor = User.objects.filter(facility=facility, role="facility_admin").first() or User.objects.first()
+person, _ = Client.objects.get_or_create(
+    facility=facility, pseudonym="Race-Ban-2", defaults={"contact_stage": "identified", "created_by": actor}
+)
+ban_type = DocumentType.objects.filter(facility=facility, system_type="ban", is_active=True).first()
+event = create_event(
+    facility, actor, ban_type, timezone.now(),
+    {"aktiv": "true", "grund": "E2E-Test: second ban", "bis": str(date(2099, 12, 31))}, client=person,
+)
+print(f"SECOND_BAN_PK={event.pk}")
+"""
+
+_REMOVE_SECOND_BAN_SHELL = r"""
+from core.models import Event, User
+from core.services.events import soft_delete_event
+
+event = Event.objects.filter(pk="{pk}").first()
+if event is not None and not event.is_deleted:
+    soft_delete_event(event, User.objects.filter(role="facility_admin").first())
+"""
+
+
+def _add_second_ban(e2e_env: dict[str, str]) -> str:
+    """Add a second active ban through the service layer, so the live watch notices it."""
+    result = run_child(
+        [sys.executable, "src/manage.py", "shell", "--no-imports", "-c", _ADD_SECOND_BAN_SHELL],
+        env=e2e_env,
+        check=False,
+        timeout=SHELL_TIMEOUT_SECONDS,
+    )
+    assert result.returncode == 0, f"Second ban failed:\n{result.stderr}"
+    return next(
+        line.split("=", 1)[1].strip() for line in result.stdout.splitlines() if line.startswith("SECOND_BAN_PK=")
+    )
+
+
+def _remove_second_ban(e2e_env: dict[str, str], event_pk: str) -> None:
+    run_child(
+        [sys.executable, "src/manage.py", "shell", "--no-imports", "-c", _REMOVE_SECOND_BAN_SHELL.format(pk=event_pk)],
+        env=e2e_env,
+        check=False,
+        timeout=SHELL_TIMEOUT_SECONDS,
+    )
+
+
+def _wait_until(page, condition, attempts=100):
+    """Poll *condition* with short browser round trips (the held response arrives through them)."""
+    for _ in range(attempts):
+        if condition():
+            return
+        page.wait_for_timeout(100)
+    raise AssertionError("condition not met in time")
+
+
 def _open_settled_zeitstrom(page, base_url, query=""):
     """Open the Zeitstrom and finish the initial live-watch replacement first."""
     page.goto(f"{base_url}/{query}", wait_until="load")
     page.evaluate("() => window.zeitstromWatch.checkNow()")
 
 
-class TestHausverbotDetailsToggle:
+class TestBanDetailsToggle:
     """#2809: hide the ban details, bring them back through the figure, keep the choice per user."""
 
     def _prepare(self, e2e_env):
@@ -483,6 +544,96 @@ class TestHausverbotDetailsToggle:
             assert toggle_box["x"] >= 0 and toggle_box["x"] + toggle_box["width"] <= 390, toggle_box
             assert page.evaluate("() => window.scrollX") == 0
         finally:
+            _clear_ban_details_choice(e2e_env)
+            _restore_ban_state(e2e_env, restore)
+
+    def test_a_late_hide_answer_does_not_hide_a_newer_list(self, staff_page, base_url, e2e_env):
+        _event_pk, _pseudonym, restore = self._prepare(e2e_env)
+        second_pk = None
+        context = None
+        try:
+            context = staff_page.context.browser.new_context(
+                storage_state=staff_page.context.storage_state(), service_workers="block", locale="de-DE"
+            )
+            page = context.new_page()
+            page.set_default_timeout(30000)
+            held = []
+            # The server answers at once; the browser gets the answer only when the test lets it.
+            page.route("**/zeitstrom/ban-details/", lambda route: held.append((route, route.fetch())))
+            _open_settled_zeitstrom(page, base_url)
+            before = int(page.get_by_test_id("zeitstrom-kpi-bans").get_attribute("data-count"))
+
+            page.get_by_role("button", name="Hausverbot-Details ausblenden").click()
+            _wait_until(page, lambda: bool(held))
+
+            second_pk = _add_second_ban(e2e_env)
+            page.evaluate("() => window.zeitstromWatch.checkNow()")
+            expect(page.get_by_test_id("zeitstrom-kpi-bans")).to_have_attribute(
+                "data-count", str(before + 1), timeout=30_000
+            )
+            expect(page.locator("#zeitstrom-ban-details")).to_be_visible()
+
+            route, response = held[0]
+            route.fulfill(response=response)
+            page.wait_for_timeout(1000)
+
+            expect(page.locator("#zeitstrom-ban-details")).to_be_visible()
+            expect(page.get_by_test_id("zeitstrom-kpi-bans")).to_have_attribute("aria-expanded", "true")
+        finally:
+            if context is not None:
+                context.close()
+            if second_pk:
+                _remove_second_ban(e2e_env, second_pk)
+            _clear_ban_details_choice(e2e_env)
+            _restore_ban_state(e2e_env, restore)
+
+    def test_a_late_feed_refresh_does_not_hide_a_newer_list(self, staff_page, base_url, e2e_env):
+        _event_pk, _pseudonym, restore = self._prepare(e2e_env)
+        second_pk = None
+        context = None
+        try:
+            context = staff_page.context.browser.new_context(
+                storage_state=staff_page.context.storage_state(), service_workers="block", locale="de-DE"
+            )
+            page = context.new_page()
+            page.set_default_timeout(30000)
+            held = []
+
+            def hold_feed_refresh(route):
+                if route.request.headers.get("x-zeitstrom-watch") == "1" or held:
+                    route.continue_()
+                else:
+                    held.append((route, route.fetch()))
+
+            page.route("**/partials/zeitstrom/feed/**", hold_feed_refresh)
+            _open_settled_zeitstrom(page, base_url)
+            before = int(page.get_by_test_id("zeitstrom-kpi-bans").get_attribute("data-count"))
+            page.get_by_role("button", name="Hausverbot-Details ausblenden").click()
+            expect(page.locator("#zeitstrom-ban-details")).to_be_hidden()
+            # A feed refresh whose KPI slot still says "hidden for the old list".
+            page.locator("#filter-doc-type").select_option(index=1)
+            _wait_until(page, lambda: bool(held))
+
+            second_pk = _add_second_ban(e2e_env)
+            page.evaluate("() => window.zeitstromWatch.checkNow()")
+            expect(page.get_by_test_id("zeitstrom-kpi-bans")).to_have_attribute(
+                "data-count", str(before + 1), timeout=30_000
+            )
+            expect(page.locator("#zeitstrom-ban-details")).to_be_visible()
+
+            route, response = held[0]
+            route.fulfill(response=response)
+
+            expect(page.locator("#zeitstrom-ban-details")).to_be_visible()
+            expect(page.get_by_test_id("zeitstrom-kpi-bans")).to_have_attribute("aria-expanded", "true")
+            expect(page.get_by_test_id("zeitstrom-kpi-bans")).to_have_attribute(
+                "data-count", str(before + 1), timeout=30_000
+            )
+        finally:
+            if context is not None:
+                context.close()
+            if second_pk:
+                _remove_second_ban(e2e_env, second_pk)
             _clear_ban_details_choice(e2e_env)
             _restore_ban_state(e2e_env, restore)
 
