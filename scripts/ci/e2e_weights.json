@@ -160,7 +160,7 @@
   "test_system_compliance_maintenance_results.py": 12.129,
   "test_system_cron_card.py": 5.895,
   "test_tally_collaboration.py": 31.957,
-  "test_tally_focus_scroll.py": 40.0,
+  "test_tally_focus_scroll.py": 65.881,
   "test_upload_tiff_limits.py": 17.421,
   "test_upload_virus_feedback.py": 34.295,
   "test_user_access_hub.py": 10.421,
