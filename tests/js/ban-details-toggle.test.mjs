@@ -280,7 +280,7 @@ describe("while a request is open", () => {
         fetch.mockReturnValue(held.promise);
     });
 
-    it("shows the details at once when an old KPI slot without the figure arrives (review run 3)", async () => {
+    it("shows the details at once when an old KPI slot without the figure arrives", async () => {
         close().click();
         await settle();
 
@@ -463,7 +463,7 @@ describe("slots after a confirmed choice", () => {
         expect(isHidden()).toBe(false);
     });
 
-    it("an old hidden pair after a confirmed show does not hide again and gives the close button its focus back (review run 4)", async () => {
+    it("an old hidden pair after a confirmed show does not hide again and gives the close button its focus back", async () => {
         renderPage({ hidden: true });
         await settle();
         fetch.mockResolvedValue(answer({ hidden: false, fingerprint: "fp1" }));
@@ -596,7 +596,7 @@ describe("repair through the live watch", () => {
         return { promise, resolve };
     }
 
-    it("lets a running cycle finish, then brings the newer list (review run 2, watch design)", async () => {
+    it("lets a running cycle finish, then brings the newer list", async () => {
         renderPage({ hidden: true });
         await settle();
         const firstKpi = deferredValue();
