@@ -305,8 +305,9 @@ class DocumentType(ReportKeyMixin, SluggedModel):
                 .first()
             )
             if previous is not None:
-                # Under the exclusive configuration gate no event of this
-                # facility can be created until commit, so the check holds.
+                # Under the exclusive configuration gate ``create_event`` cannot
+                # add an event of this facility until commit; any other insert
+                # meets the trigger of migration 0199.
                 new_system_type = self.system_type
                 if update_fields is not None and "system_type" not in update_fields:
                     new_system_type = previous.system_type
