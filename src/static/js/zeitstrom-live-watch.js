@@ -70,6 +70,9 @@
         let pageActive = true;
         let pendingFilterTransition = null;
         let abortedTransitionBaseline = null;
+        // A repair request of ban-details-toggle.js that waits for the running
+        // cycle or the open time-filter transition to end.
+        let banRepairQueued = false;
 
         // The first request carries the server-rendered topology baseline.
         // Regions whose full render cannot share one DB snapshot
@@ -523,6 +526,7 @@
         function poll() {
             if (!canPoll() || pendingFilterTransition) return Promise.resolve();
             if (cycle && cycle.generation === generation) return cycle.promise;
+            takeQueuedBanRepair();
             clearTimer();
             const currentCycle = {
                 generation: generation,
@@ -544,7 +548,8 @@
                 .finally(function () {
                     if (cycle === currentCycle) {
                         cycle = null;
-                        schedule();
+                        if (banRepairQueued) pollImmediately();
+                        else schedule();
                     }
                 });
             return currentCycle.promise;
@@ -735,20 +740,30 @@
             schedule();
         }
 
-        function onBanSlotsStale() {
-            // ban-details-toggle.js found the KPI slot and the ban slot out of step
-            // (or discarded an own answer that may be older than the page). Forget
-            // what the page is known to hold for both, drop a cycle in flight (its
-            // answers could be older) and ask again: the slots then come through
-            // the snapshot and generation checks of this watch, and the server
-            // answers with fresh validators instead of 304.
-            if (stopped) return;
-            clearTimer();
-            abortCycle(true);
+        // Forget what the page is known to hold for the KPI and ban slots, so the
+        // next cycle asks for both again (the server reports a component without a
+        // validator as changed: 200 instead of 304). The topology validator is
+        // never touched, so a repair cannot cause a full navigation.
+        function takeQueuedBanRepair() {
+            if (!banRepairQueued) return false;
+            banRepairQueued = false;
             delete validators.kpi;
             delete validators.bans;
             pageEtag = "";
             failures = 0;
+            return true;
+        }
+
+        function onBanSlotsStale() {
+            // ban-details-toggle.js found the KPI slot and the ban slot showing
+            // different lists. The request is queued and taken by the next cycle
+            // that starts: a running cycle is not aborted (it may be the one that
+            // brings the missing slot) and an open time-filter transition keeps its
+            // generation and topology proof; both poll again when they end.
+            if (stopped) return;
+            banRepairQueued = true;
+            if (cycle !== null || pendingFilterTransition) return;
+            clearTimer();
             pollImmediately();
         }
 

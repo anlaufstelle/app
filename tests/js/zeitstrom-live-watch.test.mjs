@@ -484,6 +484,74 @@ describe("Zeitstrom live watch", () => {
         watcher.stop();
     });
 
+    it("queues a ban slot repair behind an open time-filter transition and keeps its topology proof", async () => {
+        const navigate = vi.fn();
+        const fetchMock = vi.fn().mockImplementation(async () =>
+            response({ status: 304, headers: { ETag: '"page-v1"' } }),
+        );
+        const watcher = window.createZeitstromLiveWatch(document.getElementById("zeitstrom-live-watch"), {
+            fetch: fetchMock,
+            navigate,
+        });
+        watcher.start();
+        await flush();
+
+        const transition = configureTimeFilter("shift-v2");
+        await flush();
+        window.dispatchEvent(new CustomEvent("zeitstrom:ban-slots-stale"));
+        await flush();
+        expect(fetchMock).toHaveBeenCalledOnce();
+
+        finishTimeFilterRequest(transition, {
+            etag: '"feed-v2"',
+            validators: { feed: '"feed-v2"', tally_topology: '"topology-v2"' },
+        });
+        await flush();
+
+        expect(navigate).not.toHaveBeenCalled();
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+        const sent = JSON.parse(fetchMock.mock.calls[1][1].headers["X-Zeitstrom-Validators"]);
+        expect(sent).toMatchObject({ feed: '"feed-v2"', tally_topology: '"topology-v2"' });
+        expect(sent).not.toHaveProperty("kpi");
+        expect(sent).not.toHaveProperty("bans");
+        watcher.stop();
+    });
+
+    it("queues a ban slot repair behind a running cycle instead of aborting it", async () => {
+        const root = document.getElementById("zeitstrom-live-watch");
+        root.dataset.bansUrl = "/partials/zeitstrom/bans/";
+        const followup = deferred();
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(watchResponse(["bans"], { bans: '"bans-v2"' }))
+            .mockReturnValueOnce(followup.promise)
+            .mockResolvedValue(response({ status: 304, headers: { ETag: '"page-v3"' } }));
+        const watcher = window.createZeitstromLiveWatch(root, { fetch: fetchMock, navigate: vi.fn() });
+        watcher.start();
+        await flush();
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+
+        window.dispatchEvent(new CustomEvent("zeitstrom:ban-slots-stale"));
+        await flush();
+        expect(fetchMock).toHaveBeenCalledTimes(2);
+
+        followup.resolve(
+            response({
+                text: '<div id="zeitstrom-bans-slot">fresh bans</div>',
+                headers: { "Content-Type": "text/html", ETag: '"bans-v2"' },
+            }),
+        );
+        await flush();
+        await flush();
+
+        expect(document.getElementById("zeitstrom-bans-slot").textContent).toBe("fresh bans");
+        expect(fetchMock).toHaveBeenCalledTimes(3);
+        const sent = JSON.parse(fetchMock.mock.calls[2][1].headers["X-Zeitstrom-Validators"] || "{}");
+        expect(sent).not.toHaveProperty("bans");
+        expect(sent).not.toHaveProperty("kpi");
+        watcher.stop();
+    });
+
     it("defers public and focus checks until a pending time-filter transition commits", async () => {
         const navigate = vi.fn();
         const fetchMock = vi.fn().mockImplementation(async (_url, options) => {
