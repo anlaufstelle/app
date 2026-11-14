@@ -282,8 +282,10 @@ class TestEventErstellung:
         page.goto(f"{base_url}/events/new/")
 
         _select_doc_type_and_await_swap(page, "Kontakt")
-        # „Dauer" bleibt bewusst leer — nur die Notiz wird gefuellt.
+        # The package pre-fills "Dauer" with its default (15); this case needs it
+        # emptied again, so the field is cleared on purpose before saving.
         _fill_after_htmx_swap(page, "textarea[name='notiz']", "E2E ohne Dauer")
+        page.locator("input[name='dauer']").fill("")
         expect(page.locator("input[name='dauer']")).to_have_value("")
 
         page.click("button:has-text('Speichern')")

@@ -226,6 +226,11 @@ class FieldTemplateDef:
     wird geschrieben. Vorher normalisierte der Parser fehlenden Schlüssel und
     explizites ``null`` beide auf ``None``; der Loader konnte die Fälle nicht
     unterscheiden und überschrieb beide Grenzen bei **jedem** Lauf auf NULL.
+
+    ``default_value`` follows the same pattern: :data:`KEY_MISSING` leaves a
+    default maintained in the configuration UI untouched, ``null`` and ``""``
+    clear it deliberately (both normalise to ``""``), a string sets it on every
+    run, also over a default changed in the configuration UI.
     """
 
     slug: str
@@ -238,7 +243,7 @@ class FieldTemplateDef:
     sensitivity: str = ""
     options: tuple[dict[str, Any], ...] = ()
     help_text: str = ""
-    default_value: str = ""
+    default_value: str | _KeyMissing = KEY_MISSING
     report_key: str | None = None
     normalized_report_keys: tuple[tuple[str, str], ...] = ()
 
@@ -388,6 +393,20 @@ def _key_missing_str_value(data: dict[str, Any], key: str, path: str, errors: Er
     """Zeichenkette mit ``KEY_MISSING`` fuer E13-konformen Ruecksync (#1886)."""
     if key not in data:
         return KEY_MISSING
+    return _str_value(data, key, path, errors)
+
+
+def _default_value(data: dict[str, Any], key: str, path: str, errors: Errors) -> str | _KeyMissing:
+    """Default value with tri-state semantics (omitted / ``null`` / string).
+
+    A missing key leaves the existing value untouched (:data:`KEY_MISSING`).
+    ``null`` is the deliberate clear and normalises to an empty string like
+    ``""``; any other non-string is a schema error.
+    """
+    if key not in data:
+        return KEY_MISSING
+    if data[key] is None:
+        return ""
     return _str_value(data, key, path, errors)
 
 
@@ -670,7 +689,7 @@ def _parse_field_template(raw: Any, path: str, errors: Errors) -> FieldTemplateD
     is_encrypted = _bool_value(data, "is_encrypted", path, errors)
     sensitivity = _enum_value(data, "sensitivity", path, errors, _TEMPLATE_SENSITIVITIES, default="")
     help_text = _str_value(data, "help_text", path, errors)
-    default_value = _str_value(data, "default_value", path, errors)
+    default_value = _default_value(data, "default_value", path, errors)
     report_key, normalized_report_keys = _optional_report_key_value(data, "report_key", path, errors)
 
     options = _parse_option_list(data, path, errors, field_type)

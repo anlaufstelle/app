@@ -35,14 +35,16 @@ Das ist besonders beim wiederverwendeten Feld `leistungen` wichtig: Die Jugend-O
 
 | Typ | Felder |
 |---|---|
-| `kontakt` | `leistungen` (Essen, Getränk, WLAN, Spiele, Aufenthaltsraum, Ladestation, Sonstiges), `alterscluster`, `strassenkontakt`, `dauer` (Minuten), `notiz` |
-| `veranstaltungsteilnahme` | `angebotsname`, `teilnehmende` (Kopfzahl, mindestens 1), `zielgruppe` (Grundschule, Sekundarstufe I/II, geflüchtete Jugendliche, queere Jugendliche, offen) |
+| `kontakt` | `leistungen` (Essen, Getränk, WLAN, Spiele, Aufenthaltsraum, Ladestation, Sonstiges), `alterscluster`, `strassenkontakt`, `dauer` (Minuten, vorbelegt mit 15), `notiz` |
+| `veranstaltungsteilnahme` | `angebotsname`, `teilnehmende` (Kopfzahl, mindestens 1, vorbelegt mit 1), `zielgruppe` (Grundschule, Sekundarstufe I/II, geflüchtete Jugendliche, queere Jugendliche, offen) |
 | `bezugsarbeit` | `ort` (Stadtteil oder Spot, keine Adresse), `anlass` (Streetwork, Schulhof, Fest, unterwegs angesprochen), `leistungen` |
 | `krisengespraech-jugend` | `art-der-krise` (acht jugendspezifische Kategorien, `report_key: art_der_krise`), `notiz-krise` (high, verschlüsselt), `weitervermittlung-jugend` (Jugendamt, Schulsozialarbeit, Therapeut:in, Notdienst, keine) |
 | `beratung-jugend` | `thema` und `vereinbarungen` (beide high und verschlüsselt), `sorgeberechtigte-informiert` (normal, unverschlüsselt) |
 | `vermittlung` | keine dynamischen Felder |
 | `hausverbot-jugend` | `grund` (Pflichtfeld), `bis`, `aktiv`; die Slugs entsprechen exakt der Hausverbots-Projektion |
 | `notiz` | `notiz` |
+
+Die Vorbelegung von `dauer` (15 Minuten) und `teilnehmende` (1) kommt aus dem Paket: Wird sie in der Konfigurationsoberfläche geändert, setzt ein erneutes Anwenden des Pakets mit `load_package` sie auf den Paketwert zurück (Details: [Paket-Referenz](packages.md#was-der-loader-anfasst--und-was-nicht)).
 
 Das Paket enthält bewusst **kein Datei-Feld**. `teilnehmende` ist ausschließlich eine Kopfzahl; Gruppenangebote führen keine Liste von Pseudonymen.
 

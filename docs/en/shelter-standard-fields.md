@@ -8,5 +8,5 @@ Event fields `ziel` and `notiz` are unencrypted and visible to all roles. Their 
 
 <!-- translation-source: docs/packages-frauenhaus.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: 1ccfecf43bb5e034ac7b1fb3db76e429691a0c25 -->
-<!-- translation-date: 2026-10-26 -->
+<!-- source-hash: 9c059f6f02535d0c8b81207465317a53ad181512 -->
+<!-- translation-date: 2026-11-14 -->

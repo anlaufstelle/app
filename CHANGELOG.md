@@ -47,6 +47,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Rückgängig der Strichliste als feste Leiste mit Countdown** (#2652) — Nach einem Strich erscheint 60 Sekunden lang eine feste Leiste mit „Rückgängig · 58 s“ unter der Strichliste, am Handy über der Navigation. Die Kacheln springen nicht mehr, die Seite scrollt nach einem Strich nicht weg und der Tastaturfokus bleibt auf der Kachel; die Leiste zeigt immer den letzten Strich.
 - **Zahleneingabe der Strichliste als Popover bzw. Bottom-Sheet** (#2653) — Die Werteingabe öffnet am Desktop als Popover an der Kachel, am Handy als Fenster von unten; die Liste verschiebt sich nicht. Escape, Abbrechen oder ein Klick außerhalb schließen, der Fokus kehrt zur Kachel zurück.
 - **Kettenprüfung und Statistik mit weniger Aufwand, Bereinigung mit Vorprüfung** (#2717) — Die Statistikseite zählt Live-Personen gezielt; `verify_audit_chain` liest schrittweise. Die Bereinigung sucht Grenzen in der Datenbank und löscht nichts, wenn eine Zeile vor der Fristgrenze nicht authentifiziert oder nicht anschließt. Signierter Prüfpunkt und Anker vor der Fristgrenze verhindern einen Fehlalarm bei ruhenden Einrichtungen.
+- **Zahlenfelder der Pakete vorbelegt** (#2819) — Dauer (15) sowie Ausgabe, Rückgabe und Teilnehmende (je 1) sind in Strichliste und Ereignisformular vorbelegt. Ein erneutes Anwenden eines Pakets setzt davon abweichende Defaults auf den Paketwert zurück, ein Paket ohne `default_value` lässt sie stehen.
 
 ### Fixed
 

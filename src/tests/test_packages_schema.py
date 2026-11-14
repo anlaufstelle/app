@@ -88,7 +88,7 @@ class TestValidPackage:
         assert dauer.is_encrypted is False
         assert dauer.sensitivity == ""
         assert dauer.options == ()
-        assert dauer.default_value == ""
+        assert dauer.default_value is KEY_MISSING
 
         doc_type = package.document_types[0]
         assert isinstance(doc_type, DocumentTypeDef)
@@ -765,3 +765,31 @@ class TestNumberRangeTriState:
         raw = _valid_raw()
         raw["field_templates"][0]["min_value"] = "fuenf"
         assert "field_templates[0].min_value" in _paths(raw)
+
+
+class TestDefaultValueTriState:
+    """``default_value`` as tri-state: omitted => ``KEY_MISSING``, ``null``/``""`` => ``""``, string => itself."""
+
+    @staticmethod
+    def _default_of(**template_overrides: object) -> object:
+        raw = _valid_raw()
+        raw["field_templates"][0].update(template_overrides)
+        return parse_package(raw).field_templates[0].default_value
+
+    def test_missing_key_is_key_missing(self) -> None:
+        assert self._default_of() is KEY_MISSING
+
+    def test_explicit_null_normalises_to_empty_string(self) -> None:
+        assert self._default_of(default_value=None) == ""
+
+    def test_explicit_empty_string_stays_empty(self) -> None:
+        assert self._default_of(default_value="") == ""
+
+    def test_string_value_is_kept(self) -> None:
+        assert self._default_of(default_value="15") == "15"
+
+    def test_non_string_value_is_a_schema_error(self) -> None:
+        raw = _valid_raw()
+        raw["field_templates"][0]["default_value"] = 15
+
+        assert "field_templates[0].default_value" in _paths(raw)

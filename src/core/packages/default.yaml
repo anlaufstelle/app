@@ -70,6 +70,7 @@ field_templates:
     name: Dauer
     report_key: dauer_minuten
     field_type: number
+    default_value: "15"
     is_encrypted: false
     sensitivity: ""
     help_text: Dauer in Minuten
@@ -190,6 +191,7 @@ field_templates:
     report_key: ausgabe_stueck
     field_type: number
     min_value: 0
+    default_value: "1"
     is_required: true
     is_encrypted: false
     sensitivity: ""
@@ -199,6 +201,7 @@ field_templates:
     report_key: rueckgabe_stueck
     field_type: number
     min_value: 0
+    default_value: "1"
     is_required: true
     is_encrypted: false
     sensitivity: ""

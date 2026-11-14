@@ -980,6 +980,8 @@ In the **Default value** field of a field template, you can store a default that
 
 Precedence on create: **Quick template > Default value > empty**. Invalid values are rejected by `FieldTemplate.clean()` when saved in the admin.
 
+The shipped packages carry a default for their number fields (duration 15 minutes; issued, returned and participants 1). If you change it here, an explicit re-apply of the package (`load_package`) resets it to the package value; the initial setup and `setup_facility` leave a facility that already has a catalog untouched. Individual fields cannot be excluded — see the [package reference](../packages.md#was-der-loader-anfasst--und-was-nicht) (German) for details and the workaround.
+
 **Schema of an option:**
 
 ```json
@@ -2592,5 +2594,5 @@ Person anonymization clears these dynamic fields as well as related titles and g
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: 02f3638cbe199b02687f11f53344a354695fd0a9 -->
-<!-- translation-date: 2026-11-13 -->
+<!-- source-hash: 74990222d10ae791fe545e16e39739d26b74857a -->
+<!-- translation-date: 2026-11-14 -->

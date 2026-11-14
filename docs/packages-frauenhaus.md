@@ -36,13 +36,15 @@ Das Frauenhaus-Paket ist **Ersatz, nicht Zusatz**. Es wird in eine neue, katalog
 | Typ | Felder |
 |---|---|
 | `anfrage` | `kontaktweg` (Telefon, persönlich, weitergeleitete Mail, dritte Stelle), `anliegen` (Unterbringung, Beratung, Rechtliches, Finanzen, Kind, Sonstiges), `aufnahme-moeglich` |
-| `beratung` | `thema` (high, verschlüsselt), `dauer` (Minuten), `vereinbarungen` (high, verschlüsselt), `naechster-schritt`, `scan-dokument` (Datei, high, verschlüsselt) |
+| `beratung` | `thema` (high, verschlüsselt), `dauer` (Minuten, vorbelegt mit 15), `vereinbarungen` (high, verschlüsselt), `naechster-schritt`, `scan-dokument` (Datei, high, verschlüsselt) |
 | `gefaehrdungslage` | `ausloeser` (Kategorie mit `report_key: art_der_krise`), `notiz-gefaehrdung` (high, verschlüsselt), `eskalationskanal`; durch den high-Typ sind **alle drei Felder effektiv high** |
 | `begleitung` | `ziel`, `datum`, `uhrzeit`, `notiz-begleitung` (high, verschlüsselt) |
 | `schutzmassnahme` | `art` (einstweilige Anordnung, Schutzantrag, Kontaktverbot, Räumungsankündigung, Sonstiges), `gueltig-bis` |
 | `wohnungswechsel` | `von-nach` (Aufnahme, interner Wechsel, Auszug in eigene Wohnung, Auszug in andere Einrichtung, Sonstiges), `datum` |
 | `vermittlung` | `vermittelt-an` (Rechtsberatung, Jugendamt, Jobcenter, ärztlich, Therapie, Sonstiges) |
 | `notiz` | `notiz` |
+
+Die Vorbelegung von `dauer` (15 Minuten) kommt aus dem Paket: Wird sie in der Konfigurationsoberfläche geändert, setzt ein erneutes Anwenden des Pakets mit `load_package` sie auf den Paketwert zurück (Details: [Paket-Referenz](packages.md#was-der-loader-anfasst--und-was-nicht)).
 
 `scan-dokument` ist das **einzige Datei-Feld** des Pakets. Dateien werden im File-Vault verschlüsselt gespeichert. Neue JPG- und PNG-Uploads durchlaufen außerdem die Metadaten-Bereinigung aus #2128; Dokumenteigenschaften in PDF-Dateien werden davon nicht bereinigt und müssen vor dem Upload organisatorisch geprüft werden.
 

@@ -58,6 +58,7 @@ field_templates:
     name: Dauer
     report_key: dauer_minuten
     field_type: number
+    default_value: "15"
     is_encrypted: false
     sensitivity: ""
     help_text: Dauer in Minuten
@@ -111,6 +112,7 @@ field_templates:
     name: Teilnehmende
     field_type: number
     min_value: 1
+    default_value: "1"
     is_encrypted: false
     sensitivity: normal
     help_text: Kopfzahl, keine Liste von Pseudonymen

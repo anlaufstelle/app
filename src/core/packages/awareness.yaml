@@ -83,6 +83,7 @@ field_templates:
     name: Dauer
     report_key: dauer_minuten
     field_type: number
+    default_value: "15"
     is_encrypted: false
     sensitivity: ""
     help_text: Dauer in Minuten

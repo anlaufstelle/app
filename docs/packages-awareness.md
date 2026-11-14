@@ -32,13 +32,15 @@ Keiner der sieben Typen verlangt eine Mindest-Kontaktstufe. Auch Gewaltvorfall u
 
 | Typ | Felder |
 |---|---|
-| `awareness-kontakt` | `anliegen` (Mehrfachauswahl: Orientierung, Gespräch, Belästigung, Unwohlsein, Begleitung, Sonstiges), `alterscluster`, `dauer` (Minuten), `veranstaltung` |
+| `awareness-kontakt` | `anliegen` (Mehrfachauswahl: Orientierung, Gespräch, Belästigung, Unwohlsein, Begleitung, Sonstiges), `alterscluster`, `dauer` (Minuten, vorbelegt mit 15), `veranstaltung` |
 | `versorgung` | `bedarf` (Mehrfachauswahl: Wasser, Decke, Ruheraum, Gehörschutz, Hygieneartikel, Sonstiges), `veranstaltung` |
 | `gewaltvorfall` | `art-des-vorfalls` (acht Vorfallsarten), `beteiligung`, `ort-im-veranstaltungsgelaende` (high, verschlüsselt), `weitergabe-an`, `folgesituation`, `notiz-vorfall` (high, verschlüsselt) |
 | `krisensituation` | `art-der-krise` (mit `report_key: art_der_krise`), `notiz-krise` (high, verschlüsselt), `weitervermittlung` |
 | `orga-meldung` | `grund` (Pflichtfeld), `bis`, `aktiv`; die Slugs entsprechen exakt der Hausverbots-Projektion |
 | `vermittlung` | `vermittelt-an` (Sanität, Psy-Support, Security, Taxi / Safe Home, Sonstiges), `veranstaltung` |
 | `notiz` | `notiz` |
+
+Die Vorbelegung von `dauer` (15 Minuten) kommt aus dem Paket: Wird sie in der Konfigurationsoberfläche geändert, setzt ein erneutes Anwenden des Pakets mit `load_package` sie auf den Paketwert zurück (Details: [Paket-Referenz](packages.md#was-der-loader-anfasst--und-was-nicht)).
 
 Das gesamte Paket enthält bewusst **kein Datei-Feld**. Fotos von betroffenen Personen dürfen nicht gespeichert werden; Vorfälle werden kategorisiert und notwendige Freitexte verschlüsselt dokumentiert.
 

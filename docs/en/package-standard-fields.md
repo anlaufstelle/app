@@ -15,5 +15,5 @@ The types have normal sensitivity. Effective visibility follows the higher type/
 
 <!-- translation-source: docs/packages.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: cdd92562b03dae0a7256ea20e4365760bb0d1dfa -->
-<!-- translation-date: 2026-10-26 -->
+<!-- source-hash: 5cc5933cb2ee725796b731c4d4acc27515718e58 -->
+<!-- translation-date: 2026-11-14 -->

@@ -47,6 +47,21 @@ Semantik-Entscheide (verbindlich, E13–E15):
   ``default.yaml`` selbst zeigt den Praxis-Impact — ``dauer``/``ausgabe``/
   ``rueckgabe`` führen mindestens eine der beiden Grenzen nicht mit
   (Kompatibilitätsentscheid, Task M1-B2/#1934, Review-Runde 1).
+* **``default_value``** follows the same tri-state (a semantic change without
+  a ``schema_version`` bump, equally one-sided in the protective direction):
+  key missing => a default maintained in the configuration UI stays untouched,
+  ``null``/``""`` => deliberately cleared, a value => set. Before, every run
+  overwrote a maintained default with the model default ``""`` whenever the
+  package did not carry the key; now omitting it never clears anything, while
+  an explicit ``null`` clears exactly as before. A package **value** is an
+  ordinary sync-back and always wins: re-applying a package that carries a
+  default resets a default that differs from it (for example one changed in the
+  configuration UI) to the package value, and a dry run reports that as
+  ``updated``. There is no per-field opt-out; a facility that wants to keep its
+  own default re-applies no package, or applies its own package file without the
+  ``default_value`` key for that field. A number default outside the effective
+  bounds (package **or** UI-maintained bound) is a named error, never a
+  silently invalid state.
 * **Dry-Run** nimmt exakt denselben Code-Pfad und rollt am Ende zurück.
 
 Bewusst NICHT enthalten: Audit-Logging (konsistent mit dem Seed — der Loader
@@ -281,11 +296,16 @@ def _apply_field_templates(facility: Facility, package: PackageV1, report: Packa
         lookup = {"facility": facility, "slug": template_def.slug}
         existing = FieldTemplate.objects.filter(**lookup).first()
 
+        bounds_conflict = _number_default_bounds_conflict(existing, desired)
+        if bounds_conflict is not None:
+            report.errors.append((identifier, bounds_conflict))
+            continue
+
         if existing is not None:
             if not _check_disappearing_options(existing, desired, report, identifier):
                 continue
             _warn_on_field_sensitivity_downgrade(existing, desired["sensitivity"], report, identifier)
-            _note_preserved_number_range(existing, template_def, report, identifier)
+            _note_preserved_template_values(existing, template_def, report, identifier)
             conflicts = _immutable_conflicts(existing, desired, _TEMPLATE_IMMUTABLES)
             conflicts += _report_key_conflicts(existing, template_def.report_key)
             if conflicts:
@@ -580,8 +600,12 @@ def _desired_template_values(template_def: FieldTemplateDef) -> dict[str, Any]:
         # Kopien: die Dicts im (frozen) Def dürfen nie mit dem ORM geteilt werden.
         "options_json": [dict(option) for option in template_def.options],
         "help_text": template_def.help_text,
-        "default_value": template_def.default_value,
     }
+    # Tri-state like ``min_value``/``max_value`` below: only take the key when
+    # the package carries it, so a default maintained in the configuration UI
+    # survives a re-run. ``null``/``""`` arrive as ``""`` and clear it on purpose.
+    if template_def.default_value is not KEY_MISSING:
+        desired["default_value"] = template_def.default_value
     # Refs #1934, Tri-State analog ``tally_enabled`` (E13): NUR aufnehmen, wenn
     # das Paket den Schlüssel überhaupt trägt (``KEY_MISSING`` = fehlt, Bestand
     # bleibt unangetastet). Ein aufgenommenes ``None`` löscht eine bestehende
@@ -774,7 +798,9 @@ def _check_disappearing_options(
     if not missing:
         return True
     try:
-        validate_option_changes(existing, desired["options_json"], default_value=desired["default_value"])
+        validate_option_changes(
+            existing, desired["options_json"], default_value=desired.get("default_value", existing.default_value)
+        )
     except ValidationError as error:
         report.errors.append((identifier, _validation_message(error)))
         return False
@@ -837,27 +863,28 @@ def _warn_on_field_sensitivity_downgrade(
         _emit_sensitivity_downgrade_warning(report, identifier, old_field, new_field)
 
 
-def _note_preserved_number_range(
+def _note_preserved_template_values(
     existing: FieldTemplate, template_def: FieldTemplateDef, report: PackageReport, identifier: str
 ) -> None:
-    """Betreiber-Sichtbarkeit für den Tri-State (Refs #1934) — bewusst
-    **keine** Warnung.
+    """Operator visibility for the tri-state keys (Refs #1934) — deliberately
+    **not** a warning.
 
-    Eine Warnung "Schlüssel fehlt" würde jeden Lauf zuspammen, bei dem ein
-    Paket Grenzen einfach nicht verwaltet — der Normalfall für die meisten
-    Zahlenfelder, kein Missstand. Diese Funktion trägt deshalb in
-    :attr:`PackageReport.preserved` ein, **nur** wenn dadurch tatsächlich ein
-    vorhandener Bestandswert erhalten bleibt (Schlüssel fehlt im Paket UND der
-    Bestand trägt bereits eine Grenze) — kein Eintrag, wenn ohnehin nichts zu
-    erhalten ist (Bestand schon ``None``) oder das Paket den Schlüssel führt
-    (dann ist es ein normaler ``unverändert``/``aktualisiert``-Fall, kein
-    "unangetastet, weil unerwähnt").
+    A warning "key missing" would spam every run in which a package simply does
+    not manage a bound or a default — the normal case for most number fields,
+    not a defect. This function therefore records an entry in
+    :attr:`PackageReport.preserved` **only** when an existing value is actually
+    kept (key missing in the package AND the stored value is set) — no entry
+    when there is nothing to keep (stored value already empty) or when the
+    package carries the key (then it is an ordinary ``unchanged``/``updated``
+    case, not "untouched because unmentioned").
     """
     preserved_bits = []
     if template_def.min_value is KEY_MISSING and existing.min_value is not None:
         preserved_bits.append(f"min_value={existing.min_value!r}")
     if template_def.max_value is KEY_MISSING and existing.max_value is not None:
         preserved_bits.append(f"max_value={existing.max_value!r}")
+    if template_def.default_value is KEY_MISSING and existing.default_value:
+        preserved_bits.append(f"default_value={existing.default_value!r}")
     if not preserved_bits:
         return
     report.preserved.append(
@@ -868,6 +895,36 @@ def _note_preserved_number_range(
                 % {"werte": ", ".join(preserved_bits)}
             ),
         )
+    )
+
+
+def _number_default_bounds_conflict(existing: FieldTemplate | None, desired: dict[str, Any]) -> str | None:
+    """Message when the effective number default would fall outside the effective bounds.
+
+    "Effective" merges the package values with what stays untouched on an
+    existing template, so a bound maintained in the configuration UI that
+    excludes the package default (or a package bound that excludes a UI-kept
+    default) is reported by name instead of surfacing as a bare model error.
+    Anything that is not a plain integer default is left to ``full_clean``.
+    """
+    if desired["field_type"] != FieldTemplate.FieldType.NUMBER:
+        return None
+    default = desired.get("default_value", existing.default_value if existing else "")
+    try:
+        value = int(str(default).strip())
+    except ValueError:
+        return None
+    minimum = desired.get("min_value", existing.min_value if existing else None)
+    maximum = desired.get("max_value", existing.max_value if existing else None)
+    if (minimum is None or value >= minimum) and (maximum is None or value <= maximum):
+        return None
+    return str(
+        _(
+            "Der Default-Wert %(wert)s liegt außerhalb der Grenzen dieser Feldvorlage "
+            "(min_value=%(minimum)s, max_value=%(maximum)s). Entweder die Grenzen in der "
+            "Einrichtung anpassen oder den Default-Wert im Paket ändern."
+        )
+        % {"wert": value, "minimum": minimum, "maximum": maximum}
     )
 
 
