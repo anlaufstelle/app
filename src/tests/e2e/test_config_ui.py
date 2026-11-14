@@ -321,6 +321,43 @@ class TestDocumentTypeCrud:
         finally:
             _delete_doctype(page, base_url, pk)
 
+    def test_ban_system_type_prefills_and_requires_the_minimum_stage(self, authenticated_page, base_url):
+        """A ban names a person: choosing the system type pre-fills "Nur Pseudonym"
+        and marks the stage as required; clearing it on edit is refused once."""
+        page = authenticated_page
+        name = _cfg_name("DT-BAN")
+        pk = None
+        try:
+            page.goto(f"{base_url}{DOCTYPE_LIST}new/", wait_until="domcontentloaded")
+            page.wait_for_load_state("networkidle")
+            stage = page.locator("select#id_min_contact_stage")
+            marker = page.locator("label[for='id_min_contact_stage'] [data-required-marker]")
+            expect(stage).to_have_value("", timeout=10000)
+            expect(marker).to_be_hidden()
+
+            page.fill("input#id_name", name)
+            page.select_option("select#id_system_type", value="ban")
+            expect(stage).to_have_value("identified", timeout=10000)
+            expect(marker).to_be_visible()
+
+            page.locator(FORM_SUBMIT).click()
+            page.wait_for_url(_DETAIL_RE)
+            match = _DETAIL_RE.search(page.url)
+            assert match, f"Detail-URL nicht erkannt: {page.url}"
+            pk = match.group(1)
+
+            page.goto(f"{base_url}{DOCTYPE_LIST}{pk}/edit/", wait_until="domcontentloaded")
+            expect(page.locator("label[for='id_min_contact_stage'] [data-required-marker]")).to_be_visible(
+                timeout=10000
+            )
+            page.select_option("select#id_min_contact_stage", value="")
+            page.locator(FORM_SUBMIT).click()
+            error = page.get_by_text("Ein Hausverbot braucht eine Person: Bitte eine Mindest-Kontaktstufe wählen.")
+            expect(error).to_have_count(1, timeout=10000)
+        finally:
+            if pk:
+                _delete_doctype(page, base_url, pk)
+
     def test_icon_color_and_sort_order_roundtrip(self, authenticated_page, base_url):
         """Manuell zuerst auf Port 8844 gepruefter Darstellungs-Workflow (#1886)."""
         page = authenticated_page

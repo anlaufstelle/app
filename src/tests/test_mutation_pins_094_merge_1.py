@@ -631,6 +631,7 @@ class TestBanBannerEffectMeasuredBeforeTheMove:
             name="Pin-Hausverbot",
             sensitivity=DocumentType.Sensitivity.ELEVATED,
             system_type=DocumentType.SystemType.BAN,
+            min_contact_stage="identified",
         )
         for name, field_type, order in (
             ("Pin-Grund", FieldTemplate.FieldType.TEXTAREA, 0),

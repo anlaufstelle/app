@@ -52,6 +52,7 @@ def doc_type_hausverbot(facility):
         facility=facility,
         name="Hausverbot",
         system_type=DocumentType.SystemType.BAN,
+        min_contact_stage="identified",
     )
 
 
@@ -63,6 +64,7 @@ def doc_type_hausverbot_verschluesselt(facility):
         facility=facility,
         name="Hausverbot (verschlüsselt)",
         system_type=DocumentType.SystemType.BAN,
+        min_contact_stage="identified",
     )
     for name in ("Aktiv", "Bis"):
         template = FieldTemplate.objects.create(
@@ -170,7 +172,7 @@ class TestBuildDataset:
     def test_fremde_facility_ist_unsichtbar(self, backend, facility, zeitraum, staff_user):
         fremd = Facility.objects.create(organization=Organization.objects.create(name="Fremd"), name="Fremdstelle")
         fremd_typ = DocumentType.objects.create(
-            facility=fremd, name="Hausverbot", system_type=DocumentType.SystemType.BAN
+            facility=fremd, name="Hausverbot", system_type=DocumentType.SystemType.BAN, min_contact_stage="identified"
         )
         _ban(fremd, fremd_typ, staff_user)
 

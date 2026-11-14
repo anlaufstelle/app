@@ -15,7 +15,9 @@ pytestmark = pytest.mark.django_db
     [("ban-overview", "aktiv_aktuell", "Aktuell aktive Hausverbote"), ("case-metrics", "neue_faelle", "Neue Fälle")],
 )
 def test_preview_labels_and_stable_export(client, lead_user, facility, backend_key, metric_key, label):
-    DocumentType.objects.create(facility=facility, name="Ban", system_type=DocumentType.SystemType.BAN)
+    DocumentType.objects.create(
+        facility=facility, name="Ban", system_type=DocumentType.SystemType.BAN, min_contact_stage="identified"
+    )
     client.force_login(lead_user)
     response = client.get(reverse("core:statistics_report_panel"), {"backend": backend_key})
     assert response.status_code == 200

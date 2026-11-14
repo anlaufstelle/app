@@ -121,7 +121,8 @@ class TestInlineHelpIsShort:
             ("report_key", "Ordnet diesen Typ Berichten zu. Leer bedeutet: noch nicht zugeordnet."),
             (
                 "min_contact_stage",
-                "Legt fest, ob dieser Typ anonym nutzbar ist oder eine gespeicherte Person braucht.",
+                "Legt fest, ob dieser Typ anonym nutzbar ist oder eine gespeicherte Person braucht. "
+                "Bei Systemtyp Hausverbot Pflicht.",
             ),
             (
                 "tally_enabled",

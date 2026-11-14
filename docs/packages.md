@@ -205,7 +205,7 @@ Pflicht sind nur **Identität** und Werte ohne sinnvollen Modell-Default. Alles 
 | `tally_enabled` | Bool oder Schlüssel weglassen | *(nicht anfassen)* | Explizites Opt-in für die Strichliste. `true`/`false` wird geschrieben; fehlt der Schlüssel, bleibt ein bestehender Konfigurationswert erhalten, bei einem neuen Typ gilt der Modell-Default `false` |
 | `system_type` | `ban`, `crisis` oder `null` | `null` | Nur bei `entity_type: event`. **Unveränderlich**, Ausnahme `null → Wert`. Nur die beiden Werte mit App-Wirkung (#1850) |
 | `sensitivity` | `normal`, `elevated`, `high` | `normal` | steuert Rollen-Sichtbarkeit |
-| `min_contact_stage` | `identified`, `qualified` oder `null` | `null` | Mindest-Kontaktstufe der Person — **wirkt nur bei `entity_type: event`** |
+| `min_contact_stage` | `identified`, `qualified` oder `null` | `null` | Mindest-Kontaktstufe der Person — **wirkt nur bei `entity_type: event`**. **Pflicht bei `system_type: ban`:** Fehlt die Stufe oder steht dort `null`, lehnt das Schema das Paket mit einem Fehler am Pfad `min_contact_stage` ab, denn ein Hausverbot nennt immer eine Person |
 | `report_key` | Schlüssel (`a-z`, `0-9`, `_`) oder `null` | `null` | Berichtszuordnung des Typs (#1849). **Unveränderlich**, Ausnahme `null → Wert`; `null`/weglassen = keine Angabe |
 | `icon`, `color` | String | `""` | |
 | `sort_order` | Int | `0` | Position des Typs in der Typ-Auswahl |
@@ -427,7 +427,7 @@ Alle vom Schema abgedeckten Werte werden bei **jedem** Lauf auf die Paketwerte g
 | Was | Folge eines Laufs |
 |---|---|
 | `name` des Typs | wird zurückbenannt — bei einem gleichnamigen betreiber-eigenen Typ bricht der Lauf am Unique-Constraint `(facility, name)` ab, bis das manuell aufgelöst ist |
-| `icon`, `color`, `sensitivity`, `min_contact_stage`, `sort_order` | zurückgesetzt |
+| `icon`, `color`, `sensitivity`, `min_contact_stage`, `sort_order` | zurückgesetzt — bei Typen mit `system_type: ban` auf die im Paket stehende Stufe, die dort Pflicht ist; ein Lauf kann sie also ändern, aber nie entfernen |
 | `sort_order` der Feldzuordnungen | zurückgesetzt — auch bei Typen **ohne** Gruppen; eine per Drag-and-Drop geänderte Reihenfolge geht verloren |
 | `help_text`, `options_json` der Vorlage | zurückgesetzt |
 | `sensitivity` der Vorlage | zurückgesetzt — eine **Absenkung** wird zusätzlich als Warnung gemeldet |

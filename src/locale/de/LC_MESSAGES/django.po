@@ -15317,3 +15317,11 @@ msgstr ""
 "Der Default-Wert %(value)s liegt außerhalb der Grenzen dieser Feldvorlage (min_value="
 "%(minimum)s, max_value=%(maximum)s). Entweder die Grenzen in der Einrichtung "
 "anpassen oder den Default-Wert im Paket ändern."
+
+#: src/core/models/document_type.py:18
+msgid "Ein Hausverbot braucht eine Person: Bitte eine Mindest-Kontaktstufe wählen."
+msgstr "Ein Hausverbot braucht eine Person: Bitte eine Mindest-Kontaktstufe wählen."
+
+#: src/templates/core/config/document_types/form.html:95
+msgid "Bei Systemtyp Hausverbot Pflicht."
+msgstr "Bei Systemtyp Hausverbot Pflicht."

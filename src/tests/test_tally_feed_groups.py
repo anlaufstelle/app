@@ -107,7 +107,7 @@ def test_group_total_matches_live_summary_for_all_types_and_visibility(
     when = context.window_start + timedelta(minutes=1)
     disabled = DocumentType.objects.create(facility=facility, name="Disabled", is_active=False)
     high = DocumentType.objects.create(facility=facility, name="Private", sensitivity="high")
-    ban = DocumentType.objects.create(facility=facility, name="Ban", system_type="ban")
+    ban = DocumentType.objects.create(facility=facility, name="Ban", system_type="ban", min_contact_stage="identified")
     for doc_type in (doc_type_contact, disabled, high, ban):
         _event(facility, staff_user, doc_type, when)
     _event(facility, staff_user, doc_type_contact, when, is_deleted=True)
@@ -179,7 +179,9 @@ def test_autumn_repeated_hour_keeps_both_real_hour_groups(facility, staff_user, 
 @pytest.mark.parametrize("feed_type", ["", "events", "bans"])
 def test_watch_ignores_tally_ban_minutes_only_when_the_feed_groups_them(client, facility, staff_user, feed_type):
     day = timezone.localdate()
-    ban_type = DocumentType.objects.create(facility=facility, name="Ban", system_type="ban")
+    ban_type = DocumentType.objects.create(
+        facility=facility, name="Ban", system_type="ban", min_contact_stage="identified"
+    )
     event = _event(facility, staff_user, ban_type, _at(day, 12, 15))
     client.force_login(staff_user)
     params = {"date": day.isoformat(), "time_filter": "all", "type": feed_type}

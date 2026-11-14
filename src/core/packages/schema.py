@@ -829,6 +829,25 @@ def _parse_document_type(raw: Any, path: str, errors: Errors) -> DocumentTypeDef
             )
         )
 
+    # A ban always names a person, so the type must carry a minimum contact
+    # stage. The rule hangs on the system type, not on a single package: it also
+    # keeps a re-applied package from clearing the stage (a missing key and an
+    # explicit ``null`` are both ``None`` here). An invalid value has already
+    # produced its own error at this path.
+    stage_path = _join(path, "min_contact_stage")
+    if (
+        system_type == DocumentType.SystemType.BAN.value
+        and min_contact_stage is None
+        and not any(error_path == stage_path for error_path, _message in errors)
+    ):
+        errors.append(
+            (
+                stage_path,
+                "Ein Typ mit system_type 'ban' braucht eine min_contact_stage ('identified' oder 'qualified'): "
+                "Ein Hausverbot nennt immer eine Person.",
+            )
+        )
+
     groups = _parse_group_list(data, path, errors)
     field_refs = _parse_field_ref_list(data, path, errors)
     _check_block_positions(data, groups, field_refs, path, errors)

@@ -74,6 +74,8 @@ document.addEventListener("alpine:init", () => {
         reportKeyEmptyLabel: "",
         reportKeyExcludedLabel: "",
         reportKeyUnboundLabel: "",
+        minContactStageSelect: null,
+        minContactStageDefaults: {},
         init() {
             const root = this.$el;
             this.select = root.querySelector("select[name='entity_type']");
@@ -86,6 +88,7 @@ document.addEventListener("alpine:init", () => {
                 .filter((el) => el !== null && el !== root);
             this.extraWrappers = Array.from(root.querySelectorAll("[data-entity-scoped-extra]"));
             this.initReportKeyDefaults(root);
+            this.initMinContactStageDefaults(root);
             if (!this.select) {
                 // Bearbeiten-Formular ohne Select (theoretisch) oder fremdes
                 // Markup: nichts ausblenden — sichtbar ist der sichere Zustand.
@@ -159,6 +162,62 @@ document.addEventListener("alpine:init", () => {
                     }
                 });
             this.systemTypeSelect.addEventListener("change", () => this.applyReportKeyDefault());
+        },
+        /**
+         * Pre-fill and required marker of the minimum contact stage.
+         *
+         * The pairs ``systemtyp:stufe`` come from
+         * ``DocumentTypeForm.MIN_CONTACT_STAGE_REQUIRED_DEFAULTS`` via
+         * ``data-min-contact-stage-defaults``; the component knows neither
+         * system types nor stages. A listed system type makes the stage
+         * mandatory: choosing it proposes the stage (only into an empty
+         * select) and shows the required marker. Without JavaScript the
+         * server-side error carries the rule.
+         */
+        initMinContactStageDefaults(root) {
+            this.minContactStageSelect = root.querySelector("select[name='min_contact_stage']");
+            const systemTypeSelect = root.querySelector("select[name='system_type']");
+            if (!this.minContactStageSelect || !systemTypeSelect) {
+                return;
+            }
+            (root.dataset.minContactStageDefaults || "")
+                .split(/\s+/)
+                .filter(Boolean)
+                .forEach((pair) => {
+                    const [systemType, stage] = pair.split(":");
+                    if (systemType && stage) {
+                        this.minContactStageDefaults[systemType] = stage;
+                    }
+                });
+            this.renderMinContactStageRequired(root, systemTypeSelect);
+            systemTypeSelect.addEventListener("change", () => {
+                const proposal = this.minContactStageDefaults[systemTypeSelect.value];
+                if (proposal && !this.minContactStageSelect.value) {
+                    this.minContactStageSelect.value = proposal;
+                }
+                this.renderMinContactStageRequired(root, systemTypeSelect);
+            });
+        },
+        renderMinContactStageRequired(root, systemTypeSelect) {
+            const required = Object.prototype.hasOwnProperty.call(this.minContactStageDefaults, systemTypeSelect.value);
+            const label = root.querySelector("label[for='" + this.minContactStageSelect.id + "']");
+            if (label) {
+                let marker = label.querySelector("[data-required-marker]");
+                if (!marker && required) {
+                    marker = document.createElement("span");
+                    marker.setAttribute("data-required-marker", "");
+                    marker.textContent = " *";
+                    label.appendChild(marker);
+                }
+                if (marker) {
+                    marker.hidden = !required;
+                }
+            }
+            if (required) {
+                this.minContactStageSelect.setAttribute("aria-required", "true");
+            } else {
+                this.minContactStageSelect.removeAttribute("aria-required");
+            }
         },
         applyReportKeyDefault() {
             if (this.reportKeyTouched || this.reportKeySelect.value) {

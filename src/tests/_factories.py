@@ -42,6 +42,11 @@ def make_document_type(*, facility, name, **overrides):
     ``retention_days``, ...) variieren stark je Testfall und haben
     deshalb bewusst KEINEN Default — nur ueber ``**overrides``.
     """
+    # A ban type must carry a minimum contact stage (the model refuses it
+    # otherwise); supply the lowest valid stage so ban fixtures stay terse. Tests
+    # that exercise the rule pass ``min_contact_stage`` explicitly.
+    if overrides.get("system_type") == DocumentType.SystemType.BAN:
+        overrides.setdefault("min_contact_stage", "identified")
     return DocumentType.objects.create(facility=facility, name=name, **overrides)
 
 

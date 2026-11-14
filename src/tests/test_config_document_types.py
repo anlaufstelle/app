@@ -212,7 +212,7 @@ class TestUpdate:
         client.force_login(admin_user)
         response = client.post(
             reverse("core:config_doctype_update", kwargs={"pk": dt.pk}),
-            _valid_post(name="Bann", system_type=DocumentType.SystemType.CRISIS),
+            _valid_post(name="Bann", system_type=DocumentType.SystemType.CRISIS, min_contact_stage="identified"),
         )
         assert response.status_code == 302
         dt.refresh_from_db()
@@ -771,6 +771,7 @@ class TestSystemTypeOnlyForEventTypes:
                 name="Personen-Bann",
                 entity_type=DocumentType.EntityType.CLIENT,
                 system_type=DocumentType.SystemType.BAN,
+                min_contact_stage="identified",
             ),
         )
         assert response.status_code == 200
@@ -809,6 +810,7 @@ class TestSystemTypeOnlyForEventTypes:
             entity_type=DocumentType.EntityType.CLIENT,
             system_type=DocumentType.SystemType.BAN,
         )
+        DocumentType.objects.filter(pk=dt.pk).update(min_contact_stage=None)
         client.force_login(admin_user)
         response = client.post(
             reverse("core:config_doctype_update", kwargs={"pk": dt.pk}),

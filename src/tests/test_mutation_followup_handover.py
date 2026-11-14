@@ -43,6 +43,8 @@ def _make_doc_type(facility, *, system_type: str | None = None, name: str = "Doc
     )
     if system_type:
         kwargs["system_type"] = system_type
+    if system_type == DocumentType.SystemType.BAN:
+        kwargs["min_contact_stage"] = "identified"
     return DocumentType.objects.create(**kwargs)
 
 
@@ -423,6 +425,7 @@ class TestBuildHandoverSummaryMutations:
             facility=facility,
             name="Hausverbot",
             system_type="ban",
+            min_contact_stage="identified",
         )
         ft = FieldTemplate.objects.create(
             facility=facility,

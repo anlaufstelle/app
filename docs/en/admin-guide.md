@@ -813,6 +813,8 @@ The system type serves **one** purpose: **UI logic**. Accordingly there are exac
 | **Ban** | Activates a ban banner on the person page, dedicated filter in the timeline, count and highlight in the handover; feeds the example ban overview |
 | **Crisis** | Displayed as a highlight in the handover (recent crisis events) |
 
+> **A ban needs a person.** With the system type **Hausverbot (entry ban)**, the **minimum contact stage** is mandatory -- when creating and when editing. Choosing the system type makes the form propose "Pseudonym only" and mark the field as required; without JavaScript, the error message appears on saving instead. The same rule applies to configuration packages (the schema rejects a `ban` type without a stage), in the Django admin and on every save path of the model. Existing bans without a person stay editable and can be deactivated; the check applies only when a ban is created.
+
 > **Note:** Not every documentation type needs a system type -- most do without one. Whether a type lands in a report is answered by the "Appears in …" information in the detail and form views; the system type has nothing to do with it.
 
 > **The list of values is frozen** (RFC #1748, decision of 2026-08-03). **No new system types will be added:** a value belongs here only if it drives application behaviour. Report mappings go through the report key.
@@ -891,7 +893,7 @@ This is particularly useful after creating many types manually or loading a thir
 
 #### Minimum Contact Stage
 
-Defines the minimum contact stage a person must have for an event of this type to be created. Example: Counseling sessions require at least "With additional details" because additional personal details about the person must be on record.
+Defines the minimum contact stage a person must have for an event of this type to be created. Example: Counseling sessions require at least "With additional details" because additional personal details about the person must be on record. With the system type **Hausverbot (entry ban)**, the stage is mandatory and cannot be cleared.
 
 > **Effective for event types only (Refs #1058).** **Minimum contact stage**, **maximum period (shortens only), `retention_days`**, **system type** and **report key** only take effect on documentation types whose entity type is **event**: the contact-stage check only applies when creating events, and the retention run deletes events only. For **persons**, the facility-wide rules from the settings apply instead: the trash period (`client_trash_days`) and anonymisation once event retention has cleared out a person's records. **Cases have no retention period of their own** — the retention run never deletes a case by itself. It only acts on a case that has already been **deleted**: its trash period then expires after `client_trash_days` and the case is anonymised (Refs #1818, [ADR-044](../adr/044-fall-loeschpfad.md), which supersedes the earlier promise in [ADR-039](../adr/039-owner-generische-dateianhaenge.md) § 6). Without a deletion, a case's contents are still only redacted when the associated person is anonymised. `retention_qualified_days` counts from closure for a closed case, from last substantive case activity (fallback creation) for an open case, and from the event date without a case; events are deleted after proposal and approval, while the case remains (§ 7.3).
 >
@@ -2594,5 +2596,5 @@ Person anonymization clears these dynamic fields as well as related titles and g
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: 1b30f31568d9f47954d97be17d8aaff06673b8e6 -->
+<!-- source-hash: 89b2fd07cde6dd6ff3d3a34fa259f91be49974f3 -->
 <!-- translation-date: 2026-11-14 -->

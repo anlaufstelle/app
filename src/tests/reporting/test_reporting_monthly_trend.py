@@ -86,6 +86,7 @@ def doc_type_hausverbot(facility):
         facility=facility,
         name="Hausverbot",
         system_type=DocumentType.SystemType.BAN,
+        min_contact_stage="identified",
         report_key="excluded",
     )
 
@@ -213,6 +214,7 @@ class TestBuildDataset:
             name="Hausverbot",
             slug="kontakt",
             system_type=DocumentType.SystemType.BAN,
+            min_contact_stage="identified",
             report_key="excluded",
         )
         _event(facility, doc_type, staff_user, _berlin(2026, 1, 10))

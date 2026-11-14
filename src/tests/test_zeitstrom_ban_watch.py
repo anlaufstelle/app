@@ -51,6 +51,7 @@ def _make_ban_doc_type(facility, *, sensitivity=DocumentType.Sensitivity.ELEVATE
         name=name,
         sensitivity=sensitivity,
         system_type=DocumentType.SystemType.BAN,
+        min_contact_stage="identified",
     )
     for field_name, field_type, required in (
         ("Grund", FieldTemplate.FieldType.TEXTAREA, True),
@@ -436,7 +437,11 @@ class TestDocTypeWriteBoundaries:
 
         response = client.post(
             reverse("core:config_doctype_update", kwargs={"pk": ban_doc_type.pk}),
-            {"name": ban_doc_type.name, "sensitivity": ban_doc_type.sensitivity},
+            {
+                "name": ban_doc_type.name,
+                "sensitivity": ban_doc_type.sensitivity,
+                "min_contact_stage": ban_doc_type.min_contact_stage,
+            },
         )
 
         assert response.status_code == 302

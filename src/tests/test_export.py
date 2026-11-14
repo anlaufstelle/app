@@ -48,6 +48,7 @@ def doc_type_hausverbot(facility):
         facility=facility,
         name="Hausverbot",
         system_type=DocumentType.SystemType.BAN,
+        min_contact_stage="identified",
         report_key=EXCLUDED_KEY,
     )
 

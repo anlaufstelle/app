@@ -20,6 +20,7 @@ from django.utils.translation import gettext_lazy as _
 
 from core.forms.mixins import TailwindFormMixin
 from core.models import DocumentType, DocumentTypeField, FieldCondition, FieldGroup, FieldTemplate
+from core.models.document_type import BAN_STAGE_REQUIRED_MESSAGE
 from core.models.report_key import EXCLUDED
 from core.models.slug import _RESERVED_SLUGS, _SLUG_RE, slug_base
 from core.reporting.registry import (
@@ -256,6 +257,14 @@ class DocumentTypeForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
         DocumentType.SystemType.BAN.value: EXCLUDED,
     }
 
+    #: System types whose ``min_contact_stage`` is mandatory, mapped to the
+    #: stage proposed when the type is chosen on create. The browser pre-fills
+    #: the proposal; without JavaScript the error message in :meth:`clean`
+    #: carries the rule. The proposal is a suggestion, never filled in server-side.
+    MIN_CONTACT_STAGE_REQUIRED_DEFAULTS = {
+        DocumentType.SystemType.BAN.value: "identified",
+    }
+
     class Meta:
         model = DocumentType
         # Refs #1731: ``entity_type`` steht bewusst direkt hinter ``name``. Das
@@ -310,6 +319,12 @@ class DocumentTypeForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
         # unuebersetzten Blank-Choice-Text ("- Select an option -") faellt.
         label_blank_choice(self.fields["system_type"], _("— Kein Systemtyp —"))
         label_blank_choice(self.fields["min_contact_stage"], _("— Keine Angabe —"))
+        # Mark the stage as required while the effective system type demands it
+        # (edit: the stored value; create: the posted one). The browser keeps the
+        # marker in sync when the system type changes.
+        self.fields["min_contact_stage"].is_conditionally_required = (  # type: ignore[attr-defined]
+            self._effective_system_type() in self.MIN_CONTACT_STAGE_REQUIRED_DEFAULTS
+        )
         # Neuobjekt: facility aus dem Scope an die Instanz binden, damit
         # form.save() (Service) den richtigen Mandanten schreibt.
         if facility is not None and self.instance.facility_id is None:
@@ -439,6 +454,41 @@ class DocumentTypeForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
         """Sentinel-Wert für die Live-Auskunft, ohne Duplikat im JavaScript."""
         return EXCLUDED
 
+    def full_clean(self) -> None:
+        super().full_clean()
+        # The form rule in ``clean()`` and the model backstop report the same
+        # missing stage; show the message once.
+        stage_errors = self.errors.get("min_contact_stage")
+        if stage_errors:
+            seen: set[str] = set()
+            unique = []
+            for error in stage_errors.as_data():
+                text = " ".join(error.messages)
+                if text not in seen:
+                    seen.add(text)
+                    unique.append(error)
+            self.errors["min_contact_stage"] = self.error_class(unique)
+
+    def _effective_system_type(self) -> str | None:
+        """System type in force: the stored one when editing, the posted one on create."""
+        if not self.instance._state.adding:
+            return self.instance.system_type
+        if self.is_bound:
+            return str(self.data.get("system_type") or "") or None
+        return self.initial.get("system_type") or self.instance.system_type
+
+    @property
+    def min_contact_stage_defaults_attr(self) -> str:
+        """Pairs for ``data-min-contact-stage-defaults`` (``system_type:stage``).
+
+        The keys are the system types that make the stage mandatory, the values
+        the stage proposed on create. Same hand-over pattern as
+        :attr:`report_key_defaults_attr`: the mapping lives once in the form.
+        """
+        return " ".join(
+            f"{system_type}:{stage}" for system_type, stage in self.MIN_CONTACT_STAGE_REQUIRED_DEFAULTS.items()
+        )
+
     def clean_name(self) -> str:
         name: str = self.cleaned_data["name"]
         if self.instance._state.adding:
@@ -473,6 +523,15 @@ class DocumentTypeForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
                     "system_type",
                     _("Ein Systemtyp ist nur für Dokumentationstypen mit Entitätstyp „Ereignis“ zulässig."),
                 )
+        # A ban names a person: the stage is mandatory, on create and on edit.
+        # ``system_type`` is disabled on edit, so its cleaned value is the stored one.
+        if (
+            cleaned.get("system_type") in self.MIN_CONTACT_STAGE_REQUIRED_DEFAULTS
+            and cleaned.get("entity_type") == DocumentType.EntityType.EVENT
+            and not cleaned.get("min_contact_stage")
+            and "min_contact_stage" not in self.errors
+        ):
+            self.add_error("min_contact_stage", BAN_STAGE_REQUIRED_MESSAGE)
         # #1776 Punkt 5 (Bereinigen, ADR-039 Event-only-Doktrin): ``retention_days``
         # wirkt ausschliesslich an Ereignis-Typen (``enforce_document_type_retention``
         # zaehlt nur ``Event``). Ein an einem Personen-/Fall-Typ gesetzter Wert blieb

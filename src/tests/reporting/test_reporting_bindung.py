@@ -444,6 +444,8 @@ def universum(db):
                     facility=facility,
                     name=f"Typ {slug}",
                     slug=slug,
+                    # A ban type must carry a minimum contact stage.
+                    **({"min_contact_stage": "identified"} if felder.get("system_type") == "ban" else {}),
                     **felder,
                 )
             )
@@ -843,7 +845,9 @@ class TestBanOverviewBindung:
         DocumentType.objects.create(facility=facility, name="Hausverbot-Notiz", slug="hausverbot", system_type=None)
         assert not DocumentType.objects.filter(TYP_BINDUNG.matching_q()).exists()
 
-        DocumentType.objects.create(facility=facility, name="Hausverbot", system_type="ban")
+        DocumentType.objects.create(
+            facility=facility, name="Hausverbot", system_type="ban", min_contact_stage="identified"
+        )
         assert DocumentType.objects.filter(TYP_BINDUNG.matching_q()).count() == 1
 
     @pytest.mark.django_db
@@ -855,7 +859,9 @@ class TestBanOverviewBindung:
         backend = registry.get_backend("ban-overview")
         assert backend.is_available(facility) is False
 
-        typ = DocumentType.objects.create(facility=facility, name="Hausverbot", system_type="ban")
+        typ = DocumentType.objects.create(
+            facility=facility, name="Hausverbot", system_type="ban", min_contact_stage="identified"
+        )
         assert backend.is_available(facility) is True
 
         typ.is_active = False

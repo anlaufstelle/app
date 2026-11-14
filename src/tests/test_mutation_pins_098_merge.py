@@ -103,6 +103,7 @@ def _make_ban_doc_type(facility, *, name="Pin098-Hausverbot"):
         name=name,
         sensitivity=DocumentType.Sensitivity.ELEVATED,
         system_type=DocumentType.SystemType.BAN,
+        min_contact_stage="identified",
     )
     for field_name, field_type, required in (
         ("Grund", FieldTemplate.FieldType.TEXTAREA, True),

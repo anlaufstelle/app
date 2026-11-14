@@ -155,6 +155,7 @@ class TestCollectHighlightsSelectRelated:
             name="Ban-Pin-Case1",
             sensitivity=DocumentType.Sensitivity.ELEVATED,
             system_type="ban",
+            min_contact_stage="identified",
         )
         now = timezone.now()
         Event.objects.create(

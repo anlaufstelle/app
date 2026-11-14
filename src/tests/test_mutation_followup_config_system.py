@@ -184,6 +184,7 @@ class TestSaveDocumentTypeBanRevisionWiring:
             facility=facility,
             name="Hausverbot Spy",
             system_type=DocumentType.SystemType.BAN,
+            min_contact_stage="identified",
             sensitivity=DocumentType.Sensitivity.NORMAL,
         )
         calls = []

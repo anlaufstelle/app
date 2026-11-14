@@ -322,6 +322,7 @@ class TestImmutables:
         self._seed(facility)
         raw = _raw()
         raw["document_types"][0]["system_type"] = "ban"
+        raw["document_types"][0]["min_contact_stage"] = "identified"
         self._expect_rejection(facility, raw, "kontakt")
         assert DocumentType.objects.get(slug="kontakt").system_type == "crisis"
 
@@ -552,6 +553,7 @@ class TestDryRun:
         _load(facility, _raw())
         raw = _raw()
         raw["document_types"][0]["system_type"] = "ban"
+        raw["document_types"][0]["min_contact_stage"] = "identified"
 
         with pytest.raises(PackageLoadError):
             _load(facility, raw, dry_run=True)

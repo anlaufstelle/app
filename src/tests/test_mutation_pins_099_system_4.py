@@ -124,6 +124,7 @@ def test_event_change_mit_unbekannter_sensitivity_bumpt_stratum_normal(facility)
         facility=facility,
         name="Hausverbot (Pin-099-System4)",
         system_type=DocumentType.SystemType.BAN,
+        min_contact_stage="identified",
         sensitivity=DocumentType.Sensitivity.ELEVATED,
     )
     DocumentType.objects.filter(pk=doc_type.pk).update(sensitivity="unbekannter-wert")

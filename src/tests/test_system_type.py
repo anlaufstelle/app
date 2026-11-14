@@ -20,6 +20,7 @@ def doc_type_ban(facility):
         name="Hausverbot",
         sensitivity=DocumentType.Sensitivity.ELEVATED,
         system_type=DocumentType.SystemType.BAN,
+        min_contact_stage="identified",
     )
     ft_grund = FieldTemplate.objects.create(
         facility=facility, name="Grund_st", field_type=FieldTemplate.FieldType.TEXTAREA, is_required=True

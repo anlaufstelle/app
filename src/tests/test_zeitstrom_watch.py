@@ -510,6 +510,7 @@ class TestZeitstromWatchVisibility:
             facility=facility,
             name="Hausverbot Feed",
             system_type=DocumentType.SystemType.BAN,
+            min_contact_stage="identified",
         )
         make_event(
             facility=facility,
@@ -536,6 +537,7 @@ class TestZeitstromWatchVisibility:
             facility=facility,
             name="Sicherheits-Hausverbot",
             system_type=DocumentType.SystemType.BAN,
+            min_contact_stage="identified",
             sensitivity=DocumentType.Sensitivity.ELEVATED,
         )
         client.force_login(assistant_user)

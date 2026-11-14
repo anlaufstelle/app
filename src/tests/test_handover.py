@@ -27,6 +27,7 @@ def doc_type_ban(facility):
         name="Hausverbot",
         sensitivity=DocumentType.Sensitivity.ELEVATED,
         system_type="ban",
+        min_contact_stage="identified",
         color="red",
     )
 

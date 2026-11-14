@@ -19,7 +19,9 @@ pytestmark = pytest.mark.django_db
 
 @pytest.fixture
 def ban_events(facility, client_identified, staff_user):
-    doc = DocumentType.objects.create(facility=facility, name="Safety ban", system_type="ban")
+    doc = DocumentType.objects.create(
+        facility=facility, name="Safety ban", system_type="ban", min_contact_stage="identified"
+    )
     return [
         Event.objects.create(
             facility=facility,

@@ -815,6 +815,8 @@ Der Systemtyp hat **eine** Funktion: **UI-Logik**. Entsprechend gibt es genau zw
 | **Hausverbot** | Aktiviert Hausverbot-Banner auf der Personenseite, eigener Filter im Zeitstrom, Zählung und Highlight in der Übergabe; speist die Beispiel-Hausverbots-Übersicht |
 | **Krisengespräch** | Wird als Highlight in der Übergabe angezeigt (letzte Krisen-Events) |
 
+> **Hausverbot braucht eine Person.** Bei Systemtyp **Hausverbot** ist die **Mindest-Kontaktstufe** ein Pflichtfeld — beim Anlegen und beim Bearbeiten. Wählen Sie den Systemtyp, schlägt das Formular „Nur Pseudonym“ vor und markiert das Feld als Pflicht; ohne JavaScript erscheint stattdessen beim Speichern die Fehlermeldung. Dieselbe Regel gilt für Konfigurationspakete (das Schema lehnt einen Typ `ban` ohne Stufe ab), im Django-Admin und für jeden Speicherweg des Modells. Bereits vorhandene Hausverbote ohne Person bleiben bearbeitbar und deaktivierbar; die Prüfung greift nur beim Anlegen eines Hausverbots.
+
 > **Hinweis:** Nicht jeder Dokumentationstyp benötigt einen Systemtyp — die meisten kommen ohne aus. Ob ein Typ in einem Bericht landet, sagt Ihnen die Auskunft „Erscheint in …" in Detail- und Formularansicht; der Systemtyp hat damit nichts zu tun.
 
 > **Die Werteliste ist eingefroren** (RFC #1748, Entscheid 2026-08-03). Es kommen **keine neuen Systemtypen** hinzu: Ein Wert gehört nur dann hierher, wenn er Anwendungsverhalten steuert. Berichts-Zuordnungen laufen über den Berichtsschlüssel.
@@ -892,7 +894,7 @@ Sinnvoll vor allem, nachdem Sie viele Typen von Hand angelegt oder ein fremdes K
 
 #### Mindest-Kontaktstufe
 
-Legt fest, welche Kontaktstufe eine Person mindestens haben muss, damit ein Ereignis dieses Typs erstellt werden kann. Beispiel: Beratungsgespräche erfordern mindestens „Mit Zusatzangaben", weil zusätzliche persönliche Angaben zur Person vorliegen müssen.
+Legt fest, welche Kontaktstufe eine Person mindestens haben muss, damit ein Ereignis dieses Typs erstellt werden kann. Beispiel: Beratungsgespräche erfordern mindestens „Mit Zusatzangaben", weil zusätzliche persönliche Angaben zur Person vorliegen müssen. Bei Systemtyp **Hausverbot** ist die Stufe Pflicht und lässt sich nicht leeren.
 
 > **Nur für Ereignis-Typen wirksam (Refs #1058).** **Mindest-Kontaktstufe**, **Höchstfrist (verkürzt nur), `retention_days`**, **Systemtyp** und **Berichtsschlüssel** wirken ausschließlich an Dokumentationstypen mit Entitätstyp **Ereignis**: Die Kontaktstufen-Prüfung greift nur bei der Ereignis-Anlage, und der Aufbewahrungslauf löscht ausschließlich Ereignisse. Für **Personen** greifen stattdessen die einrichtungsweiten Regeln aus den Einstellungen: die Papierkorb-Frist (`client_trash_days`) und die Anonymisierung, sobald die Ereignis-Retention den Bestand einer Person abgeräumt hat. **Fälle haben keine eigene Aufbewahrungsfrist** — der Aufbewahrungslauf löscht keinen Fall von sich aus. Er greift nur, wenn ein Fall bereits **gelöscht** wurde: Dann läuft dessen Papierkorb nach `client_trash_days` ab und der Fall wird anonymisiert (Refs #1818, [ADR-044](adr/044-fall-loeschpfad.md) — ersetzt die Zusage aus [ADR-039](adr/039-owner-generische-dateianhaenge.md) § 6 ab). Ohne Löschung werden die Inhalte eines Falls weiterhin erst mit der Anonymisierung der zugehörigen Person redigiert. `retention_qualified_days` zählt bei geschlossenem Fall ab Abschluss, bei offenem Fall ab letzter fachlicher Fallaktivität (Fallback Anlage) und ohne Fall ab Ereignisdatum; gelöscht werden nach Vorschlag und Freigabe die Ereignisse, nicht der Fall (§ 7.3).
 >

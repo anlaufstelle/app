@@ -129,6 +129,7 @@ class TestUnabhaengigkeitVonSystemType:
             facility=facility,
             name="Hausverbot mit Zuordnung",
             system_type=DocumentType.SystemType.BAN,
+            min_contact_stage="identified",
             report_key="contact",
         )
         assert bann.report_key == "contact"
@@ -143,5 +144,6 @@ class TestUnabhaengigkeitVonSystemType:
         )
 
         typ.system_type = DocumentType.SystemType.BAN
+        typ.min_contact_stage = "identified"
         with pytest.raises(ValidationError, match="system_type kann nach Erstellung nicht geändert werden"):
             typ.save()

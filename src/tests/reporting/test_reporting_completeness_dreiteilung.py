@@ -106,7 +106,12 @@ def person(facility, user):
 def typ(facility):
     def _make(name, *, report_key=None, system_type=None, slug=""):
         return DocumentType.objects.create(
-            facility=facility, name=name, slug=slug, system_type=system_type, report_key=report_key
+            facility=facility,
+            name=name,
+            slug=slug,
+            system_type=system_type,
+            report_key=report_key,
+            min_contact_stage="identified" if system_type == DocumentType.SystemType.BAN else None,
         )
 
     return _make

@@ -50,7 +50,9 @@ def test_contact_columns_and_toggle_are_shared(client, staff_user, sample_event,
 
 
 def test_mixed_feed_uses_the_same_columns_for_all_card_kinds(client, staff_user, facility, sample_event):
-    doc_type_ban = DocumentType.objects.create(facility=facility, name="Ban", system_type="ban")
+    doc_type_ban = DocumentType.objects.create(
+        facility=facility, name="Ban", system_type="ban", min_contact_stage="identified"
+    )
     ban = Event.objects.create(
         facility=facility, document_type=doc_type_ban, occurred_at=timezone.now(), created_by=staff_user
     )

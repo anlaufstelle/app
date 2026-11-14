@@ -13,6 +13,10 @@ from core.models.managers import FacilityScopedManager
 from core.models.mixins import SluggedModel, validate_protection_literals
 from core.models.report_key import ReportKeyMixin
 
+#: Shown when a ban type has no minimum contact stage. Shared by the model
+#: backstop and the configuration form, so both layers speak with one voice.
+BAN_STAGE_REQUIRED_MESSAGE = _("Ein Hausverbot braucht eine Person: Bitte eine Mindest-Kontaktstufe wählen.")
+
 
 class DocumentType(ReportKeyMixin, SluggedModel):
     """Configurable document type (e.g. contact, crisis intervention)."""
@@ -165,7 +169,33 @@ class DocumentType(ReportKeyMixin, SluggedModel):
 
         super().clean()
         validate_configuration_facility(self, self.facility_id)
+        self._validate_ban_contact_stage()
         self._validate_explicit_high_fields()
+
+    def _validate_ban_contact_stage(self):
+        """A ban names a person, so its type needs a minimum contact stage.
+
+        Backstop below the configuration form and the package schema: it
+        catches the Django admin (``clean``) and every service, import or
+        shell path that saves a type directly (``save``).
+        """
+        # The stage only acts on event types; a ban on any other entity type is
+        # an inconsistency the package schema already refuses and that stays
+        # editable here.
+        if (
+            self.system_type == self.SystemType.BAN
+            and self.entity_type == self.EntityType.EVENT
+            and not self.min_contact_stage
+        ):
+            raise ValidationError({"min_contact_stage": BAN_STAGE_REQUIRED_MESSAGE})
+
+    def save(self, *args, **kwargs):
+        # A partial save that touches neither field (for example deactivating a
+        # type that predates the rule) must stay possible.
+        update_fields = kwargs.get("update_fields")
+        if update_fields is None or {"system_type", "min_contact_stage"} & set(update_fields):
+            self._validate_ban_contact_stage()
+        super().save(*args, **kwargs)
 
     def _validate_explicit_high_fields(self, sensitivity=None):
         """Use the shared rule for model saves and admin form validation."""
