@@ -141,6 +141,18 @@ def test_undo_button_shows_a_space_before_the_countdown(staff_page, base_url, vi
 
 
 @pytest.mark.parametrize("viewport_name", sorted(VIEWPORTS))
+def _settle_first_watch_cycle(page):
+    """Wait for the live watch's first cycle, which always replaces the feed list.
+
+    The watch starts without a validator for the feed, so its first cycle swaps
+    ``#feed-list`` after the load. A scroll position taken before that swap is lost
+    when it lands (the page ends up at the top), so specs that scroll the feed wait
+    for it first (Refs #2846).
+    """
+    page.wait_for_function("() => !!window.zeitstromWatch")
+    page.evaluate("() => window.zeitstromWatch.checkNow()")
+
+
 class TestTallyStrokeKeepsPlace:
     @staticmethod
     def _wait_until_scrollable(page, viewport_name):
@@ -214,7 +226,8 @@ class TestTallyStrokeKeepsPlace:
         controls = f"event-detail-{long_feed[LOWER_CARD_INDEX]}"
         selector = f'#feed-list button[aria-controls="{controls}"]'
         # The live watch refreshes the feed once right after the page load; focus the card after that.
-        page.wait_for_load_state("networkidle")
+        _settle_first_watch_cycle(page)
+        self._wait_until_scrollable(page, viewport_name)
         page.locator(selector).scroll_into_view_if_needed()
         scroll_before = _settled_scroll_y(page)
         assert scroll_before > 0
@@ -248,9 +261,8 @@ class TestTallyStrokeKeepsPlace:
         self._open(page, base_url, viewport_name)
         controls = f"event-detail-{long_feed[LOWER_CARD_INDEX]}"
         selector = f'#feed-list button[aria-controls="{controls}"]'
-        page.wait_for_load_state("networkidle")
         # The first check settles the baseline the later check compares against.
-        page.evaluate("() => window.zeitstromWatch.checkNow()")
+        _settle_first_watch_cycle(page)
         self._wait_until_scrollable(page, viewport_name)
         page.locator(selector).scroll_into_view_if_needed()
         scroll_before = _settled_scroll_y(page)
