@@ -182,6 +182,7 @@
         <div id="feed-list" aria-live="polite" role="region" aria-label="{% trans 'Zeitstrom Feed' %}"
              hx-get="{% url 'core:zeitstrom_feed_partial' %}?feed_only=1"
              hx-trigger="zeitstrom-changed from:body"
+             data-hx-no-focus-self-refresh
              hx-include="#zeitstrom-filter-state"
              hx-target="this"
              hx-swap="innerHTML"
