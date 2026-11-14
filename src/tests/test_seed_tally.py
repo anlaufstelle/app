@@ -252,6 +252,20 @@ class TestSeedEventsBulkTally:
 
         random.seed(1234)
 
+    def test_a_ban_type_gets_no_tally_event(self, tally_setup):
+        ban = DocumentType.objects.create(
+            facility=tally_setup["facility"],
+            name="Ban in tally seed",
+            tally_enabled=True,
+            system_type=DocumentType.SystemType.BAN,
+            min_contact_stage="identified",
+        )
+
+        _run(tally_setup)
+
+        assert not Event.objects.filter(document_type=ban, created_via=TALLY).exists()
+        assert not Event.objects.filter(document_type=ban, client__isnull=True).exists()
+
     def test_ratio_is_additional_and_only_eligible_types_are_used(self, tally_setup):
         created = _run(tally_setup)
         facility = tally_setup["facility"]

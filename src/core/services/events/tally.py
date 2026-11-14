@@ -166,7 +166,8 @@ def evaluate_tally_eligibility(document_type, user=None) -> TallyEligibility:
         reasons.append(TallyIneligibilityReason.INACTIVE)
     if document_type.entity_type != DocumentType.EntityType.EVENT:
         reasons.append(TallyIneligibilityReason.UNSUPPORTED_ENTITY_TYPE)
-    if document_type.min_contact_stage:
+    # A ban always names a person, so it is never a tally type, with or without a stage.
+    if document_type.requires_person:
         reasons.append(TallyIneligibilityReason.REQUIRES_CONTACT)
     if user is not None and not user_can_see_document_type(user, document_type):
         reasons.append(TallyIneligibilityReason.RESTRICTED_DOCUMENT_TYPE)
@@ -210,12 +211,16 @@ def _tally_static_candidate_queryset(facility, user):
     erst dort entschieden.
     """
     allowed_sensitivities = allowed_sensitivities_for_user(user)
-    return DocumentType.objects.for_facility(facility).filter(
-        Q(min_contact_stage__isnull=True) | Q(min_contact_stage=""),
-        tally_enabled=True,
-        is_active=True,
-        entity_type=DocumentType.EntityType.EVENT,
-        sensitivity__in=allowed_sensitivities,
+    return (
+        DocumentType.objects.for_facility(facility)
+        .exclude(system_type=DocumentType.SystemType.BAN)
+        .filter(
+            Q(min_contact_stage__isnull=True) | Q(min_contact_stage=""),
+            tally_enabled=True,
+            is_active=True,
+            entity_type=DocumentType.EntityType.EVENT,
+            sensitivity__in=allowed_sensitivities,
+        )
     )
 
 

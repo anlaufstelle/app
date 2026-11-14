@@ -117,6 +117,27 @@ class TestTallyEligibilityPolicy:
         assert result.eligible is False
         assert reason in result.reasons
 
+    def test_a_ban_type_is_never_a_tally_type(self, facility, staff_user):
+        """The person rule of a ban hangs on the system type, not on the type's own stage."""
+        ban = DocumentType.objects.create(
+            facility=facility,
+            name="Ban in tally",
+            tally_enabled=True,
+            system_type=DocumentType.SystemType.BAN,
+            min_contact_stage="identified",
+        )
+        # A type that would carry no stage cannot be stored any more, so the policy is
+        # exercised on an in-memory copy of an unstaged type that is switched to a ban.
+        stageless = DocumentType.objects.create(facility=facility, name="Stageless", tally_enabled=True)
+        stageless.system_type = DocumentType.SystemType.BAN
+
+        for document_type in (ban, stageless):
+            result = evaluate_tally_eligibility(document_type, staff_user)
+
+            assert result.eligible is False
+            assert TallyIneligibilityReason.REQUIRES_CONTACT in result.reasons
+        assert ban.pk not in {entry.document_type.pk for entry in tally_eligibilities(facility, staff_user)}
+
     def test_role_restrictions_are_explicit_policy_reasons(self, facility, staff_user, lead_user):
         document_type = DocumentType.objects.create(
             facility=facility,
