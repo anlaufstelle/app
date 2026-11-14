@@ -533,7 +533,8 @@ describe("refresh through the live watch", () => {
 
             watcher.start();
             const first = watcher.checkNow();
-            await settle();
+            // The old cycle has asked for both slots; its answers are held back.
+            await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
             fire();
             await watcher.checkNow();
             await settle();
