@@ -397,6 +397,104 @@ describe("Background reload of an 'always' feed with the focus inside it", () =>
         expect(document.activeElement).toBe(outside);
     });
 
+    /** A feed whose focused control is a link; the reload brings the given markup. */
+    function feedWithFocusedLink(href) {
+        const el = feed("always");
+        el.innerHTML = `<a id="focused-link" href="${href}">Open</a>`;
+        el.querySelector("a").focus();
+        return el;
+    }
+
+    /** Pretend every element is laid out (jsdom has no layout) unless the test says otherwise. */
+    function renderEverything() {
+        vi.spyOn(Element.prototype, "getClientRects").mockImplementation(() => [{}]);
+    }
+
+    it("falls back to the feed when the twin cannot take the focus (collapsed detail)", () => {
+        const el = feed("always");
+        el.querySelector('[aria-controls="detail-1"]').focus();
+        const realFocus = HTMLElement.prototype.focus;
+        vi.spyOn(HTMLElement.prototype, "focus").mockImplementation(function (options) {
+            if (this.getAttribute("aria-controls") === "detail-1") {
+                return; // a control inside a hidden region does not take the focus
+            }
+            return realFocus.call(this, options);
+        });
+
+        reload(el, TWIN_HTML);
+
+        expect(document.activeElement).toBe(el);
+        expect(el.getAttribute("tabindex")).toBe("-1");
+    });
+
+    it("takes a link twin when exactly one rendered link carries the target", () => {
+        renderEverything();
+        const el = feedWithFocusedLink("/clients/7/");
+
+        reload(el, '<a href="/other/">Other</a><a href="/clients/7/">Open</a>');
+
+        expect(document.activeElement).toBe(el.querySelector('a[href="/clients/7/"]'));
+    });
+
+    it("does not guess between several links with the same target", () => {
+        renderEverything();
+        const el = feedWithFocusedLink("/clients/7/");
+
+        reload(el, '<a href="/clients/7/">First</a><a href="/clients/7/">Second</a>');
+
+        expect(document.activeElement).toBe(el);
+    });
+
+    it("does not take a link twin that is not rendered", () => {
+        const el = feedWithFocusedLink("/clients/7/");
+
+        reload(el, '<a href="/clients/7/">Hidden</a>');
+
+        expect(document.activeElement).toBe(el);
+    });
+
+    it("forgets the focus snapshot of a swap that never reached afterSwap", () => {
+        const el = feed("always");
+        el.querySelector('[aria-controls="detail-1"]').focus();
+        beforeSwapOn(el);
+        document.body.dispatchEvent(new CustomEvent("htmx:responseError", { bubbles: true, detail: { target: el } }));
+        document.activeElement.blur();
+
+        // A later swap of the same target that did not announce itself with beforeSwap.
+        el.innerHTML = TWIN_HTML;
+        afterSwapFrom(el, el);
+
+        expect(document.activeElement).toBe(document.body);
+        expect(scrollToSpy).not.toHaveBeenCalled();
+    });
+
+    it("lets the live watch hand the focus on through the shared guard", () => {
+        const el = feed("always");
+        const card = el.querySelector('[aria-controls="detail-1"]');
+        card.focus();
+        const snapshot = window.backgroundSwapGuard.capture(el);
+        el.innerHTML = TWIN_HTML; // htmx.swap fires no afterSwap with a target
+        Object.defineProperty(window, "scrollY", { configurable: true, value: 2300 });
+
+        window.backgroundSwapGuard.restore(el, snapshot);
+
+        expect(document.activeElement).toBe(el.querySelector('[aria-controls="detail-1"]'));
+        expect(scrollToSpy).toHaveBeenCalledWith(0, 640);
+    });
+
+    it("lets the live watch leave the focus alone when it sat outside the region", () => {
+        const outside = document.createElement("button");
+        document.body.appendChild(outside);
+        const el = feed("always");
+        outside.focus();
+        const snapshot = window.backgroundSwapGuard.capture(el);
+        el.innerHTML = TWIN_HTML;
+
+        window.backgroundSwapGuard.restore(el, snapshot);
+
+        expect(document.activeElement).toBe(outside);
+    });
+
     it("leaves the condition board as before: the focus lost inside it goes to the board", () => {
         const el = feed("");
         el.id = "condition-board";

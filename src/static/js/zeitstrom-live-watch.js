@@ -267,6 +267,10 @@
         function swapRegion(target, html, swapStyle) {
             const scrollX = window.scrollX;
             const scrollY = window.scrollY;
+            // focus-management.js remembers where the focus sat inside the region and
+            // hands it to the same control afterwards; it also restores the scroll.
+            const guard = window.backgroundSwapGuard;
+            const snapshot = guard ? guard.capture(target) : null;
             if (window.htmx && typeof window.htmx.swap === "function") {
                 // Use HTMX's normal insertion pipeline so hx-* attributes are
                 // initialized and Alpine's mutation observer sees the same
@@ -279,6 +283,10 @@
                 if (fresh) target.replaceWith(fresh);
             } else {
                 target.innerHTML = html;
+            }
+            if (snapshot) {
+                guard.restore(target, snapshot);
+                return;
             }
             // A background refresh must never move the reader. HTMX itself
             // does not request scrolling here, but extensions or focus

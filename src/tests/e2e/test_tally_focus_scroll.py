@@ -24,6 +24,8 @@ from .test_offline_tally import _cleanup_offline_state, _reconnect_via_online_ev
 pytestmark = pytest.mark.e2e
 
 FEED_EVENT_COUNT = 45
+# A card far down the feed, so that it is out of sight until the page scrolls to it.
+LOWER_CARD_INDEX = 30
 VIEWPORTS = {
     "desktop": {"width": 1200, "height": 750},
     "mobile": {"width": 390, "height": 844},
@@ -71,6 +73,12 @@ def long_feed(e2e_env):
         yield pks
     finally:
         django_shell(e2e_env, _DELETE_FEED_EVENTS % {"pks": pks})
+
+
+def _add_feed_events(e2e_env, count):
+    """Add ``count`` more events to the day's feed; returns their primary keys."""
+    lines = django_shell(e2e_env, _CREATE_FEED_EVENTS % {"count": count})
+    return next(line.removeprefix("PKS|") for line in lines if line.startswith("PKS|")).split(",")
 
 
 def _scroll_y(page):
@@ -134,16 +142,23 @@ def test_undo_button_shows_a_space_before_the_countdown(staff_page, base_url, vi
 
 @pytest.mark.parametrize("viewport_name", sorted(VIEWPORTS))
 class TestTallyStrokeKeepsPlace:
+    @staticmethod
+    def _wait_until_scrollable(page, viewport_name):
+        """The page must be long enough to scroll for these checks to mean anything."""
+        minimum = VIEWPORTS[viewport_name]["height"] + 200
+        assert wait_until(
+            page,
+            lambda: page.evaluate("() => document.documentElement.scrollHeight") > minimum,
+            timeout_ms=15000,
+        ), f"the page is only {page.evaluate('() => document.documentElement.scrollHeight')} px high"
+
     def _open(self, page, base_url, viewport_name):
         page.set_viewport_size(VIEWPORTS[viewport_name])
         page.goto(f"{base_url}/", wait_until="domcontentloaded")
         tile = tally_tile(page, "Kontakt")
         expect(tile).to_be_visible()
         page.evaluate("() => window.scrollTo(0, 0)")
-        page_height = page.evaluate("() => document.documentElement.scrollHeight")
-        assert page_height > VIEWPORTS[viewport_name]["height"] + 200, (
-            "the page must be long enough to scroll for this check to mean anything"
-        )
+        self._wait_until_scrollable(page, viewport_name)
         return tile
 
     def test_stroke_keeps_scroll_and_focus_on_the_tile(self, staff_page, base_url, long_feed, viewport_name):
@@ -196,7 +211,7 @@ class TestTallyStrokeKeepsPlace:
         """The focus on a feed card survives a background reload that replaces the card."""
         page = staff_page
         self._open(page, base_url, viewport_name)
-        controls = f"event-detail-{long_feed[0]}"
+        controls = f"event-detail-{long_feed[LOWER_CARD_INDEX]}"
         selector = f'#feed-list button[aria-controls="{controls}"]'
         # The live watch refreshes the feed once right after the page load; focus the card after that.
         page.wait_for_load_state("networkidle")
@@ -223,7 +238,55 @@ class TestTallyStrokeKeepsPlace:
                 };
             }"""
         )
-        assert focused == {"inFeed": True, "controls": f"event-detail-{long_feed[0]}"}, focused
+        assert focused == {"inFeed": True, "controls": f"event-detail-{long_feed[LOWER_CARD_INDEX]}"}, focused
+
+    def test_live_watch_swap_replacing_the_focused_card_keeps_the_focus_in_the_feed(
+        self, staff_page, base_url, e2e_env, long_feed, viewport_name
+    ):
+        """The background refresh of the live watch hands the focus on a card to its replacement."""
+        page = staff_page
+        self._open(page, base_url, viewport_name)
+        controls = f"event-detail-{long_feed[LOWER_CARD_INDEX]}"
+        selector = f'#feed-list button[aria-controls="{controls}"]'
+        page.wait_for_load_state("networkidle")
+        # The first check settles the baseline the later check compares against.
+        page.evaluate("() => window.zeitstromWatch.checkNow()")
+        self._wait_until_scrollable(page, viewport_name)
+        page.locator(selector).scroll_into_view_if_needed()
+        scroll_before = _settled_scroll_y(page)
+        assert scroll_before > 0
+        page.evaluate(
+            "(selector) => document.querySelector(selector).focus({ preventScroll: true })",
+            selector,
+        )
+        assert page.evaluate("(selector) => document.activeElement === document.querySelector(selector)", selector)
+
+        # A new event changes the feed, so the next check swaps the whole feed.
+        extra = _add_feed_events(e2e_env, 1)
+        try:
+            page.evaluate("() => { window.__feedChild = document.getElementById('feed-list').firstElementChild; }")
+            page.evaluate("() => window.zeitstromWatch.checkNow()")
+            assert wait_until(
+                page,
+                lambda: page.evaluate(
+                    "() => document.getElementById('feed-list').firstElementChild !== window.__feedChild"
+                ),
+            ), "the live watch did not swap the feed"
+            page.wait_for_timeout(300)
+
+            assert _scroll_y(page) == scroll_before, "the page moved after the live watch swap"
+            focused = page.evaluate(
+                """() => {
+                    const active = document.activeElement;
+                    return {
+                        inFeed: !!active.closest('#feed-list'),
+                        controls: active.getAttribute('aria-controls'),
+                    };
+                }"""
+            )
+            assert focused == {"inFeed": True, "controls": controls}, focused
+        finally:
+            django_shell(e2e_env, _DELETE_FEED_EVENTS % {"pks": extra})
 
     def test_number_tile_save_keeps_scroll_and_focus_on_the_tile(self, staff_page, base_url, long_feed, viewport_name):
         page = staff_page

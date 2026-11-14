@@ -192,22 +192,31 @@
         return keys;
     }
 
-    function _handleBeforeSwap(event) {
-        var target = event && event.detail ? event.detail.target : null;
-        var active = document.activeElement;
-        pendingSwap = null;
+    // Snapshot of the scroll position and of where the focus sits, taken right
+    // before a background swap of ``target``.
+    function _snapshot(target) {
         if (!target || target.nodeType !== 1) {
-            return;
+            return null;
         }
+        var active = document.activeElement;
         var focusInside =
             !!active && active !== document.body && active !== target && target.contains(active);
-        pendingSwap = {
+        return {
             target: target,
             focusInside: focusInside,
             keys: focusInside ? _focusKeys(active) : [],
             x: window.scrollX,
             y: window.scrollY,
         };
+    }
+
+    function _handleBeforeSwap(event) {
+        pendingSwap = _snapshot(event && event.detail ? event.detail.target : null);
+    }
+
+    // A request that fails after beforeSwap never reaches afterSwap.
+    function _handleSwapAborted() {
+        pendingSwap = null;
     }
 
     // A background reload must never move the reader. Chromium's scroll anchoring
@@ -219,34 +228,72 @@
         }
     }
 
-    // A background reload removed the control that held the focus: hand the focus
-    // to its twin in the new content, else to the container, and never scroll.
-    function _restoreFocusInside(container, pending) {
-        var twin = null;
-        for (var k = 0; k < pending.keys.length && !twin; k++) {
-            var key = pending.keys[k];
+    function _isRendered(el) {
+        return el.getClientRects().length > 0;
+    }
+
+    // The control in the new content that stands for the one that held the focus:
+    // the first match for an id or an aria-controls value; a link target only when
+    // exactly one rendered control carries it (the same target often appears on
+    // several cards).
+    function _findTwin(container, keys) {
+        for (var k = 0; k < keys.length; k++) {
+            var key = keys[k];
+            var matches = [];
             var candidates = container.querySelectorAll("[" + key.attr + "]");
             for (var i = 0; i < candidates.length; i++) {
                 if (candidates[i].getAttribute(key.attr) === key.value) {
-                    twin = candidates[i];
-                    break;
+                    matches.push(candidates[i]);
                 }
             }
+            if (key.attr === "href") {
+                matches = matches.filter(_isRendered);
+                if (matches.length !== 1) {
+                    continue;
+                }
+            }
+            if (matches.length) {
+                return matches[0];
+            }
         }
-        if (!twin) {
-            twin = container;
-            _makeFocusable(twin);
-        }
+        return null;
+    }
+
+    function _focusQuietly(el) {
         try {
-            twin.focus({ preventScroll: true });
+            el.focus({ preventScroll: true });
         } catch (_e) {
             // Focus can fail in edge cases; keep the starting state.
         }
+        return document.activeElement === el;
+    }
+
+    // A background reload removed the control that held the focus: hand the focus
+    // to its twin in the new content. A twin that cannot take the focus (for
+    // example inside a collapsed detail) and a missing twin both fall back to the
+    // container. Never scrolls.
+    function _restoreFocusInside(container, pending) {
+        var twin = _findTwin(container, pending.keys);
+        if (twin && _focusQuietly(twin)) {
+            return;
+        }
+        _makeFocusable(container);
+        _focusQuietly(container);
+    }
+
+    // Closing step of a background swap of an "always" target.
+    function _finishBackgroundSwap(container, pending, active) {
+        if (pending.focusInside && (!active || active === document.body)) {
+            _restoreFocusInside(container, pending);
+        }
+        _restoreScroll(pending);
     }
 
     function _handleAfterSwap(event) {
         var detail = event && event.detail ? event.detail : {};
         var replaced = detail.target || {};
+        var pending = pendingSwap && pendingSwap.target === replaced ? pendingSwap : null;
+        pendingSwap = null;
         var target = _resolveConnectedContainer(replaced);
 
         if (!target || target.nodeType !== 1) {
@@ -268,25 +315,14 @@
         // reload took the focus away (the active element is <body>) does the
         // normal target choice below apply.
         var requestElt = detail.requestConfig ? detail.requestConfig.elt : null;
-        var pending = pendingSwap && pendingSwap.target === replaced ? pendingSwap : null;
-        pendingSwap = null;
         if (requestElt && requestElt === replaced && target.hasAttribute(SELF_REFRESH_OPT_OUT_ATTR)) {
             var always = target.getAttribute(SELF_REFRESH_OPT_OUT_ATTR) === SELF_REFRESH_ALWAYS;
-            if (active && active !== document.body) {
-                if (always && pending) {
-                    _restoreScroll(pending);
-                }
-                return;
-            }
-            if (always) {
+            if (always && pending) {
                 // The focus was inside the target and the reload took it away: keep
                 // it in the target. Otherwise nothing held it, so nothing takes it.
-                if (pending && pending.focusInside) {
-                    _restoreFocusInside(target, pending);
-                }
-                if (pending) {
-                    _restoreScroll(pending);
-                }
+                _finishBackgroundSwap(target, pending, active);
+            }
+            if (always || (active && active !== document.body)) {
                 return;
             }
         }
@@ -326,5 +362,24 @@
     // Fokus soll sitzen, BEVOR eine evtl. Alpine-Reinitialisierung des Fragments
     // dazwischengrätscht.
     document.body.addEventListener("htmx:beforeSwap", _handleBeforeSwap);
+    document.body.addEventListener("htmx:swapError", _handleSwapAborted);
+    document.body.addEventListener("htmx:responseError", _handleSwapAborted);
+
+    // Swaps that do not go through a request (the live watch inserts fetched HTML
+    // with htmx.swap) take the snapshot and restore themselves around the swap.
+    window.backgroundSwapGuard = {
+        capture: _snapshot,
+        restore: function (target, snapshot) {
+            var container = _resolveConnectedContainer(target);
+            if (!snapshot) {
+                return;
+            }
+            if (!container || container.nodeType !== 1) {
+                _restoreScroll(snapshot);
+                return;
+            }
+            _finishBackgroundSwap(container, snapshot, document.activeElement);
+        },
+    };
     document.body.addEventListener("htmx:afterSwap", _handleAfterSwap);
 })();
