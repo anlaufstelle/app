@@ -51,6 +51,14 @@ def get_item(container, key):
 
 
 @register.filter
+def ban_reason_excerpt(value):
+    """The shortened ban reason of the Zeitstrom; the fingerprint of the list uses the same text."""
+    from core.services.system.ban_details import ban_reason_excerpt as excerpt
+
+    return excerpt(value)
+
+
+@register.filter
 def split(value, sep=","):
     """Split a string into a list for true membership tests in templates.
 

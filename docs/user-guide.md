@@ -269,7 +269,7 @@ Wenn aktive Hausverbote in Ihrer Einrichtung bestehen, steht ganz vorn in der Ke
 - **Ausblenden:** Das **×** neben den Zeilen blendet den ganzen Block aus. Die Zahl bleibt rot stehen und ist dann der einzige Hinweis; der Fokus wechselt auf sie.
 - **Einblenden:** Ein Klick auf die Zahl blendet die Zeilen wieder ein (und aus). Die Zahl meldet Screenreadern, ob die Details aufgeklappt sind.
 - **Gespeichert:** Ihre Wahl gilt für Ihr Benutzerkonto und bleibt nach Neuladen, in neuen Tabs, nach der Abmeldung und auf anderen Geräten erhalten. Gespeichert wird nur ein Prüfwert der ausgeblendeten Liste (ein mit einem Servergeheimnis gebildeter Hash), keine Namen und keine Gründe.
-- **Änderung der Liste:** Wird ein Hausverbot angelegt, geändert, abgelaufen oder gelöscht, erscheinen die Zeilen wieder, auch in der geöffneten Seite im Hintergrund. Änderungen, die Ihre Rolle in der Liste nicht sieht (etwa ein Grund, den Sie nicht lesen dürfen), blenden nichts ein.
+- **Änderung der Liste:** Wird ein Hausverbot angelegt, geändert, abgelaufen oder gelöscht, erscheinen die Zeilen wieder, auch in der geöffneten Seite im Hintergrund. Änderungen, die Ihre Rolle in der Liste nicht sieht (etwa ein Grund, den Sie nicht lesen dürfen, oder Wörter hinter dem angezeigten Auszug des Grundes), blenden nichts ein.
 - **Übergabe:** In der Übergabe stehen die Zeilen immer da, ohne **×**.
 - **Ohne JavaScript:** **×** und Zahl arbeiten als Formular-Knöpfe und laden die Seite neu.
 

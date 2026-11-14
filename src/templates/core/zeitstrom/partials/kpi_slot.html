@@ -12,7 +12,7 @@ The slot is replaced by the live watch (component "kpi") and out-of-band by feed
         {% if kpis.bans_count %}
         <li>
             {# The ban figure comes first so it stays in view on a narrow screen. With the details hidden it is the only notice. #}
-            {# Without script it submits the form in index.html (progressive); with script bans-details.js handles it. #}
+            {# Without script it submits the form in index.html (progressive); with script ban-details-toggle.js handles it. #}
             <button type="submit" form="zeitstrom-ban-details-form" id="zeitstrom-ban-details-toggle" data-testid="zeitstrom-kpi-bans" data-count="{{ kpis.bans_count }}"
                     {% if ban_details %}name="ban_details" value="{% if ban_details.hidden %}show{% else %}hide:{{ ban_details.fingerprint }}{% endif %}" aria-expanded="{% if ban_details.hidden %}false{% else %}true{% endif %}" aria-controls="zeitstrom-ban-details"{% endif %}
                     class="inline-flex items-center gap-1.5 whitespace-nowrap min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 rounded-full border border-ban/30 bg-ban-soft px-2.5 py-1 font-semibold text-ban-deep cursor-pointer">

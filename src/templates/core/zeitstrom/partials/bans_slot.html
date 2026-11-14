@@ -1,4 +1,4 @@
-{% load i18n %}
+{% load i18n core_tags %}
 {% comment %}Active bans above the feed. In the feed the block can be hidden (the figure in the KPI row
 brings it back); ``ban_details`` carries the stored choice and is empty in the handover, where the block
 is always shown and has no close button. Without script the close button is a form post.{% endcomment %}
@@ -16,7 +16,7 @@ is always shown and has no close button. Without script the close button is a fo
                     {% else %}
                     <span class="font-semibold">{% trans "Unbekannt" %}</span>
                     {% endif %}
-                    {% if ban.grund %}&nbsp;– {{ ban.grund|truncatewords:10 }}{% endif %}
+                    {% if ban.grund %}&nbsp;– {{ ban.grund|ban_reason_excerpt }}{% endif %}
                     {% if ban.bis_datum %}<span class="ml-auto text-[12px]">{% trans "Bis:" %} {{ ban.bis_datum|date }}</span>{% endif %}
                 </div>
                 {% endfor %}

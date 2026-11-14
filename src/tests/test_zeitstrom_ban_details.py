@@ -15,7 +15,7 @@ from django.utils import timezone
 
 from core.models import Event, TimeFilter, User
 from core.services.system import get_active_bans
-from core.services.system.ban_details import ban_list_fingerprint
+from core.services.system.ban_details import _store, ban_list_fingerprint
 from tests import test_bans as _bans
 
 doc_type_hausverbot = _bans.doc_type_hausverbot
@@ -46,7 +46,9 @@ def _tag(html, needle):
 
 
 def _fingerprint(html):
-    return re.search(r'id="zeitstrom-bans-slot"[^>]*data-fingerprint="([0-9a-f]+)"', html).group(1)
+    match = re.search(r'id="zeitstrom-bans-slot"[^>]*data-fingerprint="([0-9a-f]+)"', html)
+    assert match, "The ban slot carries no fingerprint (no active ban rendered)"
+    return match.group(1)
 
 
 def _details_hidden(html):
@@ -297,6 +299,63 @@ class TestChangeShowsTheDetailsAgain:
 
         assert _stored(staff_user) == ""
         assert not _details_hidden(_page(client, staff_user))
+
+
+@pytest.mark.django_db
+class TestHandoverAndRenderedProjection:
+    def test_list_change_seen_in_the_handover_clears_the_earlier_choice(
+        self, client, staff_user, facility, active_ban_event, doc_type_hausverbot
+    ):
+        _hide(client, _page(client, staff_user))
+        second = _second_ban(facility, staff_user, doc_type_hausverbot)
+        handover = {"view": "uebergabe", "date": (date.today() - timedelta(days=1)).isoformat()}
+        assert not _details_hidden(_page(client, staff_user, handover))
+        assert _stored(staff_user) == ""
+
+        Event.objects.filter(pk=second.pk).update(is_deleted=True)
+
+        assert not _details_hidden(_page(client, staff_user))
+
+    def test_unchanged_list_in_the_handover_keeps_the_choice(self, client, staff_user, active_ban_event):
+        _hide(client, _page(client, staff_user))
+        handover = {"view": "uebergabe", "date": (date.today() - timedelta(days=1)).isoformat()}
+
+        assert not _details_hidden(_page(client, staff_user, handover))
+
+        assert _details_hidden(_page(client, staff_user))
+
+    def test_reason_behind_the_rendered_excerpt_does_not_end_the_choice(self, client, staff_user, active_ban_event):
+        head = "one two three four five six seven eight nine ten "
+        active_ban_event.data_json = {**active_ban_event.data_json, "grund": head + "old ending"}
+        active_ban_event.save()
+        before = _page(client, staff_user)
+        _hide(client, before)
+
+        active_ban_event.data_json = {**active_ban_event.data_json, "grund": head + "new ending"}
+        active_ban_event.save()
+        after = _page(client, staff_user)
+
+        assert "old ending" not in before and "new ending" not in after
+        assert _fingerprint(before) == _fingerprint(after)
+        assert _details_hidden(after)
+
+    def test_reason_inside_the_rendered_excerpt_ends_the_choice(self, client, staff_user, active_ban_event):
+        active_ban_event.data_json = {**active_ban_event.data_json, "grund": "alpha beta gamma"}
+        active_ban_event.save()
+        _hide(client, _page(client, staff_user))
+
+        active_ban_event.data_json = {**active_ban_event.data_json, "grund": "alpha beta delta"}
+        active_ban_event.save()
+
+        assert not _details_hidden(_page(client, staff_user))
+
+
+@pytest.mark.django_db
+def test_store_does_not_take_over_a_value_that_no_row_received(staff_user, second_facility):
+    _store(staff_user, second_facility, "a" * 64)
+
+    assert staff_user.ban_details_fingerprint == ""
+    assert _stored(staff_user) == ""
 
 
 @pytest.mark.django_db

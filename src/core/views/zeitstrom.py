@@ -86,12 +86,13 @@ def _kpi_context(facility, user, state, *, tally_summary, active_bans, today=Non
 def _ban_details_context(facility, user, state, active_bans):
     """Stored hide choice for the ban details; ``None`` where the details are always shown.
 
-    The handover has no figure to show them again. The choice sits on the user row,
-    so resolving it costs no query unless an outdated choice has to be dropped.
+    The handover has no figure to show them again, but it still sees the list: a
+    change it observes ends an earlier choice like anywhere else. The choice sits on
+    the user row, so resolving it costs no query unless an outdated choice has to be
+    dropped.
     """
-    if state.is_handover:
-        return {"ban_details": None}
-    return {"ban_details": resolve_ban_details(user, facility, active_bans)}
+    resolved = resolve_ban_details(user, facility, active_bans)
+    return {"ban_details": None if state.is_handover else resolved}
 
 
 #: Feed type pills (design: als-screens.jsx filter pills).

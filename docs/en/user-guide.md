@@ -271,11 +271,11 @@ If there are active entry bans in your facility, the red-marked figure **Entry b
 - **Hide:** The **×** next to the rows hides the whole block. The figure stays in red and is then the only notice; the focus moves to it.
 - **Show:** A click on the figure shows the rows again (and hides them). The figure tells screen readers whether the details are expanded.
 - **Saved:** Your choice belongs to your user account and stays after a reload, in new tabs, after signing out and on other devices. Only a check value of the hidden list is stored (a hash formed with a server secret), no names and no reasons.
-- **Change of the list:** When an entry ban is created, changed, expired or deleted, the rows reappear, also in the open page in the background. Changes that your role does not see in the list (for example a reason you may not read) do not show anything again.
+- **Change of the list:** When an entry ban is created, changed, expired or deleted, the rows reappear, also in the open page in the background. Changes that your role does not see in the list (for example a reason you may not read, or words behind the shown excerpt of the reason) do not show anything again.
 - **Handover:** In the handover the rows are always shown, without **×**.
 - **Without JavaScript:** **×** and the figure work as form buttons and reload the page.
 
-In the **people list** (`/clients/`) every person with an active entry ban carries the red badge **Facility ban** next to the pseudonym, in the table and in the card on a phone. It names no reason and follows the same visibility rule as the red rows in the Zeitstrom.
+In the **people list** (`/clients/`) every person with an active entry ban carries the red badge **Facility ban** next to the pseudonym, in the table and in the card on a phone. It names no reason and follows the same visibility rule as the red rows in the Timeline.
 
 ---
 
@@ -1224,5 +1224,5 @@ Phone, email, date and address patterns are detected heuristically and locally o
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: 97289a489f708cfd86bc0dd3ad5b92025dffb63c -->
+<!-- source-hash: a7d3154c31b00e7a3c36d504ec4018637b9a876c -->
 <!-- translation-date: 2026-11-14 -->

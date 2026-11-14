@@ -17,10 +17,23 @@ from dataclasses import dataclass
 
 from django.db import DatabaseError, transaction
 from django.utils.crypto import salted_hmac
+from django.utils.text import Truncator
 
 from core.models import User
 
 _FINGERPRINT_RE = re.compile(r"[0-9a-f]{64}")
+
+#: Number of words of a ban reason that the Zeitstrom shows.
+REASON_EXCERPT_WORDS = 10
+
+
+def ban_reason_excerpt(reason) -> str:
+    """The part of a ban reason the Zeitstrom renders.
+
+    The template filter of the same name and the fingerprint both use this, so
+    what is hashed is what is shown.
+    """
+    return Truncator(reason or "").words(REASON_EXCERPT_WORDS, truncate=" …")
 
 
 @dataclass(frozen=True)
@@ -38,14 +51,14 @@ def ban_list_fingerprint(user, facility, active_bans) -> str:
     rows = []
     for ban in active_bans:
         client = ban.get("client")
-        bis = ban.get("bis_datum")
+        until = ban.get("bis_datum")
         rows.append(
             [
                 str(ban["event"].pk),
                 str(client.pk) if client is not None else "",
                 client.pseudonym if client is not None else "",
-                ban.get("grund") or "",
-                bis.isoformat() if bis else "",
+                ban_reason_excerpt(ban.get("grund")),
+                until.isoformat() if until else "",
             ]
         )
     rows.sort()
@@ -64,10 +77,11 @@ def _store(user, facility, value: str, *, only_if: str | None = None) -> None:
         rows = rows.filter(ban_details_fingerprint=only_if)
     try:
         with transaction.atomic():
-            rows.update(ban_details_fingerprint=value)
+            updated = rows.update(ban_details_fingerprint=value)
     except DatabaseError:
         return
-    user.ban_details_fingerprint = value
+    if updated:
+        user.ban_details_fingerprint = value
 
 
 def resolve_ban_details(user, facility, active_bans) -> BanDetailsState:
