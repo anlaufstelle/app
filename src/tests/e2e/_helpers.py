@@ -27,21 +27,81 @@ def python_bin() -> str:
     return ".venv/bin/python" if os.path.exists(".venv/bin/python") else sys.executable
 
 
-def django_shell(e2e_env, script):
+SHELL_TIMEOUT_SECONDS = 90
+"""Limit for one ``manage.py shell -c`` call (Refs #2723).
+
+Measured start-up of ``manage.py shell`` is about 1.3 s on an idle host; the
+limit is roughly 70 times that, so a host under heavy load still passes, and
+it stays below the 120 s per-test limit of the browser runs so that a hung
+child is reported with its own stderr before the test limit dumps a bare stack.
+"""
+
+SETUP_TIMEOUT_SECONDS = 300
+"""Limit for the session-fixture children (``migrate``, ``seed``, ``collectstatic``, database creation).
+
+These run inside the first test's setup, which the 120 s per-test limit of the
+browser runs already bounds. The limit here is a backstop for runs that do
+not apply that limit (2.5 times that value), not a tuning knob.
+"""
+
+PROBE_TIMEOUT_SECONDS = 30
+"""Limit for quick probes such as ``lsof``."""
+
+
+class ChildProcessTimeout(RuntimeError):
+    """A child process of the test harness did not finish within its limit."""
+
+
+def _as_text(value) -> str:
+    if value is None:
+        return ""
+    return value.decode(errors="replace") if isinstance(value, bytes) else value
+
+
+def run_child(cmd, *, timeout, label=None, check=True, env=None, **kwargs):
+    """``subprocess.run`` with a mandatory time limit; output is captured as text.
+
+    A child that does not end within ``timeout`` seconds is killed and
+    :class:`ChildProcessTimeout` is raised with whatever the child had written to
+    stdout and stderr up to then, so the failure names the cause instead of the
+    run hanging inside ``communicate`` (Refs #2723). A failing child still raises
+    :class:`subprocess.CalledProcessError` when ``check`` is true.
+    """
+    label = label or " ".join(str(part) for part in cmd[:3])
+    try:
+        return subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            env=env,
+            check=check,
+            timeout=timeout,
+            **kwargs,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise ChildProcessTimeout(
+            f"FAIL: {label} did not finish within {timeout} s and was killed\n"
+            f"--- STDOUT ---\n{_as_text(exc.stdout)}\n"
+            f"--- STDERR ---\n{_as_text(exc.stderr)}\n"
+        ) from exc
+
+
+def django_shell(e2e_env, script, timeout=SHELL_TIMEOUT_SECONDS):
     """``manage.py shell -c`` gegen die E2E-Datenbank; liefert die Ausgabezeilen.
 
     Für Vorbedingungen, die sich nicht durchklicken lassen (eine Person mit
     einem bestimmten Pseudonym, ein Ereignis genau ohne Fallbezug). ``e2e_env``
     ist die Session-Fixture aus ``conftest.py`` — sie trägt
     ``DJANGO_SETTINGS_MODULE=anlaufstelle.settings.e2e``, ohne das das Skript
-    die falsche Datenbank träfe.
+    die falsche Datenbank träfe. Läuft das Kind länger als ``timeout`` Sekunden,
+    schlägt der Aufruf mit :class:`ChildProcessTimeout` und der stderr des Kinds
+    fehl, statt den Lauf zu blockieren (Refs #2723).
     """
-    out = subprocess.run(
+    out = run_child(
         [python_bin(), "src/manage.py", "shell", "--no-imports", "-c", script],
-        capture_output=True,
-        text=True,
+        timeout=timeout,
+        label="manage.py shell",
         env=e2e_env,
-        check=True,
     )
     return [ln for ln in out.stdout.strip().splitlines() if ln.strip()]
 

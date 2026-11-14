@@ -24,7 +24,13 @@ import pytest
 import requests
 from filelock import FileLock
 
-from tests.e2e._helpers import SEED_PASSWORD  # absolut: test_e2e_storage_state_ttl laedt die Datei ohne Paketkontext
+# absolut: test_e2e_storage_state_ttl laedt die Datei ohne Paketkontext
+from tests.e2e._helpers import (
+    PROBE_TIMEOUT_SECONDS,
+    SEED_PASSWORD,
+    SETUP_TIMEOUT_SECONDS,
+    run_child,
+)
 
 # E2E-Server + Seed mit e2e-Settings (Dev/PBKDF2 + kein Rate-Limit).
 # NICHT test-Settings verwenden — Django rehashed Passwörter bei Login
@@ -51,7 +57,7 @@ def _run_or_die(cmd, env, label):
     nicht — die Ausgabe taucht im Test-Setup-Error nicht auf. RuntimeError mit komplettem
     Inhalt im Message-String wird dagegen vollständig im pytest-Traceback gerendert.
     """
-    result = subprocess.run(cmd, capture_output=True, text=True, env=env)
+    result = run_child(cmd, timeout=SETUP_TIMEOUT_SECONDS, label=label, check=False, env=env)
     if result.returncode != 0:
         msg = (
             f"FAIL: {label} (exit {result.returncode})\n"
@@ -64,7 +70,7 @@ def _run_or_die(cmd, env, label):
 
 def _create_e2e_db(python, db_name):
     """E2E-Datenbank erstellen falls nicht vorhanden."""
-    subprocess.run(
+    run_child(
         [
             python,
             "-c",
@@ -85,15 +91,17 @@ def _create_e2e_db(python, db_name):
                 e2e_db=db_name,
             ),
         ],
-        check=True,
-        capture_output=True,
+        timeout=SETUP_TIMEOUT_SECONDS,
+        label=f"create database {db_name}",
     )
 
 
 def _kill_port(port):
     """Clean up direct children, then refuse to start on an occupied port."""
     try:
-        stale = subprocess.run(["lsof", f"-tiTCP:{port}", "-sTCP:LISTEN"], capture_output=True, text=True)
+        stale = run_child(
+            ["lsof", f"-tiTCP:{port}", "-sTCP:LISTEN"], timeout=PROBE_TIMEOUT_SECONDS, label="lsof", check=False
+        )
     except FileNotFoundError:
         stale_pids = []
     else:
@@ -181,10 +189,10 @@ def base_url(request, tmp_path_factory):
     with FileLock(str(root_tmp / "collectstatic.lock")):
         fingerprint = _static_fingerprint()
         if stamp_file.read_text() != fingerprint if stamp_file.exists() else True:
-            subprocess.run(
+            run_child(
                 [python, "src/manage.py", "collectstatic", "--noinput"],
-                check=True,
-                capture_output=True,
+                timeout=SETUP_TIMEOUT_SECONDS,
+                label="collectstatic",
                 env=worker_env,
             )
             stamp_file.write_text(fingerprint)
