@@ -63,6 +63,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Löschfreigaben neu geprüft** (#2714) — Ist das Ereignis nicht mehr fällig oder war es nach aktuellen Fristen bei der ersten Freigabe noch nicht fällig, verwirft der Lauf die Freigaben mit Audit und setzt den Vorschlag zurück. Es gilt die Frist bei der Löschentscheidung, auch für Aktivitäten, Übergabenotizen, Personen ohne Ereignis, Papierkorb und Historie.
 - **Schlüsselrotation verschiebt die Anonymisierung inaktiver Personen nicht mehr** (#2715) — Die Neuverschlüsselung lässt den Änderungszeitpunkt von Personen, Fällen und Aufgaben unverändert; eine gleichzeitige fachliche Änderung hat weiterhin Vorrang.
 - **Demo-Reset: Audit-Kettenprüfung bleibt nach `seed --flush` grün** (#2708) — `seed --flush` setzt die externe Audit-Ankerdatei jetzt zusammen mit dem Audit-Protokoll zurück. Bisher blieb `verify_audit_chain` dauerhaft rot, sobald ein Prüflauf eine Kette aus dem Seed-Fenster verankert hatte, etwa nach einer Anmeldung beim stündlichen Reset.
+- **Zeitstrom zeigt Einträge in Erfassungsreihenfolge** (#2798) — Innerhalb derselben Minute steht der zuletzt erfasste Eintrag oben; ein Löscheintrag steht nicht mehr über Kontakten, die danach erfasst wurden. Ein nachträglich erfasster Kontakt steht weiter bei seiner Kontaktzeit.
 
 ### Docs
 

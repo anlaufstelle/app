@@ -102,6 +102,7 @@ def _page_etag(*, user, facility, state: ZeitstromState, validators: dict[str, s
 _EVENT_VALUES = (
     "id",
     "occurred_at",
+    "created_at",
     "document_type_id",
     "document_type__name",
     "document_type__sensitivity",
@@ -278,11 +279,13 @@ def _feed_projection(facility, user, state: ZeitstromState):
         rows = list(
             events.exclude(created_via=Event.CreatedVia.TALLY)
             .values(*_EVENT_VALUES)
-            .order_by("-occurred_at")[:FEED_MAX_PER_TYPE]
+            .order_by("-occurred_at", "-created_at")[:FEED_MAX_PER_TYPE]
         )
         groups = build_tally_feed_groups(facility, start_dt, end_dt, user, state.doc_type_id)
         items.extend({"type": "tally_group", "time": group["start"], "row": group} for group in groups)
-        items.extend({"type": "event", "time": row["occurred_at"], "row": row} for row in rows)
+        items.extend(
+            {"type": "event", "time": row["occurred_at"], "recorded_at": row["created_at"], "row": row} for row in rows
+        )
 
     if state.feed_type == "activities" or include_all:
         from core.services.dashboard.activity import activity_target_prefetch, render_activity_summary
@@ -339,9 +342,11 @@ def _feed_projection(facility, user, state: ZeitstromState):
                 occurred_at__lte=end_dt,
             )
             .values(*_EVENT_VALUES)
-            .order_by("-occurred_at")[:FEED_MAX_PER_TYPE]
+            .order_by("-occurred_at", "-created_at")[:FEED_MAX_PER_TYPE]
         )
-        items.extend({"type": "ban", "time": row["occurred_at"], "row": row} for row in rows)
+        items.extend(
+            {"type": "ban", "time": row["occurred_at"], "recorded_at": row["created_at"], "row": row} for row in rows
+        )
 
     items = cap_feed_items(items, time_key="time")
     event_rows = [item["row"] for item in items if item["type"] == "event"]

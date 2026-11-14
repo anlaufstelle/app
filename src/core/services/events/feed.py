@@ -241,15 +241,32 @@ def build_tally_feed_groups(facility, start_dt, end_dt, user, document_type_id=N
     return list(groups.values())
 
 
+def feed_sort_key(item, *, time_key="occurred_at"):
+    """Order by the minute shown on the card, then by when the entry was recorded.
+
+    Event times come from the form at minute precision, activities carry the
+    exact instant. Comparing raw timestamps put a deletion above every contact
+    recorded later in the same minute, and contacts sharing a minute came back
+    in database order. ``recorded_at`` breaks those ties in recording order.
+    """
+    shown = item[time_key].astimezone(UTC)
+    recorded = item.get("recorded_at") or shown
+    return shown.replace(second=0, microsecond=0), recorded.astimezone(UTC)
+
+
 def cap_feed_items(items, *, time_key="occurred_at"):
     """Reserve room for complete hour groups, then merge in the capped rows."""
+
+    def key(item):
+        return feed_sort_key(item, time_key=time_key)
+
     groups = [item for item in items if item["type"] == "tally_group"]
     entries = sorted(
         (item for item in items if item["type"] != "tally_group"),
-        key=lambda item: item[time_key].astimezone(UTC),
+        key=key,
         reverse=True,
     )[: max(0, FEED_MAX_PER_TYPE - len(groups))]
-    return sorted(entries + groups, key=lambda item: item[time_key].astimezone(UTC), reverse=True)
+    return sorted(entries + groups, key=key, reverse=True)
 
 
 def _feed_events(facility, start_dt, end_dt, user, include_all, document_type_id=None):
@@ -270,12 +287,12 @@ def _feed_events(facility, start_dt, end_dt, user, include_all, document_type_id
     events = (
         events_qs.exclude(created_via=Event.CreatedVia.TALLY)
         .select_related("document_type", "client", "created_by")
-        .order_by("-occurred_at")[:FEED_MAX_PER_TYPE]
+        .order_by("-occurred_at", "-created_at")[:FEED_MAX_PER_TYPE]
     )
     groups = build_tally_feed_groups(facility, start_dt, end_dt, user, document_type_id)
-    return [{"type": "event", "occurred_at": e.occurred_at, "object": e} for e in events] + [
-        {"type": "tally_group", "occurred_at": group["start"], "object": group} for group in groups
-    ]
+    return [
+        {"type": "event", "occurred_at": e.occurred_at, "recorded_at": e.created_at, "object": e} for e in events
+    ] + [{"type": "tally_group", "occurred_at": group["start"], "object": group} for group in groups]
 
 
 def activity_person_label(activity):
@@ -332,9 +349,9 @@ def _feed_bans(facility, start_dt, end_dt, user, *, exclude_tally=False):
             occurred_at__lte=end_dt,
         )
         .select_related("document_type", "client", "created_by")
-        .order_by("-occurred_at")[:FEED_MAX_PER_TYPE]
+        .order_by("-occurred_at", "-created_at")[:FEED_MAX_PER_TYPE]
     )
-    return [{"type": "ban", "occurred_at": e.occurred_at, "object": e} for e in bans]
+    return [{"type": "ban", "occurred_at": e.occurred_at, "recorded_at": e.created_at, "object": e} for e in bans]
 
 
 def build_feed_items(facility, target_date, feed_type, time_filter=None, user=None, document_type_id=None):
