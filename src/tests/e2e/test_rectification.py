@@ -22,13 +22,14 @@ einem unverschlüsselten TEXT-Feld an und räumt ihn am Modulende wieder ab.
 
 import json
 import re
-import subprocess
 import sys
 import uuid
 from urllib.parse import urlencode
 
 import pytest
 from playwright.sync_api import expect
+
+from ._helpers import SHELL_TIMEOUT_SECONDS, run_child
 
 pytestmark = pytest.mark.e2e
 
@@ -39,11 +40,11 @@ _LIST_RE = re.compile(r"/rectification/$")
 
 def _shell(e2e_env, code):
     """``manage.py shell -c`` auf der Worker-DB; liefert stdout."""
-    result = subprocess.run(
+    result = run_child(
         [sys.executable, "src/manage.py", "shell", "--no-imports", "-c", code],
         env=e2e_env,
-        capture_output=True,
-        text=True,
+        check=False,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
     assert result.returncode == 0, f"shell fehlgeschlagen: {result.stderr}\n{result.stdout}"
     return result.stdout

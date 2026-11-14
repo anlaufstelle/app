@@ -29,13 +29,13 @@ parallelisieren.
 
 from __future__ import annotations
 
-import subprocess
 import uuid
 from contextlib import suppress
 
 import pytest
 
 from ._axe import AXE_TAGS, run_axe
+from ._helpers import SHELL_TIMEOUT_SECONDS, run_child
 from ._helpers import do_real_login as _do_real_login
 from ._helpers import python_bin as _python
 
@@ -56,12 +56,11 @@ _DESKTOP_HEIGHT = 900
 
 
 def _shell(e2e_env, script):
-    out = subprocess.run(
+    out = run_child(
         [_python(), "src/manage.py", "shell", "--no-imports", "-c", script],
-        capture_output=True,
-        text=True,
         env=e2e_env,
         check=True,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
     return [ln for ln in out.stdout.strip().splitlines() if ln.strip()]
 

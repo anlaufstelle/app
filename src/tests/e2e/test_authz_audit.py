@@ -18,7 +18,6 @@ strukturellem Versagen (zu wenige Zellen, zu viele Setup-Fehler).
 import datetime
 import os
 import shutil
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -40,6 +39,8 @@ from tests.test_authz_idor import IDOR_POST_DATA, NOT_PROBEABLE
 # M6: bekannte, als Issue dokumentierte Lücken der Unit-Matrix — Abweichungen
 # dieser Zellen werden im Report als „Bekannt" annotiert (kein neuer Befund).
 from tests.test_authz_matrix import KNOWN_GAPS
+
+from ._helpers import BULK_TIMEOUT_SECONDS, PROBE_TIMEOUT_SECONDS, run_child
 
 pytestmark = [
     pytest.mark.e2e,
@@ -106,20 +107,19 @@ def medium_seed(request, base_url):
         # Seriell = Worker 0 = Default-DB (muss zu helpers.db_connection passen).
         "E2E_DATABASE_NAME": os.environ.get("E2E_DATABASE_NAME", "anlaufstelle_e2e"),
     }
-    result = subprocess.run(
+    result = run_child(
         [python, "src/manage.py", "seed", "--flush", "--scale", "medium"],
         cwd=helpers.REPO_ROOT,
         env=env,
         check=False,
-        capture_output=True,
-        text=True,
+        timeout=BULK_TIMEOUT_SECONDS,
     )
     if result.returncode != 0:
         raise RuntimeError(f"seed --scale medium fehlgeschlagen:\n{result.stdout}\n{result.stderr}")
 
     # Owner attachments for facilities whose catalog has no ``anhang`` template
     # (second facility): the cross-facility download probes need real objects.
-    owner_files = subprocess.run(
+    owner_files = run_child(
         [
             python,
             "src/manage.py",
@@ -130,8 +130,7 @@ def medium_seed(request, base_url):
         cwd=helpers.REPO_ROOT,
         env=env,
         check=False,
-        capture_output=True,
-        text=True,
+        timeout=BULK_TIMEOUT_SECONDS,
     )
     if owner_files.returncode != 0:
         raise RuntimeError(f"owner attachments failed:\n{owner_files.stdout}\n{owner_files.stderr}")
@@ -664,12 +663,8 @@ def test_full_live_matrix_and_report(base_url, audit_context):
     ]
 
     # 4. Report schreiben.
-    commit = subprocess.run(
-        ["git", "rev-parse", "--short", "HEAD"],
-        cwd=helpers.REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
+    commit = run_child(
+        ["git", "rev-parse", "--short", "HEAD"], cwd=helpers.REPO_ROOT, check=True, timeout=PROBE_TIMEOUT_SECONDS
     ).stdout.strip()
     meta = {"date": datetime.date.today().isoformat(), "commit": commit}
     report_path = helpers.write_report(rows, header_findings, meta)

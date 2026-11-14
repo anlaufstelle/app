@@ -25,11 +25,12 @@ nur so landet die Query auf der DB des jeweiligen Workers.
 
 import json
 import re
-import subprocess
 import sys
 import uuid
 
 import pytest
+
+from ._helpers import SHELL_TIMEOUT_SECONDS, run_child
 
 pytestmark = pytest.mark.e2e
 
@@ -46,11 +47,11 @@ def _shell(e2e_env, code):
     deshalb alles selbst importieren. Nur ``;``-getrennte einfache Statements
     sind erlaubt (kein ``if``/``for``) — Schleifen daher als Comprehension.
     """
-    result = subprocess.run(
+    result = run_child(
         [sys.executable, "src/manage.py", "shell", "--no-imports", "-c", code],
         env=e2e_env,
-        capture_output=True,
-        text=True,
+        check=False,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
     assert result.returncode == 0, f"shell fehlgeschlagen: {result.stderr}\n{result.stdout}"
     return result.stdout

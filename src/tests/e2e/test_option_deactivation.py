@@ -20,10 +20,11 @@ damit von jedem Fremdzugriff entkoppelt.
 """
 
 import re
-import subprocess
 import sys
 
 import pytest
+
+from ._helpers import SHELL_TIMEOUT_SECONDS, run_child
 
 pytestmark = pytest.mark.e2e
 
@@ -71,11 +72,11 @@ def _create_event_with_sachspenden(e2e_env) -> str:
 
     Gibt die Event-PK (UUID als String) zurück.
     """
-    result = subprocess.run(
+    result = run_child(
         [sys.executable, "src/manage.py", "shell", "--no-imports", "-c", _SEED_SACHSPENDEN_EVENT_SHELL],
         env=e2e_env,
-        capture_output=True,
-        text=True,
+        check=False,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
     assert result.returncode == 0, f"Event-Seed fehlgeschlagen:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     event_pk = ""
@@ -88,11 +89,11 @@ def _create_event_with_sachspenden(e2e_env) -> str:
 
 def _cleanup_event(e2e_env, event_pk: str) -> None:
     """Wegwerf-Event wieder entfernen (best-effort, wie ``_deactivate_ban``)."""
-    subprocess.run(
+    run_child(
         [sys.executable, "src/manage.py", "shell", "--no-imports", "-c", _CLEANUP_EVENT_SHELL.format(pk=event_pk)],
         env=e2e_env,
         check=False,
-        capture_output=True,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
 
 

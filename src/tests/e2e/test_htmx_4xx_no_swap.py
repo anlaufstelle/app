@@ -12,7 +12,6 @@ zeigt die Meldung — Muster ``test_goals_htmx_art18_rejection.py``.
 
 from __future__ import annotations
 
-import subprocess
 import sys
 import uuid
 
@@ -20,6 +19,7 @@ import pytest
 from playwright.sync_api import expect
 
 from ._date_helpers import expect_date_value, fill_date
+from ._helpers import SHELL_TIMEOUT_SECONDS, run_child
 
 pytestmark = pytest.mark.e2e
 
@@ -59,11 +59,11 @@ def _ensure_pending_proposal(e2e_env):
         "           'occurred_at': str(e.occurred_at)}); "
         "print('proposal=' + str(p.pk))"
     )
-    result = subprocess.run(
+    result = run_child(
         [sys.executable, "src/manage.py", "shell", "--no-imports", "-c", code],
         env=e2e_env,
-        capture_output=True,
-        text=True,
+        check=False,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
     pks = [ln.removeprefix("proposal=") for ln in result.stdout.splitlines() if ln.startswith("proposal=")]
     assert len(pks) == 1, f"Seed failed: {result.stderr}\n{result.stdout}"
@@ -87,11 +87,11 @@ def _ensure_number_tally_type(e2e_env):
         "DocumentTypeField.objects.create(document_type=dt, field_template=ft); "
         "print('doc_type=' + str(dt.pk))"
     )
-    result = subprocess.run(
+    result = run_child(
         [sys.executable, "src/manage.py", "shell", "--no-imports", "-c", code],
         env=e2e_env,
-        capture_output=True,
-        text=True,
+        check=False,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
     pks = [ln.removeprefix("doc_type=") for ln in result.stdout.splitlines() if ln.startswith("doc_type=")]
     assert len(pks) == 1, f"Seed failed: {result.stderr}\n{result.stdout}"
@@ -104,11 +104,11 @@ def _disable_tally_opt_in(e2e_env, document_type_pk):
         "from core.models import DocumentType; "
         f"DocumentType.objects.filter(pk='{document_type_pk}').update(tally_enabled=False)"
     )
-    result = subprocess.run(
+    result = run_child(
         [sys.executable, "src/manage.py", "shell", "--no-imports", "-c", code],
         env=e2e_env,
-        capture_output=True,
-        text=True,
+        check=False,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
     assert result.returncode == 0, f"Seed mutation failed: {result.stderr}\n{result.stdout}"
 
@@ -125,11 +125,11 @@ def _retire_document_type(e2e_env, document_type_pk):
     type here.
     """
     code = f"from core.models import DocumentType; DocumentType.objects.filter(pk='{document_type_pk}').delete()"
-    result = subprocess.run(
+    result = run_child(
         [sys.executable, "src/manage.py", "shell", "--no-imports", "-c", code],
         env=e2e_env,
-        capture_output=True,
-        text=True,
+        check=False,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
     assert result.returncode == 0, f"Cleanup failed: {result.stderr}\n{result.stdout}"
 

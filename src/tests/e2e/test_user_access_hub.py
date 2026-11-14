@@ -9,14 +9,13 @@ waren gruen.
 from __future__ import annotations
 
 import re
-import subprocess
 import sys
 import uuid
 
 import pytest
 from playwright.sync_api import expect
 
-from ._helpers import SEED_PASSWORD, track_console_errors
+from ._helpers import SEED_PASSWORD, SHELL_TIMEOUT_SECONDS, run_child, track_console_errors
 
 pytestmark = pytest.mark.e2e
 
@@ -24,12 +23,8 @@ _DETAIL_RE = re.compile(r"/verwaltung/zugaenge/(\d+)/$")
 
 
 def _shell(e2e_env, code: str) -> str:
-    result = subprocess.run(
-        [sys.executable, "src/manage.py", "shell", "-c", code],
-        capture_output=True,
-        text=True,
-        env=e2e_env,
-        check=True,
+    result = run_child(
+        [sys.executable, "src/manage.py", "shell", "-c", code], env=e2e_env, check=True, timeout=SHELL_TIMEOUT_SECONDS
     )
     return result.stdout.strip().splitlines()[-1]
 

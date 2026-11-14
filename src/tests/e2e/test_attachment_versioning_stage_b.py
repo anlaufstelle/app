@@ -6,11 +6,11 @@ Verifiziert die Multi-File-UI im Event-Create und -Edit:
 - Zwei existierende Dateien parallel sichtbar.
 """
 
-import subprocess
 import uuid
 
 import pytest
 
+from ._helpers import SHELL_TIMEOUT_SECONDS, run_child
 from ._helpers import python_bin as _python
 
 pytestmark = pytest.mark.e2e
@@ -32,12 +32,11 @@ def _create_doc_type_with_file(e2e_env, name_suffix):
         " DocumentTypeField.objects.get_or_create(document_type=dt, field_template=ft);"
         " print(ft.slug)"
     )
-    out = subprocess.run(
+    out = run_child(
         [_python(), "src/manage.py", "shell", "--no-imports", "-c", script],
-        capture_output=True,
-        text=True,
         env=e2e_env,
         check=True,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
     slug = out.stdout.strip().splitlines()[-1]
     return dt_name, slug

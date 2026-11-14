@@ -22,10 +22,11 @@ Person, Fall) deckt ``src/tests/test_attachment_purge.py`` ab.
 """
 
 import os
-import subprocess
 import sys
 
 import pytest
+
+from ._helpers import SHELL_TIMEOUT_SECONDS, run_child
 
 pytestmark = pytest.mark.e2e
 
@@ -44,11 +45,11 @@ _VALID_PDF_BYTES = (
 
 def _run_shell(code, e2e_env):
     python = ".venv/bin/python" if os.path.exists(".venv/bin/python") else sys.executable
-    result = subprocess.run(
+    result = run_child(
         [python, "src/manage.py", "shell", "--no-imports", "-c", code],
-        capture_output=True,
-        text=True,
         env=e2e_env,
+        check=False,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
     assert result.returncode == 0, f"shell-Setup fehlgeschlagen: {result.stderr[-800:]}"
     return result.stdout.strip()

@@ -28,7 +28,6 @@ anderer Test sieht etwas von diesem Aufbau.
 
 import os
 import re
-import signal
 import socket
 import struct
 import subprocess
@@ -40,7 +39,7 @@ from urllib.parse import urlparse
 import pytest
 from playwright.sync_api import expect
 
-from ._helpers import django_shell
+from ._helpers import django_shell, stop_child
 
 # Die drei Helfer stammen aus dem bestehenden Upload-E2E — sie tragen die
 # Anti-Stale-DOM-Mechanik fuer den HTMX-Feldwechsel (Refs #1797) und das
@@ -212,26 +211,6 @@ def _close_quietly(conn):
         pass
 
 
-def _stop_process(proc):
-    """gunicorn garantiert beenden: SIGTERM → wait(10) → SIGKILL → wait().
-
-    Review: Der Teardown schickte nur ``SIGTERM`` und wartete
-    ohne Fallback. Endet der Prozess nicht in zehn Sekunden, scheiterte der
-    Teardown und der Server konnte auf Port ``base_url+200`` weiterlaufen; im
-    Startfehler-Pfad blieb er ausserdem unreaped. Beides ist Shared-State-Muell
-    fuer den seriellen Voll-Lauf.
-    """
-    if proc.poll() is not None:
-        proc.wait()
-        return
-    proc.send_signal(signal.SIGTERM)
-    try:
-        proc.wait(timeout=10)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        proc.wait()
-
-
 @pytest.fixture(scope="module")
 def fake_clamd():
     """Fake-``clamd`` fuer die Dauer dieser Testdatei."""
@@ -292,7 +271,7 @@ def clamav_base_url(base_url, e2e_env, fake_clamd):
         _wait_for_server(url, proc)
         yield url
     finally:
-        _stop_process(proc)
+        stop_child(proc)
 
 
 @pytest.fixture

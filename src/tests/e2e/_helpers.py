@@ -2,6 +2,7 @@
 
 import os
 import re
+import signal
 import subprocess
 import sys
 
@@ -84,6 +85,29 @@ def run_child(cmd, *, timeout, label=None, check=True, env=None, **kwargs):
             f"--- STDOUT ---\n{_as_text(exc.stdout)}\n"
             f"--- STDERR ---\n{_as_text(exc.stderr)}\n"
         ) from exc
+
+
+BULK_TIMEOUT_SECONDS = 900
+"""Limit for the opt-in authorization audit, which seeds a medium-sized data set and runs
+without the per-test limit of the browser runs; it is a backstop against a hung child."""
+
+STOP_TIMEOUT_SECONDS = 10
+"""Grace period of a long-running child after SIGTERM, before it is killed."""
+
+
+def stop_child(process, timeout=STOP_TIMEOUT_SECONDS):
+    """End a long-running child (a test server): SIGTERM, wait with a limit, then SIGKILL.
+
+    The teardown of a fixture must not wait without a limit for a server that ignores
+    SIGTERM (Refs #2723). An already ended child is only reaped.
+    """
+    if process.poll() is None:
+        process.send_signal(signal.SIGTERM)
+        try:
+            process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            process.kill()
+    process.wait(timeout=timeout)
 
 
 def django_shell(e2e_env, script, timeout=SHELL_TIMEOUT_SECONDS):

@@ -19,13 +19,12 @@ admin-User unverändert sehen.
 
 import base64
 import re
-import subprocess
 import sys
 
 import pytest
 from django_otp.oath import TOTP
 
-from ._helpers import SEED_PASSWORD
+from ._helpers import SEED_PASSWORD, SHELL_TIMEOUT_SECONDS, run_child
 
 pytestmark = pytest.mark.e2e
 
@@ -51,7 +50,7 @@ def _cleanup_totp(username: str, e2e_env) -> None:
     xdist-Worker — sonst greift der Cleanup auf die default-DB statt auf die
     worker-spezifische.
     """
-    subprocess.run(
+    run_child(
         [
             sys.executable,
             "src/manage.py",
@@ -68,8 +67,8 @@ def _cleanup_totp(username: str, e2e_env) -> None:
             ),
         ],
         env=e2e_env,
-        capture_output=True,
-        text=True,
+        check=False,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
 
 

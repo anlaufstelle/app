@@ -5,6 +5,8 @@ import os
 import pytest
 from playwright.sync_api import expect
 
+from ._helpers import SHELL_TIMEOUT_SECONDS, run_child
+
 pytestmark = pytest.mark.e2e
 
 
@@ -70,11 +72,10 @@ def set_files_on_swapped_input(page, selector, path):
 
 def _select_qualified_client(page, base_url, e2e_env):
     """Select the first qualified client via hidden input (bypasses autocomplete)."""
-    import subprocess
     import sys
 
     python = ".venv/bin/python" if os.path.exists(".venv/bin/python") else sys.executable
-    result = subprocess.run(
+    result = run_child(
         [
             python,
             "src/manage.py",
@@ -87,9 +88,9 @@ def _select_qualified_client(page, base_url, e2e_env):
             + "c = Client.objects.filter(contact_stage='qualified').first(); "
             + "print(c.pk if c else '')",
         ],
-        capture_output=True,
-        text=True,
         env=e2e_env,
+        check=False,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
     client_pk = result.stdout.strip()
     if client_pk:
@@ -166,7 +167,6 @@ class TestFileUploadAndDownload:
 
     def test_download_creates_audit_log(self, lead_page, base_url, e2e_env, _test_pdf):
         """Downloading a file creates an AuditLog entry."""
-        import subprocess
         import sys
 
         page = lead_page
@@ -187,7 +187,7 @@ class TestFileUploadAndDownload:
             page.locator("a:has-text('e2e-test.pdf')").click()
 
         # Check AuditLog via manage.py shell
-        result = subprocess.run(
+        result = run_child(
             [
                 python,
                 "src/manage.py",
@@ -198,9 +198,9 @@ class TestFileUploadAndDownload:
                 + "log = AuditLog.objects.filter(action='download').order_by('-timestamp').first(); "
                 + "print(f'{log.action}|{log.target_type}' if log else 'NONE')",
             ],
-            capture_output=True,
-            text=True,
             env=e2e_env,
+            check=False,
+            timeout=SHELL_TIMEOUT_SECONDS,
         )
         assert "download|Attachment" in result.stdout.strip()
 

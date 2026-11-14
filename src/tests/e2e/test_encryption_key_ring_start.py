@@ -22,7 +22,7 @@ import uuid
 import pytest
 from cryptography.fernet import Fernet, InvalidToken
 
-from ._helpers import SEED_PASSWORD, django_shell, python_bin
+from ._helpers import SEED_PASSWORD, django_shell, python_bin, stop_child
 from ._selectors import save_button
 
 pytestmark = pytest.mark.e2e
@@ -104,8 +104,7 @@ def serve_with_ring(e2e_env):
 
     yield _serve
     for process in started:
-        process.terminate()
-        process.wait(timeout=15)
+        stop_child(process)
 
 
 @pytest.fixture

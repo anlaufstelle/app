@@ -31,7 +31,6 @@ arbeitet in genau einem frischen Kontext.
 
 import base64
 import re
-import subprocess
 import sys
 import time
 from urllib.parse import parse_qs, urlsplit
@@ -39,7 +38,7 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 from django_otp.oath import TOTP
 
-from ._helpers import SEED_PASSWORD, next_totp_code
+from ._helpers import SEED_PASSWORD, SHELL_TIMEOUT_SECONDS, next_totp_code, run_child
 
 pytestmark = pytest.mark.e2e
 
@@ -49,11 +48,11 @@ OLD_SECRET = base64.b32encode(bytes.fromhex(OLD_KEY_HEX)).decode("ascii").rstrip
 
 
 def _shell(e2e_env, code: str) -> str:
-    result = subprocess.run(
+    result = run_child(
         [sys.executable, "src/manage.py", "shell", "--no-imports", "-c", code],
         env=e2e_env,
-        capture_output=True,
-        text=True,
+        check=False,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
     assert result.returncode == 0, f"Shell fehlgeschlagen: {result.stderr}"
     return result.stdout

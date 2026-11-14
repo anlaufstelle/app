@@ -12,13 +12,13 @@ gesäten Daten ist das geraten, kein Test. Diese Variante:
 
 from __future__ import annotations
 
-import subprocess
 import sys
 from urllib.parse import urljoin
 
 import pytest
 from playwright.sync_api import expect
 
+from ._helpers import SHELL_TIMEOUT_SECONDS, run_child
 from ._selectors import action_in_bar
 
 pytestmark = pytest.mark.e2e
@@ -162,11 +162,11 @@ def _seed_active_ban(e2e_env: dict[str, str], pseudonym: str = "Stern-42") -> tu
     JSON-Vorzustand für :func:`_restore_ban_state` (Refs #1917).
     """
     seed_shell = _SEED_BAN_SHELL.replace("__PSEUDONYM__", pseudonym)
-    result = subprocess.run(
+    result = run_child(
         [sys.executable, "src/manage.py", "shell", "--no-imports", "-c", seed_shell],
         env=e2e_env,
-        capture_output=True,
-        text=True,
+        check=False,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
     assert result.returncode == 0, f"Ban-Seed fehlgeschlagen:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     event_pk = ""
@@ -185,11 +185,11 @@ def _seed_active_ban(e2e_env: dict[str, str], pseudonym: str = "Stern-42") -> tu
 
 def _deactivate_ban(e2e_env: dict[str, str], event_pk: str) -> None:
     """Fachliche Aktion (kein Cleanup): setzt aktiv=False."""
-    subprocess.run(
+    run_child(
         [sys.executable, "src/manage.py", "shell", "--no-imports", "-c", _CLEANUP_BAN_SHELL.format(pk=event_pk)],
         env=e2e_env,
         check=False,
-        capture_output=True,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
 
 
@@ -202,11 +202,11 @@ def _restore_ban_state(e2e_env: dict[str, str], restore: str) -> None:
     nachfolgende Tests kippt — deshalb wird hier der komplette gesicherte
     Zustand (Ziel-Event **und** Geschwister-Bans) zurückgespielt.
     """
-    subprocess.run(
+    run_child(
         [sys.executable, "src/manage.py", "shell", "--no-imports", "-c", _RESTORE_BAN_SHELL],
         env={**e2e_env, "E2E_BAN_RESTORE": restore},
         check=False,
-        capture_output=True,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
 
 

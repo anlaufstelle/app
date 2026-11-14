@@ -22,15 +22,14 @@ parallelisieren.
 from __future__ import annotations
 
 import re
-import subprocess
 import uuid
 from contextlib import suppress
 from pathlib import Path
 
 import pytest
 
+from ._helpers import SHELL_TIMEOUT_SECONDS, run_child, wait_until
 from ._helpers import python_bin as _python
-from ._helpers import wait_until
 
 pytestmark = [pytest.mark.e2e, pytest.mark.offline_smoke]  # Refs #1418 (WebKit-Smoke)
 
@@ -56,12 +55,11 @@ def _bootstrap_store(page, base_url):
 
 
 def _shell(e2e_env, script):
-    out = subprocess.run(
+    out = run_child(
         [_python(), "src/manage.py", "shell", "--no-imports", "-c", script],
-        capture_output=True,
-        text=True,
         env=e2e_env,
         check=True,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
     return [ln for ln in out.stdout.strip().splitlines() if ln.strip()]
 

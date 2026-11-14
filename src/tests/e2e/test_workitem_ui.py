@@ -1,7 +1,6 @@
 """E2E-Tests: WorkItem-UI — Navigation, Inbox, Status, Badge, Klickbarkeit, Erledigungsdatum."""
 
 import re
-import subprocess
 
 import pytest
 
@@ -10,6 +9,7 @@ from tests.e2e._helpers import wait_until
 from tests.e2e._selectors import action_bar, find_client_link
 
 from ._date_helpers import fill_date
+from ._helpers import SHELL_TIMEOUT_SECONDS, run_child
 
 pytestmark = pytest.mark.e2e
 
@@ -47,11 +47,11 @@ def _warte_auf_abgewiesenen_dialog(page, gesehen):
 
 def _run_shell(code, e2e_env):
     """``manage.py shell --no-imports -c`` ausführen und stdout zurückgeben."""
-    result = subprocess.run(
+    result = run_child(
         [_python(), "src/manage.py", "shell", "--no-imports", "-c", code],
-        capture_output=True,
-        text=True,
         env=e2e_env,
+        check=False,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
     assert result.returncode == 0, f"shell failed: {result.stderr}\n{result.stdout}"
     return result.stdout
@@ -302,7 +302,6 @@ class TestWorkItemCompletedAt:
     def test_completed_at_shown_after_done(self, authenticated_page, base_url, e2e_env):
         """Aufgabe erledigen → Erledigungsdatum wird auf Detail-Seite angezeigt."""
         import os
-        import subprocess
         import sys
 
         page = authenticated_page
@@ -322,11 +321,11 @@ class TestWorkItemCompletedAt:
             "wi.save(); "
             "print(wi.pk)"
         )
-        result = subprocess.run(
+        result = run_child(
             [python, "src/manage.py", "shell", "--no-imports", "-c", script],
-            capture_output=True,
-            text=True,
             env=e2e_env,
+            check=False,
+            timeout=SHELL_TIMEOUT_SECONDS,
         )
         wi_pk = result.stdout.strip()
         assert wi_pk, f"WorkItem 'Erledigungstest' nicht gefunden: stderr={result.stderr}"

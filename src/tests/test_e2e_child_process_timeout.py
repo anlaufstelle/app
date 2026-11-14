@@ -5,7 +5,9 @@ never ends, so the tests finish in a second or two.
 """
 
 import ast
+import signal
 import subprocess
+import sys
 import textwrap
 import time
 from pathlib import Path
@@ -43,7 +45,7 @@ def test_django_shell_fails_with_child_stderr_instead_of_hanging(hanging_interpr
 
     assert time.monotonic() - started < 20
     assert "child stderr marker: waiting on a lock" in str(excinfo.value)
-    assert "1" in str(excinfo.value)  # the limit that was exceeded is named
+    assert "within 1 s" in str(excinfo.value)  # the limit that was exceeded is named
 
 
 def test_timed_out_child_is_killed(tmp_path):
@@ -84,29 +86,100 @@ def test_django_shell_still_returns_the_output_lines(tmp_path, monkeypatch):
     assert _helpers.django_shell({}, "ignored") == ["first", "second"]
 
 
-def _calls_without_timeout(path):
-    """``subprocess.run``-style calls in ``path`` that pass no ``timeout`` argument."""
-    missing = []
-    for node in ast.walk(ast.parse(path.read_text())):
-        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
-            continue
-        owner = node.func.value
-        if (
-            isinstance(owner, ast.Name)
-            and owner.id == "subprocess"
-            and node.func.attr
-            in {
-                "run",
-                "check_output",
-                "check_call",
-                "call",
-            }
+BLOCKING_CALLS = {"run", "check_output", "check_call", "call"}
+
+LONG_RUNNING_PROCESS_FILES = {
+    "conftest.py": "the gunicorn servers of the session fixtures",
+    "test_encryption_key_ring_start.py": "a gunicorn started per test with its own key ring",
+    "test_upload_virus_feedback.py": "a gunicorn with the virus scanner enabled",
+}
+"""Files that may start a process which outlives the call (``subprocess.Popen``).
+
+Such a process ends in a fixture teardown, so every file listed here must stop it
+through ``stop_child`` (terminate, wait with a limit, kill) instead of an unbounded wait.
+"""
+
+
+def _child_process_findings(source, filename):
+    """Calls in ``source`` that can block a run without a limit, as ``file:line: reason``."""
+    findings = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.ImportFrom) and node.module == "subprocess":
+            findings.append(f"{filename}:{node.lineno}: import names from subprocess (use the module attribute)")
+        elif isinstance(node, ast.Import) and any(a.name == "subprocess" and a.asname for a in node.names):
+            findings.append(f"{filename}:{node.lineno}: subprocess imported under an alias")
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "subprocess"
         ):
-            if "timeout" not in {keyword.arg for keyword in node.keywords}:
-                missing.append(f"{path.name}:{node.lineno}")
-    return missing
+            name = node.func.attr
+            if name in BLOCKING_CALLS and "timeout" not in {keyword.arg for keyword in node.keywords}:
+                findings.append(f"{filename}:{node.lineno}: subprocess.{name} without timeout")
+            elif name == "Popen" and filename not in LONG_RUNNING_PROCESS_FILES:
+                findings.append(f"{filename}:{node.lineno}: subprocess.Popen outside the long-running allowlist")
+    if filename in LONG_RUNNING_PROCESS_FILES and "stop_child(" not in source:
+        findings.append(f"{filename}: starts a long-running process but never calls stop_child")
+    return findings
 
 
-@pytest.mark.parametrize("name", ["_helpers.py", "conftest.py"])
-def test_shared_e2e_modules_pass_a_timeout_to_every_blocking_child_call(name):
-    assert _calls_without_timeout(E2E_DIR / name) == []
+def test_every_child_process_call_of_the_e2e_files_is_bounded():
+    findings = []
+    for path in sorted(E2E_DIR.glob("*.py")):
+        findings += _child_process_findings(path.read_text(), path.name)
+    assert findings == []
+
+
+def test_long_running_allowlist_has_no_stale_entries():
+    for name in LONG_RUNNING_PROCESS_FILES:
+        assert "subprocess.Popen(" in (E2E_DIR / name).read_text(), name
+
+
+def test_guard_flags_an_unbounded_call_and_accepts_a_bounded_one():
+    unbounded = "import subprocess\nsubprocess.run(['x'], capture_output=True)\n"
+    bounded = "import subprocess\nsubprocess.run(['x'], capture_output=True, timeout=5)\n"
+
+    assert _child_process_findings(unbounded, "test_x.py") == ["test_x.py:2: subprocess.run without timeout"]
+    assert _child_process_findings(bounded, "test_x.py") == []
+
+
+def test_guard_flags_popen_outside_the_allowlist_and_import_forms():
+    popen = "import subprocess\nsubprocess.Popen(['x'])\n"
+    from_import = "from subprocess import run\n"
+    aliased = "import subprocess as sp\n"
+
+    assert len(_child_process_findings(popen, "test_x.py")) == 1
+    assert len(_child_process_findings(from_import, "test_x.py")) == 1
+    assert len(_child_process_findings(aliased, "test_x.py")) == 1
+
+
+def test_guard_requires_stop_child_where_popen_is_allowed():
+    name = next(iter(LONG_RUNNING_PROCESS_FILES))
+    popen = "import subprocess\nsubprocess.Popen(['x'])\n"
+
+    assert _child_process_findings(popen, name) == [f"{name}: starts a long-running process but never calls stop_child"]
+    assert _child_process_findings(popen + "stop_child(p)\n", name) == []
+
+
+def test_stop_child_ends_a_process_that_ignores_sigterm():
+    ready = (
+        "import signal, time; signal.signal(signal.SIGTERM, signal.SIG_IGN); print('up', flush=True); time.sleep(600)"
+    )
+    with subprocess.Popen([sys.executable, "-c", ready], stdout=subprocess.PIPE, text=True) as process:
+        assert process.stdout.readline().strip() == "up"
+        started = time.monotonic()
+
+        _helpers.stop_child(process, timeout=1)
+
+        assert process.returncode == -signal.SIGKILL
+        assert time.monotonic() - started < 15
+
+
+def test_stop_child_accepts_a_process_that_already_ended():
+    process = subprocess.Popen([sys.executable, "-c", "pass"])
+    process.wait()
+
+    _helpers.stop_child(process, timeout=1)
+
+    assert process.returncode == 0

@@ -19,7 +19,6 @@ admin-User unverändert sehen. ZZ-Prefix hält den Zwischenstand aus anderen Tes
 
 import base64
 import re
-import subprocess
 import sys
 
 import pytest
@@ -33,7 +32,7 @@ from django_otp.oath import TOTP
 # soll. Refs #1606.
 from playwright._impl._errors import TargetClosedError
 
-from ._helpers import SEED_PASSWORD
+from ._helpers import SEED_PASSWORD, SHELL_TIMEOUT_SECONDS, run_child
 
 pytestmark = pytest.mark.e2e
 
@@ -45,7 +44,7 @@ def _generate_totp_code(base32_secret: str) -> str:
 
 
 def _cleanup(username: str, e2e_env) -> None:
-    subprocess.run(
+    run_child(
         [
             sys.executable,
             "src/manage.py",
@@ -64,8 +63,8 @@ def _cleanup(username: str, e2e_env) -> None:
             ),
         ],
         env=e2e_env,
-        capture_output=True,
-        text=True,
+        check=False,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
 
 

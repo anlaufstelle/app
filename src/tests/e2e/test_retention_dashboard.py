@@ -1,14 +1,13 @@
 """E2E-Tests: Retention Dashboard — Löschfristen-Management."""
 
 import re
-import subprocess
 import sys
 import uuid
 
 import pytest
 from playwright.sync_api import expect
 
-from ._helpers import django_shell
+from ._helpers import SHELL_TIMEOUT_SECONDS, django_shell, run_child
 from ._selectors import sidebar_item, subnav_tab
 
 pytestmark = pytest.mark.e2e
@@ -73,11 +72,11 @@ def _ensure_proposals(e2e_env, count=3):
         "           'occurred_at': str(e.occurred_at)}) for i, e in enumerate(events)]; "
         "[print('proposal=' + str(p.pk)) for p in props]"
     )
-    result = subprocess.run(
+    result = run_child(
         [sys.executable, "src/manage.py", "shell", "--no-imports", "-c", code],
         env=e2e_env,
-        capture_output=True,
-        text=True,
+        check=False,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
     pks = [ln.removeprefix("proposal=") for ln in result.stdout.splitlines() if ln.startswith("proposal=")]
     assert len(pks) == count, f"Seed failed: {result.stderr}\n{result.stdout}"

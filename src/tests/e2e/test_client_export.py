@@ -1,6 +1,5 @@
 """E2E-Tests: Klientel-Datenauskunft (Art. 15/20 DSGVO)."""
 
-import subprocess
 import uuid
 from pathlib import Path
 
@@ -10,16 +9,17 @@ from tests.e2e._helpers import enter_sudo_mode
 from tests.e2e._helpers import python_bin as _python
 from tests.e2e._selectors import find_client_link, open_desktop_overflow
 
+from ._helpers import SHELL_TIMEOUT_SECONDS, run_child
+
 pytestmark = pytest.mark.e2e
 
 
 def _shell(e2e_env, script):
-    out = subprocess.run(
+    out = run_child(
         [_python(), "src/manage.py", "shell", "--no-imports", "-c", script],
-        capture_output=True,
-        text=True,
         env=e2e_env,
         check=True,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
     return [ln for ln in out.stdout.strip().splitlines() if ln.strip()]
 

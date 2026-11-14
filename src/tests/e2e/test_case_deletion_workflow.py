@@ -21,23 +21,22 @@ Der Papierkorb liegt unter ``/cases/trash/`` und damit **nicht** unter
 """
 
 import re
-import subprocess
 import uuid
 
 import pytest
 
+from ._helpers import SHELL_TIMEOUT_SECONDS, run_child
 from ._helpers import python_bin as _python
 
 pytestmark = pytest.mark.e2e
 
 
 def _shell(e2e_env, script):
-    out = subprocess.run(
+    out = run_child(
         [_python(), "src/manage.py", "shell", "--no-imports", "-c", script],
-        capture_output=True,
-        text=True,
         env=e2e_env,
         check=True,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
     return [ln for ln in out.stdout.strip().splitlines() if ln.strip()]
 

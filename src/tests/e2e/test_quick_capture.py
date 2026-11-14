@@ -14,7 +14,7 @@ import time
 import pytest
 from playwright.sync_api import expect
 
-from ._helpers import tally_tile, wait_until, wait_until_htmx_bound
+from ._helpers import SHELL_TIMEOUT_SECONDS, run_child, tally_tile, wait_until, wait_until_htmx_bound
 
 pytestmark = pytest.mark.e2e
 
@@ -301,12 +301,11 @@ class TestAutoSave:
         /events/new/ (ohne ?template=) den alten Draft wieder laden und so
         den „leeren" Zustand verfälschen.
         """
-        import subprocess
         import sys
 
         python = ".venv/bin/python" if os.path.exists(".venv/bin/python") else sys.executable
 
-        tpl_id_proc = subprocess.run(
+        tpl_id_proc = run_child(
             [
                 python,
                 "src/manage.py",
@@ -327,9 +326,9 @@ class TestAutoSave:
                     " print(tpl.pk)"
                 ),
             ],
-            capture_output=True,
-            text=True,
             env=e2e_env,
+            check=False,
+            timeout=SHELL_TIMEOUT_SECONDS,
         )
         tpl_id = tpl_id_proc.stdout.strip().splitlines()[-1]
         assert tpl_id, f"Template-PK konnte nicht erzeugt werden: {tpl_id_proc.stderr}"
@@ -367,13 +366,12 @@ class TestAutoSave:
         wuerde ``autosave.js`` den alten Draft nach dem Server-Render
         restauren und die Template-Werte kippen.
         """
-        import subprocess
         import sys
 
         python = ".venv/bin/python" if os.path.exists(".venv/bin/python") else sys.executable
 
         # QuickTemplate programmatisch anlegen (Hauptstelle, DocType „Kontakt")
-        tpl_id_proc = subprocess.run(
+        tpl_id_proc = run_child(
             [
                 python,
                 "src/manage.py",
@@ -394,9 +392,9 @@ class TestAutoSave:
                     " print(tpl.pk)"
                 ),
             ],
-            capture_output=True,
-            text=True,
             env=e2e_env,
+            check=False,
+            timeout=SHELL_TIMEOUT_SECONDS,
         )
         tpl_id = tpl_id_proc.stdout.strip().splitlines()[-1]
         assert tpl_id, f"Template-PK konnte nicht erzeugt werden: {tpl_id_proc.stderr}"

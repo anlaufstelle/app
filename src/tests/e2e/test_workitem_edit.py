@@ -11,6 +11,7 @@ import pytest
 from tests.e2e._selectors import action_bar
 
 from ._date_helpers import date_field, expect_date_value, fill_date
+from ._helpers import SHELL_TIMEOUT_SECONDS, run_child
 
 pytestmark = pytest.mark.e2e
 
@@ -22,7 +23,7 @@ def _create_overdue_task_for(username: str, title: str, e2e_env) -> str:
     navigieren kann. ``assigned_to`` ist nötig, damit der editierende User die
     Aufgabe laut ``can_user_mutate_workitem`` bearbeiten darf (Refs #1131).
     """
-    result = subprocess.run(
+    result = run_child(
         [
             sys.executable,
             "src/manage.py",
@@ -41,16 +42,15 @@ def _create_overdue_task_for(username: str, title: str, e2e_env) -> str:
             ),
         ],
         env=e2e_env,
-        capture_output=True,
-        text=True,
         check=True,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
     return result.stdout.strip().splitlines()[-1]
 
 
 def _create_urgent_task_for(username: str, title: str, e2e_env) -> str:
     """Offene Aufgabe mit Priorität „Dringend“, ``created_by``/``assigned_to`` = ``username``."""
-    result = subprocess.run(
+    result = run_child(
         [
             sys.executable,
             "src/manage.py",
@@ -69,15 +69,14 @@ def _create_urgent_task_for(username: str, title: str, e2e_env) -> str:
             ),
         ],
         env=e2e_env,
-        capture_output=True,
-        text=True,
         check=True,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
     return result.stdout.strip().splitlines()[-1]
 
 
 def _read_status_and_priority(pk: str, e2e_env) -> tuple[str, str]:
-    result = subprocess.run(
+    result = run_child(
         [
             sys.executable,
             "src/manage.py",
@@ -91,16 +90,15 @@ def _read_status_and_priority(pk: str, e2e_env) -> tuple[str, str]:
             ),
         ],
         env=e2e_env,
-        capture_output=True,
-        text=True,
         check=True,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
     status, priority = result.stdout.strip().splitlines()[-1].split("|")
     return status, priority
 
 
 def _cleanup_task_by_title(title: str, e2e_env) -> None:
-    subprocess.run(
+    run_child(
         [
             sys.executable,
             "src/manage.py",
@@ -110,8 +108,8 @@ def _cleanup_task_by_title(title: str, e2e_env) -> None:
             (f"from core.models import WorkItem; WorkItem.objects.filter(title='{title}').delete()"),
         ],
         env=e2e_env,
-        capture_output=True,
-        text=True,
+        check=False,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
 
 

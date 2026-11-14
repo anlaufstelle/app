@@ -14,10 +14,11 @@ Darum wird der exakte Hash-String gesichert und wiederhergestellt; die
 Vorher-Session-Assertions am Testende verankern diese Invariante.
 """
 
-import subprocess
 import sys
 
 import pytest
+
+from ._helpers import SHELL_TIMEOUT_SECONDS, run_child
 
 pytestmark = pytest.mark.e2e
 
@@ -26,11 +27,11 @@ _ORIG_PASSWORD = "anlaufstelle2026"
 
 
 def _run_manage_shell(code: str, e2e_env) -> str:
-    result = subprocess.run(
+    result = run_child(
         [sys.executable, "src/manage.py", "shell", "--no-imports", "-c", code],
         env=e2e_env,
-        capture_output=True,
-        text=True,
+        check=False,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
     assert result.returncode == 0, f"manage.py shell fehlgeschlagen: {result.stderr}"
     return result.stdout.strip()

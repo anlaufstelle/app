@@ -1,21 +1,22 @@
 """E2E-Tests für FieldTemplate.default_value (Refs #624)."""
 
 import os
-import subprocess
 import sys
 
 import pytest
+
+from ._helpers import SHELL_TIMEOUT_SECONDS, run_child
 
 pytestmark = pytest.mark.e2e
 
 
 def _run_shell(script, env):
     python = ".venv/bin/python" if os.path.exists(".venv/bin/python") else sys.executable
-    subprocess.run(
+    run_child(
         [python, "src/manage.py", "shell", "--no-imports", "-c", script],
         check=True,
-        capture_output=True,
         env=env,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
 
 

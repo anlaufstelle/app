@@ -30,6 +30,7 @@ from tests.e2e._helpers import (
     SEED_PASSWORD,
     SETUP_TIMEOUT_SECONDS,
     run_child,
+    stop_child,
 )
 
 # E2E-Server + Seed mit e2e-Settings (Dev/PBKDF2 + kein Rate-Limit).
@@ -249,8 +250,7 @@ def base_url(request, tmp_path_factory):
         _wait_for_server(url, proc)
         yield url
     finally:
-        proc.send_signal(signal.SIGTERM)
-        proc.wait(timeout=10)
+        stop_child(proc)
 
 
 @pytest.fixture(scope="session")
@@ -364,8 +364,7 @@ def enforced_base_url(request, base_url):
         _wait_for_server(url, proc)
         yield url
     finally:
-        proc.send_signal(signal.SIGTERM)
-        proc.wait(timeout=10)
+        stop_child(proc)
 
 
 # Replay is released only inside a sync-orchestrator run whose revocation check

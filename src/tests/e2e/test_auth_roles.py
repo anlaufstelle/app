@@ -14,7 +14,7 @@ from playwright.sync_api import expect
 from tests.e2e._helpers import enter_sudo_mode
 from tests.e2e._selectors import find_client_link
 
-from ._helpers import SEED_PASSWORD
+from ._helpers import SEED_PASSWORD, SHELL_TIMEOUT_SECONDS, run_child
 
 pytestmark = pytest.mark.e2e
 
@@ -144,10 +144,9 @@ def _seed_failed_logins_and_check_lock(username, e2e_env, n=10):
     aktuellen xdist-Worker — ohne das landet der manage.py-shell-Aufruf in der
     default-DB ``anlaufstelle_e2e`` und kollidiert mit Tests auf anderen Workern.
     """
-    import subprocess
     import sys
 
-    result = subprocess.run(
+    result = run_child(
         [
             sys.executable,
             "src/manage.py",
@@ -169,8 +168,8 @@ def _seed_failed_logins_and_check_lock(username, e2e_env, n=10):
             ),
         ],
         env=e2e_env,
-        capture_output=True,
-        text=True,
+        check=False,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
     assert "LOCKED=True" in result.stdout, f"Seed fehlgeschlagen: {result.stdout}\n{result.stderr}"
 
@@ -185,7 +184,6 @@ def _clear_lockout_for(usernames, e2e_env):
     ``e2e_env`` aus der gleichnamigen Fixture sorgt dafür, dass der manage.py-
     Aufruf gegen die worker-spezifische ``anlaufstelle_e2e[_N]``-DB läuft.
     """
-    import subprocess
     import sys
 
     code = (
@@ -194,11 +192,11 @@ def _clear_lockout_for(usernames, e2e_env):
         f"users = User.objects.filter(username__in={list(usernames)!r}); "
         "[unlock(u, unlocked_by=u) for u in users]"
     )
-    subprocess.run(
+    run_child(
         [sys.executable, "src/manage.py", "shell", "--no-imports", "-c", code],
         env=e2e_env,
         check=False,
-        capture_output=True,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
 
 

@@ -5,12 +5,11 @@ Session ist als verifiziert markiert, User landet auf der Startseite.
 """
 
 import re
-import subprocess
 import sys
 
 import pytest
 
-from ._helpers import SEED_PASSWORD
+from ._helpers import SEED_PASSWORD, SHELL_TIMEOUT_SECONDS, run_child
 
 pytestmark = pytest.mark.e2e
 
@@ -24,7 +23,7 @@ def _enable_totp_and_generate_codes(username: str, e2e_env) -> list[str]:
     xdist-Worker — sonst landen TOTPDevice und Backup-Codes in der default-
     DB ``anlaufstelle_e2e`` und kollidieren mit Tests anderer Workers.
     """
-    result = subprocess.run(
+    result = run_child(
         [
             sys.executable,
             "src/manage.py",
@@ -42,8 +41,8 @@ def _enable_totp_and_generate_codes(username: str, e2e_env) -> list[str]:
             ),
         ],
         env=e2e_env,
-        capture_output=True,
-        text=True,
+        check=False,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
     assert result.returncode == 0, f"Shell-Setup fehlgeschlagen: {result.stderr}"
     # Letzte Zeile (nach „System check" etc.) enthält die Codes.
@@ -58,7 +57,7 @@ def _enable_totp_and_current_code(username: str, e2e_env) -> str:
     TOTP-Modus von ``/mfa/verify/`` braucht echte Browser-Abdeckung —
     vor dem Fix gingen BEIDE ``token``-Inputs in den POST und
     ``QueryDict.get("token")`` las das leere Backup-Feld)."""
-    result = subprocess.run(
+    result = run_child(
         [
             sys.executable,
             "src/manage.py",
@@ -76,8 +75,8 @@ def _enable_totp_and_current_code(username: str, e2e_env) -> str:
             ),
         ],
         env=e2e_env,
-        capture_output=True,
-        text=True,
+        check=False,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
     assert result.returncode == 0, f"Shell-Setup fehlgeschlagen: {result.stderr}"
     lines = [line for line in result.stdout.splitlines() if line.startswith("CODE:")]
@@ -86,7 +85,7 @@ def _enable_totp_and_current_code(username: str, e2e_env) -> str:
 
 
 def _cleanup_totp(username: str, e2e_env) -> None:
-    subprocess.run(
+    run_child(
         [
             sys.executable,
             "src/manage.py",
@@ -103,8 +102,8 @@ def _cleanup_totp(username: str, e2e_env) -> None:
             ),
         ],
         env=e2e_env,
-        capture_output=True,
-        text=True,
+        check=False,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
 
 

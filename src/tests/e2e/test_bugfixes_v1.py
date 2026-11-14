@@ -7,10 +7,11 @@ Verifiziert die drei Bugfixes:
 """
 
 import os
-import subprocess
 import sys
 
 import pytest
+
+from ._helpers import SHELL_TIMEOUT_SECONDS, run_child
 
 pytestmark = pytest.mark.e2e
 
@@ -18,12 +19,11 @@ pytestmark = pytest.mark.e2e
 def _run_shell(script, env):
     """Django-Shell-Befehl mit worker-aware Environment ausfuehren."""
     python = ".venv/bin/python" if os.path.exists(".venv/bin/python") else sys.executable
-    result = subprocess.run(
+    result = run_child(
         [python, "src/manage.py", "shell", "--no-imports", "-c", script],
         check=True,
-        capture_output=True,
-        text=True,
         env=env,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
     return result.stdout.splitlines()
 

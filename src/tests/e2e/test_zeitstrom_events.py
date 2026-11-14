@@ -12,7 +12,13 @@ import re
 import pytest
 from playwright.sync_api import expect
 
-from ._helpers import track_console_errors, wait_for_active_service_worker, wait_until_htmx_bound
+from ._helpers import (
+    SHELL_TIMEOUT_SECONDS,
+    run_child,
+    track_console_errors,
+    wait_for_active_service_worker,
+    wait_until_htmx_bound,
+)
 from ._selectors import open_desktop_overflow
 
 pytestmark = pytest.mark.e2e
@@ -658,7 +664,6 @@ def _arrange_history_matrix_doc_type(e2e_env):
     (basis, stufe2, stufe3, anhang) — so hängt der Test nicht an
     Slugify-Details.
     """
-    import subprocess
     import sys
 
     python = ".venv/bin/python" if os.path.exists(".venv/bin/python") else sys.executable
@@ -688,11 +693,11 @@ def _arrange_history_matrix_doc_type(e2e_env):
         "    slugs.append(ft.slug)\n"
         "print('SLUGS ' + ' '.join(slugs))\n"
     )
-    result = subprocess.run(
+    result = run_child(
         [python, "src/manage.py", "shell", "--no-imports", "-c", code],
-        capture_output=True,
-        text=True,
         env=e2e_env,
+        check=False,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
     assert result.returncode == 0, f"Arrange-Shell fehlgeschlagen: {result.stderr}\n{result.stdout}"
     line = [ln for ln in result.stdout.splitlines() if ln.startswith("SLUGS ")][-1]

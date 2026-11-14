@@ -22,18 +22,17 @@ WICHTIG: E2E seriell ausführen (RAM-Limit der Container) — nicht parallelisie
 from __future__ import annotations
 
 import re
-import subprocess
 import time
 import uuid
 from contextlib import suppress
 
 import pytest
 
+from ._helpers import SHELL_TIMEOUT_SECONDS, run_child, wait_until
 from ._helpers import do_real_login as _do_real_login
 from ._helpers import python_bin as _python
 from ._helpers import track_console_errors as _track_console_errors
 from ._helpers import wait_for_active_service_worker as _wait_for_active_service_worker
-from ._helpers import wait_until
 
 pytestmark = pytest.mark.e2e
 
@@ -43,12 +42,11 @@ pytestmark = pytest.mark.e2e
 
 
 def _shell(e2e_env, script):
-    out = subprocess.run(
+    out = run_child(
         [_python(), "src/manage.py", "shell", "--no-imports", "-c", script],
-        capture_output=True,
-        text=True,
         env=e2e_env,
         check=True,
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
     return [ln for ln in out.stdout.strip().splitlines() if ln.strip()]
 

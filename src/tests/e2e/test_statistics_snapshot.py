@@ -6,22 +6,18 @@ Ablauf:
 3. Statistik-Seite erneut laden → Zahlen identisch
 """
 
-import subprocess
 import sys
 
 import pytest
+
+from ._helpers import SETUP_TIMEOUT_SECONDS, run_child
 
 pytestmark = pytest.mark.e2e
 
 
 def _run_management_command(env, *args):
     """Run a Django management command in the worker-aware E2E environment."""
-    result = subprocess.run(
-        [sys.executable, "src/manage.py", *args],
-        capture_output=True,
-        text=True,
-        env=env,
-    )
+    result = run_child([sys.executable, "src/manage.py", *args], env=env, check=False, timeout=SETUP_TIMEOUT_SECONDS)
     return result
 
 
