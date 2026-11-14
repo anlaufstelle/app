@@ -99,6 +99,7 @@ Bestreitet eine betroffene Person die Richtigkeit ihrer Daten (Art. 18 Abs. 1 li
 - Benutzername, Anzeigename, E-Mail-Adresse
 - Rolle (Systemadministration, Anwendungsbetreuung, Leitung, Fachkraft, Assistenz), Berechtigung zur Bestätigung von Löschanträgen, Einrichtungszuordnung
 - Telefonnummer, Sprache und interne Kontonotiz, sofern diese Felder genutzt werden
+- Anzeigeeinstellung „Hausverbot-Details im Zeitstrom ausgeblendet“ als Prüfwert der ausgeblendeten Liste, ohne Namen und Gründe, bis die Details wieder eingeblendet werden
 - Passwort-Hash, MFA-Pflicht und -Geräte, verschlüsselte TOTP-Secrets, gehashte Wiederherstellungscodes und Sicherheitsfristen
 - Anmelde-, Sperr- und Audit-Daten wie Zeitpunkt, Aktion, Konto- und Einrichtungskennung sowie bei protokollierten Vorgängen die IP-Adresse
 

@@ -37,6 +37,9 @@ Ausgabe dieser Information.
   Bestätigung von Löschanträgen;
 - Telefonnummer, Einrichtungszuordnung, Sprache und interne Kontonotiz, sofern
   diese Felder genutzt werden;
+- eine persönliche Anzeigeeinstellung: ob Sie die Hausverbot-Details im Zeitstrom
+  ausgeblendet haben, gespeichert als Prüfwert der ausgeblendeten Liste ohne
+  Namen und Gründe, solange Sie sie ausgeblendet lassen;
 - Passwort-Hash, MFA-Pflicht und -Geräte, verschlüsselte TOTP-Secrets,
   gehashte Wiederherstellungscodes und Sicherheitsfristen;
 - Anmelde-, Sperr- und Audit-Daten wie Zeitpunkt, Aktion, Konto- und
