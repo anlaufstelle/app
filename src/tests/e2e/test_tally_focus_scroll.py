@@ -6,6 +6,8 @@ tiles left the screen after every tap.  The scenarios run on a day whose feed
 is long enough for the page to scroll, at a desktop and a phone viewport.
 """
 
+import re
+
 import pytest
 from playwright.sync_api import expect
 
@@ -92,6 +94,20 @@ def _wait_for_feed_reload(page, action):
 
 def _stroke(page, tile):
     tile.locator('[data-testid^="tally-increment-"]').click()
+
+
+@pytest.mark.parametrize("viewport_name", sorted(VIEWPORTS))
+def test_undo_button_shows_a_space_before_the_countdown(staff_page, base_url, viewport_name):
+    """The rendered label reads "Rückgängig · 60 s" - the flex button must not swallow the space."""
+    page = staff_page
+    page.set_viewport_size(VIEWPORTS[viewport_name])
+    page.goto(f"{base_url}/", wait_until="domcontentloaded")
+    tile = tally_tile(page, "Kontakt")
+    _stroke(page, tile)
+
+    undo = page.locator('#tally-undo-slot [data-testid="tally-undo"]')
+    expect(undo).to_be_visible()
+    expect(undo).to_have_text(re.compile(r"^Rückgängig · \d+ s$"), use_inner_text=True)
 
 
 @pytest.mark.parametrize("viewport_name", sorted(VIEWPORTS))

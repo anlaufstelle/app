@@ -2,7 +2,9 @@
 {% comment %}Undo bar of the tally, showing the last tap. Fixed above the bottom nav on
 small screens, in flow below the panel from md up. The remaining time is an
 aria-hidden suffix (countdown in tally-undo.js); only the static text is announced,
-once, when the bar appears.{% endcomment %}
+once, when the bar appears. The label and the countdown share ONE inner span: as direct
+children of the inline-flex button they would be separate flex items and the space before
+the dot would collapse.{% endcomment %}
 <div data-tally-undo-bar
      class="fixed inset-x-3 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-40 md:static md:inset-auto md:z-auto flex items-center justify-between gap-3 rounded-[10px] bg-ink text-white px-4 py-2 min-h-[44px] shadow-lg md:shadow-none">
     <span class="text-[13px] min-w-0" data-testid="tally-undo-announcement"><span aria-hidden="true">{% blocktrans with name=row.document_type.name %}+1 {{ name }} gezählt{% endblocktrans %}</span><span class="sr-only">{% blocktrans with name=row.document_type.name %}+1 {{ name }} gezählt, Rückgängig möglich{% endblocktrans %}</span></span>
@@ -21,6 +23,6 @@ once, when the bar appears.{% endcomment %}
         <input type="hidden" name="{{ name }}" value="{{ value }}">
         {% endfor %}
         <button type="submit" class="inline-flex items-center justify-center min-h-[44px] px-3 rounded-[10px] bg-white text-ink text-[13px] font-semibold whitespace-nowrap"
-                data-testid="tally-undo">{% trans "Rückgängig" %}<span aria-hidden="true"> · <span data-tally-undo-remaining>{{ tally_undo_seconds_left }}</span> s</span></button>
+                data-testid="tally-undo"><span>{% trans "Rückgängig" %}<span aria-hidden="true"> · <span data-tally-undo-remaining>{{ tally_undo_seconds_left }}</span> s</span></span></button>
     </form>
 </div>
