@@ -32,10 +32,11 @@
  * generation checks. The repair only fixes the slots; visibility never waits for
  * it.
  *
- * Focus. Swaps are handled by the guard in focus-management.js. After the final
- * evaluation, a figure or close button that held the focus before its slot was
- * replaced gets it back if it is visible again; when the details are hidden while
- * the focus is inside them, the focus moves to the figure first.
+ * Focus. Swaps are handled by the guard in focus-management.js. When the guard
+ * could not hand the focus to the replaced figure or close button (it was hidden in
+ * the new slot) and parked it on the slot, that control gets it back after the
+ * final evaluation; when the details are hidden while the focus is inside them,
+ * the focus moves to the figure first.
  */
 (function () {
     "use strict";
@@ -138,13 +139,14 @@
     }
 
     // A control that held the focus before its slot was replaced gets it back once
-    // it is visible again (the guard may have parked the focus on the slot).
+    // it is visible again. Only a focus the swap guard parked on the slot itself is
+    // taken back; a focus that the person moved away (also to <body>) stays put.
     function restoreFocus() {
         if (!focusedControlId) {
             return;
         }
         var active = document.activeElement;
-        var parked = !active || active === document.body || active.id === KPI_SLOT_ID || active.id === BANS_SLOT_ID;
+        var parked = !!active && (active.id === KPI_SLOT_ID || active.id === BANS_SLOT_ID);
         var control = byId(focusedControlId);
         if (!parked || !control || control === active) {
             return;

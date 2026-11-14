@@ -64,6 +64,23 @@ function swap(id, html) {
     document.getElementById(id).outerHTML = html;
 }
 
+// A swap the way the live watch does it: wrapped in the focus guard. The guard is
+// told that the old twin cannot take the focus (it is hidden in the new slot, as in
+// a browser), so it parks the focus on the slot.
+function guardedSwap(id, html) {
+    const current = document.getElementById(id);
+    const snapshot = window.backgroundSwapGuard.capture(current);
+    current.outerHTML = html;
+    const fresh = document.getElementById(id);
+    const realFocus = HTMLElement.prototype.focus;
+    const spy = vi.spyOn(HTMLElement.prototype, "focus").mockImplementation(function (options) {
+        if (this.closest && this.closest("[hidden]")) return undefined;
+        return realFocus.call(this, options);
+    });
+    window.backgroundSwapGuard.restore(fresh, snapshot);
+    spy.mockRestore();
+}
+
 async function settle() {
     for (let i = 0; i < 8; i++) await Promise.resolve();
 }
@@ -456,11 +473,23 @@ describe("slots after a confirmed choice", () => {
         close().focus();
 
         swap("zeitstrom-kpi-slot", kpiSlot({ hidden: true }));
-        swap("zeitstrom-bans-slot", bansSlot({ hidden: true }));
+        guardedSwap("zeitstrom-bans-slot", bansSlot({ hidden: true }));
+        expect(document.activeElement.id).toBe("zeitstrom-bans-slot");
         await settle();
 
         expect(isHidden()).toBe(false);
         expect(document.activeElement).toBe(close());
+    });
+
+    it("does not pull the focus back to the figure after the person moved it away", async () => {
+        toggle().focus();
+        toggle().blur();
+        expect(document.activeElement).toBe(document.body);
+
+        swap("zeitstrom-kpi-slot", kpiSlot({ count: 3 }));
+        await settle();
+
+        expect(document.activeElement).toBe(document.body);
     });
 });
 
