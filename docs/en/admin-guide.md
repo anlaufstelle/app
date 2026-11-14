@@ -813,7 +813,7 @@ The system type serves **one** purpose: **UI logic**. Accordingly there are exac
 | **Ban** | Activates a ban banner on the person page, dedicated filter in the timeline, count and highlight in the handover; feeds the example ban overview |
 | **Crisis** | Displayed as a highlight in the handover (recent crisis events) |
 
-> **A ban needs a person.** With the system type **Hausverbot (entry ban)**, the **minimum contact stage** is mandatory -- when creating and when editing. Choosing the system type makes the form propose "Pseudonym only" and mark the field as required; without JavaScript, the error message appears on saving instead. The same rule applies to configuration packages (the schema rejects a `ban` type without a stage), in the Django admin and on every save path of the model. Existing bans without a person stay editable and can be deactivated; the check applies only when a ban is created.
+> **A ban needs a person.** With the system type **Hausverbot (entry ban)**, the **minimum contact stage** is mandatory -- when creating and when editing. Choosing the system type makes the form propose "Pseudonym only" and mark the field as required; without JavaScript, the error message appears on saving instead. The same rule applies to configuration packages (the schema rejects a `ban` type without a stage), in the Django admin and when saving through the model; the database additionally enforces it for bulk writes. A ban system type is also only allowed on event types. A **new** ban always needs a person -- even on a type without a stage. Existing bans without a person stay editable and can be deactivated; the check applies only when a ban is created.
 
 > **Note:** Not every documentation type needs a system type -- most do without one. Whether a type lands in a report is answered by the "Appears in …" information in the detail and form views; the system type has nothing to do with it.
 
@@ -2596,5 +2596,5 @@ Person anonymization clears these dynamic fields as well as related titles and g
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- source-hash: 89b2fd07cde6dd6ff3d3a34fa259f91be49974f3 -->
+<!-- source-hash: 503a5df6f6a71376627c0786d3fe301c0cc9f8de -->
 <!-- translation-date: 2026-11-14 -->

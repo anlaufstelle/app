@@ -166,7 +166,7 @@ document.addEventListener("alpine:init", () => {
         /**
          * Pre-fill and required marker of the minimum contact stage.
          *
-         * The pairs ``systemtyp:stufe`` come from
+         * The pairs ``system_type:stage`` come from
          * ``DocumentTypeForm.MIN_CONTACT_STAGE_REQUIRED_DEFAULTS`` via
          * ``data-min-contact-stage-defaults``; the component knows neither
          * system types nor stages. A listed system type makes the stage

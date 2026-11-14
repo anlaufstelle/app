@@ -329,7 +329,11 @@ class TestDocumentTypeCrud:
         pk = None
         try:
             page.goto(f"{base_url}{DOCTYPE_LIST}new/", wait_until="domcontentloaded")
-            page.wait_for_load_state("networkidle")
+            # Ready once Alpine has initialised the form component (it attaches the change listener).
+            page.wait_for_function(
+                "() => document.querySelector('[x-data=\"documentTypeEntityFields\"]')?._x_dataStack !== undefined",
+                timeout=10000,
+            )
             stage = page.locator("select#id_min_contact_stage")
             marker = page.locator("label[for='id_min_contact_stage'] [data-required-marker]")
             expect(stage).to_have_value("", timeout=10000)
@@ -343,7 +347,7 @@ class TestDocumentTypeCrud:
             page.locator(FORM_SUBMIT).click()
             page.wait_for_url(_DETAIL_RE)
             match = _DETAIL_RE.search(page.url)
-            assert match, f"Detail-URL nicht erkannt: {page.url}"
+            assert match, f"detail URL not recognised: {page.url}"
             pk = match.group(1)
 
             page.goto(f"{base_url}{DOCTYPE_LIST}{pk}/edit/", wait_until="domcontentloaded")

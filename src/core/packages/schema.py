@@ -843,8 +843,8 @@ def _parse_document_type(raw: Any, path: str, errors: Errors) -> DocumentTypeDef
         errors.append(
             (
                 stage_path,
-                "Ein Typ mit system_type 'ban' braucht eine min_contact_stage ('identified' oder 'qualified'): "
-                "Ein Hausverbot nennt immer eine Person.",
+                "A type with system_type 'ban' needs a min_contact_stage ('identified' or 'qualified'): "
+                "a ban always names a person.",
             )
         )
 
