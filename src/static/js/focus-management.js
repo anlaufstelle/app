@@ -380,8 +380,10 @@
     // The guard acts for EVERY region the live watch swaps, not only the feed: the
     // feed, the handover note, the KPI row, the ban block and the focus box all
     // pass through it, whatever their own attributes say. It therefore honours
-    // the same data-hx-no-focus opt-out as the afterSwap path and then leaves focus
-    // and scroll position entirely alone.
+    // the same data-hx-no-focus opt-out as the afterSwap path: the opt-out switches
+    // off the hand-over of the focus only. The scroll position is put back in every
+    // case, because the reader must not be moved by a background swap whoever
+    // holds the focus.
     window.backgroundSwapGuard = {
         capture: _snapshot,
         restore: function (target, snapshot) {
@@ -389,10 +391,11 @@
             if (!snapshot) {
                 return;
             }
-            if (_optedOut(container || target)) {
+            if (!container || container.nodeType !== 1) {
+                _restoreScroll(snapshot);
                 return;
             }
-            if (!container || container.nodeType !== 1) {
+            if (_optedOut(container)) {
                 _restoreScroll(snapshot);
                 return;
             }

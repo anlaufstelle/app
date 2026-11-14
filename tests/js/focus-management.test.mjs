@@ -495,7 +495,7 @@ describe("Background reload of an 'always' feed with the focus inside it", () =>
         expect(document.activeElement).toBe(outside);
     });
 
-    it("lets the live watch respect the data-hx-no-focus opt-out on the region", () => {
+    it("lets the live watch respect the data-hx-no-focus opt-out on the region: no focus hand-over, scroll put back", () => {
         const el = feed("always");
         el.setAttribute("data-hx-no-focus", "");
         el.querySelector('[aria-controls="detail-1"]').focus();
@@ -506,10 +506,10 @@ describe("Background reload of an 'always' feed with the focus inside it", () =>
         window.backgroundSwapGuard.restore(el, snapshot);
 
         expect(document.activeElement).toBe(document.body);
-        expect(scrollToSpy).not.toHaveBeenCalled();
+        expect(scrollToSpy).toHaveBeenCalledWith(0, 640);
     });
 
-    it("lets the live watch respect the opt-out on the control that holds the focus", () => {
+    it("lets the live watch respect the opt-out on the control that holds the focus, but still holds the page in place", () => {
         const holder = document.createElement("div");
         holder.setAttribute("data-hx-no-focus", "");
         holder.innerHTML = '<button id="opted-out">Trigger</button>';
@@ -523,6 +523,17 @@ describe("Background reload of an 'always' feed with the focus inside it", () =>
         window.backgroundSwapGuard.restore(el, snapshot);
 
         expect(document.activeElement.id).toBe("opted-out");
+        expect(scrollToSpy).toHaveBeenCalledWith(0, 640);
+    });
+
+    it("does not scroll when an opted-out region swap left the position alone", () => {
+        const el = feed("always");
+        el.setAttribute("data-hx-no-focus", "");
+        const snapshot = window.backgroundSwapGuard.capture(el);
+        el.innerHTML = TWIN_HTML;
+
+        window.backgroundSwapGuard.restore(el, snapshot);
+
         expect(scrollToSpy).not.toHaveBeenCalled();
     });
 
