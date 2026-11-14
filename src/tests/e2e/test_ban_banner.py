@@ -659,6 +659,11 @@ class TestBanDetailsToggle:
 
             page.route("**/partials/zeitstrom/kpi/**", hold_slots)
             page.route("**/partials/zeitstrom/bans/**", hold_slots)
+            failed = []
+            page.on(
+                "requestfailed",
+                lambda request: failed.append(request.url) if "/partials/zeitstrom/" in request.url else None,
+            )
             _open_settled_zeitstrom(page, base_url)
             page.get_by_role("button", name="Hausverbot-Details ausblenden").click()
             expect(page.locator("#zeitstrom-ban-details")).to_be_hidden()
@@ -673,8 +678,12 @@ class TestBanDetailsToggle:
             hold["on"] = False
             second_pk = _add_second_ban(e2e_env)
             page.evaluate("() => window.dispatchEvent(new CustomEvent('zeitstrom:ban-slots-stale'))")
+            # The repair must not abort the held cycle: none of its requests failed.
+            page.evaluate("() => new Promise((resolve) => setTimeout(resolve, 500))")
+            assert failed == [], f"the repair aborted the running cycle: {failed}"
             for route, response in held:
                 route.fulfill(response=response)
+            assert failed == [], f"the held answers could not be delivered: {failed}"
 
             details = page.locator("#zeitstrom-ban-details")
             expect(details.get_by_role("link", name="Race-Ban-2")).to_be_visible(timeout=30_000)
