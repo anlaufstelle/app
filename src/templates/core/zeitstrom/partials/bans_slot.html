@@ -1,20 +1,35 @@
 {% load i18n %}
-<div id="zeitstrom-bans-slot">
+{% comment %}Active bans above the feed. In the feed the block can be hidden (the figure in the KPI row
+brings it back); ``ban_details`` carries the stored choice and is empty in the handover, where the block
+is always shown and has no close button. Without script the close button is a form post.{% endcomment %}
+<div id="zeitstrom-bans-slot"{% if ban_details %} data-fingerprint="{{ ban_details.fingerprint }}" data-ban-details-hidden="{% if ban_details.hidden %}true{% else %}false{% endif %}"{% endif %}>
     {% if active_bans %}
-    <div class="mb-5 space-y-2">
-        {% for ban in active_bans %}
-        <div class="flex items-center px-4 py-2.5 bg-ban-soft border border-ban rounded-[10px] text-[13px] text-ban-deep">
-            <svg aria-hidden="true" class="w-4 h-4 mr-2 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
-            <span class="font-semibold">{% trans "Hausverbot:" %}</span>&nbsp;
-            {% if ban.client %}
-            <a href="{% url 'core:client_detail' pk=ban.client.pk %}" class="inline-flex items-center min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 font-semibold underline">{{ ban.client.pseudonym }}</a>
-            {% else %}
-            <span class="font-semibold">{% trans "Unbekannt" %}</span>
+    <div id="zeitstrom-ban-details"{% if ban_details.hidden %} hidden{% endif %}>
+        <div class="mb-5 flex items-start gap-2">
+            <div class="min-w-0 flex-1 space-y-2">
+                {% for ban in active_bans %}
+                <div class="flex items-center px-4 py-2.5 bg-ban-soft border border-ban rounded-[10px] text-[13px] text-ban-deep">
+                    <svg aria-hidden="true" class="w-4 h-4 mr-2 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+                    <span class="font-semibold">{% trans "Hausverbot:" %}</span>&nbsp;
+                    {% if ban.client %}
+                    <a href="{% url 'core:client_detail' pk=ban.client.pk %}" class="inline-flex items-center min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 font-semibold underline">{{ ban.client.pseudonym }}</a>
+                    {% else %}
+                    <span class="font-semibold">{% trans "Unbekannt" %}</span>
+                    {% endif %}
+                    {% if ban.grund %}&nbsp;– {{ ban.grund|truncatewords:10 }}{% endif %}
+                    {% if ban.bis_datum %}<span class="ml-auto text-[12px]">{% trans "Bis:" %} {{ ban.bis_datum|date }}</span>{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% if ban_details %}
+            <button type="submit" form="zeitstrom-ban-details-form" id="zeitstrom-ban-details-close" data-testid="zeitstrom-ban-details-close"
+                    name="ban_details" value="hide:{{ ban_details.fingerprint }}" aria-controls="zeitstrom-ban-details"
+                    aria-label="{% trans 'Hausverbot-Details ausblenden' %}"
+                    class="inline-flex flex-shrink-0 items-center justify-center min-h-[44px] min-w-[44px] rounded-md text-ban-deep hover:bg-ban-soft cursor-pointer">
+                <span aria-hidden="true" class="text-[22px] leading-none">×</span>
+            </button>
             {% endif %}
-            {% if ban.grund %}&nbsp;– {{ ban.grund|truncatewords:10 }}{% endif %}
-            {% if ban.bis_datum %}<span class="ml-auto text-[12px]">{% trans "Bis:" %} {{ ban.bis_datum|date }}</span>{% endif %}
         </div>
-        {% endfor %}
     </div>
     {% endif %}
 </div>

@@ -79,7 +79,8 @@ NAV_ROUTE_PREFIXES = (
 # #2524 adds record protection and downgrade routes: 175 -> 183.
 # Free-text review adds a list and one source-field review route.
 # Refs #2668: Episode and task forms each add a dynamic-fields partial route.
-_EXPECTED_TOTAL_PATTERNS = 187
+# Refs #2809: the Zeitstrom ban details switch adds one POST route: 187 -> 188.
+_EXPECTED_TOTAL_PATTERNS = 188
 
 
 def _prefixed_route_names() -> dict[str, str]:

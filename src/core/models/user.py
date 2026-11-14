@@ -115,6 +115,15 @@ class User(AbstractUser):
         ),
     )
 
+    # Keyed hash of the ban list this user hid in the Zeitstrom; empty = details shown.
+    # See ``core.services.system.ban_details``. A user belongs to one facility.
+    ban_details_fingerprint = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        editable=False,
+    )
+
     class Meta:
         verbose_name = _("Benutzer")
         verbose_name_plural = _("Benutzer")

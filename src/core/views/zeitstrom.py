@@ -11,7 +11,7 @@ from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import connection, transaction
 from django.http import HttpResponse, HttpResponseNotAllowed, JsonResponse
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.cache import patch_vary_headers
@@ -44,6 +44,11 @@ from core.services.events import (
     enrich_events_with_preview,
 )
 from core.services.system import get_active_bans
+from core.services.system.ban_details import (
+    hide_ban_details,
+    resolve_ban_details,
+    show_ban_details,
+)
 from core.services.zeitstrom_display import format_shift_window
 from core.services.zeitstrom_filters import ZEITSTROM_FILTER_KEYS, resolve_zeitstrom_state
 from core.services.zeitstrom_kpis import build_zeitstrom_kpis
@@ -57,6 +62,7 @@ from core.services.zeitstrom_watch import (
 )
 from core.utils.ratelimit import ratelimit
 from core.views.mixins import AssistantOrAboveRequiredMixin, StaffRequiredMixin
+from core.views.utils import safe_redirect_path
 
 ZEITSTROM_FILTER_TRANSITION_HEADER = "X-Zeitstrom-Filter-Transition"
 ZEITSTROM_VALIDATORS_HEADER = "X-Zeitstrom-Validators"
@@ -75,6 +81,17 @@ def _kpi_context(facility, user, state, *, tally_summary, active_bans, today=Non
     kpis["bans_count"] = len(active_bans)
     kpis["contacts_url"] = reverse(nav.CONTACTS.url_name) if nav.is_visible(nav.CONTACTS, user) else None
     return {"kpis": kpis}
+
+
+def _ban_details_context(facility, user, state, active_bans):
+    """Stored hide choice for the ban details; ``None`` where the details are always shown.
+
+    The handover has no figure to show them again. The choice sits on the user row,
+    so resolving it costs no query unless an outdated choice has to be dropped.
+    """
+    if state.is_handover:
+        return {"ban_details": None}
+    return {"ban_details": resolve_ban_details(user, facility, active_bans)}
 
 
 #: Feed type pills (design: als-screens.jsx filter pills).
@@ -286,6 +303,7 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
         context.update(_feed_context(facility, user, state))
         context.update(_filter_context(facility, user, state, today=today))
         context.update(_sidebar_context(facility, user))
+        context.update(_ban_details_context(facility, user, state, context["active_bans"]))
         context.update(_handover_context(facility, user, state, summaries, now=now))
         context.update(_tally_context(facility, user, state))
         context.update(
@@ -767,15 +785,17 @@ class ZeitstromFeedPartialView(AssistantOrAboveRequiredMixin, ZeitstromWatchFoll
         # other feed request (shift change, filter change, own tally action)
         # carries the row out-of-band so it never lags behind the feed.
         if self.request.headers.get("X-Zeitstrom-Watch") != "1":
+            active_bans = get_active_bans(facility, user=self.request.user)
             context.update(
                 _kpi_context(
                     facility,
                     self.request.user,
                     state,
                     tally_summary=context["tally_summary"],
-                    active_bans=get_active_bans(facility, user=self.request.user),
+                    active_bans=active_bans,
                 )
             )
+            context.update(_ban_details_context(facility, self.request.user, state, active_bans))
             context["kpi_oob"] = context["kpis"] is not None
         return context
 
@@ -886,13 +906,15 @@ class ZeitstromKpiPartialView(AssistantOrAboveRequiredMixin, ZeitstromWatchFollo
                 if state.is_live_tally_context
                 else None
             )
+            active_bans = get_active_bans(facility, user=request.user)
             context = _kpi_context(
                 facility,
                 request.user,
                 state,
                 tally_summary=tally_summary,
-                active_bans=get_active_bans(facility, user=request.user),
+                active_bans=active_bans,
             )
+            context.update(_ban_details_context(facility, request.user, state, active_bans))
             return self.render_watch_followup(request, self.template_name, context, state, tally_summary=tally_summary)
 
 
@@ -924,6 +946,38 @@ class ZeitstromBansPartialView(AssistantOrAboveRequiredMixin, ZeitstromWatchFoll
 
     def get(self, request):
         with _consistent_watch_render():
-            state = resolve_zeitstrom_state(request.GET, request.current_facility)
-            context = {"active_bans": get_active_bans(request.current_facility, user=request.user)}
+            facility = request.current_facility
+            state = resolve_zeitstrom_state(request.GET, facility)
+            active_bans = get_active_bans(facility, user=request.user)
+            context = {"active_bans": active_bans}
+            context.update(_ban_details_context(facility, request.user, state, active_bans))
             return self.render_watch_followup(request, self.template_name, context, state)
+
+
+@method_decorator(require_http_methods(["POST"]), name="dispatch")
+class ZeitstromBanDetailsView(AssistantOrAboveRequiredMixin, View):
+    """Hide or show the ban details for the signed-in user (per facility).
+
+    ``ban_details`` is ``hide:<fingerprint>`` (the fingerprint of the list the
+    person was looking at) or ``show``. A fingerprint that no longer matches the
+    list changes nothing. Scripted calls get JSON, a plain form post is redirected
+    back to the Zeitstrom.
+    """
+
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
+    def post(self, request):
+        facility = request.current_facility
+        if facility is None:
+            raise PermissionDenied
+        active_bans = get_active_bans(facility, user=request.user)
+        choice = request.POST.get("ban_details", "")
+        if choice.startswith("hide:"):
+            state = hide_ban_details(request.user, facility, active_bans, choice[len("hide:") :])
+        elif choice == "show":
+            state = show_ban_details(request.user, facility, active_bans)
+        else:
+            state = resolve_ban_details(request.user, facility, active_bans)
+        if "application/json" in request.headers.get("Accept", ""):
+            return JsonResponse({"hidden": state.hidden, "fingerprint": state.fingerprint})
+        target = safe_redirect_path(request.POST.get("next"))
+        return redirect(target if target != "/" else reverse("core:zeitstrom"))

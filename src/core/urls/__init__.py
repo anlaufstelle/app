@@ -158,6 +158,7 @@ from core.views.workitems import (
 )
 from core.views.zeitstrom import (
     HandoverNoteUpdateView,
+    ZeitstromBanDetailsView,
     ZeitstromBansPartialView,
     ZeitstromFeedPartialView,
     ZeitstromFocusBoxPartialView,
@@ -439,6 +440,7 @@ urlpatterns = [
         ZeitstromBansPartialView.as_view(),
         name="zeitstrom_bans_partial",
     ),
+    path("zeitstrom/ban-details/", ZeitstromBanDetailsView.as_view(), name="zeitstrom_ban_details"),
     path("api/v1/zeitstrom/watch/", ZeitstromWatchView.as_view(), name="zeitstrom_watch"),
     path("partials/cases/fields/", CaseFieldsPartialView.as_view(), name="case_fields_partial"),
     path("partials/cases/for-client/", CasesForClientView.as_view(), name="cases_for_client"),

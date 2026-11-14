@@ -28,7 +28,7 @@ def _get(client, user, params=None):
 
 def _chip(html, testid):
     """Return ``(count, href)`` of the KPI chip with *testid*, or ``None`` when absent."""
-    match = re.search(rf'<(?:a|span)[^>]*data-testid="{re.escape(testid)}"[^>]*>', html)
+    match = re.search(rf'<(?:a|span|button)[^>]*data-testid="{re.escape(testid)}"[^>]*>', html)
     if match is None:
         return None
     tag = match.group(0)
@@ -331,6 +331,17 @@ class TestBanSafety:
         assert html.index("zeitstrom-kpi-bans") < html.index('id="zeitstrom-bans-slot"')
         slot = html[html.index('id="zeitstrom-bans-slot"') :]
         assert "Hausverbot:" in slot and "Bedrohung" in slot
+
+    def test_ban_figure_is_a_switch_for_the_details_and_leads_the_row(
+        self, client, staff_user, active_ban_event, full_day_shift
+    ):
+        html = _get(client, staff_user).content.decode()
+
+        tag = re.search(r'<[^>]*data-testid="zeitstrom-kpi-bans"[^>]*>', html).group(0)
+        assert tag.startswith("<button")
+        assert 'aria-controls="zeitstrom-ban-details"' in tag and 'aria-expanded="true"' in tag
+        assert 'id="zeitstrom-ban-details"' in html
+        assert html.index("zeitstrom-kpi-bans") < html.index("zeitstrom-contacts-list")
 
     def test_chip_is_absent_without_active_bans(self, client, staff_user, full_day_shift):
         html = _get(client, staff_user).content.decode()

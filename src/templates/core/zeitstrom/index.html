@@ -116,7 +116,14 @@
 {% endwith %}
 {% if not uebergabe_mode %}{% include "core/zeitstrom/partials/selection_hint.html" %}{% endif %}
 
-{% if not uebergabe_mode %}{% include "core/zeitstrom/partials/kpi_slot.html" %}{% endif %}
+{% if not uebergabe_mode %}
+{# Target of the ban figure and the close button of the ban block; works without script (redirects back here). #}
+<form id="zeitstrom-ban-details-form" method="post" action="{% url 'core:zeitstrom_ban_details' %}" class="contents">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+</form>
+{% include "core/zeitstrom/partials/kpi_slot.html" %}
+{% endif %}
 
 {% include "core/zeitstrom/partials/bans_slot.html" %}
 
@@ -202,6 +209,7 @@
 <script src="{% static 'js/time-filter-tabs.js' %}"></script>
 <script src="{% static 'js/zeitstrom-filter-state.js' %}"></script>
 <script src="{% static 'js/zeitstrom-live-watch.js' %}"></script>
+<script src="{% static 'js/ban-details-toggle.js' %}"></script>
 <script src="{% static 'js/tally-undo.js' %}"></script>
 {# #1912: progressive Pending-/Blocked-Anzeige und lokales Zahlenformular im warm geladenen Zeitstrom. #}
 <script src="{% static 'js/offline-tally.js' %}"

@@ -3,11 +3,25 @@
 hit count of the page it opens — the contact count runs through the contact list's own query with
 the same parameters as the link, "mine" and "overdue" are strictly assigned to the user, the tally
 total counts tally-origin entries of every type in the live window. On small screens the row scrolls sideways inside itself.
+The hausverbot figure is the switch for the detail block (bans_slot.html).
 The slot is replaced by the live watch (component "kpi") and out-of-band by feed refreshes.{% endcomment %}
-<div id="zeitstrom-kpi-slot" data-testid="zeitstrom-kpi-slot" {% if kpi_oob %}hx-swap-oob="outerHTML"{% endif %}>
+<div id="zeitstrom-kpi-slot" data-testid="zeitstrom-kpi-slot"{% if ban_details %} data-ban-fingerprint="{{ ban_details.fingerprint }}" data-ban-details-hidden="{% if ban_details.hidden %}true{% else %}false{% endif %}"{% endif %} {% if kpi_oob %}hx-swap-oob="outerHTML"{% endif %}>
     {% if kpis %}
     {% with link_class="inline-flex items-center gap-1.5 whitespace-nowrap min-h-[44px] md:min-h-0 rounded-md px-1 hover:bg-canvas" %}
     <ul class="mb-4 flex max-w-full items-center gap-x-5 gap-y-1 overflow-x-auto md:flex-wrap" aria-label="{% trans 'Kennzahlen' %}">
+        {% if kpis.bans_count %}
+        <li>
+            {# The ban figure comes first so it stays in view on a narrow screen. With the details hidden it is the only notice. #}
+            {# Without script it submits the form in index.html (progressive); with script bans-details.js handles it. #}
+            <button type="submit" form="zeitstrom-ban-details-form" id="zeitstrom-ban-details-toggle" data-testid="zeitstrom-kpi-bans" data-count="{{ kpis.bans_count }}"
+                    {% if ban_details %}name="ban_details" value="{% if ban_details.hidden %}show{% else %}hide:{{ ban_details.fingerprint }}{% endif %}" aria-expanded="{% if ban_details.hidden %}false{% else %}true{% endif %}" aria-controls="zeitstrom-ban-details"{% endif %}
+                    class="inline-flex items-center gap-1.5 whitespace-nowrap min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 rounded-full border border-ban/30 bg-ban-soft px-2.5 py-1 font-semibold text-ban-deep cursor-pointer">
+                <svg aria-hidden="true" class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+                <span class="text-[18px] font-bold tabular-nums">{{ kpis.bans_count }}</span>
+                <span class="text-[13px]">{% blocktrans count counter=kpis.bans_count %}Hausverbot aktiv{% plural %}Hausverbote aktiv{% endblocktrans %}</span>
+            </button>
+        </li>
+        {% endif %}
         <li>
             {% if kpis.contacts_url %}<a href="{{ kpis.contacts_url }}?{{ kpis.contacts_params }}" data-testid="zeitstrom-contacts-list" data-count="{{ kpis.contacts_count }}" class="{{ link_class }} text-ink">{% else %}<span data-testid="zeitstrom-contacts-list" data-count="{{ kpis.contacts_count }}" class="{{ link_class }} text-ink">{% endif %}
                 <span class="text-[18px] font-bold tabular-nums">{{ kpis.contacts_count }}</span>
@@ -34,15 +48,6 @@ The slot is replaced by the live watch (component "kpi") and out-of-band by feed
                 <span class="text-[13px] {% if kpis.my_overdue_count %}text-red-600{% else %}text-ink-soft{% endif %}">{% trans "überfällig" %}</span><span aria-hidden="true" class="{% if kpis.my_overdue_count %}text-red-600{% else %}text-ink-muted{% endif %}">→</span>
             </a>
         </li>
-        {% if kpis.bans_count %}
-        <li>
-            <span data-testid="zeitstrom-kpi-bans" data-count="{{ kpis.bans_count }}" class="inline-flex items-center gap-1.5 whitespace-nowrap min-h-[44px] md:min-h-0 rounded-full border border-ban/30 bg-ban-soft px-2.5 py-1 font-semibold text-ban-deep">
-                <svg aria-hidden="true" class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
-                <span class="text-[18px] font-bold tabular-nums">{{ kpis.bans_count }}</span>
-                <span class="text-[13px]">{% blocktrans count counter=kpis.bans_count %}Hausverbot aktiv{% plural %}Hausverbote aktiv{% endblocktrans %}</span>
-            </span>
-        </li>
-        {% endif %}
     </ul>
     {% endwith %}
     {% endif %}
