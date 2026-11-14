@@ -13,7 +13,7 @@
   "test_auth_roles.py": 56.873,
   "test_authz_audit.py": 0.892,
   "test_authz_live.py": 5.75,
-  "test_ban_banner.py": 40.43,
+  "test_ban_banner.py": 120.73,
   "test_bugfixes_v1.py": 16.298,
   "test_button_permissions.py": 29.327,
   "test_case_deletion_workflow.py": 46.796,

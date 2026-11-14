@@ -971,7 +971,7 @@ print(event.pk)
             assert figures.evaluate("el => getComputedStyle(el).overflowX") == "auto"
             assert page.locator("main").evaluate("el => el.scrollWidth <= el.clientWidth")
             assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
-            ban_row = page.locator("#zeitstrom-bans-slot > div > div").filter(has_text="KPI-Ban")
+            ban_row = page.get_by_test_id("zeitstrom-ban-row").filter(has_text="KPI-Ban")
             expect(ban_row).to_be_visible()
             expect(ban_row).to_contain_text("Safety")
             expect(ban_row).to_contain_text("Bis:")

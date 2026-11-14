@@ -12,7 +12,9 @@ gesäten Daten ist das geraten, kein Test. Diese Variante:
 
 from __future__ import annotations
 
+import re
 import sys
+from datetime import date, timedelta
 from urllib.parse import urljoin
 
 import pytest
@@ -331,4 +333,202 @@ class TestHausverbotBannerLiveWatch:
         finally:
             if editor is not None:
                 editor.close()
+            _restore_ban_state(e2e_env, restore)
+
+
+_CLEAR_CHOICE_SHELL = r"""
+from core.models import User
+User.objects.exclude(ban_details_fingerprint="").update(ban_details_fingerprint="")
+"""
+
+
+def _clear_ban_details_choice(e2e_env: dict[str, str]) -> None:
+    """Forget every stored hide choice, so a test starts with the details shown."""
+    result = run_child(
+        [sys.executable, "src/manage.py", "shell", "--no-imports", "-c", _CLEAR_CHOICE_SHELL],
+        env=e2e_env,
+        check=False,
+        timeout=SHELL_TIMEOUT_SECONDS,
+    )
+    assert result.returncode == 0, f"Choice reset failed:\n{result.stderr}"
+
+
+def _open_settled_zeitstrom(page, base_url, query=""):
+    """Open the Zeitstrom and finish the initial live-watch replacement first."""
+    page.goto(f"{base_url}/{query}", wait_until="load")
+    page.evaluate("() => window.zeitstromWatch.checkNow()")
+
+
+class TestHausverbotDetailsToggle:
+    """#2809: hide the ban details, bring them back through the figure, keep the choice per user."""
+
+    def _prepare(self, e2e_env):
+        _clear_ban_details_choice(e2e_env)
+        return _seed_active_ban(e2e_env)
+
+    def test_close_and_figure_toggle_the_details_and_the_choice_survives_a_reload(self, staff_page, base_url, e2e_env):
+        _event_pk, pseudonym, restore = self._prepare(e2e_env)
+        page = staff_page
+        try:
+            _open_settled_zeitstrom(page, base_url)
+            toggle = page.get_by_test_id("zeitstrom-kpi-bans")
+            details = page.locator("#zeitstrom-ban-details")
+            expect(details).to_be_visible()
+            expect(details.get_by_role("link", name=pseudonym)).to_be_visible()
+            expect(toggle).to_have_attribute("aria-expanded", "true")
+            expect(toggle).to_have_attribute("aria-controls", "zeitstrom-ban-details")
+
+            page.get_by_role("button", name="Hausverbot-Details ausblenden").click()
+
+            expect(details).to_be_hidden()
+            expect(toggle).to_be_visible()
+            expect(toggle).to_have_attribute("aria-expanded", "false")
+            expect(toggle).to_be_focused()
+
+            _open_settled_zeitstrom(page, base_url)
+            expect(page.locator("#zeitstrom-ban-details")).to_be_hidden()
+            expect(page.get_by_test_id("zeitstrom-kpi-bans")).to_have_attribute("aria-expanded", "false")
+
+            page.get_by_test_id("zeitstrom-kpi-bans").click()
+
+            expect(page.locator("#zeitstrom-ban-details")).to_be_visible()
+            expect(page.get_by_test_id("zeitstrom-kpi-bans")).to_have_attribute("aria-expanded", "true")
+            _open_settled_zeitstrom(page, base_url)
+            expect(page.locator("#zeitstrom-ban-details")).to_be_visible()
+        finally:
+            _clear_ban_details_choice(e2e_env)
+            _restore_ban_state(e2e_env, restore)
+
+    def test_choice_survives_a_feed_refresh_and_the_figure_stays_the_only_notice(self, staff_page, base_url, e2e_env):
+        _event_pk, _pseudonym, restore = self._prepare(e2e_env)
+        page = staff_page
+        try:
+            _open_settled_zeitstrom(page, base_url)
+            page.get_by_role("button", name="Hausverbot-Details ausblenden").click()
+            expect(page.locator("#zeitstrom-ban-details")).to_be_hidden()
+
+            page.get_by_test_id("zeitstrom-filter-chip").filter(has_text="Kontakte").click()
+            page.wait_for_load_state("load")
+            page.evaluate("() => window.zeitstromWatch.checkNow()")
+
+            expect(page.locator("#zeitstrom-ban-details")).to_be_hidden()
+            expect(page.get_by_test_id("zeitstrom-kpi-bans")).to_have_attribute("aria-expanded", "false")
+        finally:
+            _clear_ban_details_choice(e2e_env)
+            _restore_ban_state(e2e_env, restore)
+
+    def test_a_changed_ban_shows_the_details_again_without_a_reload(self, staff_page, base_url, e2e_env):
+        event_pk, _pseudonym, restore = self._prepare(e2e_env)
+        watched = staff_page
+        editor = None
+        try:
+            _open_settled_zeitstrom(watched, base_url)
+            watched.get_by_role("button", name="Hausverbot-Details ausblenden").click()
+            expect(watched.locator("#zeitstrom-ban-details")).to_be_hidden()
+            watched_url = watched.url
+
+            editor = watched.context.new_page()
+            editor.set_default_timeout(30000)
+            editor.set_default_navigation_timeout(30000)
+            editor.goto(f"{base_url}/events/{event_pk}/", wait_until="domcontentloaded")
+            action_in_bar(editor, "event", "event-action-edit").click()
+            editor.wait_for_load_state("domcontentloaded")
+            reason = editor.locator('[name="grund"]')
+            reason.fill("E2E-Test: reason changed while hidden")
+            editor.get_by_role("button", name="Änderungen speichern").click()
+            editor.wait_for_url(f"**/events/{event_pk}/", wait_until="domcontentloaded")
+
+            expect(watched.locator("#zeitstrom-ban-details")).to_be_visible(timeout=30_000)
+            expect(watched.get_by_test_id("zeitstrom-kpi-bans")).to_have_attribute("aria-expanded", "true")
+            assert watched.url == watched_url, "The refresh must not navigate"
+        finally:
+            if editor is not None:
+                editor.close()
+            _clear_ban_details_choice(e2e_env)
+            _restore_ban_state(e2e_env, restore)
+
+    def test_handover_always_shows_the_details_without_a_close_button(self, staff_page, base_url, e2e_env):
+        _event_pk, _pseudonym, restore = self._prepare(e2e_env)
+        page = staff_page
+        try:
+            _open_settled_zeitstrom(page, base_url)
+            page.get_by_role("button", name="Hausverbot-Details ausblenden").click()
+            expect(page.locator("#zeitstrom-ban-details")).to_be_hidden()
+
+            yesterday = (date.today() - timedelta(days=1)).isoformat()
+            page.goto(f"{base_url}/?view=uebergabe&date={yesterday}", wait_until="load")
+
+            expect(page.locator("#zeitstrom-ban-details")).to_be_visible()
+            expect(page.get_by_role("button", name="Hausverbot-Details ausblenden")).to_have_count(0)
+            expect(page.get_by_test_id("zeitstrom-kpi-bans")).to_have_count(0)
+        finally:
+            _clear_ban_details_choice(e2e_env)
+            _restore_ban_state(e2e_env, restore)
+
+    def test_figure_is_in_view_and_targets_are_44px_on_a_phone(self, staff_page, base_url, e2e_env):
+        _event_pk, _pseudonym, restore = self._prepare(e2e_env)
+        page = staff_page
+        try:
+            page.set_viewport_size({"width": 390, "height": 844})
+            _open_settled_zeitstrom(page, base_url)
+            close = page.get_by_role("button", name="Hausverbot-Details ausblenden")
+            close_box = close.evaluate("el => el.getBoundingClientRect().toJSON()")
+            assert close_box["width"] >= 44 and close_box["height"] >= 44, close_box
+
+            close.click()
+            expect(page.locator("#zeitstrom-ban-details")).to_be_hidden()
+
+            toggle_box = page.get_by_test_id("zeitstrom-kpi-bans").evaluate("el => el.getBoundingClientRect().toJSON()")
+            assert toggle_box["width"] >= 44 and toggle_box["height"] >= 44, toggle_box
+            assert toggle_box["x"] >= 0 and toggle_box["x"] + toggle_box["width"] <= 390, toggle_box
+            assert page.evaluate("() => window.scrollX") == 0
+        finally:
+            _clear_ban_details_choice(e2e_env)
+            _restore_ban_state(e2e_env, restore)
+
+    def test_switch_works_without_script_as_a_form_post(self, staff_page, base_url, e2e_env):
+        _event_pk, _pseudonym, restore = self._prepare(e2e_env)
+        plain = None
+        try:
+            plain = staff_page.context.browser.new_context(
+                storage_state=staff_page.context.storage_state(), java_script_enabled=False, locale="de-DE"
+            )
+            page = plain.new_page()
+            page.set_default_timeout(30000)
+            page.goto(f"{base_url}/", wait_until="load")
+            expect(page.locator("#zeitstrom-ban-details")).to_be_visible()
+
+            page.get_by_role("button", name="Hausverbot-Details ausblenden").click()
+            page.wait_for_load_state("load")
+
+            expect(page.locator("#zeitstrom-ban-details")).to_be_hidden()
+            page.get_by_test_id("zeitstrom-kpi-bans").click()
+            page.wait_for_load_state("load")
+            expect(page.locator("#zeitstrom-ban-details")).to_be_visible()
+        finally:
+            if plain is not None:
+                plain.close()
+            _clear_ban_details_choice(e2e_env)
+            _restore_ban_state(e2e_env, restore)
+
+
+class TestPersonListBanBadge:
+    """#2809: the person list flags people with an active ban."""
+
+    def test_row_carries_the_badge_in_text_and_colour(self, staff_page, base_url, e2e_env):
+        _event_pk, pseudonym, restore = _seed_active_ban(e2e_env)
+        page = staff_page
+        try:
+            page.goto(f"{base_url}/clients/?q={pseudonym}", wait_until="load")
+            row = page.locator(f"[data-testid='client-row'][data-pseudonym='{pseudonym}']")
+            badge = row.get_by_test_id("client-row-ban-badge")
+
+            expect(badge).to_be_visible()
+            expect(badge).to_have_text("Hausverbot")
+            expect(badge).to_have_class(re.compile(r"bg-ban"))
+            expect(row).not_to_contain_text("E2E-Test: temporary ban")
+
+            page.set_viewport_size({"width": 390, "height": 844})
+            expect(row.get_by_test_id("client-row-ban-badge")).to_be_visible()
+        finally:
             _restore_ban_state(e2e_env, restore)
