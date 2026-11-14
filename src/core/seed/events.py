@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from core.models import Client, DocumentType, Event, Facility, User
 from core.seed.constants import EVENT_DATA_POOLS, EVENT_TYPE_WEIGHTS
+from core.seed.tally import seed_tally_events
 from core.services.events.fields import stage_index
 
 logger = logging.getLogger(__name__)
@@ -232,6 +233,26 @@ def seed_events_bulk(
     package: str = "default",
     now: datetime | None = None,
 ) -> int:
+    """Generate the standard events and, on top of them, the tally events of ``facility``.
+
+    The standard volume is ``cfg["events_per_facility"]`` and does not count
+    tally events; their number comes from ``cfg["tally_ratio"]`` (see
+    :func:`core.seed.tally.seed_tally_events`). Returns the number of newly
+    created events of both kinds.
+    """
+    created = _seed_standard_events_bulk(facility, users, clients, cfg, package=package, now=now)
+    return created + seed_tally_events(facility, users, cfg, package=package, now=now)
+
+
+def _seed_standard_events_bulk(
+    facility: Facility,
+    users: list[User],
+    clients: list[Client],
+    cfg: dict,
+    *,
+    package: str = "default",
+    now: datetime | None = None,
+) -> int:
     """Generate events with ``bulk_create`` for non-small scales.
 
     ``package`` waehlt den Pool-/Gewichts-Namensraum aus ``EVENT_TYPE_WEIGHTS``/
@@ -246,7 +267,8 @@ def seed_events_bulk(
     target = cfg["events_per_facility"]
     zeitraum = cfg["zeitraum_days"]
 
-    existing_count = Event.objects.filter(facility=facility).count()
+    # Tally events come on top of the target and do not count towards it.
+    existing_count = Event.objects.filter(facility=facility).exclude(created_via=Event.CreatedVia.TALLY).count()
     if existing_count >= target:
         return 0
 

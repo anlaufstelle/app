@@ -4785,7 +4785,7 @@
 |---------|-------|---------|--------|-----|
 | Statistik | leitung | C | ⚪ | `test_statistics_dashboard.py` |
 
-**Voraussetzung:** Seed mit `.venv/bin/python src/manage.py seed --flush --scale large` (10.000 Ereignisse je Einrichtung, 50.000 insgesamt).
+**Voraussetzung:** Seed mit `.venv/bin/python src/manage.py seed --flush --scale large` (10.000 Ereignisse je Einrichtung, 50.000 insgesamt, dazu 500 Strichlisten-Ereignisse je Einrichtung).
 
 **Vorbereitung:**
 - Browser-DevTools mit Performance-Tab.

@@ -17,7 +17,12 @@ def seed_deletion_requests(facility: Facility, users: list[User], cfg: dict) -> 
     if existing >= count:
         return 0
 
-    events = list(Event.objects.filter(facility=facility, is_deleted=False)[: count * 2])
+    # Tally events are skipped: the picks stay the ones of the standard events, as before the tally seed existed.
+    events = list(
+        Event.objects.filter(facility=facility, is_deleted=False).exclude(created_via=Event.CreatedVia.TALLY)[
+            : count * 2
+        ]
+    )
     if not events:
         return 0
 
@@ -82,7 +87,12 @@ def seed_retention_proposals(facility: Facility, users: list[User], cfg: dict) -
     if existing >= count:
         return (0, 0)
 
-    events = list(Event.objects.filter(facility=facility, is_deleted=False)[: count * 2])
+    # Tally events are skipped: the picks stay the ones of the standard events, as before the tally seed existed.
+    events = list(
+        Event.objects.filter(facility=facility, is_deleted=False).exclude(created_via=Event.CreatedVia.TALLY)[
+            : count * 2
+        ]
+    )
     if not events:
         return (0, 0)
 

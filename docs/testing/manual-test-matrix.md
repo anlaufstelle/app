@@ -354,8 +354,8 @@ Die Zielwerte gelten für einen frischen Seed nach `--flush`. Angaben jeweils **
 | Skalierung | Einrichtungen | Personen | Events | Cases | WorkItems | Aufruf |
 |------------|---------------|--------------|--------|-------|-----------|--------|
 | Small (Default) | 1 | 7 / 7 | 25 / 25 | 3 / 3 | 5 / 5 | `.venv/bin/python src/manage.py seed --flush --scale small` |
-| Medium | 2 | 40 / 80 | 750 / 1.500 | 12 / 24 | 25 / 50 | `.venv/bin/python src/manage.py seed --flush --scale medium` |
-| Large (Last-Smoke) | 5 | 500 / 2.500 | 10.000 / 50.000 | 50 / 250 | 100 / 500 | `.venv/bin/python src/manage.py seed --flush --scale large` |
+| Medium | 2 | 40 / 80 | 750 + 38 Strichliste / 1.500 + 76 | 12 / 24 | 25 / 50 | `.venv/bin/python src/manage.py seed --flush --scale medium` |
+| Large (Last-Smoke) | 5 | 500 / 2.500 | 10.000 + 500 Strichliste / 50.000 + 2.500 | 50 / 250 | 100 / 500 | `.venv/bin/python src/manage.py seed --flush --scale large` |
 
 `make seed` ruft nur `.venv/bin/python src/manage.py seed` auf (Default `small`, ohne `--flush`); Make-Variablen für Skalierung oder Einrichtungszahl werden nicht weitergereicht. `solo` und `demo` sind weitere gültige Profile; `empty` ist kein Profil.
 

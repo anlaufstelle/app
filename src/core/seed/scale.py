@@ -1,5 +1,7 @@
 """Scale configuration for the seed command."""
 
+# ``tally_ratio`` (optional): tally (Strichliste) events per facility as a share of ``events_per_facility``,
+# created on top of that volume (see ``core.seed.tally``). ``small`` seeds its fixed event list and has none.
 SCALE_CONFIG = {
     "small": {
         "facilities": 1,
@@ -19,6 +21,7 @@ SCALE_CONFIG = {
         "users_per_facility": 6,
         "clients_per_facility": 40,
         "events_per_facility": 750,
+        "tally_ratio": 0.05,
         "cases": 12,
         "episodes": 20,
         "goals": 15,
@@ -37,6 +40,7 @@ SCALE_CONFIG = {
         "users_per_facility": 6,
         "clients_per_facility": 500,
         "events_per_facility": 10000,
+        "tally_ratio": 0.05,
         "cases": 50,
         "episodes": 80,
         "goals": 60,
@@ -53,6 +57,7 @@ SCALE_CONFIG = {
         "users_per_facility": 6,
         "clients_per_facility": 30,
         "events_per_facility": 500,
+        "tally_ratio": 0.05,
         "cases": 10,
         "episodes": 15,
         "goals": 10,
@@ -76,6 +81,7 @@ SCALE_CONFIG = {
         "users_per_facility": 6,
         "clients_per_facility": 18,
         "events_per_facility": 120,
+        "tally_ratio": 0.05,
         "cases": 6,
         "episodes": 8,
         "goals": 6,
@@ -94,6 +100,7 @@ SCALE_CONFIG = {
         "users_per_facility": 2,
         "clients_per_facility": 9,
         "events_per_facility": 60,
+        "tally_ratio": 0.05,
         "cases": 4,
         "episodes": 4,
         "goals": 3,

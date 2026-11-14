@@ -267,6 +267,7 @@ Die im Demo-Panel beworbenen Demo-Konten haben keine E-Mail-Adresse, weil die ge
 | Users / Einrichtung | 6 (`admin`/`emma`/`miriam`/`markus`/`lena`/`felix`) | 6 | 6 | 6 | 6 (Solo-Facility: 2 — Fachkraft + Vertretung) |
 | Clients / Einrichtung | 7 | 40 | 500 | 30 | 18 (Solo: 9) |
 | Events / Einrichtung | 25 | 750 | 10.000 | 500 | 120 (Solo: 60) |
+| Strichlisten-Ereignisse / Einrichtung (zusätzlich) | — | 38 | 500 | 25 | 6 (Solo: 3) |
 | Cases | 3 | 12 | 50 | 10 | 6 (Solo: 4) |
 | Episoden | — | 20 | 80 | 15 | 8 (Solo: 4) |
 | Wirkungsziele | — | 15 | 60 | 10 | 6 (Solo: 3) |
@@ -280,6 +281,8 @@ Die im Demo-Panel beworbenen Demo-Konten haben keine E-Mail-Adresse, weil die ge
 | Zeitraum | 80 Tage | 365 Tage | 3 Jahre | 1000 Tage | 270 Tage |
 | Zeitfenster je Einrichtung | Hauptstelle 3 | Hauptstelle 3, Nord 3 | Hauptstelle 3, Nord 3, Süd 2, Ost 2, West 3 | Hauptstelle 3 | Kontaktladen 3, Falkenweg 3, Lindenhof 0, Nachtfalter 2, Wilhelmshöhe 2, Amalie 3 |
 
+> **Strichlisten-Ereignisse:** `medium`, `large`, `solo` und `demo` legen je Einrichtung rund 5 % der Ereignis-Zahl zusätzlich als Strichlisten-Ereignisse an (`created_via=tally`, anonym, ohne Person). Sie landen nur auf Typen, die die Strichliste zulässt (Zähl-Modus ohne Pflichtfeld oder mit Zahlen-Pflichtfeldern); solange die Zahl reicht, bekommt zuerst jeder zulässige Typ eines. Sie verteilen sich über den Zeitraum, liegen überwiegend in den Schichtfenstern der Einrichtung, und einige gehören zur laufenden Schicht bzw. zum Seed-Tag. Die Zahl unter „Events / Einrichtung“ bleibt unverändert; `small` hat keine.
+>
 > **Hinweis:** `small` enthält kein Fallmanagement (keine Episoden, Ziele). Für die Entwicklung am Fallmanagement `medium` verwenden.
 >
 > **`demo`** (Refs #2279) stellt alle sechs Demo-Szenarien (einschließlich Solo-Betrieb) gleichzeitig bereit, unabhängig vom Datenvolumen der übrigen Profile — Quelle ist ausschließlich `core.seed.scenarios.SCENARIOS`. Wird von `dev-ops/deploy/demo-reseed.sh` (stündlicher Reset auf `demo.anlaufstelle.app`) verwendet, ist aber auch lokal nutzbar (`python src/manage.py seed --scale demo`).

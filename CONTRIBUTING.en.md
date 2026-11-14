@@ -264,6 +264,7 @@ The demo accounts advertised in the demo panel have no email address because the
 | Users / facility | 6 (`admin`/`emma`/`miriam`/`markus`/`lena`/`felix`) | 6 | 6 | 6 | 6 (solo facility: 2 — case worker + backup) |
 | Clients / facility | 7 | 40 | 500 | 30 | 18 (solo: 9) |
 | Events / facility | 25 | 750 | 10,000 | 500 | 120 (solo: 60) |
+| Tally events / facility (additional) | — | 38 | 500 | 25 | 6 (solo: 3) |
 | Cases | 3 | 12 | 50 | 10 | 6 (solo: 4) |
 | Episodes | — | 20 | 80 | 15 | 8 (solo: 4) |
 | Impact goals | — | 15 | 60 | 10 | 6 (solo: 3) |
@@ -277,6 +278,8 @@ The demo accounts advertised in the demo panel have no email address because the
 | Time span | 80 days | 365 days | 3 years | 1000 days | 270 days |
 | Time filters per facility | Main facility 3 | Main facility 3, Nord 3 | Main facility 3, Nord 3, Süd 2, Ost 2, West 3 | Main facility 3 | Kontaktladen 3, Falkenweg 3, Lindenhof 0, Nachtfalter 2, Wilhelmshöhe 2, Amalie 3 |
 
+> **Tally events:** `medium`, `large`, `solo` and `demo` additionally create roughly 5 % of the event count per facility as tally events (`created_via=tally`, anonymous, no person). They only land on types the tally list allows (counting mode without a required field or with required number fields); as long as the number suffices, every allowed type gets one first. They are spread over the time span, mostly fall inside the facility's shift windows, and some belong to the running shift or the seed day. The figure under "Events / facility" stays unchanged; `small` has none.
+>
 > **Note:** `small` does not include case management (no episodes, goals). Use `medium` when developing case management features.
 >
 > **`demo`** (Refs #2279) provides all six demo scenarios (including solo operation) at once, independent of the data volume used by the other profiles — the sole source is `core.seed.scenarios.SCENARIOS`. Used by `dev-ops/deploy/demo-reseed.sh` (hourly reset on `demo.anlaufstelle.app`), but also usable locally (`python src/manage.py seed --scale demo`).
@@ -1057,5 +1060,5 @@ src/
 
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.99.10 -->
-<!-- translation-date: 2026-11-04 -->
-<!-- source-hash: 72484c4b44f9820e64738e86b9a14595830b030f -->
+<!-- translation-date: 2026-11-14 -->
+<!-- source-hash: 2106ad1057e1655769b3021473b65c6124b4593e -->

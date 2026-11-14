@@ -41,6 +41,7 @@ KEY_TO_DOC_LABEL = {
     "users_per_facility": "Users / Einrichtung",
     "clients_per_facility": "Clients / Einrichtung",
     "events_per_facility": "Events / Einrichtung",
+    "tally_ratio": "Strichlisten-Ereignisse / Einrichtung (zusätzlich)",
     "cases": "Cases",
     "episodes": "Episoden",
     "goals": "Wirkungsziele",
