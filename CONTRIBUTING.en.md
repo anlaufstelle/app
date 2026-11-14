@@ -278,7 +278,7 @@ The demo accounts advertised in the demo panel have no email address because the
 | Time span | 80 days | 365 days | 3 years | 1000 days | 270 days |
 | Time filters per facility | Main facility 3 | Main facility 3, Nord 3 | Main facility 3, Nord 3, Süd 2, Ost 2, West 3 | Main facility 3 | Kontaktladen 3, Falkenweg 3, Lindenhof 0, Nachtfalter 2, Wilhelmshöhe 2, Amalie 3 |
 
-> **Tally events:** `medium`, `large`, `solo` and `demo` additionally create roughly 5 % of the event count per facility as tally events (`created_via=tally`, anonymous, no person). They only land on types the tally list allows (counting mode without a required field or with required number fields); as long as the number suffices, every allowed type gets one first. They are spread over the time span, mostly fall inside the facility's shift windows, and some belong to the running shift or the seed day. The figure under "Events / facility" stays unchanged; `small` has none.
+> **Tally events:** `medium`, `large`, `solo` and `demo` additionally create roughly 5 % of the event count per facility as tally events (`created_via=tally`, anonymous, no person). They only land on types the tally list allows (counting mode without a required field or with required number fields); as long as the number suffices, every allowed type gets one first. They are spread over the time span, mostly fall inside them if the facility has shift windows, and some belong to the running shift or the seed day. The figure under "Events / facility" stays unchanged; `small` has none.
 >
 > **Note:** `small` does not include case management (no episodes, goals). Use `medium` when developing case management features.
 >
@@ -1061,4 +1061,4 @@ src/
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.99.10 -->
 <!-- translation-date: 2026-11-14 -->
-<!-- source-hash: 2106ad1057e1655769b3021473b65c6124b4593e -->
+<!-- source-hash: 49b85e32b80660ac8ad13b4ed70daa8518526fe6 -->

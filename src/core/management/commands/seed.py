@@ -11,7 +11,7 @@ from collections.abc import Callable
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 
-from core.models import Case, Client, Facility, User
+from core.models import Case, Client, Event, Facility, User
 from core.packages.catalog import list_packages
 from core.seed.activities import seed_activities
 from core.seed.attachments import attach_files_to_client_and_case, attach_files_to_counseling_events
@@ -181,9 +181,16 @@ class Command(BaseCommand):
                 seed_work_items(facility, users, clients, facility_cfg)
             else:
                 clients = seed_clients_bulk(facility, users, facility_cfg)
+                tally_before = Event.objects.filter(facility=facility, created_via=Event.CreatedVia.TALLY).count()
                 created_events = seed_events_bulk(facility, users, clients, facility_cfg, package=package_name)
+                created_tally = (
+                    Event.objects.filter(facility=facility, created_via=Event.CreatedVia.TALLY).count() - tally_before
+                )
                 if created_events:
-                    self.stdout.write(f"  {created_events} Events für {facility.name} erstellt.")
+                    self.stdout.write(
+                        f"  {created_events - created_tally} Events + {created_tally} Strichliste "
+                        f"für {facility.name} erstellt."
+                    )
                 created_cases = seed_cases(facility, users, clients, facility_cfg)
                 if created_cases:
                     self.stdout.write(f"  {created_cases} Cases für {facility.name} erstellt.")

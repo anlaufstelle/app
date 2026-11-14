@@ -6,10 +6,12 @@ The events look like the ones the tally form creates (``TallyIncrementView``):
 holds every required number field, in ``TallyMode.DIRECT`` it stays empty.
 
 They are written with one ``bulk_create`` like the other seed events, so the
-side effects of ``create_event`` (EventHistory row, audit entry) do not
-exist for them either. Feed, list filter and KPI only read ``created_via``,
-``is_anonymous``, ``occurred_at`` and the type; the seed Activity rows come
-from ``seed_activities``, which reads every event of the facility.
+side effects of ``create_event`` (EventHistory row, audit entry, Activity row)
+do not exist for them either. Feed, list filter and KPI only read
+``created_via``, ``is_anonymous``, ``occurred_at`` and the type. The later
+seed steps that pick events (Activity sample, deletion requests, retention
+proposals) skip them, so their amounts and random draws are the same with and
+without tally events.
 """
 
 import random

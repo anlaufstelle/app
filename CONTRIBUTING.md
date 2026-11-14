@@ -281,7 +281,7 @@ Die im Demo-Panel beworbenen Demo-Konten haben keine E-Mail-Adresse, weil die ge
 | Zeitraum | 80 Tage | 365 Tage | 3 Jahre | 1000 Tage | 270 Tage |
 | Zeitfenster je Einrichtung | Hauptstelle 3 | Hauptstelle 3, Nord 3 | Hauptstelle 3, Nord 3, Süd 2, Ost 2, West 3 | Hauptstelle 3 | Kontaktladen 3, Falkenweg 3, Lindenhof 0, Nachtfalter 2, Wilhelmshöhe 2, Amalie 3 |
 
-> **Strichlisten-Ereignisse:** `medium`, `large`, `solo` und `demo` legen je Einrichtung rund 5 % der Ereignis-Zahl zusätzlich als Strichlisten-Ereignisse an (`created_via=tally`, anonym, ohne Person). Sie landen nur auf Typen, die die Strichliste zulässt (Zähl-Modus ohne Pflichtfeld oder mit Zahlen-Pflichtfeldern); solange die Zahl reicht, bekommt zuerst jeder zulässige Typ eines. Sie verteilen sich über den Zeitraum, liegen überwiegend in den Schichtfenstern der Einrichtung, und einige gehören zur laufenden Schicht bzw. zum Seed-Tag. Die Zahl unter „Events / Einrichtung“ bleibt unverändert; `small` hat keine.
+> **Strichlisten-Ereignisse:** `medium`, `large`, `solo` und `demo` legen je Einrichtung rund 5 % der Ereignis-Zahl zusätzlich als Strichlisten-Ereignisse an (`created_via=tally`, anonym, ohne Person). Sie landen nur auf Typen, die die Strichliste zulässt (Zähl-Modus ohne Pflichtfeld oder mit Zahlen-Pflichtfeldern); solange die Zahl reicht, bekommt zuerst jeder zulässige Typ eines. Sie verteilen sich über den Zeitraum, liegen, sofern die Einrichtung Schichtfenster hat, überwiegend darin, und einige gehören zur laufenden Schicht bzw. zum Seed-Tag. Die Zahl unter „Events / Einrichtung“ bleibt unverändert; `small` hat keine.
 >
 > **Hinweis:** `small` enthält kein Fallmanagement (keine Episoden, Ziele). Für die Entwicklung am Fallmanagement `medium` verwenden.
 >

@@ -6,7 +6,10 @@ tally form: ``created_via=tally``, anonymous, no person, only on types that
 (NUMBER mode: every required number field; DIRECT mode: empty).
 """
 
-from datetime import time, timedelta
+import random
+from datetime import UTC, datetime, time, timedelta
+from io import StringIO
+from unittest import mock
 from urllib.parse import parse_qsl
 
 import pytest
@@ -14,6 +17,7 @@ from django.core.management import call_command
 from django.utils import timezone
 
 from core.models import (
+    Activity,
     Client,
     DocumentType,
     DocumentTypeField,
@@ -28,6 +32,7 @@ from core.seed.scale import SCALE_CONFIG
 
 pytest.importorskip("magic", reason="The seed command needs libmagic for its file uploads.")
 
+from core.seed.activities import seed_activities  # noqa: E402
 from core.seed.events import seed_events_bulk  # noqa: E402
 from core.services.events import build_tally_summary  # noqa: E402
 from core.services.events.feed import get_time_range  # noqa: E402
@@ -52,17 +57,40 @@ def _in_any_window(event, windows):
     return any(window.covers_time(moment) for window in windows)
 
 
+#: The medium seed runs one minute before the early shift starts (08:00 local, winter time), the
+#: checks one minute after: the live window of the seed is not the live window of the checks.
+SEED_NOW = datetime(2026, 11, 13, 6, 59, 30, tzinfo=UTC)
+CHECK_NOW = SEED_NOW + timedelta(minutes=1)
+
+
+def _clock(moment):
+    return mock.patch("django.utils.timezone.now", return_value=moment)
+
+
 @pytest.fixture(scope="class")
 def _medium_seed(django_db_setup, django_db_blocker):
+    """Seed medium at ``SEED_NOW``; yields the command output."""
     with django_db_blocker.unblock():
         call_command("flush", interactive=False, verbosity=0)
-        call_command("seed", scale="medium")
-        yield
+        out = StringIO()
+        with _clock(SEED_NOW):
+            call_command("seed", scale="medium", stdout=out)
+        yield out.getvalue()
         call_command("flush", interactive=False, verbosity=0)
 
 
 @pytest.mark.django_db
 class TestMediumSeedTallyEvents:
+    @pytest.fixture(autouse=True)
+    def _check_clock(self):
+        with _clock(CHECK_NOW):
+            yield
+
+    def test_output_names_standard_and_tally_events_separately(self, _medium_seed):
+        volume = SCALE_CONFIG["medium"]["events_per_facility"]
+        tally = Event.objects.filter(facility__name="Hauptstelle", created_via=TALLY).count()
+        assert f"{volume} Events + {tally} Strichliste für Hauptstelle erstellt." in _medium_seed
+
     def test_every_facility_has_tally_events_in_addition_to_the_standard_volume(self, _medium_seed):
         facilities = list(Facility.objects.all())
         assert len(facilities) == SCALE_CONFIG["medium"]["facilities"]
@@ -112,7 +140,7 @@ class TestMediumSeedTallyEvents:
         assert modes_seen == {TallyMode.DIRECT, TallyMode.NUMBER}
 
     def test_events_are_spread_over_the_period_and_present_on_the_seed_day(self, _medium_seed):
-        today = timezone.localdate()
+        today = timezone.localdate(SEED_NOW)
         for facility in Facility.objects.all():
             days = {
                 timezone.localdate(moment)
@@ -120,34 +148,33 @@ class TestMediumSeedTallyEvents:
                     "occurred_at", flat=True
                 )
             }
-            live_start = current_tally_context(facility).window_start
+            live_start = current_tally_context(facility, now=timezone.localtime(SEED_NOW)).window_start
             assert Event.objects.filter(
-                facility=facility, created_via=TALLY, occurred_at__gte=live_start, occurred_at__lte=timezone.now()
+                facility=facility, created_via=TALLY, occurred_at__gte=live_start, occurred_at__lte=SEED_NOW
             ).exists(), facility.name
             assert min(days) < today - timedelta(days=90), facility.name
             assert len(days) > 10, facility.name
             assert max(days) <= today
 
     def test_zeitstrom_kpi_and_only_tally_filter_show_the_seeded_events(self, _medium_seed):
+        seed_local = timezone.localtime(SEED_NOW)
         for facility in Facility.objects.all():
             viewer = User.objects.filter(facility=facility, role=User.Role.FACILITY_ADMIN).first()
             assert viewer is not None, facility.name
-            state = resolve_zeitstrom_state({}, facility)
+            state = resolve_zeitstrom_state({}, facility, today=seed_local.date(), now=seed_local)
             summary = build_tally_summary(facility, viewer, context=state.live_context)
-            kpis = build_zeitstrom_kpis(facility, viewer, state, tally_summary=summary)
+            kpis = build_zeitstrom_kpis(facility, viewer, state, tally_summary=summary, today=seed_local.date())
             assert kpis["tally_total"] and kpis["tally_total"] > 0, facility.name
             params = dict(parse_qsl(kpis["tally_params"]))
             assert params["created_via"] == "tally"
-            filters = resolve_event_list_filters(params, facility, viewer, today=timezone.localdate())
+            filters = resolve_event_list_filters(params, facility, viewer, today=seed_local.date())
             assert event_list_queryset(facility, viewer, filters).count() > 0, facility.name
 
     def test_kpi_of_a_past_seed_day(self, _medium_seed):
         facility = Facility.objects.get(name="Hauptstelle")
         viewer = User.objects.filter(facility=facility, role=User.Role.FACILITY_ADMIN).first()
         moment = (
-            Event.objects.filter(
-                facility=facility, created_via=TALLY, occurred_at__lt=timezone.now() - timedelta(days=5)
-            )
+            Event.objects.filter(facility=facility, created_via=TALLY, occurred_at__lt=SEED_NOW - timedelta(days=5))
             .order_by("-occurred_at")
             .values_list("occurred_at", flat=True)
             .first()
@@ -160,8 +187,7 @@ class TestMediumSeedTallyEvents:
         assert summary["tally_total"] > 0
 
 
-@pytest.fixture
-def tally_setup(facility, staff_user):
+def _build_tally_setup(facility, staff_user):
     """A facility with tally-eligible and -ineligible event types and one shift."""
     time_filter = TimeFilter.objects.create(
         facility=facility, label="Window", start_time=time(10, 0), end_time=time(12, 0)
@@ -204,6 +230,11 @@ def tally_setup(facility, staff_user):
         "direct": direct,
         "ineligible": [not_opted_in, needs_person, text_required],
     }
+
+
+@pytest.fixture
+def tally_setup(facility, staff_user):
+    return _build_tally_setup(facility, staff_user)
 
 
 CFG = {"events_per_facility": 60, "zeitraum_days": 120, "tally_ratio": 0.5}
@@ -347,3 +378,47 @@ class TestSeedEventsBulkTally:
         _run(tally_setup)
         assert not Event.objects.filter(created_via=TALLY).exists()
         assert Event.objects.exists()
+
+
+@pytest.mark.django_db
+def test_downstream_seed_steps_are_unchanged_by_the_tally_ratio(organization):
+    """Amounts and random-dependent results of the steps after the events do not depend on the ratio.
+
+    Two facilities are seeded in a row (events, then activities), once without and once with tally
+    events. The second facility draws from the stream the first one leaves behind, so any extra draw
+    in the first facility shows up in the second one and in the final stream position.
+    """
+    now = timezone.now()
+
+    def run(ratio, label):
+        random.seed(99)
+        result = []
+        for index in range(2):
+            facility = Facility.objects.create(organization=organization, name=f"{label} {index}")
+            user = User.objects.create_user(username=f"{label}{index}", role=User.Role.STAFF, facility=facility)
+            setup = _build_tally_setup(facility, user)
+            cfg = {**CFG, "tally_ratio": ratio}
+            with _clock(now):
+                seed_events_bulk(facility, setup["users"], setup["clients"], cfg, now=now)
+                created = seed_activities(facility, setup["users"], cfg)
+            standard = Event.objects.filter(facility=facility, created_via=Event.CreatedVia.STANDARD)
+            result.append(
+                (
+                    created,
+                    Activity.objects.filter(facility=facility).count(),
+                    sorted(
+                        (e.document_type.slug, e.occurred_at, str(sorted(e.data_json.items())))
+                        for e in standard.select_related("document_type")
+                    ),
+                    sorted(Activity.objects.filter(facility=facility).values_list("occurred_at", flat=True)),
+                )
+            )
+        return result, random.random()
+
+    without, stream_without = run(0, "plain")
+    with_tally, stream_with = run(0.5, "tally")
+    assert with_tally == without
+    assert stream_with == stream_without
+    assert not Activity.objects.filter(
+        target_id__in=Event.objects.filter(created_via=TALLY).values_list("pk", flat=True)
+    ).exists()

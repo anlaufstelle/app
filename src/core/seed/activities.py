@@ -73,8 +73,11 @@ def seed_activities(facility: Facility, users: list[User], cfg: dict) -> int:
     # Activities for events: ALL recent (90d), 30% of older events
     # Calendar days keep the sample and random stream stable within a day (Refs #2599).
     cutoff_90d = timezone.localdate(now) - timedelta(days=90)
+    # Tally events stay out of the sample: it would draw more numbers and shift every later facility.
     all_events = list(
-        Event.objects.filter(facility=facility, is_deleted=False).select_related("document_type", "client")
+        Event.objects.filter(facility=facility, is_deleted=False)
+        .exclude(created_via=Event.CreatedVia.TALLY)
+        .select_related("document_type", "client")
     )
     recent_events = [e for e in all_events if timezone.localdate(e.occurred_at) >= cutoff_90d]
     older_events = [e for e in all_events if timezone.localdate(e.occurred_at) < cutoff_90d]

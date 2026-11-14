@@ -63,6 +63,8 @@ SEED_CODE_GLOBS = (
     "src/core/services/dynamic_protection.py",
     "src/core/services/file_vault/**/*.py",
     "src/core/services/events/fields.py",
+    # The tally events decide their types and values through this eligibility check.
+    "src/core/services/events/tally.py",
     "src/core/demo.py",
     "src/core/constants.py",
     # The models (defaults, save logic) and the k-threshold helpers the reserve size comes from.
