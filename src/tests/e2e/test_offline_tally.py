@@ -30,7 +30,12 @@ pytestmark = pytest.mark.e2e
 def _open_number_contacts_from_group(page, base_url, document_type_id):
     """Follow the visible hour-group link to its individual number contacts."""
     query = urlencode({"date": timezone.localdate().isoformat(), "time_filter": "all"})
-    page.goto(f"{base_url}/?{query}", wait_until="domcontentloaded")
+    page.goto(f"{base_url}/?{query}", wait_until="load")
+    # The first live-watch cycle always replaces the feed list (it starts without a
+    # validator for it). Wait for that cycle, or it collapses the group opened below
+    # and the link never becomes visible.
+    page.wait_for_function("() => !!window.zeitstromWatch")
+    page.evaluate("() => window.zeitstromWatch.checkNow()")
     group = page.get_by_test_id("tally-group").filter(has_text=re.compile(r"\bSpritzentausch\b")).first
     expect(group).to_be_visible(timeout=15000)
     group.get_by_test_id("tally-group-toggle").click()
