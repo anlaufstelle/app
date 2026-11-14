@@ -540,7 +540,7 @@
      *     eigentliche lokale Arbeit. Personlose (`clientPk===""`) Eintraege sind
      *     stets unsynced-new und werden als anonym markiert (ohne Pseudonym).
      *
-     * Sortierung wie der Online-Feed: angezeigte Minute absteigend, dann Erfassungszeit (Refs #2798).
+     * Order as in the online feed: shown minute descending, then recording time (Refs #2798).
      */
     async function listOfflineEventsAggregated() {
         const bundles = await _validClientBundles();
