@@ -23,7 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - **Kontakte-Liste: eine Filterzeile mit Chips und Sofort-Filter** (#2658) — Suche, Zeitraum-Schnellwahl und Filter-Knopf stehen in einer Zeile, aktive Filter als entfernbare Chips darunter; Änderungen wirken sofort, ohne JavaScript bleibt „Filtern“. Eine Schnellwahl überschreibt eigene Von/Bis-Daten nicht mehr still; neu: „Heute“, „Monat“, Erfassungsweg.
-- **Seed mit Strichlisten-Ereignissen** — Die Seed-Profile `medium`, `large`, `solo` und `demo` legen je Einrichtung rund 5 % zusätzliche anonyme Strichlisten-Ereignisse an, damit Kennzahl, Filter „Nur Strichliste“ und Feed auf Entwicklungs- und Demo-Ständen nicht leer bleiben. Die bisherigen Ereigniszahlen bleiben unverändert.
+- **Seed mit Strichlisten-Ereignissen** (#2810) — Die Seed-Profile `medium`, `large`, `solo` und `demo` legen je Einrichtung rund 5 % zusätzliche anonyme Strichlisten-Ereignisse an, damit Kennzahl, Filter „Nur Strichliste“ und Feed auf Entwicklungs- und Demo-Ständen nicht leer bleiben. Die bisherigen Ereigniszahlen bleiben unverändert.
 
 ### Changed
 
