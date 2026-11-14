@@ -427,6 +427,40 @@ describe("Background reload of an 'always' feed with the focus inside it", () =>
         expect(el.getAttribute("tabindex")).toBe("-1");
     });
 
+    it("takes back the tabindex it set on the container once the focus leaves it", () => {
+        const el = feed("always");
+        el.querySelector('[aria-controls="detail-1"]').focus();
+        const realFocus = HTMLElement.prototype.focus;
+        vi.spyOn(HTMLElement.prototype, "focus").mockImplementation(function (options) {
+            if (this.getAttribute("aria-controls") === "detail-1") {
+                return; // a control inside a hidden region does not take the focus
+            }
+            return realFocus.call(this, options);
+        });
+        reload(el, TWIN_HTML);
+        expect(document.activeElement).toBe(el);
+        expect(el.getAttribute("tabindex")).toBe("-1");
+        vi.restoreAllMocks();
+
+        el.querySelector('[aria-controls="detail-other"]').focus();
+
+        expect(el.hasAttribute("tabindex")).toBe(false);
+    });
+
+    it("keeps a tabindex the container already had", () => {
+        const el = feed("always");
+        el.setAttribute("tabindex", "-1");
+        el.querySelector('[aria-controls="detail-1"]').focus();
+        reload(el, '<p>nothing to focus</p>');
+        expect(document.activeElement).toBe(el);
+
+        const outside = document.createElement("button");
+        document.body.appendChild(outside);
+        outside.focus();
+
+        expect(el.getAttribute("tabindex")).toBe("-1");
+    });
+
     it("takes a link twin when exactly one rendered link carries the target", () => {
         renderEverything();
         const el = feedWithFocusedLink("/clients/7/");

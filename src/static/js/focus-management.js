@@ -277,8 +277,31 @@
         if (twin && _focusQuietly(twin)) {
             return;
         }
+        _parkOn(container);
+    }
+
+    // Park the focus on the container of a background swap. A tabindex set only for
+    // that is taken away again as soon as the focus leaves the container (for
+    // example when ban-details-toggle.js hands it back to the control), so the
+    // container does not stay focusable for later clicks.
+    function _parkOn(container) {
+        var added = !container.hasAttribute("tabindex");
         _makeFocusable(container);
-        _focusQuietly(container);
+        var focused = _focusQuietly(container);
+        if (!added) {
+            return;
+        }
+        var release = function () {
+            container.removeEventListener("focusout", release);
+            if (container.getAttribute("tabindex") === "-1") {
+                container.removeAttribute("tabindex");
+            }
+        };
+        if (focused) {
+            container.addEventListener("focusout", release);
+        } else {
+            release();
+        }
     }
 
     // Closing step of a background swap of an "always" target.
