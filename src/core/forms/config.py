@@ -456,18 +456,20 @@ class DocumentTypeForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
 
     def full_clean(self) -> None:
         super().full_clean()
-        # The form rule in ``clean()`` and the model backstop report the same
-        # missing stage; show the message once.
-        stage_errors = self.errors.get("min_contact_stage")
-        if stage_errors:
+        # The form rules in ``clean()`` and the model backstop report the same
+        # ban errors; show each message once.
+        for field_name in ("min_contact_stage", "system_type"):
+            field_errors = self.errors.get(field_name)
+            if not field_errors:
+                continue
             seen: set[str] = set()
             unique = []
-            for error in stage_errors.as_data():
+            for error in field_errors.as_data():
                 text = " ".join(error.messages)
                 if text not in seen:
                     seen.add(text)
                     unique.append(error)
-            self.errors["min_contact_stage"] = self.error_class(unique)
+            self.errors[field_name] = self.error_class(unique)
 
     def _effective_system_type(self) -> str | None:
         """System type in force: the stored one when editing, the posted one on create."""
@@ -527,7 +529,6 @@ class DocumentTypeForm(ReportKeyFormMixin, TailwindFormMixin, forms.ModelForm):
         # ``system_type`` is disabled on edit, so its cleaned value is the stored one.
         if (
             cleaned.get("system_type") in self.MIN_CONTACT_STAGE_REQUIRED_DEFAULTS
-            and cleaned.get("entity_type") == DocumentType.EntityType.EVENT
             and not cleaned.get("min_contact_stage")
             and "min_contact_stage" not in self.errors
         ):

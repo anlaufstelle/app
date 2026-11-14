@@ -158,6 +158,17 @@ class DocumentType(ReportKeyMixin, SluggedModel):
                 condition=models.Q(retention_days__isnull=True) | models.Q(retention_days__gte=1),
                 name="documenttype_retention_days_min_1",
             ),
+            # A ban names a person, so its type needs a minimum contact stage
+            # (bulk writes and ``QuerySet.update`` included), and the ban
+            # system type only exists on event types, where the stage acts.
+            models.CheckConstraint(
+                condition=~models.Q(system_type="ban") | models.Q(min_contact_stage__in=["identified", "qualified"]),
+                name="documenttype_ban_requires_contact_stage",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(system_type="ban") | models.Q(entity_type="event"),
+                name="documenttype_ban_only_on_events",
+            ),
         ]
 
     def slug_sibling_queryset(self):
@@ -169,32 +180,62 @@ class DocumentType(ReportKeyMixin, SluggedModel):
 
         super().clean()
         validate_configuration_facility(self, self.facility_id)
-        self._validate_ban_contact_stage()
+        self._validate_ban_rules()
         self._validate_explicit_high_fields()
 
-    def _validate_ban_contact_stage(self):
-        """A ban names a person, so its type needs a minimum contact stage.
+    @property
+    def requires_person(self) -> bool:
+        """Whether an event of this type needs a person (a minimum stage or a ban)."""
+        return bool(self.min_contact_stage) or self.system_type == self.SystemType.BAN
+
+    @classmethod
+    def _ban_rule_errors(cls, system_type, entity_type, min_contact_stage) -> dict[str, ValidationError]:
+        """Field errors for a ban type that breaks the stage or entity-type rule."""
+        if system_type != cls.SystemType.BAN:
+            return {}
+        errors: dict[str, ValidationError] = {}
+        if entity_type != cls.EntityType.EVENT:
+            errors["system_type"] = ValidationError(
+                _("Ein Systemtyp ist nur für Dokumentationstypen mit Entitätstyp „Ereignis“ zulässig.")
+            )
+        if min_contact_stage not in {choice for choice, _label in CONTACT_STAGE_CHOICES}:
+            errors["min_contact_stage"] = ValidationError(BAN_STAGE_REQUIRED_MESSAGE)
+        return errors
+
+    def _validate_ban_rules(self):
+        """A ban names a person: its type needs a stage and must be an event type.
 
         Backstop below the configuration form and the package schema: it
         catches the Django admin (``clean``) and every service, import or
-        shell path that saves a type directly (``save``).
+        shell path that saves a type directly (``save``). The database
+        constraints of the same names catch the paths that skip both
+        (``QuerySet.update``, ``bulk_create``).
         """
-        # The stage only acts on event types; a ban on any other entity type is
-        # an inconsistency the package schema already refuses and that stays
-        # editable here.
-        if (
-            self.system_type == self.SystemType.BAN
-            and self.entity_type == self.EntityType.EVENT
-            and not self.min_contact_stage
-        ):
-            raise ValidationError({"min_contact_stage": BAN_STAGE_REQUIRED_MESSAGE})
+        errors = self._ban_rule_errors(self.system_type, self.entity_type, self.min_contact_stage)
+        if errors:
+            raise ValidationError(errors)
 
     def save(self, *args, **kwargs):
-        # A partial save that touches neither field (for example deactivating a
-        # type that predates the rule) must stay possible.
+        # A save that writes none of the three rule fields (``is_active``,
+        # ``name``) must stay possible. Otherwise the rule is checked against
+        # the row as it will be stored: fields outside ``update_fields`` keep
+        # their stored value, not the in-memory one.
         update_fields = kwargs.get("update_fields")
-        if update_fields is None or {"system_type", "min_contact_stage"} & set(update_fields):
-            self._validate_ban_contact_stage()
+        rule_fields = {"system_type", "min_contact_stage", "entity_type"}
+        if update_fields is None:
+            self._validate_ban_rules()
+        elif rule_fields & set(update_fields):
+            values = {name: getattr(self, name) for name in rule_fields}
+            stored = (
+                type(self)._default_manager.filter(pk=self.pk).values(*rule_fields).first()
+                if rule_fields - set(update_fields)
+                else None
+            )
+            if stored:
+                values.update({name: stored[name] for name in rule_fields - set(update_fields)})
+            errors = self._ban_rule_errors(values["system_type"], values["entity_type"], values["min_contact_stage"])
+            if errors:
+                raise ValidationError(errors)
         super().save(*args, **kwargs)
 
     def _validate_explicit_high_fields(self, sensitivity=None):

@@ -14,6 +14,7 @@ from typing import Any
 
 import pytest
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
 from django.urls import reverse
 
 from core.forms.config import DocumentTypeForm
@@ -101,17 +102,6 @@ class TestReapplyingAPackage:
         doc_type = DocumentType.objects.get(facility=facility, slug="hausverbot")
         assert doc_type.min_contact_stage == IDENTIFIED
 
-    def test_reapplying_fills_a_stage_that_is_missing_on_an_existing_ban_type(self, facility):
-        package = parse_catalog_package("default")
-        load_package(facility, package)
-        DocumentType.objects.filter(facility=facility, slug="hausverbot").update(min_contact_stage=None)
-
-        report = load_package(facility, package)
-
-        assert not report.errors
-        doc_type = DocumentType.objects.get(facility=facility, slug="hausverbot")
-        assert doc_type.min_contact_stage == IDENTIFIED
-
     def test_a_package_that_would_clear_the_stage_is_refused_before_anything_is_written(self, facility):
         load_package(facility, parse_catalog_package("default"))
 
@@ -166,18 +156,6 @@ class TestForm:
 
         assert not form.is_valid()
         assert list(form.errors) == ["min_contact_stage"]
-
-    def test_editing_a_legacy_ban_type_without_a_stage_demands_one(self, facility):
-        ban_type = make_document_type(facility=facility, name="Ban", system_type=BAN, min_contact_stage=IDENTIFIED)
-        DocumentType.objects.filter(pk=ban_type.pk).update(min_contact_stage=None)
-        ban_type.refresh_from_db()
-
-        form = DocumentTypeForm(_form_data(name="Ban"), instance=ban_type, facility=facility)
-
-        assert not form.is_valid()
-        assert form.errors["min_contact_stage"] == [
-            "Ein Hausverbot braucht eine Person: Bitte eine Mindest-Kontaktstufe wählen."
-        ]
 
     def test_editing_a_ban_type_with_a_stage_is_valid(self, facility):
         ban_type = make_document_type(facility=facility, name="Ban", system_type=BAN, min_contact_stage=IDENTIFIED)
@@ -297,16 +275,171 @@ class TestModelBackstop:
         make_document_type(facility=facility, name="Plain")
         make_document_type(facility=facility, name="Crisis", system_type=DocumentType.SystemType.CRISIS)
 
-    def test_a_legacy_ban_type_without_a_stage_can_still_be_deactivated(self, facility):
+
+@pytest.mark.django_db
+class TestPartialSaves:
+    """``save(update_fields=...)`` checks the row as it will be stored."""
+
+    def test_a_save_that_writes_no_rule_field_stays_possible(self, facility):
         doc_type = make_document_type(facility=facility, name="Ban", system_type=BAN, min_contact_stage=IDENTIFIED)
-        DocumentType.objects.filter(pk=doc_type.pk).update(min_contact_stage=None)
-        doc_type.refresh_from_db()
 
         doc_type.is_active = False
-        doc_type.save(update_fields=["is_active"])
+        doc_type.name = "Ban renamed"
+        doc_type.save(update_fields=["is_active", "name"])
 
         doc_type.refresh_from_db()
-        assert doc_type.is_active is False
+        assert (doc_type.is_active, doc_type.name, doc_type.min_contact_stage) == (False, "Ban renamed", IDENTIFIED)
+
+    def test_an_in_memory_stage_does_not_hide_a_missing_stored_stage(self, facility):
+        doc_type = make_document_type(facility=facility, name="Plain")
+        doc_type.system_type = BAN
+        doc_type.min_contact_stage = IDENTIFIED
+
+        with pytest.raises(ValidationError) as excinfo:
+            doc_type.save(update_fields=["system_type"])
+
+        assert "min_contact_stage" in excinfo.value.message_dict
+        doc_type.refresh_from_db()
+        assert doc_type.system_type is None
+
+    def test_clearing_the_stage_through_update_fields_is_refused(self, facility):
+        doc_type = make_document_type(facility=facility, name="Ban", system_type=BAN, min_contact_stage=IDENTIFIED)
+        doc_type.min_contact_stage = None
+
+        with pytest.raises(ValidationError):
+            doc_type.save(update_fields=["min_contact_stage"])
+
+        doc_type.refresh_from_db()
+        assert doc_type.min_contact_stage == IDENTIFIED
+
+    def test_writing_system_type_and_stage_together_is_accepted(self, facility):
+        doc_type = make_document_type(facility=facility, name="Plain")
+        doc_type.system_type = BAN
+        doc_type.min_contact_stage = QUALIFIED
+
+        doc_type.save(update_fields=["system_type", "min_contact_stage"])
+
+        doc_type.refresh_from_db()
+        assert (doc_type.system_type, doc_type.min_contact_stage) == (BAN, QUALIFIED)
+
+
+@pytest.mark.django_db
+class TestBanOnlyOnEventTypes:
+    def test_creating_a_ban_type_on_a_non_event_entity_is_refused(self, facility):
+        with pytest.raises(ValidationError) as excinfo:
+            DocumentType.objects.create(
+                facility=facility,
+                name="Client ban",
+                entity_type=DocumentType.EntityType.CLIENT,
+                system_type=BAN,
+                min_contact_stage=IDENTIFIED,
+            )
+
+        assert "system_type" in excinfo.value.message_dict
+
+    def test_clean_reports_the_entity_type_rule_on_the_system_type_field(self, facility):
+        doc_type = DocumentType(
+            facility=facility,
+            name="Client ban",
+            entity_type=DocumentType.EntityType.CLIENT,
+            system_type=BAN,
+            min_contact_stage=IDENTIFIED,
+        )
+
+        with pytest.raises(ValidationError) as excinfo:
+            doc_type.full_clean(exclude=["slug"])
+
+        assert "system_type" in excinfo.value.message_dict
+
+    def test_other_system_types_may_still_sit_on_other_entities(self, facility):
+        make_document_type(
+            facility=facility,
+            name="Client crisis",
+            entity_type=DocumentType.EntityType.CLIENT,
+            system_type=DocumentType.SystemType.CRISIS,
+        )
+
+
+@pytest.mark.django_db
+class TestDatabaseConstraints:
+    """Paths that skip ``save()`` and ``clean()`` still fail in the database."""
+
+    @staticmethod
+    def _ban_type(facility):
+        return make_document_type(facility=facility, name="Ban", system_type=BAN, min_contact_stage=IDENTIFIED)
+
+    @pytest.mark.parametrize("stage", [None, ""])
+    def test_queryset_update_cannot_clear_the_stage(self, facility, stage):
+        doc_type = self._ban_type(facility)
+
+        with pytest.raises(IntegrityError), transaction.atomic():
+            DocumentType.objects.filter(pk=doc_type.pk).update(min_contact_stage=stage)
+
+        doc_type.refresh_from_db()
+        assert doc_type.min_contact_stage == IDENTIFIED
+
+    def test_queryset_update_cannot_make_a_stageless_type_a_ban(self, facility):
+        doc_type = make_document_type(facility=facility, name="Plain")
+
+        with pytest.raises(IntegrityError), transaction.atomic():
+            DocumentType.objects.filter(pk=doc_type.pk).update(system_type=BAN)
+
+    def test_queryset_update_cannot_move_a_ban_type_off_events(self, facility):
+        doc_type = self._ban_type(facility)
+
+        with pytest.raises(IntegrityError), transaction.atomic():
+            DocumentType.objects.filter(pk=doc_type.pk).update(entity_type=DocumentType.EntityType.CLIENT)
+
+    def test_bulk_create_cannot_insert_a_stageless_ban_type(self, facility):
+        with pytest.raises(IntegrityError), transaction.atomic():
+            DocumentType.objects.bulk_create(
+                [DocumentType(facility=facility, name="Bulk ban", slug="bulk-ban", system_type=BAN)]
+            )
+
+        assert not DocumentType.objects.filter(slug="bulk-ban").exists()
+
+    def test_bulk_create_cannot_insert_a_ban_type_on_another_entity(self, facility):
+        with pytest.raises(IntegrityError), transaction.atomic():
+            DocumentType.objects.bulk_create(
+                [
+                    DocumentType(
+                        facility=facility,
+                        name="Bulk client ban",
+                        slug="bulk-client-ban",
+                        system_type=BAN,
+                        min_contact_stage=IDENTIFIED,
+                        entity_type=DocumentType.EntityType.CLIENT,
+                    )
+                ]
+            )
+
+    def test_bulk_update_cannot_clear_the_stage(self, facility):
+        doc_type = self._ban_type(facility)
+        doc_type.min_contact_stage = None
+
+        with pytest.raises(IntegrityError), transaction.atomic():
+            DocumentType.objects.bulk_update([doc_type], ["min_contact_stage"])
+
+    def test_save_with_update_fields_cannot_bypass_the_constraint_either(self, facility):
+        doc_type = self._ban_type(facility)
+        doc_type.min_contact_stage = None
+
+        with pytest.raises(ValidationError):
+            doc_type.save(update_fields=["min_contact_stage"])
+
+    def test_other_types_are_not_constrained(self, facility):
+        doc_type = make_document_type(facility=facility, name="Plain")
+
+        DocumentType.objects.filter(pk=doc_type.pk).update(min_contact_stage=None, is_active=False)
+        DocumentType.objects.bulk_create([DocumentType(facility=facility, name="Bulk plain", slug="bulk-plain")])
+
+        assert DocumentType.objects.filter(slug="bulk-plain").exists()
+
+
+def test_requires_person_follows_the_system_type_even_without_a_stage():
+    assert DocumentType(system_type=BAN).requires_person is True
+    assert DocumentType(min_contact_stage=QUALIFIED).requires_person is True
+    assert DocumentType().requires_person is False
 
 
 @pytest.mark.django_db

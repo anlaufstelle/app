@@ -42,7 +42,7 @@ class TestMigrate0145BackfillReportKey(MigratorTestCase):
         }
         # (2) Bewusst ausgeschlossen.
         self.notiz_pk = typ("Notiz", "notiz", system_type="note")
-        self.hausverbot_pk = typ("Hausverbot", "hausverbot", system_type="ban")
+        self.hausverbot_pk = typ("Hausverbot", "hausverbot", system_type="ban", min_contact_stage="identified")
         # (3) Zweitschluessel-Pfad: NULL bzw. Leerstring als Erststufe.
         self.slug_null_pk = typ("Erstkontakt", "kontakt", system_type=None)
         self.slug_leer_pk = typ("Gespräch", "beratungsgespraech", system_type="")

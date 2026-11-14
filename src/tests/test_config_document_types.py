@@ -802,15 +802,16 @@ class TestSystemTypeOnlyForEventTypes:
         assert response.status_code == 302
 
     def test_editing_legacy_inconsistent_type_stays_possible(self, client, admin_user, facility):
-        """Bestandsdaten (vor dem Guard angelegt) dürfen nicht unbearbeitbar
-        werden — beide Felder sind bei der Bearbeitung ohnehin ``disabled``."""
+        """A system type on a non-event type (created before the form guard) must not
+        become uneditable: both fields are ``disabled`` on edit. The ban type is
+        excluded from this tolerance by a database constraint, so the case uses
+        the crisis system type."""
         dt = make_document_type(
             facility=facility,
             name="Alt-Inkonsistent",
             entity_type=DocumentType.EntityType.CLIENT,
-            system_type=DocumentType.SystemType.BAN,
+            system_type=DocumentType.SystemType.CRISIS,
         )
-        DocumentType.objects.filter(pk=dt.pk).update(min_contact_stage=None)
         client.force_login(admin_user)
         response = client.post(
             reverse("core:config_doctype_update", kwargs={"pk": dt.pk}),

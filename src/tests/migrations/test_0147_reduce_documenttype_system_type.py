@@ -49,7 +49,9 @@ class TestMigrate0147ReduceDocumentTypeSystemType(MigratorTestCase):
         }
         self.notiz_pk = typ("Notiz", "notiz", system_type="note", report_key="excluded")
         # Die beiden Verhaltens-Schluessel bleiben.
-        self.ban_pk = typ("Hausverbot", "hausverbot", system_type="ban", report_key="excluded")
+        self.ban_pk = typ(
+            "Hausverbot", "hausverbot", system_type="ban", report_key="excluded", min_contact_stage="identified"
+        )
         self.crisis_pk = typ("Krisengespräch", "krisengespraech", system_type="crisis", report_key="crisis")
         # Raender: nie gesetzt bzw. Leerstring (``blank=True``).
         self.null_pk = typ("Freitext", "freitext", system_type=None)
