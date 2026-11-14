@@ -19,6 +19,8 @@ Template hooks (added in the data-testid commit):
   pending-deletion-request link
 - ``data-testid="nav-items"`` on the desktop sidebar entry container and
   ``data-testid="mobile-more-items"`` on the mobile „Mehr" dropdown (Refs #1813)
+- ``data-testid="tally-increment-<document type pk>"`` on the action of each tally
+  tile (a ``<button>`` for a +1 tile, an ``<a>`` for a number tile)
 
 When extending: keep helpers small, return ``Locator``s, and document the
 template hook each helper depends on.
@@ -42,6 +44,24 @@ def find_client_link(page: Page, pseudonym: str) -> Locator:
     return page.locator(f"[data-testid='client-row'][data-pseudonym='{pseudonym}']").locator(
         "[data-testid='client-detail-link']"
     )
+
+
+def find_first_by_exact_testid(scope: Page | Locator, candidates: Locator) -> Locator:
+    """Locator for the first match of ``candidates``, addressed by its exact ``data-testid``.
+
+    Reads the ``data-testid`` of the first element matching ``candidates`` (e.g.
+    ``panel.locator("button[data-testid^='tally-increment-']")``) and returns
+    ``scope.get_by_test_id(<that value>)``. The picked element is the same one a
+    positional lookup would pick, but the returned locator stays bound to it if
+    the list is re-rendered or reordered, and ``get_by_test_id`` matches the
+    value exactly.
+
+    Fails (timeout) when ``candidates`` matches nothing, so callers should assert
+    presence first when it is optional.
+    """
+    testid = candidates.first.get_attribute("data-testid")
+    assert testid, "the first candidate has no data-testid"
+    return scope.get_by_test_id(testid)
 
 
 def find_first_client_link(page: Page) -> Locator:

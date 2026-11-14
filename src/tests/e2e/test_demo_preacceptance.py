@@ -27,7 +27,7 @@ from playwright.sync_api import expect
 
 from ._axe import assert_within_baseline, run_axe
 from ._profiles import require_demo
-from ._selectors import demo_scenario_start, wait_for_settled
+from ._selectors import demo_scenario_start, find_first_by_exact_testid, wait_for_settled
 
 pytestmark = pytest.mark.e2e
 
@@ -172,14 +172,14 @@ def _tally_walk(page, base_url, width, role):
         "number": number.count(),
     }
     if found["direct"]:
-        direct.first.click()
+        find_first_by_exact_testid(panel, direct).click()
         undo = page.get_by_test_id("tally-undo")
         expect(undo).to_be_visible(timeout=10000)
         _check_page(page, base_url, "tally-undo", width, role)
         undo.click()
         expect(page.get_by_test_id("tally-undo")).to_have_count(0, timeout=10000)
     if found["number"]:
-        number.first.click()
+        find_first_by_exact_testid(panel, number).click()
         slot = page.get_by_test_id("tally-number-form-slot")
         expect(slot.locator("form")).to_be_visible(timeout=10000)
         # A modal dialog covers the notice and the exit button by design (see the z-index note in

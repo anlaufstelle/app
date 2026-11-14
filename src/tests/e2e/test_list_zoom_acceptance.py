@@ -12,6 +12,8 @@ from pathlib import Path
 import pytest
 from playwright.sync_api import expect
 
+from ._selectors import find_first_by_exact_testid
+
 pytestmark = pytest.mark.e2e
 
 PAGES = [
@@ -268,7 +270,7 @@ def test_tally_actions_keep_their_targets_at_200_percent(browser, base_url, _sta
         assert tile_metrics["scroll"] <= tile_metrics["viewport"], tile_metrics
         assert not tile_metrics["clipped"], tile_metrics["clipped"]
 
-        direct.first.click()
+        find_first_by_exact_testid(panel, direct).click()
         undo = page.get_by_test_id("tally-undo")
         expect(undo).to_be_visible()
         bar = page.evaluate(_TARGETS, "#tally-undo-slot a[href], #tally-undo-slot button")
@@ -276,7 +278,7 @@ def test_tally_actions_keep_their_targets_at_200_percent(browser, base_url, _sta
         undo.click()
         expect(page.get_by_test_id("tally-undo")).to_have_count(0)
 
-        number.first.click()
+        find_first_by_exact_testid(panel, number).click()
         slot = page.get_by_test_id("tally-number-form-slot")
         expect(slot.locator("form")).to_be_visible()
         form = page.evaluate(_TARGETS, _scoped("#tally-number-form-slot"))
