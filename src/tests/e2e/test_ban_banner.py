@@ -637,6 +637,113 @@ class TestBanDetailsToggle:
             _clear_ban_details_choice(e2e_env)
             _restore_ban_state(e2e_env, restore)
 
+    def test_a_late_watch_answer_for_an_empty_list_does_not_erase_a_newer_ban(self, staff_page, base_url, e2e_env):
+        """A watch cycle overtaken by a newer one (here: a refresh request) never writes its slots."""
+        event_pk, _pseudonym, restore = self._prepare(e2e_env)
+        second_pk = None
+        context = None
+        try:
+            context = staff_page.context.browser.new_context(
+                storage_state=staff_page.context.storage_state(), service_workers="block", locale="de-DE"
+            )
+            page = context.new_page()
+            page.set_default_timeout(30000)
+            held = []
+            hold = {"on": False}
+
+            def hold_slots(route):
+                if hold["on"] and route.request.headers.get("x-zeitstrom-watch") == "1":
+                    held.append((route, route.fetch()))
+                else:
+                    route.continue_()
+
+            page.route("**/partials/zeitstrom/kpi/**", hold_slots)
+            page.route("**/partials/zeitstrom/bans/**", hold_slots)
+            _open_settled_zeitstrom(page, base_url)
+            page.get_by_role("button", name="Hausverbot-Details ausblenden").click()
+            expect(page.locator("#zeitstrom-ban-details")).to_be_hidden()
+
+            # A cycle that renders both slots while the seeded ban is gone, held back.
+            hold["on"] = True
+            _remove_second_ban(e2e_env, event_pk)
+            page.evaluate("() => { window.zeitstromWatch.checkNow(); }")
+            _wait_until(page, lambda: len(held) == 2)
+
+            # A newer ban, delivered by a newer cycle.
+            hold["on"] = False
+            second_pk = _add_second_ban(e2e_env)
+            page.evaluate("() => window.dispatchEvent(new CustomEvent('zeitstrom:ban-slots-stale'))")
+            expect(page.locator("#zeitstrom-ban-details").get_by_role("link", name="Race-Ban-2")).to_be_visible(
+                timeout=30_000
+            )
+
+            for route, response in held:
+                # The newer cycle aborts the old requests; an aborted request takes no
+                # answer any more, which is the point. A late answer that still gets
+                # through must be dropped by the watch.
+                try:
+                    route.fulfill(response=response)
+                except Exception:  # noqa: BLE001 - aborted by the page
+                    pass
+            page.wait_for_timeout(1000)
+            page.evaluate("() => window.zeitstromWatch.checkNow()")
+
+            expect(page.locator("#zeitstrom-ban-details").get_by_role("link", name="Race-Ban-2")).to_be_visible()
+            expect(page.get_by_test_id("zeitstrom-kpi-bans")).to_be_visible()
+            expect(page.get_by_test_id("zeitstrom-kpi-bans")).to_have_attribute("aria-expanded", "true")
+        finally:
+            if context is not None:
+                context.close()
+            if second_pk:
+                _remove_second_ban(e2e_env, second_pk)
+            _clear_ban_details_choice(e2e_env)
+            _restore_ban_state(e2e_env, restore)
+
+    def test_a_late_hide_answer_after_the_list_went_back_does_not_hide(self, staff_page, base_url, e2e_env):
+        """Hide(A) answered late, after A, A+B and A again were seen: the details stay visible."""
+        _event_pk, _pseudonym, restore = self._prepare(e2e_env)
+        second_pk = None
+        context = None
+        try:
+            context = staff_page.context.browser.new_context(
+                storage_state=staff_page.context.storage_state(), service_workers="block", locale="de-DE"
+            )
+            page = context.new_page()
+            page.set_default_timeout(30000)
+            held = []
+            page.route("**/zeitstrom/ban-details/", lambda route: held.append((route, route.fetch())))
+            _open_settled_zeitstrom(page, base_url)
+            before = int(page.get_by_test_id("zeitstrom-kpi-bans").get_attribute("data-count"))
+
+            page.get_by_role("button", name="Hausverbot-Details ausblenden").click()
+            _wait_until(page, lambda: bool(held))
+
+            second_pk = _add_second_ban(e2e_env)
+            page.evaluate("() => window.zeitstromWatch.checkNow()")
+            expect(page.get_by_test_id("zeitstrom-kpi-bans")).to_have_attribute(
+                "data-count", str(before + 1), timeout=30_000
+            )
+            _remove_second_ban(e2e_env, second_pk)
+            second_pk = None
+            page.evaluate("() => window.zeitstromWatch.checkNow()")
+            expect(page.get_by_test_id("zeitstrom-kpi-bans")).to_have_attribute(
+                "data-count", str(before), timeout=30_000
+            )
+
+            route, response = held[0]
+            route.fulfill(response=response)
+            page.wait_for_timeout(1000)
+
+            expect(page.locator("#zeitstrom-ban-details")).to_be_visible()
+            expect(page.get_by_test_id("zeitstrom-kpi-bans")).to_have_attribute("aria-expanded", "true")
+        finally:
+            if context is not None:
+                context.close()
+            if second_pk:
+                _remove_second_ban(e2e_env, second_pk)
+            _clear_ban_details_choice(e2e_env)
+            _restore_ban_state(e2e_env, restore)
+
     def test_switch_works_without_script_as_a_form_post(self, staff_page, base_url, e2e_env):
         _event_pk, _pseudonym, restore = self._prepare(e2e_env)
         plain = None
