@@ -27,7 +27,12 @@ from playwright.sync_api import expect
 
 from ._axe import assert_within_baseline, run_axe
 from ._profiles import require_demo
-from ._selectors import demo_scenario_start, find_first_by_exact_testid, wait_for_settled
+from ._selectors import (
+    demo_scenario_start,
+    find_first_by_exact_testid,
+    wait_for_settled,
+    wait_for_transition_end,
+)
 
 pytestmark = pytest.mark.e2e
 
@@ -149,6 +154,12 @@ def _assert_session_ended(page, base_url, how, seconds=15.0):
 
 
 def _open_all_contacts(page):
+    """Open every contact card and return how many there are.
+
+    Each panel fades in over 150 ms. axe reads the colour through the running opacity (the
+    muted text of the last panel measured 4.31:1 at an effective opacity of 0.69, 4.57:1 at rest),
+    so the helper returns only when every opened panel rests at full opacity.
+    """
     toggles = page.get_by_test_id("event-card-toggle")
     expect(toggles.first).to_be_visible(timeout=15000)
     for index in range(toggles.count()):
@@ -156,6 +167,9 @@ def _open_all_contacts(page):
         if toggle.get_attribute("aria-expanded") != "true":
             toggle.click()
             expect(toggle).to_have_attribute("aria-expanded", "true")
+            panel = page.locator("#" + toggle.get_attribute("aria-controls"))
+            expect(panel).to_be_visible()
+            wait_for_transition_end(panel)
     return toggles.count()
 
 
