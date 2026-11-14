@@ -147,17 +147,25 @@ def test_activities_in_one_minute_follow_their_exact_instant(facility, staff_use
 def test_bans_in_one_minute_follow_recording_order(facility, staff_user, client_identified):
     ban_type = make_document_type(facility=facility, name="Hausverbot", system_type="ban")
     second = timedelta(seconds=1)
-    last = _contact(
-        facility, staff_user, ban_type, client_identified, occurred_at=_MINUTE, recorded_at=_MINUTE + 40 * second
-    )
-    first = _contact(
-        facility, staff_user, ban_type, client_identified, occurred_at=_MINUTE, recorded_at=_MINUTE + 10 * second
-    )
+    # Insertion order (middle, first, last) differs from the expected display
+    # order (last, middle, first) and from its reverse, so neither the physical
+    # row order nor its reverse can pass; only the recording-time tiebreaker does.
+    recorded = {}
+    for label, offset in (("middle", 25), ("first", 5), ("last", 45)):
+        ban = _contact(
+            facility,
+            staff_user,
+            ban_type,
+            client_identified,
+            occurred_at=_MINUTE,
+            recorded_at=_MINUTE + offset * second,
+        )
+        recorded[ban.pk] = label
 
     items = build_feed_items(facility, _DAY, "bans", user=staff_user)
 
-    assert [item["type"] for item in items] == ["ban", "ban"]
-    assert [item["object"].pk for item in items] == [last.pk, first.pk]
+    assert [item["type"] for item in items] == ["ban", "ban", "ban"]
+    assert [recorded[item["object"].pk] for item in items] == ["last", "middle", "first"]
 
 
 def test_contact_after_a_later_minute_deletion_stays_below_it(
