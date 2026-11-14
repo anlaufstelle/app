@@ -296,12 +296,16 @@
             }
         }
 
+        // Event cards, activity cards and tally-hour groups keep their opened state
+        // across a background swap; all three are expandableCard-style components.
+        const CARD_TOGGLE_SELECTOR =
+            'button[aria-controls^="event-detail-"], button[aria-controls^="activity-detail-"], ' +
+            'button[aria-controls^="tally-group-"]';
+
         function preserveFeedCardState(target, html) {
             const states = new Map();
             target
-                .querySelectorAll(
-                    'button[aria-controls^="event-detail-"], button[aria-controls^="activity-detail-"]',
-                )
+                .querySelectorAll(CARD_TOGGLE_SELECTOR)
                 .forEach(function (button) {
                     states.set(
                         button.getAttribute("aria-controls"),
@@ -313,9 +317,7 @@
             const template = document.createElement("template");
             template.innerHTML = html;
             template.content
-                .querySelectorAll(
-                    'button[aria-controls^="event-detail-"], button[aria-controls^="activity-detail-"]',
-                )
+                .querySelectorAll(CARD_TOGGLE_SELECTOR)
                 .forEach(function (button) {
                     const controls = button.getAttribute("aria-controls");
                     if (!states.has(controls)) return;

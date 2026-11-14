@@ -51,6 +51,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Geöffnete Strichlisten-Gruppe bleibt bei der Aktualisierung offen** (#2811) — Aktualisiert sich der Zeitstrom im Hintergrund, klappt eine aufgeklappte Stundengruppe der Strichliste nicht mehr zu.
 - **Mobile Abmelde-Fläche und Personenliste** — Im „Mehr“-Menü ist „Abmelden“ jetzt 44 px hoch. In der Personenliste und in der Offline-Personenliste liegt der mobile Knopf je Zeile in einer Tabellenzelle, sodass die Zeilen gültige Tabellenzeilen sind (mit axe geprüft); auf Telefonbreite (390 px gemessen) sind offline Knopf, Namenslink, Suche und Filter 44 px groß.
 - **Statistik-Diagramme bei langsamer Verbindung** (#2691) — Die Diagramme warten auf die Diagramm-Bibliothek und erscheinen auch dann, wenn ihre Daten zuerst eintreffen. Dafür werden die Daten nur einmal abgerufen; kann die Bibliothek nicht geladen werden, erscheint die bestehende Fehlermeldung.
 - **Sicherheitsbestätigung bei Passkey-Änderungen** (#2750) — Die Weiterleitung zur erneuten Passwortbestätigung bleibt bei einem Service-Worker-Wechsel unter Kontrolle des Browsers und hängt nicht mehr am alten Worker.

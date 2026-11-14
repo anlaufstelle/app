@@ -886,6 +886,49 @@ describe("Zeitstrom live watch", () => {
         expect(freshActivity.dataset.zeitstromExpanded).toBe("false");
     });
 
+    it("keeps an opened tally group open across a live swap", async () => {
+        document.getElementById("feed-list").innerHTML = `
+            <div data-testid="tally-group" x-data="expandableCard">
+                <button aria-controls="tally-group-09" aria-expanded="true">offen</button>
+            </div>
+            <div data-testid="tally-group" x-data="expandableCard">
+                <button aria-controls="tally-group-10" aria-expanded="false">zu</button>
+            </div>`;
+        window.htmx = {
+            swap: vi.fn((target, html) => {
+                target.innerHTML = html;
+            }),
+        };
+        const fetchMock = vi
+            .fn()
+            .mockResolvedValueOnce(watchResponse(["feed"], { feed: '"feed-v2"' }))
+            .mockResolvedValueOnce(
+                response({
+                    text: `
+                        <div data-testid="tally-group" x-data="expandableCard">
+                            <button aria-controls="tally-group-09" aria-expanded="false">neu offen</button>
+                        </div>
+                        <div data-testid="tally-group" x-data="expandableCard">
+                            <button aria-controls="tally-group-10" aria-expanded="false">neu zu</button>
+                        </div>
+                        <div data-testid="tally-group" x-data="expandableCard">
+                            <button aria-controls="tally-group-11" aria-expanded="false">neu dazu</button>
+                        </div>`,
+                    headers: { "Content-Type": "text/html", ETag: '"feed-v2"' },
+                }),
+            );
+        const watcher = window.createZeitstromLiveWatch(document.getElementById("zeitstrom-live-watch"), {
+            fetch: fetchMock,
+        });
+
+        await watcher.pollNow();
+
+        const groups = document.querySelectorAll('[data-testid="tally-group"]');
+        expect(groups[0].dataset.zeitstromExpanded).toBe("true");
+        expect(groups[1].dataset.zeitstromExpanded).toBe("false");
+        expect(groups[2].dataset.zeitstromExpanded).toBeUndefined();
+    });
+
     it("invalidates a local zeitstrom change without starting a competing immediate refresh cascade", async () => {
         const fetchMock = vi
             .fn()
