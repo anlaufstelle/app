@@ -10,7 +10,7 @@
  *
  * Fail-closed rule. The details are visible unless ALL of these hold at once
  * (``shouldHideDetails``, re-evaluated on every event):
- *  - no own hide or show request is open;
+ *  - no own hide or show request is open (a compensating show counts too);
  *  - both slots carry the same, non-empty list;
  *  - the ban figure is actually on the page;
  *  - the last confirmed choice is "hidden" and was made for exactly this list.
@@ -57,6 +57,8 @@
     // The only mutable decision input besides the slots on the page.
     var state = {
         pending: false,
+        // Compensating "show" requests still on their way (they are own requests too).
+        compensating: 0,
         confirmedHidden: false,
         confirmedList: "",
         choiceGeneration: 0,
@@ -106,7 +108,7 @@
     function decisionInput() {
         var slots = readSlots();
         return {
-            pending: state.pending,
+            pending: state.pending || state.compensating > 0,
             kpiList: slots.kpiList,
             bansList: slots.bansList,
             figurePresent: slots.figurePresent,
@@ -260,12 +262,29 @@
     }
 
     // The page did not accept an own hide: make sure the server forgets it too.
-    // Sent after the hide's answer (or failure), so the server sees it later.
+    // Sent after the hide's answer (or failure), so the server sees it later. It is
+    // an open own request: until it ends the details stay visible and the buttons
+    // do nothing; afterwards the state the server confirmed (shown) applies.
+    // If the hide's answer was lost and the server only processes the hide after
+    // this show, or if this show fails, the choice stays stored at the server: the
+    // details stay visible in this page, and the choice may apply again after a
+    // reload.
     function compensateHide(form) {
-        send(form, "show").catch(function () {
-            // Offline: the details stay visible here; the stored choice may apply
-            // again after a reload (see the guide).
-        });
+        var page = pageGeneration;
+        state.compensating += 1;
+        send(form, "show")
+            .catch(function () {
+                return null;
+            })
+            .then(function () {
+                if (page !== pageGeneration) {
+                    return;
+                }
+                state.compensating -= 1;
+                endConfirmedHidden();
+                state.choiceGeneration += 1;
+                evaluate();
+            });
     }
 
     async function onClick(event) {
@@ -275,7 +294,7 @@
             return;
         }
         event.preventDefault();
-        if (state.pending) {
+        if (state.pending || state.compensating > 0) {
             return;
         }
 
@@ -336,6 +355,7 @@
         knownBansSlot = bansSlot;
         pageGeneration += 1;
         state.pending = false;
+        state.compensating = 0;
         clearRefreshTimer();
         refreshRounds = 0;
         state.confirmedHidden =

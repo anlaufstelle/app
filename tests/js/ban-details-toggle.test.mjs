@@ -356,6 +356,35 @@ describe("while a request is open", () => {
         });
     }
 
+    it("blocks a second click while the compensating show runs, then applies what the server confirmed", async () => {
+        const show = heldRequest();
+        fetch
+            .mockReturnValueOnce(held.promise)
+            .mockReturnValueOnce(show.promise)
+            .mockResolvedValue(answer({ hidden: true, fingerprint: "fp1" }));
+        close().click();
+        // A replaced slot makes the hide answer stale.
+        swap("zeitstrom-kpi-slot", kpiSlot({ fp: "fp1" }));
+        await settle();
+        held.release(answer({ hidden: true, fingerprint: "fp1" }));
+        await settle();
+        expect(sentChoices()).toEqual(["hide:fp1", "show"]);
+
+        close().click();
+        await settle();
+        expect(sentChoices()).toEqual(["hide:fp1", "show"]);
+        expect(isHidden()).toBe(false);
+
+        show.release(answer({ hidden: false, fingerprint: "fp1" }));
+        await settle();
+        expect(isHidden()).toBe(false);
+
+        close().click();
+        await settle();
+        expect(sentChoices()).toEqual(["hide:fp1", "show", "hide:fp1"]);
+        expect(isHidden()).toBe(true);
+    });
+
     it("an answer without any replaced slot still applies (control)", async () => {
         close().click();
 
