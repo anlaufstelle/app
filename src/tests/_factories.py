@@ -21,10 +21,10 @@ def insert_event_past_save(**fields):
     """Insert an event without ``Event.save()``.
 
     Only for fixtures that need a state the rule forbids for new rows, for
-    example an anonymous ban event that predates the person rule. Skipping
-    ``save()`` also skips the encryption of sensitive fields and the
-    ``search_text`` computation, so pass already-final ``data_json`` and
-    ``search_text`` values and do not use it for events whose content matters.
+    example an anonymous ban event that predates the person rule. What is
+    skipped is ``Event.save()`` and its person check (and the ``pre_save``
+    signals); the batch protection of ``Event.objects.bulk_create`` still
+    encrypts sensitive fields and computes ``search_text``.
     """
     return Event.objects.bulk_create([Event(**fields)])[0]
 

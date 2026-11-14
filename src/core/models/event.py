@@ -4,7 +4,7 @@ import uuid
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, router
 from django.utils.translation import gettext_lazy as _
 
 from core.models.managers import EventManager
@@ -162,13 +162,33 @@ class Event(DynamicDataEncryptionMixin):
     def __str__(self):
         return f"{self.document_type} – {self.occurred_at:%d.%m.%Y %H:%M}"
 
+    def _save_inserts_a_row(self, save_kwargs) -> bool:
+        """Whether the pending ``save()`` writes a new row instead of updating one.
+
+        Mirrors Django's decision in ``Model._save_table``: ``force_insert`` and an
+        instance that was never stored (``_state.adding``, the primary key has a
+        default) always INSERT; ``force_update`` and ``update_fields`` never do.
+        Otherwise Django runs an UPDATE and falls back to an INSERT when no row
+        carries this primary key, which is the case for a loaded instance whose
+        primary key was replaced. That last case is decided by asking the
+        database, so a re-save of a row that really exists stays an update.
+        """
+        if save_kwargs.get("force_insert"):
+            return True
+        if save_kwargs.get("force_update") or save_kwargs.get("update_fields") is not None:
+            return False
+        if self._state.adding or self.pk is None:
+            return True
+        using = save_kwargs.get("using") or self._state.db or router.db_for_write(type(self), instance=self)
+        return not type(self)._base_manager.using(using).filter(pk=self.pk).exists()
+
     def save(self, *args, **kwargs):
         from core.services.dynamic_protection import dynamic_data_write
 
         update_fields = kwargs.get("update_fields")
-        if self._state.adding and self.client_id is None and self.document_type.system_type == "ban":
+        if self.client_id is None and self.document_type.system_type == "ban" and self._save_inserts_a_row(kwargs):
             # A new ban names a person. Existing anonymous bans stay editable:
-            # this only runs when the row is first inserted.
+            # this only runs when the save writes a new row.
             raise ValidationError(
                 _(
                     "Für diesen Dokumentationstyp muss eine Person ausgewählt werden, "

@@ -10,6 +10,7 @@ because the contact-stage check runs only when an event is created.
 from __future__ import annotations
 
 import random
+import uuid
 from typing import Any
 
 import pytest
@@ -162,6 +163,45 @@ class TestEventService:
             )
 
         assert not Event.objects.filter(document_type=ban_type).exists()
+
+    @pytest.mark.parametrize("force_insert", [False, True], ids=["update-then-insert", "force-insert"])
+    def test_a_loaded_event_saved_as_a_new_ban_row_is_refused(self, facility, staff_user, ban_type, force_insert):
+        """A loaded instance with a new primary key is a new row, not an edit."""
+        plain = DocumentType.objects.create(facility=facility, name="Plain contact")
+        original = Event.objects.create(
+            facility=facility,
+            document_type=plain,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=staff_user,
+            is_anonymous=True,
+        )
+        copied = Event.objects.get(pk=original.pk)
+        copied.pk = uuid.uuid4()
+        copied.document_type = ban_type
+
+        with pytest.raises(ValidationError):
+            copied.save(force_insert=force_insert)
+
+        assert not Event.objects.filter(pk=copied.pk).exists()
+        assert not Event.objects.filter(document_type=ban_type).exists()
+        original.refresh_from_db()
+        assert (original.document_type_id, original.client_id) == (plain.pk, None)
+
+    def test_a_loaded_existing_anonymous_ban_can_be_saved_again(self, facility, staff_user, ban_type):
+        """Re-saving a row that really exists stays an update, also after a fresh load."""
+        legacy = self._legacy_anonymous_ban(facility, staff_user, ban_type)
+        loaded = Event.objects.get(pk=legacy.pk)
+
+        loaded.data_json = {"grund": "Loaded and saved", "aktiv": False}
+        loaded.save()
+        loaded.save(force_update=True)
+
+        loaded.refresh_from_db()
+        assert loaded.client_id is None
+        assert loaded.is_anonymous is True
+        assert loaded.data_json["aktiv"] is False
+        assert Event.objects.filter(document_type=ban_type).count() == 1
 
     def test_a_new_ban_event_with_a_person_can_be_inserted_directly(
         self, facility, staff_user, ban_type, client_identified
