@@ -669,16 +669,31 @@ def test_offline_client_detail_renders_in_place(browser, base_url):
         context.close()
 
 
-def test_url_patterns_conflict_and_client_extractors_do_not_cross_match(authenticated_page, base_url):
+def test_url_patterns_conflict_and_client_extractors_do_not_cross_match(browser, base_url):
     """Refs #1396: ``extractConflictPk`` und ``extractClientPk`` duerfen sich
     NICHT ueberlappen — sonst servierte der SW den falschen In-Place-Shell.
     Zusaetzlich: die pk-lose Liste (/offline/conflicts/) matcht keinen der
     beiden (sie wird ueber die generische Cache-Stufe serviert)."""
-    page = authenticated_page
-    page.goto(f"{base_url}/", wait_until="domcontentloaded")
-    page.wait_for_function(
-        "() => !!(window.URL_PATTERNS && typeof window.URL_PATTERNS.extractConflictPk === 'function')"
-    )
+    context = browser.new_context(locale="de-DE")
+    page = context.new_page()
+    page.set_default_timeout(30000)
+    try:
+        # ``/offline/`` is the static public shell: no session, no database, no feed render.
+        # It loads ``url-patterns.js`` as a blocking classic script, so the global exists once
+        # DOMContentLoaded fired and nothing has to be waited for. The start page ``/`` used
+        # before is the heaviest page; the global is only missing there when the document is
+        # not the app page, and the old 30 s wait then said nothing about why (#2729).
+        page.goto(f"{base_url}/offline/", wait_until="domcontentloaded")
+        loaded = page.evaluate(
+            "() => !!(window.URL_PATTERNS && typeof window.URL_PATTERNS.extractConflictPk === 'function')"
+        )
+        assert loaded, f"url-patterns.js not loaded on {page.url!r} (title {page.title()!r})"
+        _assert_url_patterns_do_not_cross_match(page)
+    finally:
+        context.close()
+
+
+def _assert_url_patterns_do_not_cross_match(page):
     uuid_a = "11111111-1111-4111-8111-111111111111"
     result = page.evaluate(
         """(u) => {
