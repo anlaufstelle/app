@@ -20,7 +20,7 @@ from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from core.constants import FEED_MAX_PER_TYPE
-from core.models import Activity, BanRevision, Client, DocumentType, Event
+from core.models import Activity, BanRevision, Client, DocumentType, Event, WorkItem
 from core.services.events.feed import activity_person_label, get_time_range
 from core.services.events.tally import TallyLiveContext
 from core.services.system.ban_revision import bump_ban_revision
@@ -296,3 +296,29 @@ def test_activity_person_label_is_empty_for_a_target_without_a_person(facility, 
     assert activity_person_label(_activity_for(facility, staff_user, anonymous)) == ""
     assert activity_person_label(_activity_for(facility, staff_user, client)) == "Label-01"
     assert activity_person_label(_activity_for(facility, staff_user, with_client)) == "Label-01"
+
+
+# ---------------------------------------------------------------------------
+# focus box validator
+# ---------------------------------------------------------------------------
+
+
+def test_focus_box_validator_without_passed_counters_follows_the_facility_work_items(facility, staff_user):
+    """Pins core.services.zeitstrom_watch.x_build_zeitstrom_component_validator__mutmut_60.
+
+    Without handed-in counters the focus box reads the open work items of its
+    own facility, so a new urgent one moves the validator.
+    """
+    state = _state(facility)
+
+    before = build_zeitstrom_component_validator(staff_user, facility, state, "focus_box")
+    WorkItem.objects.create(
+        facility=facility,
+        title="Urgent task",
+        item_type=WorkItem.ItemType.TASK,
+        priority=WorkItem.Priority.URGENT,
+        created_by=staff_user,
+    )
+    after = build_zeitstrom_component_validator(staff_user, facility, state, "focus_box")
+
+    assert before != after
