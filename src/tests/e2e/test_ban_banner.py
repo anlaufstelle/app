@@ -382,6 +382,21 @@ if event is not None and not event.is_deleted:
 """
 
 
+_MULTIPART_BAN_DETAILS = re.compile(r'name="ban_details"\r\n\r\n([^\r]*)\r\n')
+
+
+def _posted_ban_details(request) -> str | None:
+    """The ``ban_details`` value of a POST, whether sent as a form or as multipart ``FormData``."""
+    body = request.post_data
+    if not body:
+        return None
+    match = _MULTIPART_BAN_DETAILS.search(body)
+    if match:
+        return match.group(1)
+    match = re.search(r"(?:^|&)ban_details=([^&]*)", body)
+    return match.group(1) if match else None
+
+
 def _add_second_ban(e2e_env: dict[str, str]) -> str:
     """Add a second active ban through the service layer, so the live watch notices it."""
     result = run_child(
@@ -739,9 +754,7 @@ class TestBanDetailsToggle:
 
             with page.expect_response(
                 lambda response: (
-                    "/zeitstrom/ban-details/" in response.url
-                    and response.request.post_data is not None
-                    and "ban_details=show" in response.request.post_data
+                    "/zeitstrom/ban-details/" in response.url and _posted_ban_details(response.request) == "show"
                 )
             ):
                 held[0].continue_()
