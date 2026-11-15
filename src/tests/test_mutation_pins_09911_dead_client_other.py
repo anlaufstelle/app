@@ -18,6 +18,7 @@ from core.services.client import (
     approve_client_deletion,
     create_or_get_client_deletion_request,
 )
+from core.services.client import main as client_main
 from tests._row_lock_helpers import mitschnitt as capture_locks
 
 pytestmark = pytest.mark.django_db
@@ -110,3 +111,22 @@ def test_approval_ignores_a_request_moved_to_another_facility_after_the_person_l
     request.refresh_from_db()
     assert client_identified.is_deleted is False
     assert request.status == DeletionRequest.Status.PENDING
+
+
+def test_document_type_kwarg_helper_replaces_the_id_with_the_object_in_place(doc_type_client_profile):
+    """The helper rewrites the caller's data so exactly one spelling of the type remains.
+
+    core.services.client.main.x__normalize_document_type_kwarg__mutmut_21,
+    core.services.client.main.x__normalize_document_type_kwarg__mutmut_33
+    """
+    by_id = {"document_type_id": doc_type_client_profile.pk}
+    cleared = {"document_type_id": None}
+
+    resolved = client_main._normalize_document_type_kwarg(by_id)
+    cleared_result = client_main._normalize_document_type_kwarg(cleared)
+
+    assert resolved == doc_type_client_profile
+    assert by_id == {"document_type": doc_type_client_profile}
+    assert cleared_result is None
+    assert cleared == {"document_type": None}
+    assert cleared["document_type"] is None
