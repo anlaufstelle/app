@@ -112,16 +112,22 @@ def test_event_feed_uses_one_joined_and_one_grouped_query(facility, staff_user, 
     _assert_query_budget(captured, 2)
 
 
-def test_client_list_query_count_is_bounded_per_page(client, facility, staff_user, client_identified):
+@pytest.mark.parametrize("extra_rows", [4, 24])
+def test_client_list_query_count_is_bounded_per_page(client, facility, staff_user, client_identified, extra_rows):
+    # Five rows and one full page (DEFAULT_PAGE_SIZE = 25) must stay within the
+    # same budget: the cost is fixed per request, not per row (22 at both sizes;
+    # 21 before the ban badge read was added to the list).
     Client.objects.bulk_create(
-        [Client(facility=facility, pseudonym=f"Budget-{index}", created_by=staff_user) for index in range(5)]
+        [Client(facility=facility, pseudonym=f"Budget-{index}", created_by=staff_user) for index in range(extra_rows)]
     )
     client.force_login(staff_user)
 
-    # Includes one fixed middleware read after saving the session to check
-    # key existence and the current auth revision, independent of page size.
+    # Fixed reads per request: the session/auth/facility context and MFA checks,
+    # one middleware read after saving the session (key existence and current
+    # auth revision) and the single page-wide read for the ban badges
+    # (active_ban_client_ids).
     with CaptureQueriesContext(connection) as captured:
         response = client.get(reverse("core:client_list"))
 
     assert response.status_code == 200
-    _assert_query_budget(captured, 21)
+    _assert_query_budget(captured, 22)
