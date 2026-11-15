@@ -113,17 +113,21 @@ def stop_child(process, timeout=STOP_TIMEOUT_SECONDS):
 def stop_children(processes, timeout=STOP_TIMEOUT_SECONDS):
     """End several long-running children; one that cannot be stopped does not spare the others.
 
-    Every child gets its turn. A :class:`subprocess.TimeoutExpired` of the first child that stayed alive
-    is raised afterwards, so the hung child is still reported (Refs #2723).
+    Every child gets its turn, whatever happens to the ones before. Afterwards the first failure is raised
+    and every further failure is attached to it as a note, so a hung child is still reported and nothing
+    is lost (Refs #2723).
     """
-    first_error = None
+    errors = []
     for process in processes:
         try:
             stop_child(process, timeout=timeout)
-        except subprocess.TimeoutExpired as error:
-            first_error = first_error or error
-    if first_error is not None:
-        raise first_error
+        except Exception as error:
+            errors.append(error)
+    if errors:
+        first, *others = errors
+        for other in others:
+            first.add_note(f"further failure while stopping the children: {type(other).__name__}: {other}")
+        raise first
 
 
 def django_shell(e2e_env, script, timeout=SHELL_TIMEOUT_SECONDS):

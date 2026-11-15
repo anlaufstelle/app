@@ -264,6 +264,31 @@ def test_stop_children_stops_every_child_although_one_cannot_be_stopped():
             process.wait()
 
 
+class _BrokenChild(_StuckChild):
+    """A child whose signal cannot be delivered, a failure other than a timeout."""
+
+    def send_signal(self, _signal):
+        raise PermissionError("cannot signal this child")
+
+
+def test_stop_children_reports_every_failure_and_still_stops_all_children():
+    before, between, after = _sleeper(), _sleeper(), _sleeper()
+    try:
+        with pytest.raises(subprocess.TimeoutExpired) as caught:
+            _helpers.stop_children([before, _StuckChild(), between, _BrokenChild(), _StuckChild(), after], timeout=1)
+
+        assert all(process.returncode is not None for process in (before, between, after))
+        notes = "\n".join(caught.value.__notes__)
+        assert notes.count("TimeoutExpired") == 1  # the second stuck child; the first one is the error itself
+        assert "PermissionError" in notes
+        assert "cannot signal this child" in notes
+    finally:
+        for process in (before, between, after):
+            if process.poll() is None:
+                process.kill()
+            process.wait()
+
+
 def test_stop_children_without_trouble_stops_all_and_raises_nothing():
     first, second = _sleeper(), _sleeper()
 
