@@ -1,7 +1,7 @@
 // Hiding the ban details of the Zeitstrom: the figure in the KPI row and the close
 // button of the detail block. The details are visible unless every condition of
-// shouldHideDetails holds; each describe block below is one part of the state
-// table in the lane report (event x state => decision).
+// shouldHideDetails holds; each describe block below covers one part of the state
+// model (event x state => decision).
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 beforeAll(async () => {
