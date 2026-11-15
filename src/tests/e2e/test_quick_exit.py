@@ -357,18 +357,20 @@ class TestSchnellVerlassen:
         gehaltenes_ziel = []
         try:
             _do_real_login(page, base_url)
-            page.goto(f"{base_url}/", wait_until="domcontentloaded")
-            page.locator("#zeitstrom-live-watch").wait_for(state="attached", timeout=15000)
-
+            # Routes first, then the page: a watch request that the page starts while it
+            # builds up must already meet the route. A request that leaves before the route
+            # exists is not held by it, and as long as it stays open the watch returns its
+            # running cycle and starts no poll of its own.
             page.route(
                 re.compile(r"/api/v1/zeitstrom/watch/|/partials/zeitstrom/"),
                 lambda route: gehaltene_polls.append(route),
             )
             page.route(EXIT_TARGET_GLOB, lambda route: gehaltenes_ziel.append(route))
+            page.goto(f"{base_url}/", wait_until="domcontentloaded")
+            page.locator("#zeitstrom-live-watch").wait_for(state="attached", timeout=15000)
 
-            # Einen Poll anstossen (``focus`` -> ``pollImmediately``) und warten,
-            # bis er an der Route haengt. Laeuft noch der Poll des Seitenaufbaus,
-            # greift der Anstoss erst beim naechsten Versuch.
+            # Wait until a poll is held by the route; while none is, nudge one
+            # (``focus`` -> ``pollImmediately``).
             ende = time.monotonic() + 20.0
             while not gehaltene_polls and time.monotonic() < ende:
                 page.evaluate("() => window.dispatchEvent(new Event('focus'))")
