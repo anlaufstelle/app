@@ -11,6 +11,7 @@ import re
 import pytest
 from django.contrib.auth import get_user_model
 from django.db import connection
+from django.db.migrations.loader import MigrationLoader
 from django_test_migrations.contrib.unittest_case import MigratorTestCase
 
 _MIGRATION_NAME = "0181_hash_cleartext_backup_codes"
@@ -115,6 +116,11 @@ class TestMigrate0181HashLegacyBackupCodes(MigratorTestCase):
     def test_migrated_legacy_code_is_rejected_by_current_service(self):
         """Historical hashes remain stored, but weak codes no longer authenticate."""
         from core.services.security import remaining_backup_codes, verify_backup_code
+
+        # The current service reads the current User model, so the schema must be
+        # at the latest state first (0181 predates later User columns). The
+        # migrated rows are carried forward unchanged.
+        self._migrator.apply_tested_migration(MigrationLoader(connection).graph.leaf_nodes())
 
         assert not self._tokens().objects.filter(token=_ALT_CODE_1, device_id=self.backup_a_pk).exists()
         user = get_user_model().objects.get(pk=self.konto_a_pk)
