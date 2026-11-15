@@ -35,6 +35,8 @@ def test_enforced_server_uses_separate_port_range(e2e_servers, monkeypatch, port
         config=SimpleNamespace(workerinput={"workerid": f"gw{worker_num}", "workercount": worker_count})
     )
     process = Mock()
+    # The server is still running at teardown: stop_child only signals a child whose poll() is None.
+    process.poll.return_value = None
     start = Mock(return_value=process)
     cleanup = Mock()
     ready = Mock()
@@ -61,7 +63,8 @@ def test_enforced_server_uses_separate_port_range(e2e_servers, monkeypatch, port
         with pytest.raises(StopIteration):
             next(fixture)
     process.send_signal.assert_called_once_with(signal.SIGTERM)
-    process.wait.assert_called_once_with(timeout=10)
+    process.wait.assert_called_with(timeout=10)
+    process.kill.assert_not_called()
 
 
 def test_port_cleanup_only_terminates_own_child(e2e_servers, monkeypatch):
