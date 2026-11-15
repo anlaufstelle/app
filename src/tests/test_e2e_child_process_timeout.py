@@ -103,22 +103,95 @@ through ``stop_child`` or ``stop_children`` (terminate, wait with a limit, kill)
 
 BOUNDED_HELPERS = {"run_child", "django_shell"}
 
-
-def _timeout_is_none(call):
-    return any(
-        keyword.arg == "timeout" and isinstance(keyword.value, ast.Constant) and keyword.value.value is None
-        for keyword in call.keywords
-    )
+SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)
 
 
-def _blocking_call_findings(call, filename, name):
-    """Findings for one blocking ``subprocess`` call: no limit, a limit of ``None``, or options that could hide it.
+def _may_be_none(value):
+    """True if the expression is ``None`` or can evaluate to it (``a if c else None``, ``a or None``)."""
+    if isinstance(value, ast.Constant):
+        return value.value is None
+    if isinstance(value, ast.IfExp):
+        return _may_be_none(value.body) or _may_be_none(value.orelse)
+    if isinstance(value, ast.BoolOp):
+        return any(_may_be_none(operand) for operand in value.values)
+    return False
+
+
+def _walk_scope(scope):
+    """Nodes of ``scope`` without the insides of nested scopes (the nested scope node itself is yielded)."""
+    pending = list(ast.iter_child_nodes(scope))
+    while pending:
+        node = pending.pop()
+        yield node
+        if not isinstance(node, SCOPES):
+            pending.extend(ast.iter_child_nodes(node))
+
+
+def _none_names(scope):
+    """Names bound to ``None`` (or maybe) directly in ``scope``, parameters with a ``None`` default included."""
+    names = set()
+    if isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+        arguments = scope.args
+        positional = arguments.posonlyargs + arguments.args
+        names.update(
+            argument.arg
+            for argument, default in zip(
+                positional[len(positional) - len(arguments.defaults) :], arguments.defaults, strict=True
+            )
+            if _may_be_none(default)
+        )
+        names.update(
+            argument.arg
+            for argument, default in zip(arguments.kwonlyargs, arguments.kw_defaults, strict=True)
+            if default is not None and _may_be_none(default)
+        )
+    for node in _walk_scope(scope):
+        if isinstance(node, ast.Assign) and _may_be_none(node.value):
+            names.update(target.id for target in node.targets if isinstance(target, ast.Name))
+        elif (
+            isinstance(node, ast.AnnAssign)
+            and node.value is not None
+            and isinstance(node.target, ast.Name)
+            and _may_be_none(node.value)
+        ):
+            names.add(node.target.id)
+    return names
+
+
+def _calls_with_none_names(scope, inherited=frozenset()):
+    """``{id(call): names bound to None in the scope chain of the call}`` for every call below ``scope``."""
+    names = inherited | _none_names(scope)
+    found = {}
+    for node in _walk_scope(scope):
+        if isinstance(node, ast.Call):
+            found[id(node)] = names
+        if isinstance(node, SCOPES):
+            found.update(_calls_with_none_names(node, names))
+    return found
+
+
+def _timeout_problem(call, none_names):
+    """How the ``timeout=`` of ``call`` can be ``None``, or ``""``. Doubt counts: a literal limit is required."""
+    for keyword in call.keywords:
+        if keyword.arg != "timeout":
+            continue
+        if isinstance(keyword.value, ast.Constant) and keyword.value.value is None:
+            return "timeout=None"
+        if isinstance(keyword.value, ast.Name) and keyword.value.id in none_names:
+            return f"timeout={keyword.value.id} (bound to None in this scope; use a literal timeout)"
+        if _may_be_none(keyword.value):
+            return "timeout that may be None (use a literal timeout)"
+    return ""
+
+
+def _blocking_call_findings(call, filename, name, none_names):
+    """Findings for one blocking ``subprocess`` call: no limit, a limit that is ``None``, or options that could hide it.
 
     ``**options`` next to an explicit ``timeout=`` is harmless (a second ``timeout`` raises ``TypeError``).
     """
     where = f"{filename}:{call.lineno}: {name}"
-    if _timeout_is_none(call):
-        return [f"{where} with timeout=None"]
+    if problem := _timeout_problem(call, none_names):
+        return [f"{where} with {problem}"]
     if "timeout" in {keyword.arg for keyword in call.keywords}:
         return []
     splat = next((keyword.value for keyword in call.keywords if keyword.arg is None), None)
@@ -128,10 +201,18 @@ def _blocking_call_findings(call, filename, name):
     return [f"{where} without timeout"]
 
 
+def _bounded_helper_name(func):
+    """``run_child``/``django_shell`` called by name or as an attribute (``_helpers.run_child``)."""
+    name = func.id if isinstance(func, ast.Name) else func.attr if isinstance(func, ast.Attribute) else ""
+    return name if name in BOUNDED_HELPERS else ""
+
+
 def _child_process_findings(source, filename):
     """Calls in ``source`` that can block a run without a limit, as ``file:line: reason``."""
     findings = []
-    for node in ast.walk(ast.parse(source)):
+    tree = ast.parse(source)
+    none_names = _calls_with_none_names(tree)
+    for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and node.module == "subprocess":
             findings.append(f"{filename}:{node.lineno}: import names from subprocess (use the module attribute)")
         elif isinstance(node, ast.Import) and any(a.name == "subprocess" and a.asname for a in node.names):
@@ -144,13 +225,13 @@ def _child_process_findings(source, filename):
         ):
             name = node.func.attr
             if name in BLOCKING_CALLS:
-                findings += _blocking_call_findings(node, filename, f"subprocess.{name}")
+                findings += _blocking_call_findings(node, filename, f"subprocess.{name}", none_names[id(node)])
             elif name == "Popen" and filename not in LONG_RUNNING_PROCESS_FILES:
                 findings.append(f"{filename}:{node.lineno}: subprocess.Popen outside the long-running allowlist")
-        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in BOUNDED_HELPERS:
-            # The helpers have a default limit; only an explicit ``timeout=None`` removes it.
-            if _timeout_is_none(node):
-                findings.append(f"{filename}:{node.lineno}: {node.func.id} with timeout=None")
+        elif isinstance(node, ast.Call) and _bounded_helper_name(node.func):
+            # The helpers have a default limit; only a timeout that is None removes it.
+            if problem := _timeout_problem(node, none_names[id(node)]):
+                findings.append(f"{filename}:{node.lineno}: {_bounded_helper_name(node.func)} with {problem}")
     if filename in LONG_RUNNING_PROCESS_FILES and not re.search(r"\bstop_child(?:ren)?\(", source):
         findings.append(f"{filename}: starts a long-running process but never calls stop_child or stop_children")
     return findings
@@ -192,6 +273,97 @@ def test_guard_flags_a_timeout_that_is_none_and_options_that_could_hide_it():
     assert _child_process_findings(shell_none, "test_x.py") == ["test_x.py:1: django_shell with timeout=None"]
     assert _child_process_findings(splat_with_timeout, "test_x.py") == []
     assert _child_process_findings(helper_bounded, "test_x.py") == []
+
+
+def test_guard_flags_the_attribute_form_of_the_bounded_helpers():
+    source = (
+        "from . import _helpers\n"
+        "_helpers.run_child(['x'], timeout=None, label='x')\n"
+        "helpers.django_shell(env, 'script', timeout=None)\n"
+        "_helpers.run_child(['x'], timeout=30, label='x')\n"
+        "_helpers.django_shell(env, 'script')\n"
+    )
+
+    assert _child_process_findings(source, "test_x.py") == [
+        "test_x.py:2: run_child with timeout=None",
+        "test_x.py:3: django_shell with timeout=None",
+    ]
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        pytest.param(
+            "def f():\n    limit = None\n    run_child(['x'], timeout=limit, label='x')\n", id="assigned-none"
+        ),
+        pytest.param(
+            "def f():\n    limit: int | None = None\n    run_child(['x'], timeout=limit, label='x')\n",
+            id="annotated-none",
+        ),
+        pytest.param(
+            "def f(limit=None):\n    run_child(['x'], timeout=limit, label='x')\n", id="parameter-default-none"
+        ),
+        pytest.param(
+            "def f(*, limit=None):\n    run_child(['x'], timeout=limit, label='x')\n", id="keyword-only-default-none"
+        ),
+        pytest.param(
+            "def f(flag):\n    limit = 5 if flag else None\n    run_child(['x'], timeout=limit, label='x')\n",
+            id="conditional-none",
+        ),
+        pytest.param(
+            "def f(env):\n    limit = env.get('A') or None\n    run_child(['x'], timeout=limit, label='x')\n",
+            id="or-none",
+        ),
+        pytest.param(
+            "LIMIT = None\n\n\ndef f():\n    run_child(['x'], timeout=LIMIT, label='x')\n", id="module-constant-none"
+        ),
+        pytest.param(
+            "def f():\n    limit = None\n\n    def g():\n        run_child(['x'], timeout=limit, label='x')\n",
+            id="enclosing-scope-none",
+        ),
+        pytest.param(
+            "import subprocess\n\n\ndef f():\n    limit = None\n    subprocess.run(['x'], timeout=limit)\n",
+            id="subprocess-call",
+        ),
+        pytest.param(
+            "def f(flag):\n    run_child(['x'], timeout=5 if flag else None, label='x')\n", id="inline-conditional-none"
+        ),
+        pytest.param(
+            "def f():\n    limit = None\n    limit = 30\n    run_child(['x'], timeout=limit, label='x')\n",
+            id="rebound-after-none-is-doubt",
+        ),
+    ],
+)
+def test_guard_flags_a_timeout_name_that_is_bound_to_none(source):
+    findings = _child_process_findings(source, "test_x.py")
+
+    assert len(findings) == 1
+    assert "timeout" in findings[0]
+    assert "literal" in findings[0] or "timeout=None" in findings[0]
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        pytest.param(
+            "def f():\n    limit = 30\n    run_child(['x'], timeout=limit, label='x')\n", id="assigned-number"
+        ),
+        pytest.param(
+            "def f(limit=30):\n    run_child(['x'], timeout=limit, label='x')\n", id="parameter-default-number"
+        ),
+        pytest.param("def f(limit):\n    run_child(['x'], timeout=limit, label='x')\n", id="parameter-without-default"),
+        pytest.param(
+            "from ._helpers import SETUP_TIMEOUT_SECONDS\n\nrun_child(['x'], timeout=SETUP_TIMEOUT_SECONDS)\n",
+            id="imported-constant",
+        ),
+        pytest.param(
+            "def f(limit=None):\n    pass\n\n\ndef g():\n    limit = 30\n    run_child(['x'], timeout=limit)\n",
+            id="none-in-a-sibling-scope-does-not-leak",
+        ),
+    ],
+)
+def test_guard_accepts_a_timeout_name_that_is_not_bound_to_none(source):
+    assert _child_process_findings(source, "test_x.py") == []
 
 
 def test_guard_flags_popen_outside_the_allowlist_and_import_forms():
