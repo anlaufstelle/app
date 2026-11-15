@@ -5,6 +5,7 @@ never ends, so the tests finish in a second or two.
 """
 
 import ast
+import re
 import signal
 import subprocess
 import sys
@@ -96,8 +97,35 @@ LONG_RUNNING_PROCESS_FILES = {
 """Files that may start a process which outlives the call (``subprocess.Popen``).
 
 Such a process ends in a fixture teardown, so every file listed here must stop it
-through ``stop_child`` (terminate, wait with a limit, kill) instead of an unbounded wait.
+through ``stop_child`` or ``stop_children`` (terminate, wait with a limit, kill) instead of an unbounded wait.
 """
+
+
+BOUNDED_HELPERS = {"run_child", "django_shell"}
+
+
+def _timeout_is_none(call):
+    return any(
+        keyword.arg == "timeout" and isinstance(keyword.value, ast.Constant) and keyword.value.value is None
+        for keyword in call.keywords
+    )
+
+
+def _blocking_call_findings(call, filename, name):
+    """Findings for one blocking ``subprocess`` call: no limit, a limit of ``None``, or options that could hide it.
+
+    ``**options`` next to an explicit ``timeout=`` is harmless (a second ``timeout`` raises ``TypeError``).
+    """
+    where = f"{filename}:{call.lineno}: {name}"
+    if _timeout_is_none(call):
+        return [f"{where} with timeout=None"]
+    if "timeout" in {keyword.arg for keyword in call.keywords}:
+        return []
+    splat = next((keyword.value for keyword in call.keywords if keyword.arg is None), None)
+    if splat is not None:
+        shown = f"**{splat.id}" if isinstance(splat, ast.Name) else "**options"
+        return [f"{where} with {shown} (a timeout cannot be verified)"]
+    return [f"{where} without timeout"]
 
 
 def _child_process_findings(source, filename):
@@ -115,12 +143,16 @@ def _child_process_findings(source, filename):
             and node.func.value.id == "subprocess"
         ):
             name = node.func.attr
-            if name in BLOCKING_CALLS and "timeout" not in {keyword.arg for keyword in node.keywords}:
-                findings.append(f"{filename}:{node.lineno}: subprocess.{name} without timeout")
+            if name in BLOCKING_CALLS:
+                findings += _blocking_call_findings(node, filename, f"subprocess.{name}")
             elif name == "Popen" and filename not in LONG_RUNNING_PROCESS_FILES:
                 findings.append(f"{filename}:{node.lineno}: subprocess.Popen outside the long-running allowlist")
-    if filename in LONG_RUNNING_PROCESS_FILES and "stop_child(" not in source:
-        findings.append(f"{filename}: starts a long-running process but never calls stop_child")
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in BOUNDED_HELPERS:
+            # The helpers have a default limit; only an explicit ``timeout=None`` removes it.
+            if _timeout_is_none(node):
+                findings.append(f"{filename}:{node.lineno}: {node.func.id} with timeout=None")
+    if filename in LONG_RUNNING_PROCESS_FILES and not re.search(r"\bstop_child(?:ren)?\(", source):
+        findings.append(f"{filename}: starts a long-running process but never calls stop_child or stop_children")
     return findings
 
 
@@ -144,6 +176,24 @@ def test_guard_flags_an_unbounded_call_and_accepts_a_bounded_one():
     assert _child_process_findings(bounded, "test_x.py") == []
 
 
+def test_guard_flags_a_timeout_that_is_none_and_options_that_could_hide_it():
+    none = "import subprocess\nsubprocess.run(['x'], timeout=None)\n"
+    splat = "import subprocess\nsubprocess.check_output(['x'], **options)\n"
+    helper_none = "run_child(['x'], timeout=None, label='x')\n"
+    shell_none = "django_shell(env, 'script', timeout=None)\n"
+    splat_with_timeout = "import subprocess\nsubprocess.run(['x'], timeout=5, **options)\n"
+    helper_bounded = "run_child(['x'], timeout=30, label='x')\ndjango_shell(env, 'script')\n"
+
+    assert _child_process_findings(none, "test_x.py") == ["test_x.py:2: subprocess.run with timeout=None"]
+    assert _child_process_findings(splat, "test_x.py") == [
+        "test_x.py:2: subprocess.check_output with **options (a timeout cannot be verified)"
+    ]
+    assert _child_process_findings(helper_none, "test_x.py") == ["test_x.py:1: run_child with timeout=None"]
+    assert _child_process_findings(shell_none, "test_x.py") == ["test_x.py:1: django_shell with timeout=None"]
+    assert _child_process_findings(splat_with_timeout, "test_x.py") == []
+    assert _child_process_findings(helper_bounded, "test_x.py") == []
+
+
 def test_guard_flags_popen_outside_the_allowlist_and_import_forms():
     popen = "import subprocess\nsubprocess.Popen(['x'])\n"
     from_import = "from subprocess import run\n"
@@ -158,8 +208,11 @@ def test_guard_requires_stop_child_where_popen_is_allowed():
     name = next(iter(LONG_RUNNING_PROCESS_FILES))
     popen = "import subprocess\nsubprocess.Popen(['x'])\n"
 
-    assert _child_process_findings(popen, name) == [f"{name}: starts a long-running process but never calls stop_child"]
+    assert _child_process_findings(popen, name) == [
+        f"{name}: starts a long-running process but never calls stop_child or stop_children"
+    ]
     assert _child_process_findings(popen + "stop_child(p)\n", name) == []
+    assert _child_process_findings(popen + "stop_children([p])\n", name) == []
 
 
 def test_stop_child_ends_a_process_that_ignores_sigterm():
@@ -174,6 +227,49 @@ def test_stop_child_ends_a_process_that_ignores_sigterm():
 
         assert process.returncode == -signal.SIGKILL
         assert time.monotonic() - started < 15
+
+
+class _StuckChild:
+    """A child that survives SIGTERM and SIGKILL, for example in uninterruptible sleep."""
+
+    def poll(self):
+        return None
+
+    def send_signal(self, _signal):
+        pass
+
+    def kill(self):
+        pass
+
+    def wait(self, timeout=None):
+        raise subprocess.TimeoutExpired("stuck-child", timeout)
+
+
+def _sleeper():
+    return subprocess.Popen([sys.executable, "-c", "import time; time.sleep(600)"])
+
+
+def test_stop_children_stops_every_child_although_one_cannot_be_stopped():
+    before, after = _sleeper(), _sleeper()
+    try:
+        with pytest.raises(subprocess.TimeoutExpired):
+            _helpers.stop_children([before, _StuckChild(), after], timeout=1)
+
+        assert before.returncode is not None
+        assert after.returncode is not None
+    finally:
+        for process in (before, after):
+            if process.poll() is None:
+                process.kill()
+            process.wait()
+
+
+def test_stop_children_without_trouble_stops_all_and_raises_nothing():
+    first, second = _sleeper(), _sleeper()
+
+    _helpers.stop_children([first, second], timeout=5)
+
+    assert (first.returncode, second.returncode) == (-signal.SIGTERM, -signal.SIGTERM)
 
 
 def test_stop_child_accepts_a_process_that_already_ended():

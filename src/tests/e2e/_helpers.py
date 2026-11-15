@@ -110,6 +110,22 @@ def stop_child(process, timeout=STOP_TIMEOUT_SECONDS):
     process.wait(timeout=timeout)
 
 
+def stop_children(processes, timeout=STOP_TIMEOUT_SECONDS):
+    """End several long-running children; one that cannot be stopped does not spare the others.
+
+    Every child gets its turn. A :class:`subprocess.TimeoutExpired` of the first child that stayed alive
+    is raised afterwards, so the hung child is still reported (Refs #2723).
+    """
+    first_error = None
+    for process in processes:
+        try:
+            stop_child(process, timeout=timeout)
+        except subprocess.TimeoutExpired as error:
+            first_error = first_error or error
+    if first_error is not None:
+        raise first_error
+
+
 def django_shell(e2e_env, script, timeout=SHELL_TIMEOUT_SECONDS):
     """``manage.py shell -c`` gegen die E2E-Datenbank; liefert die Ausgabezeilen.
 

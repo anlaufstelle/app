@@ -22,7 +22,7 @@ import uuid
 import pytest
 from cryptography.fernet import Fernet, InvalidToken
 
-from ._helpers import SEED_PASSWORD, django_shell, python_bin, stop_child
+from ._helpers import SEED_PASSWORD, django_shell, python_bin, stop_children
 from ._selectors import save_button
 
 pytestmark = pytest.mark.e2e
@@ -103,8 +103,7 @@ def serve_with_ring(e2e_env):
         return f"http://127.0.0.1:{port}"
 
     yield _serve
-    for process in started:
-        stop_child(process)
+    stop_children(started)
 
 
 @pytest.fixture
