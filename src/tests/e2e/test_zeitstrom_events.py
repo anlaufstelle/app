@@ -499,8 +499,11 @@ class TestQualifiedClientEventDeletion:
 def _create_event_for_blitz08(page, base_url, doc_type_label: str = "Kontakt") -> str:
     """Hilfsroutine: Event für identified Klient Blitz-08 anlegen, liefert Detail-URL."""
     page.goto(f"{base_url}/events/new/")
-    page.select_option("select[name='document_type']", label=doc_type_label)
-    page.wait_for_load_state("domcontentloaded")
+    # The form pre-renders the fields of the default type; they are disabled while the field
+    # request runs and then replaced. Wait for that swap, not just for the page.
+    with page.expect_response(re.compile(r"/partials/events/fields/")):
+        page.select_option("select[name='document_type']", label=doc_type_label)
+    expect(page.locator("#dynamic-fields-fence")).not_to_have_attribute("disabled", re.compile(r".*"))
     autocomplete = page.locator("input[placeholder='Pseudonym eingeben...']")
     autocomplete.fill("Blitz")
     option = page.locator("button:has-text('Blitz-08')").first
@@ -514,6 +517,44 @@ def _create_event_for_blitz08(page, base_url, doc_type_label: str = "Kontakt") -
     page.click("button:has-text('Speichern')")
     page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/$"))
     return page.url
+
+
+# Holds back the request that swaps the dynamic fields, as a slow response under CPU load does.
+SLOW_FIELD_SWAP_SCRIPT = """
+(() => {
+    const open = XMLHttpRequest.prototype.open;
+    const send = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open = function (method, url) {
+        this.__heldUrl = String(url);
+        return open.apply(this, arguments);
+    };
+    XMLHttpRequest.prototype.send = function () {
+        if (this.__heldUrl.includes('/partials/events/fields/')) {
+            const args = arguments;
+            setTimeout(() => send.apply(this, args), 3000);
+            return undefined;
+        }
+        return send.apply(this, arguments);
+    };
+})();
+"""
+
+
+class TestCreateEventHelperWaitsForFieldSwap:
+    """The create helper must not touch the fields of the pre-rendered type while the swap runs.
+
+    ``/events/new/`` pre-renders the fields of the default document type (``Kontakt``, with
+    ``dauer``). While the field request of a type change is open the old fields are disabled
+    and then replaced; a helper that reads them in that window fills a node that is about to
+    go away. The slow response makes the window wide enough to hit it every time.
+    """
+
+    def test_slow_field_swap_to_a_type_without_dauer(self, lead_page, base_url):
+        lead_page.add_init_script(SLOW_FIELD_SWAP_SCRIPT)
+
+        detail_url = _create_event_for_blitz08(lead_page, base_url, doc_type_label="Medizinische Versorgung")
+
+        assert re.search(r"/events/[0-9a-f-]+/$", detail_url)
 
 
 class TestEventOptimisticLocking:
