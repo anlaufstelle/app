@@ -41,7 +41,7 @@ from core.models import (
 )
 from tests._standard_text import text_path
 
-pytest_plugins = ["tests._skip_profile"]
+pytest_plugins = ["tests._skip_profile", "tests._stale_test_db"]
 
 
 def pytest_collection_modifyitems(items):

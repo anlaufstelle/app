@@ -50,6 +50,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Zahleneingabe der Strichliste als Popover bzw. Bottom-Sheet** (#2653) — Die Werteingabe öffnet am Desktop als Popover an der Kachel, am Handy als Fenster von unten; die Liste verschiebt sich nicht. Escape, Abbrechen oder ein Klick außerhalb schließen, der Fokus kehrt zur Kachel zurück.
 - **Kettenprüfung und Statistik mit weniger Aufwand, Bereinigung mit Vorprüfung** (#2717) — Die Statistikseite zählt Live-Personen gezielt; `verify_audit_chain` liest schrittweise. Die Bereinigung sucht Grenzen in der Datenbank und löscht nichts, wenn eine Zeile vor der Fristgrenze nicht authentifiziert oder nicht anschließt. Signierter Prüfpunkt und Anker vor der Fristgrenze verhindern einen Fehlalarm bei ruhenden Einrichtungen.
 - **Zahlenfelder der Pakete vorbelegt** (#2819) — Die mitgelieferten Pakete belegen bei neuen Einträgen Dauer mit 15 sowie Ausgabe, Rückgabe und Teilnehmende mit 1 vor, in Strichliste und Ereignisformular. Bestehende Einrichtungen erhalten das erst mit einem erneuten `load_package`; es setzt abweichend gepflegte Defaults auf den Paketwert zurück, ein Paket ohne `default_value` lässt sie stehen.
+- **Testlauf stoppt bei Altzeilen in der wiederverwendeten Test-Datenbank** — Für Mitwirkende: Nach einem hart abgebrochenen Lauf meldet der nächste Start die Altzeilen und nennt `--create-db`, statt tausende Folgefehler zu erzeugen.
 
 ### Fixed
 
