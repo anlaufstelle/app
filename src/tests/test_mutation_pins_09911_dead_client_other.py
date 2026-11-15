@@ -31,7 +31,7 @@ def test_timestamp_generalization_continues_after_an_already_generalized_event(
 ):
     """An event already at its month start does not stop the other events from being generalized.
 
-    core.services.client.main.x__generalize_event_timestamps__mutmut_12
+    core.services.client.main.x__generalize_event_timestamps__mutmut_32
     """
     already_bucketed = datetime(2026, 5, 1, 0, 0, tzinfo=BERLIN)
     middle = datetime(2026, 4, 17, 10, 15, tzinfo=BERLIN)
