@@ -1,6 +1,7 @@
 """E2E-Tests: Doku-Typ-Filter bleibt bei Zeitfilter-Wechsel erhalten (Refs #298, Refs #303)."""
 
 import re
+import time
 
 import pytest
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
@@ -13,22 +14,61 @@ pytestmark = pytest.mark.e2e
 FEED_PARTIAL = "/partials/zeitstrom/feed/"
 
 
+class _FeedTraffic:
+    """Timestamped log of everything the page does with the feed partial."""
+
+    def __init__(self):
+        self._start = time.monotonic()
+        self._events = []
+
+    def _elapsed_ms(self):
+        return round((time.monotonic() - self._start) * 1000)
+
+    def add(self, kind, detail):
+        self._events.append(f"+{self._elapsed_ms()}ms {kind} {detail}")
+
+    def report(self):
+        """Return the log as one text, ending with the time of the report itself."""
+        events = self._events or ["no feed request seen"]
+        return "; ".join([*events, f"reported at +{self._elapsed_ms()}ms"])
+
+
 def _record_feed_responses(page):
-    """Collect status, URL and transition headers of every feed partial answer.
+    """Log request, answer and end of every feed partial exchange with a timestamp.
 
     A shift change that never gets a 200 answer is ambiguous without this: the server may have
     refused the transition (409), the answer may have been late, or the request may not have left.
+    Never sent: no ``request`` line. Held or late: ``request`` without ``finished``/``response``,
+    or an answer stamped after the wait ran out. Cancelled: ``failed`` with the browser's reason.
+    Only the names of the ``x-zeitstrom*`` headers are logged, never their values.
     """
-    seen = []
+    traffic = _FeedTraffic()
 
-    def note(response):
-        if FEED_PARTIAL not in response.url:
-            return
-        sent = sorted(name for name in response.request.headers if name.startswith("x-zeitstrom"))
-        seen.append(f"{response.status} {response.request.resource_type} {response.url} sent={sent}")
+    def describe(request):
+        sent = sorted(name for name in request.headers if name.startswith("x-zeitstrom"))
+        return f"{request.method} {request.resource_type} {request.url} sent={sent}"
 
-    page.on("response", note)
-    return seen
+    def on_request(request):
+        if FEED_PARTIAL in request.url:
+            traffic.add("request", describe(request))
+
+    def on_response(response):
+        if FEED_PARTIAL in response.url:
+            traffic.add("response", f"{response.status} {describe(response.request)}")
+
+    def on_finished(request):
+        if FEED_PARTIAL in request.url:
+            traffic.add("finished", request.url)
+
+    def on_failed(request):
+        if FEED_PARTIAL in request.url:
+            traffic.add("failed", f"{request.failure} {request.url}")
+
+    page.on("request", on_request)
+    page.on("response", on_response)
+    page.on("requestfinished", on_finished)
+    page.on("requestfailed", on_failed)
+    return traffic
 
 
 class TestDocTypeFilterPreservedOnTimeFilterSwitch:
@@ -37,7 +77,7 @@ class TestDocTypeFilterPreservedOnTimeFilterSwitch:
     def test_doc_type_preserved_when_switching_time_filter(self, staff_page, base_url):
         """Changing the shift preserves the document type without a page navigation."""
         page = staff_page
-        feed_responses = _record_feed_responses(page)
+        feed_traffic = _record_feed_responses(page)
 
         # Timeline öffnen (Schicht-Tabs + Doc-Type-Filter)
         page.goto(f"{base_url}/")
@@ -101,7 +141,7 @@ class TestDocTypeFilterPreservedOnTimeFilterSwitch:
                 shift.select_option(target_filter)
         except PlaywrightTimeoutError as error:
             raise AssertionError(
-                f"No 200 answer for the shift change to {target_filter!r}; feed answers seen: {feed_responses}"
+                f"No 200 answer for the shift change to {target_filter!r}; feed traffic: {feed_traffic.report()}"
             ) from error
 
         page.evaluate("window.zeitstromWatch.checkNow()")
