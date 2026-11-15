@@ -68,6 +68,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Schlüsselrotation verschiebt die Anonymisierung inaktiver Personen nicht mehr** (#2715) — Die Neuverschlüsselung lässt den Änderungszeitpunkt von Personen, Fällen und Aufgaben unverändert; eine gleichzeitige fachliche Änderung hat weiterhin Vorrang.
 - **Demo-Reset: Audit-Kettenprüfung bleibt nach `seed --flush` grün** (#2708) — `seed --flush` setzt die externe Audit-Ankerdatei jetzt zusammen mit dem Audit-Protokoll zurück. Bisher blieb `verify_audit_chain` dauerhaft rot, sobald ein Prüflauf eine Kette aus dem Seed-Fenster verankert hatte, etwa nach einer Anmeldung beim stündlichen Reset.
 - **Zeitstrom zeigt Einträge in Erfassungsreihenfolge** (#2798) — Innerhalb derselben Minute steht der zuletzt erfasste Eintrag oben; ein Löscheintrag steht nicht mehr über Kontakten, die danach erfasst wurden. Kontakte derselben Minute stehen auch offline in dieser Reihenfolge; ein nachträglich erfasster Kontakt steht weiter bei seiner Kontaktzeit.
+- **Stage-Probe meldet registrierte Workflows nicht mehr als fehlend** — Die Vorprüfung der Stage-Probe brach zufällig mit „nicht registriert“ ab, obwohl der Workflow auf Stage liegt; die Abfrage hängt jetzt nicht mehr davon ab, welcher Prozess zuerst endet.
 
 ### Docs
 
