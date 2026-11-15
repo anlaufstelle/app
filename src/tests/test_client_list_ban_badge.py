@@ -99,7 +99,10 @@ class TestBadgeVisibility:
         self, client, staff_user, second_facility_user, second_facility, client_identified
     ):
         foreign_type = DocumentType.objects.create(
-            facility=second_facility, name="Hausverbot", system_type=DocumentType.SystemType.BAN
+            facility=second_facility,
+            name="Hausverbot",
+            system_type=DocumentType.SystemType.BAN,
+            min_contact_stage=Client.ContactStage.IDENTIFIED,
         )
         foreign = Client.objects.create(
             facility=second_facility, pseudonym=client_identified.pseudonym, created_by=second_facility_user

@@ -30,6 +30,7 @@ from core.reporting.backends.sample_report_1 import SampleReport1Backend
 from core.services.events.crud import create_event
 from core.services.file_vault.encryption import encrypt_field
 from core.services.system.bans import get_active_bans
+from tests._factories import insert_event_past_save
 
 pytestmark = pytest.mark.django_db
 
@@ -329,8 +330,9 @@ def test_beratungsgespraech_reicht_pseudonym(facility, staff_user, client_identi
 
 def test_assistent_sieht_nur_normale_pakettypen(facility, assistant_user, staff_user):
     _load_package(facility)
+    # A personless ban exists only as a row from before the person rule.
     events = {
-        slug: Event.objects.create(
+        slug: (insert_event_past_save if slug == "hausverbot" else Event.objects.create)(
             facility=facility,
             document_type=DocumentType.objects.for_facility(facility).get(slug=slug),
             occurred_at=timezone.now(),

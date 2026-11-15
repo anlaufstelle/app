@@ -12,7 +12,7 @@ from core.services.client import approve_client_deletion, create_or_get_client_d
 from core.services.dashboard.activity import log_activity
 from core.services.zeitstrom_watch import build_zeitstrom_page_scope
 from tests._dynamic_test_data import entity_details
-from tests._factories import make_client, make_document_type, make_event
+from tests._factories import insert_event_past_save, make_client, make_document_type, make_event
 
 pytestmark = pytest.mark.django_db
 
@@ -89,7 +89,8 @@ def timeline_data(facility, reader, revoked_person):
             data_json={},
             created_by=reader,
         )
-        ban = make_event(
+        # The team ban has no person: a row from before the person rule.
+        ban = (make_event if subject is not None else insert_event_past_save)(
             facility=facility,
             client=subject,
             document_type=ban_type,

@@ -107,7 +107,7 @@ from core.models import (
 )
 from core.services import zeitstrom_watch as zw
 from core.services.zeitstrom_filters import ZeitstromState
-from tests._factories import make_document_type, make_event
+from tests._factories import insert_event_past_save, make_document_type, make_event
 
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("_encryption_key")]
 
@@ -315,8 +315,9 @@ class TestFeedProjectionBansFilters:
             facility=other_facility, name="Hausverbot-Fremd", system_type=DocumentType.SystemType.BAN
         )
         time_filter = _window_time_filter(facility)
+        # The personless ban rows are rows from before the person rule.
 
-        event_ok = make_event(
+        event_ok = insert_event_past_save(
             facility=facility,
             client=None,
             document_type=doc_type_ban,
@@ -324,7 +325,7 @@ class TestFeedProjectionBansFilters:
             data_json={},
             created_by=staff_user,
         )
-        make_event(
+        insert_event_past_save(
             facility=other_facility,
             client=None,
             document_type=doc_type_ban_foreign,
@@ -332,7 +333,7 @@ class TestFeedProjectionBansFilters:
             data_json={},
             created_by=staff_user,
         )
-        make_event(
+        insert_event_past_save(
             facility=facility,
             client=None,
             document_type=doc_type_ban,
@@ -349,7 +350,7 @@ class TestFeedProjectionBansFilters:
             data_json={},
             created_by=staff_user,
         )
-        make_event(
+        insert_event_past_save(
             facility=facility,
             client=None,
             document_type=doc_type_ban,
@@ -357,7 +358,7 @@ class TestFeedProjectionBansFilters:
             data_json={},
             created_by=staff_user,
         )
-        make_event(
+        insert_event_past_save(
             facility=facility,
             client=None,
             document_type=doc_type_ban,

@@ -30,6 +30,7 @@ from core.packages.loader import load_package
 from core.reporting.backends.ban_overview import BanOverviewBackend
 from core.reporting.backends.sample_report_1 import SampleReport1Backend
 from core.services.events import create_event
+from tests._factories import insert_event_past_save
 
 EXPECTED_TYPES = {
     "kontakt": ("Kontakt", "normal", True, None, None, "contact"),
@@ -283,7 +284,9 @@ def test_every_jugendarbeit_type_is_known_and_group_activity_is_counted(facility
     types = _loaded_types(facility)
     occurred_at = timezone.make_aware(datetime(2026, 9, 1, 12, 0))
     for doc_type in types.values():
-        Event.objects.create(
+        # A personless ban exists only as a row from before the person rule.
+        create = insert_event_past_save if doc_type.system_type == DocumentType.SystemType.BAN else Event.objects.create
+        create(
             facility=facility,
             document_type=doc_type,
             occurred_at=occurred_at,
@@ -321,7 +324,9 @@ def test_types_without_minimum_stage_accept_an_anonymous_event(facility, staff_u
 @pytest.mark.parametrize("slug", ["krisengespraech-jugend", "beratung-jugend", "hausverbot-jugend"])
 def test_assistant_cannot_see_elevated_jugendarbeit_events(client, facility, staff_user, assistant_user, slug):
     doc_type = _loaded_types(facility)[slug]
-    event = Event.objects.create(
+    # A personless ban exists only as a row from before the person rule.
+    create = insert_event_past_save if doc_type.system_type == DocumentType.SystemType.BAN else Event.objects.create
+    event = create(
         facility=facility,
         document_type=doc_type,
         occurred_at=timezone.now(),

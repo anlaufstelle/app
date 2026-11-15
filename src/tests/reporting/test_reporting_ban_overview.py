@@ -9,6 +9,7 @@ inklusive Feldverschluesselung.
 """
 
 import dataclasses
+import uuid
 from datetime import timedelta
 
 import pytest
@@ -78,6 +79,9 @@ def doc_type_hausverbot_verschluesselt(facility):
 
 
 def _ban(facility, doc_type, user, *, aktiv=True, bis="", when=None, client=None):
+    # A new ban names a person; the report itself reads no persons.
+    if client is None:
+        client = Client.objects.create(facility=facility, pseudonym=f"Ban-{uuid.uuid4().hex[:8]}")
     return Event.objects.create(
         facility=facility,
         client=client,

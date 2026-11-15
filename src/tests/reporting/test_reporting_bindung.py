@@ -43,6 +43,7 @@ from core.reporting.base import (
     feld_bindungen,
     typ_bindungen,
 )
+from tests._factories import insert_event_past_save
 
 # Synthetische Schluessel fuer die Guard-Tests: die Registry-Isolation arbeitet
 # mit einer **Kopie** der echten Registry (die Strukturtests unten brauchen die
@@ -488,7 +489,9 @@ class TestStrukturinvarianz:
         from core.models import Event
 
         for typ in universum:
-            Event.objects.create(
+            # A personless ban exists only as a row from before the person rule.
+            create = insert_event_past_save if typ.system_type == DocumentType.SystemType.BAN else Event.objects.create
+            create(
                 facility=typ.facility,
                 document_type=typ,
                 occurred_at="2025-05-05T10:00:00Z",

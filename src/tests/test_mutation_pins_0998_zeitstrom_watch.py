@@ -18,7 +18,7 @@ from core.models import Activity, TimeFilter
 from core.services import zeitstrom_watch as watch
 from core.services.zeitstrom_filters import resolve_zeitstrom_state
 from core.services.zeitstrom_kpis import build_zeitstrom_kpis
-from tests._factories import make_client, make_document_type, make_event
+from tests._factories import insert_event_past_save, make_client, make_document_type, make_event
 
 pytestmark = pytest.mark.django_db
 
@@ -65,7 +65,8 @@ def test_anonymous_feed_cards_have_no_person(facility, staff_user, shift_state, 
     through the public feed validator.
     """
     document_type = make_document_type(facility=facility, name="Anonymous card", system_type=system_type)
-    event = make_event(
+    # An anonymous ban card shows a row from before the person rule.
+    event = (insert_event_past_save if system_type == "ban" else make_event)(
         facility=facility,
         client=None,
         document_type=document_type,
