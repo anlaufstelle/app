@@ -253,7 +253,12 @@ class DocumentType(ReportKeyMixin, SluggedModel):
         # ``name``) must stay possible. Otherwise the rule is checked against
         # the row as it will be stored: fields outside ``update_fields`` keep
         # their stored value, not the in-memory one.
+        from core.services.dynamic_protection import validate_configuration_save
+
         update_fields = kwargs.get("update_fields")
+        # An implicit save of a deferred instance is refused before the rule
+        # reads (and so reloads) a deferred field.
+        validate_configuration_save(self, update_fields)
         rule_fields = {"system_type", "min_contact_stage", "entity_type"}
         if update_fields is None:
             errors = self._ban_rule_errors(self.system_type, self.entity_type, self.min_contact_stage)

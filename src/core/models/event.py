@@ -184,13 +184,16 @@ class Event(DynamicDataEncryptionMixin):
         ``0199``) refuses that INSERT, and ``event_ban_requires_person_update``
         refuses an UPDATE that turns a row into a personless ban.
         """
-        if self.client_id is not None:
-            return False
-        if save_kwargs.get("force_insert"):
-            return True
         if save_kwargs.get("force_update") or save_kwargs.get("update_fields") is not None:
             return False
-        return self._state.adding or self.pk is None
+        if not (save_kwargs.get("force_insert") or self._state.adding or self.pk is None):
+            return False
+        if self.get_deferred_fields():
+            # ``dynamic_data_write`` refuses an implicit save of a deferred
+            # instance before any query; reading a deferred ``client_id`` here
+            # would query first.
+            return False
+        return self.client_id is None
 
     def _stored_type_is_ban(self, save_kwargs) -> bool:
         """Read the system type of the stored type row, not of a loaded instance.
