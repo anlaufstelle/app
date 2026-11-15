@@ -9,6 +9,8 @@ check that
 * an UPDATE that moves a personless row to a ban type or removes the person of
   a ban is refused,
 * a type with personless events cannot become a ban,
+* a type change to a ban and a concurrent anonymous insert of that type never
+  both commit, in either order,
 * an existing anonymous ban that keeps its type stays editable and
   deactivatable,
 * a type row the trigger cannot read under row-level security is a refusal.
@@ -16,6 +18,7 @@ check that
 
 from __future__ import annotations
 
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
@@ -464,6 +467,140 @@ class TestConcurrentWrites:
             stored = Event.objects.get(pk=target_pk)
             assert stored.client_id is None
             assert stored.data_json["aktiv"] is False
+
+    @staticmethod
+    def _backend_pid() -> int:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT pg_backend_pid()")
+            return cursor.fetchone()[0]
+
+    @staticmethod
+    def _wait_until_blocked(pid: int, timeout: float = 10) -> None:
+        """Wait until the backend ``pid`` waits on a lock (or give up after ``timeout``)."""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT wait_event_type FROM pg_stat_activity WHERE pid = %s", [pid])
+                row = cursor.fetchone()
+            if row and row[0] == "Lock":
+                return
+            time.sleep(0.05)
+
+    @staticmethod
+    def _make_ban() -> dict:
+        return {"system_type": DocumentType.SystemType.BAN, "min_contact_stage": "identified"}
+
+    def test_a_type_change_to_a_ban_before_a_concurrent_anonymous_insert(self, facility):
+        """The type becomes a ban first; an anonymous insert of that type waits for it and is refused."""
+        target = _type(facility)
+        changed = ThreadEvent()
+        commit_now = ThreadEvent()
+        inserter_pid: list[int] = []
+        pid_known = ThreadEvent()
+
+        def change_type():
+            close_old_connections()
+            try:
+                with transaction.atomic():
+                    DocumentType.objects.filter(pk=target.pk).update(**self._make_ban())
+                    changed.set()
+                    assert commit_now.wait(30), "the test did not release the commit"
+                return "saved"
+            except DatabaseError:
+                return "refused"
+            finally:
+                connections.close_all()
+
+        def insert_anonymous():
+            close_old_connections()
+            try:
+                inserter_pid.append(self._backend_pid())
+                pid_known.set()
+                try:
+                    with transaction.atomic():
+                        Event.objects.create(
+                            facility_id=facility.pk,
+                            document_type_id=target.pk,
+                            occurred_at=timezone.now(),
+                            data_json={},
+                            is_anonymous=True,
+                        )
+                except (ValidationError, DatabaseError):
+                    return "refused"
+                return "saved"
+            finally:
+                connections.close_all()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            changing = executor.submit(change_type)
+            try:
+                assert changed.wait(10), "the type change did not run"
+                inserting = executor.submit(insert_anonymous)
+                assert pid_known.wait(10), "the insert did not start"
+                self._wait_until_blocked(inserter_pid[0])
+            finally:
+                commit_now.set()
+            results = [changing.result(timeout=40), inserting.result(timeout=40)]
+
+        assert results == ["saved", "refused"]
+        assert DocumentType.objects.get(pk=target.pk).system_type == DocumentType.SystemType.BAN
+        assert not Event.objects.filter(document_type_id=target.pk).exists()
+
+    def test_an_anonymous_insert_before_a_concurrent_type_change_to_a_ban(self, facility):
+        """The anonymous event comes first; the type change waits for it and is refused."""
+        target = _type(facility)
+        inserted = ThreadEvent()
+        commit_now = ThreadEvent()
+        changer_pid: list[int] = []
+        pid_known = ThreadEvent()
+
+        def insert_anonymous():
+            close_old_connections()
+            try:
+                with transaction.atomic():
+                    Event.objects.create(
+                        facility_id=facility.pk,
+                        document_type_id=target.pk,
+                        occurred_at=timezone.now(),
+                        data_json={},
+                        is_anonymous=True,
+                    )
+                    inserted.set()
+                    assert commit_now.wait(30), "the test did not release the commit"
+                return "saved"
+            except (ValidationError, DatabaseError):
+                return "refused"
+            finally:
+                connections.close_all()
+
+        def change_type():
+            close_old_connections()
+            try:
+                changer_pid.append(self._backend_pid())
+                pid_known.set()
+                try:
+                    with transaction.atomic():
+                        DocumentType.objects.filter(pk=target.pk).update(**self._make_ban())
+                except DatabaseError:
+                    return "refused"
+                return "saved"
+            finally:
+                connections.close_all()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            inserting = executor.submit(insert_anonymous)
+            try:
+                assert inserted.wait(10), "the insert did not run"
+                changing = executor.submit(change_type)
+                assert pid_known.wait(10), "the type change did not start"
+                self._wait_until_blocked(changer_pid[0])
+            finally:
+                commit_now.set()
+            results = [inserting.result(timeout=40), changing.result(timeout=40)]
+
+        assert results == ["saved", "refused"]
+        assert DocumentType.objects.get(pk=target.pk).system_type is None
+        assert Event.objects.filter(document_type_id=target.pk, client__isnull=True).count() == 1
 
 
 # ---------------------------------------------------------------------------
