@@ -9,6 +9,14 @@
 
     const BASE_DELAY = 12_000;
     const MAX_DELAY = 60_000;
+    // Deadline for one whole cycle (watch request plus its follow-ups, which share
+    // one AbortController). The watch endpoint is a conditional short request, not
+    // a long poll: it answers 304 or a small JSON at once. 30 s is a chosen bound,
+    // modelled on the default worker timeout (gunicorn --timeout, configurable);
+    // a cycle that takes longer is treated as a stuck connection. It is implemented
+    // with a timer and an AbortController, not AbortSignal.timeout, so that older
+    // iOS Safari versions are covered.
+    const CYCLE_DEADLINE = 30_000;
     const FILTER_KEYS = ["date", "time_filter", "type", "doc_type", "view"];
     const WATCH_HEADER = "X-Zeitstrom-Watch";
     const VALIDATORS_HEADER = "X-Zeitstrom-Validators";
@@ -156,9 +164,19 @@
             }, nextDelay());
         }
 
+        function clearDeadline(currentCycle) {
+            if (currentCycle.deadlineTimer !== null) {
+                window.clearTimeout(currentCycle.deadlineTimer);
+                currentCycle.deadlineTimer = null;
+            }
+        }
+
         function abortCycle(invalidate) {
             if (invalidate) generation += 1;
-            if (cycle) cycle.controller.abort();
+            if (cycle) {
+                clearDeadline(cycle);
+                cycle.controller.abort();
+            }
             cycle = null;
         }
 
@@ -532,13 +550,23 @@
                 generation: generation,
                 controller: new AbortController(),
                 promise: null,
+                deadlineTimer: null,
+                timedOut: false,
             };
             cycle = currentCycle;
+            // Only this timer marks the abort as a deadline expiry; pause() and
+            // stop() abort through abortCycle(), which clears it first, so they
+            // never count as a failure.
+            currentCycle.deadlineTimer = window.setTimeout(function () {
+                currentCycle.deadlineTimer = null;
+                currentCycle.timedOut = true;
+                currentCycle.controller.abort();
+            }, CYCLE_DEADLINE);
             currentCycle.promise = runCycle(currentCycle)
                 .catch(function (error) {
                     if (
                         currentCycle.generation === generation &&
-                        !currentCycle.controller.signal.aborted &&
+                        (!currentCycle.controller.signal.aborted || currentCycle.timedOut) &&
                         !stopped
                     ) {
                         failures += 1;
@@ -546,6 +574,7 @@
                     if (error && error.name === "AbortError") return;
                 })
                 .finally(function () {
+                    clearDeadline(currentCycle);
                     if (cycle === currentCycle) {
                         cycle = null;
                         if (banRepairQueued) pollImmediately();

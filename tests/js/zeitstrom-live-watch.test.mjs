@@ -1339,6 +1339,134 @@ describe("Zeitstrom live watch", () => {
         watcher.stop();
     });
 
+    describe("request deadline", () => {
+        // A request that never settles by itself; like a real fetch it rejects
+        // with an AbortError as soon as its signal fires.
+        function hangingFetch() {
+            return vi.fn(
+                (_url, options) =>
+                    new Promise((_resolve, reject) => {
+                        options.signal.addEventListener("abort", () => {
+                            reject(new DOMException("The operation was aborted.", "AbortError"));
+                        });
+                    }),
+            );
+        }
+
+        it("aborts a hanging watch request after the deadline and starts the next cycle after the backoff", async () => {
+            const fetchMock = hangingFetch();
+            const watcher = window.createZeitstromLiveWatch(document.getElementById("zeitstrom-live-watch"), {
+                fetch: fetchMock,
+                random: () => 0.5,
+            });
+            watcher.start();
+            await flush();
+            const signal = fetchMock.mock.calls[0][1].signal;
+
+            // Focus and online re-enter poll() but only get the open cycle back.
+            window.dispatchEvent(new Event("focus"));
+            window.dispatchEvent(new Event("online"));
+            await vi.advanceTimersByTimeAsync(29_999);
+            expect(signal.aborted).toBe(false);
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+
+            await vi.advanceTimersByTimeAsync(1);
+            expect(signal.aborted).toBe(true);
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+
+            // One failure: 12 s * 2 with a neutral jitter.
+            await vi.advanceTimersByTimeAsync(23_999);
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+            await vi.advanceTimersByTimeAsync(1);
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+            watcher.stop();
+        });
+
+        it("aborts a hanging follow-up request after the deadline and backs off", async () => {
+            const fetchMock = vi.fn((url, options) => {
+                if (String(url).includes("/api/v1/zeitstrom/watch/")) {
+                    return Promise.resolve(watchResponse(["feed"], { feed: '"feed-v2"' }));
+                }
+                return new Promise((_resolve, reject) => {
+                    options.signal.addEventListener("abort", () => {
+                        reject(new DOMException("The operation was aborted.", "AbortError"));
+                    });
+                });
+            });
+            const watcher = window.createZeitstromLiveWatch(document.getElementById("zeitstrom-live-watch"), {
+                fetch: fetchMock,
+                random: () => 0.5,
+            });
+            watcher.start();
+            await flush();
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+            const feedSignal = fetchMock.mock.calls[1][1].signal;
+
+            await vi.advanceTimersByTimeAsync(30_000);
+            expect(feedSignal.aborted).toBe(true);
+            expect(document.getElementById("feed-list").textContent).toContain("alter Feed");
+
+            await vi.advanceTimersByTimeAsync(23_999);
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+            await vi.advanceTimersByTimeAsync(1);
+            // The new cycle starts with its watch request (its follow-up hangs again).
+            expect(String(fetchMock.mock.calls[2][0])).toContain("/api/v1/zeitstrom/watch/");
+            watcher.stop();
+        });
+
+        it("does not count a hidden-tab abort as a failure and leaves no deadline timer behind", async () => {
+            const fetchMock = hangingFetch();
+            const watcher = window.createZeitstromLiveWatch(document.getElementById("zeitstrom-live-watch"), {
+                fetch: fetchMock,
+                random: () => 0.5,
+            });
+            watcher.start();
+            await flush();
+
+            Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
+            document.dispatchEvent(new Event("visibilitychange"));
+            expect(vi.getTimerCount()).toBe(0);
+            await vi.advanceTimersByTimeAsync(120_000);
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+
+            // The resumed cycle hangs too. If the pause abort had counted, the
+            // deadline failure would be the second one and wait 48 s.
+            Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
+            document.dispatchEvent(new Event("visibilitychange"));
+            await flush();
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+            await vi.advanceTimersByTimeAsync(30_000);
+            await vi.advanceTimersByTimeAsync(23_999);
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+            await vi.advanceTimersByTimeAsync(1);
+            expect(fetchMock).toHaveBeenCalledTimes(3);
+            watcher.stop();
+        });
+
+        it("does not let the deadline fire after stop and clears it with a finished cycle", async () => {
+            const hanging = hangingFetch();
+            const watcher = window.createZeitstromLiveWatch(document.getElementById("zeitstrom-live-watch"), {
+                fetch: hanging,
+            });
+            watcher.start();
+            await flush();
+            watcher.stop();
+            expect(hanging.mock.calls[0][1].signal.aborted).toBe(true);
+            expect(vi.getTimerCount()).toBe(0);
+
+            const fetchMock = vi.fn().mockResolvedValue(response({ status: 304, headers: { ETag: '"same"' } }));
+            const second = window.createZeitstromLiveWatch(document.getElementById("zeitstrom-live-watch"), {
+                fetch: fetchMock,
+            });
+            await second.checkNow();
+            // The finished cycle cleared its deadline timer and checkNow() schedules no
+            // next poll, so no timer is left.
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+            expect(vi.getTimerCount()).toBe(0);
+            second.stop();
+        });
+    });
+
     it("stops on a JSON 401 and navigates to the supplied login URL without inserting its body", async () => {
         const navigate = vi.fn();
         const fetchMock = vi.fn().mockResolvedValue(
