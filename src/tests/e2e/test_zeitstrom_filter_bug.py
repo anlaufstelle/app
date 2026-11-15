@@ -3,11 +3,32 @@
 import re
 
 import pytest
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from playwright.sync_api import expect
 
 from ._helpers import wait_until_htmx_bound
 
 pytestmark = pytest.mark.e2e
+
+FEED_PARTIAL = "/partials/zeitstrom/feed/"
+
+
+def _record_feed_responses(page):
+    """Collect status, URL and transition headers of every feed partial answer.
+
+    A shift change that never gets a 200 answer is ambiguous without this: the server may have
+    refused the transition (409), the answer may have been late, or the request may not have left.
+    """
+    seen = []
+
+    def note(response):
+        if FEED_PARTIAL not in response.url:
+            return
+        sent = sorted(name for name in response.request.headers if name.startswith("x-zeitstrom"))
+        seen.append(f"{response.status} {response.request.resource_type} {response.url} sent={sent}")
+
+    page.on("response", note)
+    return seen
 
 
 class TestDocTypeFilterPreservedOnTimeFilterSwitch:
@@ -16,6 +37,7 @@ class TestDocTypeFilterPreservedOnTimeFilterSwitch:
     def test_doc_type_preserved_when_switching_time_filter(self, staff_page, base_url):
         """Changing the shift preserves the document type without a page navigation."""
         page = staff_page
+        feed_responses = _record_feed_responses(page)
 
         # Timeline öffnen (Schicht-Tabs + Doc-Type-Filter)
         page.goto(f"{base_url}/")
@@ -37,14 +59,13 @@ class TestDocTypeFilterPreservedOnTimeFilterSwitch:
             timeout=5000,
         ):
             doc_type_select.select_option(label="Kontakt")
+        # The response is seen before htmx has swapped it in. ``hx-indicator`` puts the
+        # ``htmx-request`` class on the spinner, not on the select, so wait for the spinner and
+        # for the swap and settle classes of the target; only then is the swap complete.
         page.wait_for_function(
-            "() => !document.querySelector('#filter-doc-type')?.classList.contains('htmx-request')",
-            timeout=5000,
-        )
-        # Dropdown-Wert wird serverseitig gerendert — auf einen nicht-leeren
-        # Wert warten (signalisiert abgeschlossenen HTMX-Swap).
-        page.wait_for_function(
-            "() => document.querySelector('#filter-doc-type')?.value !== ''",
+            "() => !document.querySelector('#zeitstrom-doc-type-spinner.htmx-request')"
+            " && !document.querySelector("
+            "'#feed-list.htmx-swapping, #feed-list.htmx-settling, #feed-list .htmx-added')",
             timeout=5000,
         )
 
@@ -67,16 +88,21 @@ class TestDocTypeFilterPreservedOnTimeFilterSwitch:
         # Der Tab-Wechsel ist ein HTMX-Partial, keine vollständige Navigation.
         # Die Response explizit abwarten, damit der anschließende Live-Watch-Check
         # nicht gegen einen noch laufenden Feed-Swap konkurriert (Refs #1928).
-        with page.expect_response(
-            lambda response: (
-                response.request.resource_type == "xhr"
-                and response.status == 200
-                and "/partials/zeitstrom/feed/" in response.url
-                and f"time_filter={target_filter}" in response.url
-            ),
-            timeout=5000,
-        ):
-            shift.select_option(target_filter)
+        try:
+            with page.expect_response(
+                lambda response: (
+                    response.request.resource_type == "xhr"
+                    and response.status == 200
+                    and FEED_PARTIAL in response.url
+                    and f"time_filter={target_filter}" in response.url
+                ),
+                timeout=5000,
+            ):
+                shift.select_option(target_filter)
+        except PlaywrightTimeoutError as error:
+            raise AssertionError(
+                f"No 200 answer for the shift change to {target_filter!r}; feed answers seen: {feed_responses}"
+            ) from error
 
         page.evaluate("window.zeitstromWatch.checkNow()")
         assert page.evaluate("window.__zeitstromFilterNavigationMarker") == "alive"
