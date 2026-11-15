@@ -1,5 +1,7 @@
 """Stop a session that would reuse a test database still holding rows of an aborted run."""
 
+import os
+
 import pytest
 from django.db import connection as default_connection
 
@@ -16,6 +18,19 @@ def find_stale_rows(connection=default_connection) -> dict[str, int]:
             if count:
                 found[table] = count
     return found
+
+
+def guard_enabled(environ) -> bool:
+    """The guard is off under the mutation runner (``MUTMUT_DB_SLOT`` set, same parsing as the settings).
+
+    The runner reuses per-slot databases for many mutants in a row, and exit code 1 counts as "killed".
+    An abort here would score mutants as killed by mistake, and clearing rows has not been measured on the
+    real runner. So the mutation runner keeps the behaviour it had before the guard: no check, no abort.
+    """
+    try:
+        return int(environ.get("MUTMUT_DB_SLOT", "").strip()) < 0
+    except ValueError:
+        return True
 
 
 def stop_session(config, message: str) -> None:
@@ -39,6 +54,8 @@ def django_db_setup(django_db_setup, django_db_blocker, request):
     name then fails (``duplicate key ... (name)=(Teststelle)``) until a test happens to empty the tables:
     thousands of errors that hide the cause.
     """
+    if not guard_enabled(os.environ):
+        return
     with django_db_blocker.unblock():
         stale = find_stale_rows()
         database = default_connection.settings_dict["NAME"]
