@@ -317,7 +317,11 @@ def _expand_first_card_with_slow_transition(page, base_url):
     link = details.get_by_role("link", name="Zum Eintrag")
     expect(link).to_be_visible()
     # The slowed transition is still running here, which is the state the old measurement hit.
-    assert details.evaluate("el => el.getAnimations().length") > 0
+    # Alpine swaps the enter-start class for enter-end only on the next animation frame, so the
+    # transition and its animation object start one frame after the click; a one-off read can
+    # come back 0 although the link is already visible: wait for it. The
+    # 4 s stretch keeps the window open far longer than the default timeout needs to see it.
+    page.wait_for_function("el => el.getAnimations().length > 0", arg=details.element_handle(), timeout=5000)
     return details, link
 
 
