@@ -88,6 +88,7 @@ Client.objects.filter(pseudonym='{marker}').delete()
 def _open(page, base_url):
     page.goto(f"{base_url}/events/?{RANGE}", wait_until="domcontentloaded")
     expect(page.get_by_role("heading", name="Kontakte", exact=True)).to_be_visible()
+    page.wait_for_load_state("load")
 
 
 def _count(page, count):
@@ -178,6 +179,52 @@ def test_second_filter_immediately_after_oob_updates_counter(staff_page, base_ur
     expect(page.get_by_test_id("event-card-toggle")).to_have_count(25)
 
 
+def _assert_pagination_targets(page):
+    """Walk to the next page and back, checking the 44 px touch target of each pagination link."""
+    next_page_box = page.get_by_role("link", name="Nächste Seite").bounding_box()
+    assert next_page_box and next_page_box["width"] >= 44 and next_page_box["height"] >= 44, next_page_box
+    page.get_by_role("link", name="Nächste Seite").click()
+    # The link is visible as soon as it is parsed; measure only once the document and its
+    # stylesheet have loaded.
+    page.wait_for_load_state("load")
+    previous_page = page.get_by_role("link", name="Vorherige Seite")
+    expect(previous_page).to_be_visible()
+    previous_page_box = previous_page.bounding_box()
+    assert previous_page_box and previous_page_box["width"] >= 44 and previous_page_box["height"] >= 44, (
+        previous_page_box
+    )
+    previous_page.click()
+    page.wait_for_load_state("load")
+    expect(page.get_by_role("link", name="Nächste Seite")).to_be_visible()
+
+
+def test_pagination_targets_are_measured_on_the_loaded_page(staff_page, base_url, grouped_contacts):
+    """A slow stylesheet must not make a pagination link look smaller than its touch target.
+
+    The pagination links are plain links, so each click loads a new document. The link is
+    visible as soon as it is parsed; the stylesheet may still be on its way and the link is
+    then measured unstyled. A cold cache and a slow network widen that window.
+    """
+    page = staff_page
+    page.set_viewport_size({"width": 390, "height": 900})
+    _open(page, base_url)
+    cdp = page.context.new_cdp_session(page)
+    cdp.send("Network.enable")
+    cdp.send("Network.setCacheDisabled", {"cacheDisabled": True})
+    cdp.send(
+        "Network.emulateNetworkConditions",
+        {"offline": False, "latency": 1500, "downloadThroughput": -1, "uploadThroughput": -1},
+    )
+    try:
+        _assert_pagination_targets(page)
+    finally:
+        cdp.send(
+            "Network.emulateNetworkConditions",
+            {"offline": False, "latency": 0, "downloadThroughput": -1, "uploadThroughput": -1},
+        )
+        cdp.send("Network.setCacheDisabled", {"cacheDisabled": False})
+
+
 @pytest.mark.parametrize("width", [1280, 390], ids=["desktop", "mobile"])
 def test_grouped_row_layout_keyboard_expansion_and_detail_link(staff_page, base_url, grouped_contacts, width):
     page = staff_page
@@ -189,17 +236,7 @@ def test_grouped_row_layout_keyboard_expansion_and_detail_link(staff_page, base_
         expect(column_heading).to_contain_text("Zeit Typ Person Angaben Erfasst von")
     else:
         expect(column_heading).to_be_hidden()
-        next_page_box = page.get_by_role("link", name="Nächste Seite").bounding_box()
-        assert next_page_box and next_page_box["width"] >= 44 and next_page_box["height"] >= 44, next_page_box
-        page.get_by_role("link", name="Nächste Seite").click()
-        previous_page = page.get_by_role("link", name="Vorherige Seite")
-        expect(previous_page).to_be_visible()
-        previous_page_box = previous_page.bounding_box()
-        assert previous_page_box and previous_page_box["width"] >= 44 and previous_page_box["height"] >= 44, (
-            previous_page_box
-        )
-        previous_page.click()
-        expect(page.get_by_role("link", name="Nächste Seite")).to_be_visible()
+        _assert_pagination_targets(page)
     toggle = page.get_by_test_id("event-card-toggle").first
     geometry = toggle.evaluate("""el => {
         const cell = name => el.querySelector(`[data-feed-column='${name}']`).getBoundingClientRect();
