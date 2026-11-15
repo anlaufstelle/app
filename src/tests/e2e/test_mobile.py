@@ -954,7 +954,9 @@ from core.models import Client, DocumentType, Event, Facility, User
 facility = Facility.objects.get(name='Hauptstelle')
 actor = User.objects.get(username='emma')
 person = Client.objects.create(facility=facility, pseudonym='KPI-Ban', contact_stage='identified', created_by=actor)
-document_type = DocumentType.objects.create(facility=facility, name='KPI safety', system_type='ban')
+document_type = DocumentType.objects.create(
+    facility=facility, name='KPI safety', system_type='ban', min_contact_stage='identified'
+)
 event = Event.objects.create(
     facility=facility, client=person, document_type=document_type, occurred_at=timezone.now(), created_by=actor,
     data_json={'aktiv': True, 'grund': 'Safety', 'bis': (timezone.localdate()+timedelta(days=2)).isoformat()},
