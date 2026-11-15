@@ -57,7 +57,7 @@ def _make_types(apps):
 
 
 class TestMigrate0199Forward(MigratorTestCase):
-    migrate_from = ("core", "0197_drop_statistics_event_flat_view")
+    migrate_from = ("core", "0198_user_ban_details_fingerprint")
     migrate_to = ("core", "0199_documenttype_ban_constraints")
 
     def prepare(self):
@@ -114,7 +114,7 @@ class TestMigrate0199Forward(MigratorTestCase):
 
 class TestMigrate0199Backward(MigratorTestCase):
     migrate_from = ("core", "0199_documenttype_ban_constraints")
-    migrate_to = ("core", "0197_drop_statistics_event_flat_view")
+    migrate_to = ("core", "0198_user_ban_details_fingerprint")
 
     def prepare(self):
         self.facility_pk, self.ban_pk, self.plain_pk = _make_types(self.old_state.apps)

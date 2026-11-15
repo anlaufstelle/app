@@ -97,7 +97,7 @@ REVERSE_TRIGGER_SQL = """
 
 
 class Migration(migrations.Migration):
-    dependencies = [("core", "0197_drop_statistics_event_flat_view")]
+    dependencies = [("core", "0198_user_ban_details_fingerprint")]
 
     operations = [
         migrations.AddConstraint(
