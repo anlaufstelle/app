@@ -218,8 +218,8 @@ class DocumentType(ReportKeyMixin, SluggedModel):
 
         Backstop below the configuration form and the package schema for the
         Django admin and model forms (``clean``). A stored type that becomes a
-        ban must not have events without a person yet. ``save`` checks the same
-        rules, the event rule under the configuration lock (``_save_context``).
+        ban must not have events without a person yet. ``_save_context`` checks
+        the same rules on every save, the event rule under the configuration lock.
         The database constraints and triggers of migration ``0199`` catch the
         paths that skip both (``QuerySet.update``, ``bulk_create``, raw SQL).
         """
@@ -248,35 +248,22 @@ class DocumentType(ReportKeyMixin, SluggedModel):
             return {"system_type": ValidationError(BAN_PERSONLESS_EVENTS_MESSAGE)}
         return {}
 
-    def save(self, *args, **kwargs):
-        # A save that writes none of the three rule fields (``is_active``,
-        # ``name``) must stay possible. Otherwise the rule is checked against
-        # the row as it will be stored: fields outside ``update_fields`` keep
-        # their stored value, not the in-memory one.
-        from core.services.dynamic_protection import validate_configuration_save
+    def _validate_ban_rule_on_save(self, previous, update_fields):
+        """Check the ban rule against the row as it will be stored.
 
-        update_fields = kwargs.get("update_fields")
-        # An implicit save of a deferred instance is refused before the rule
-        # reads (and so reloads) a deferred field.
-        validate_configuration_save(self, update_fields)
-        rule_fields = {"system_type", "min_contact_stage", "entity_type"}
-        if update_fields is None:
-            errors = self._ban_rule_errors(self.system_type, self.entity_type, self.min_contact_stage)
-            if errors:
-                raise ValidationError(errors)
-        elif rule_fields & set(update_fields):
-            values = {name: getattr(self, name) for name in rule_fields}
-            stored = (
-                type(self)._default_manager.filter(pk=self.pk).values(*rule_fields).first()
-                if rule_fields - set(update_fields)
-                else None
-            )
-            if stored:
-                values.update({name: stored[name] for name in rule_fields - set(update_fields)})
-            errors = self._ban_rule_errors(values["system_type"], values["entity_type"], values["min_contact_stage"])
-            if errors:
-                raise ValidationError(errors)
-        super().save(*args, **kwargs)
+        A save that writes none of the three rule fields must stay possible.
+        Fields outside ``update_fields`` keep their stored value (read from
+        *previous* under the configuration gate), not the in-memory one.
+        """
+        rule_fields = ("system_type", "min_contact_stage", "entity_type")
+        if update_fields is not None and not set(rule_fields) & set(update_fields):
+            return
+        values = {name: getattr(self, name) for name in rule_fields}
+        if update_fields is not None and previous is not None:
+            values.update({name: getattr(previous, name) for name in rule_fields if name not in update_fields})
+        errors = self._ban_rule_errors(values["system_type"], values["entity_type"], values["min_contact_stage"])
+        if errors:
+            raise ValidationError(errors)
 
     def _validate_explicit_high_fields(self, sensitivity=None):
         """Use the shared rule for model saves and admin form validation."""
@@ -309,6 +296,7 @@ class DocumentType(ReportKeyMixin, SluggedModel):
                 .filter(pk=self.pk)
                 .first()
             )
+            self._validate_ban_rule_on_save(previous, update_fields)
             if previous is not None:
                 # Under the exclusive configuration gate ``create_event`` cannot
                 # add an event of this facility until commit; any other insert
