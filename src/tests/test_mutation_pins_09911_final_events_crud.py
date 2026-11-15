@@ -1,6 +1,6 @@
 """Mutation pins for ``core.services.events.crud`` (mutation final, part 2b).
 
-Source: survivors of the final targeted mutation delta, batch ``teil2b``,
+Source: survivors of the final targeted mutation delta,
 module ``core.services.events.crud``. Every test names the mutants it kills
 (``core.services.events.crud.x…__mutmut_N``) and the value that differs under
 the mutant.

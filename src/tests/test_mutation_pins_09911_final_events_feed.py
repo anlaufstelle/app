@@ -1,6 +1,6 @@
 """Mutation pins for ``core.services.events.feed`` (mutation final, part 2b).
 
-Source: survivors of the final targeted mutation delta, batch ``teil2b``,
+Source: survivors of the final targeted mutation delta,
 module ``core.services.events.feed``. Every test names the mutants it kills
 (``core.services.events.feed.x…__mutmut_N``) and the value that differs under
 the mutant.
@@ -153,11 +153,15 @@ class TestFeedCapKeepsTheRightRows:
 
         Five contacts share one minute; with a cap of two the two recorded
         last must survive. Without the ``-created_at`` tiebreak the database
-        keeps whichever it met first.
+        keeps whichever rows it meets first (or last). The rows are therefore
+        inserted in an order unrelated to their recording time: neither the
+        first two nor the last two inserted rows are the expected pair.
         """
         monkeypatch.setattr(feed_module, "FEED_MAX_PER_TYPE", 2)
-        events = [
-            _event(
+        # Recording minutes in insertion order: the newest two (3, 4) sit in
+        # the middle of the insertion sequence.
+        events = {
+            minute: _event(
                 facility,
                 plain_type,
                 staff_user,
@@ -165,8 +169,8 @@ class TestFeedCapKeepsTheRightRows:
                 _berlin(12),
                 dt.datetime(2026, 3, 10, 6, minute, tzinfo=UTC),
             )
-            for minute in range(5)
-        ]
+            for minute in (0, 3, 4, 1, 2)
+        }
 
         items = build_feed_items(facility, FEED_DATE, "events", user=staff_user)
 
