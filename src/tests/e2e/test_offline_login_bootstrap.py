@@ -8,6 +8,7 @@ import re
 from urllib.parse import urlparse
 
 import pytest
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from ._helpers import SEED_PASSWORD
 from ._helpers import wait_for_active_service_worker as _ensure_service_worker_controls
@@ -218,7 +219,11 @@ def test_second_submit_during_key_derivation_does_not_repost(browser, base_url):
     context = browser.new_context(service_workers="block")
     page = context.new_page()
     held = []
-    page.route("**/auth/offline-key-salt/", held.append)
+
+    def hold(route):
+        held.append(route)
+
+    page.route("**/auth/offline-key-salt/", hold)
     login_posts = _track_login_posts(page)
     page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
     page.fill("#id_username", "miriam")
@@ -284,4 +289,102 @@ def test_login_page_open_during_other_logout_gets_offline_key(browser, base_url)
         }"""
     )
     assert has_key is True
+    context.close()
+
+
+def _sign_in_like_a_person(page, username, gesture):
+    """Type the credentials into the current login page and submit by click or Enter."""
+    page.click("#id_username")
+    page.keyboard.type(username)
+    page.click("#id_password")
+    page.keyboard.type(SEED_PASSWORD)
+    if gesture == "enter":
+        page.keyboard.press("Enter")
+    else:
+        page.click("#login-form button[type=submit]")
+
+
+def _assert_signed_in_with_key(page, login_posts):
+    page.wait_for_url(re.compile(r"^(?!.*/login/)"), timeout=15000)
+    page.wait_for_function("window.crypto_session && window.offlineStore")
+    assert "403" not in page.title()
+    assert 403 not in login_posts["statuses"], login_posts
+    assert login_posts["count"] == 1, login_posts
+    key = page.evaluate(
+        """async () => {
+            await window.crypto_session.ready();
+            return {
+                memory: window.crypto_session.hasSessionKey(),
+                persisted: await window.crypto_session.hasPersistedSessionKey(),
+            };
+        }"""
+    )
+    assert key == {"memory": True, "persisted": True}, key
+
+
+def _log_out_to_landing_page(page):
+    """Log out through the sidebar form and stay on the login page the redirect lands on.
+
+    A probe in ``localStorage`` shows that the browser applied the response's
+    ``Clear-Site-Data: "storage"``: no page script clears ``localStorage`` on logout.
+    """
+    page.evaluate("localStorage.setItem('clear-site-data-probe', '1')")
+    _do_logout(page)
+    assert page.evaluate("localStorage.getItem('clear-site-data-probe')") is None, "storage was not cleared"
+    page.wait_for_function("window.crypto_session && window.offlineStore")
+
+
+@pytest.mark.parametrize(("gesture", "pause_ms"), [("click", 0), ("enter", 3000)])
+def test_login_on_logout_landing_page_gets_offline_key(browser, base_url, gesture, pause_ms):
+    """The next account signs in on the very login page the logout redirect landed on.
+
+    No new navigation: this page loads while the logout response clears the site
+    data. The service worker stays active, input is typed like a person would.
+    """
+    context = browser.new_context()
+    page = context.new_page()
+    _do_login(page, base_url, username="admin")
+    _log_out_to_landing_page(page)
+    if pause_ms:
+        page.wait_for_timeout(pause_ms)
+
+    login_posts = _track_login_posts(page)
+    _sign_in_like_a_person(page, "miriam", gesture)
+    _assert_signed_in_with_key(page, login_posts)
+    context.close()
+
+
+def test_login_on_logout_landing_page_with_second_tab_gets_offline_key(browser, base_url):
+    """As above, with a second app tab of the first account still open."""
+    context = browser.new_context()
+    page = context.new_page()
+    _do_login(page, base_url, username="admin")
+    other = context.new_page()
+    other.goto(f"{base_url}/", wait_until="domcontentloaded")
+    other.wait_for_function("window.crypto_session && window.offlineStore")
+    page.bring_to_front()
+    _log_out_to_landing_page(page)
+
+    login_posts = _track_login_posts(page)
+    _sign_in_like_a_person(page, "miriam", "click")
+    _assert_signed_in_with_key(page, login_posts)
+    assert not other.is_closed()
+    context.close()
+
+
+def test_second_click_on_logout_landing_page_does_not_repost(browser, base_url):
+    """A second click while the accepted sign-in derives its key never re-posts the form."""
+    context = browser.new_context()
+    page = context.new_page()
+    _do_login(page, base_url, username="admin")
+    _log_out_to_landing_page(page)
+
+    login_posts = _track_login_posts(page)
+    with page.expect_request(lambda request: "/auth/offline-key-salt/" in request.url, timeout=15000):
+        _sign_in_like_a_person(page, "miriam", "click")
+    try:
+        page.locator("#login-form button[type=submit]").click(timeout=2000, no_wait_after=True)
+    except PlaywrightTimeoutError:
+        pass  # the first sign-in already navigated away: no second click possible
+    _assert_signed_in_with_key(page, login_posts)
     context.close()
