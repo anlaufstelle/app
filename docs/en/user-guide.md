@@ -1225,6 +1225,6 @@ The former fixed person notes and case, episode and task descriptions are no lon
 Phone, email, date and address patterns are detected heuristically and locally on the server. Hints can be false and miss sensitive information; they do not guarantee GDPR compliance. The first suggestion only opens contact creation without prefilled content. Choose an actually encrypted field if you manually create a new record. Other suggestions recommend checking protection levels with the responsible administrator or manually neutralising the source text. Suggestions never automatically copy, decrypt or change content or protection. Review is available online only.
 
 <!-- translation-source: docs/user-guide.md -->
-<!-- translation-version: v0.99.10 -->
+<!-- translation-version: v0.99.11 -->
 <!-- source-hash: ea9baac31a44c91d444e94bf80c75796b36ee12e -->
 <!-- translation-date: 2026-11-14 -->

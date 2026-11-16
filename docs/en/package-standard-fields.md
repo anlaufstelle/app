@@ -14,6 +14,6 @@ The five YAML packages (`default`, `beratungsstelle`, `awareness`, `frauenhaus`,
 The types have normal sensitivity. Effective visibility follows the higher type/field level and role; encryption depends on the current field configuration. `load_package --package <name>` loads the standard types. One active type is preselected; several require a choice. No type means no free-text detail field. Losing populated fields requires confirmation; a type switch is refused if original values are not visible. Offline tasks have no detail field; add details online. Pseudonyms and titles remain plaintext: keep them short, without real names or GDPR Art. 9 data.
 
 <!-- translation-source: docs/packages.md -->
-<!-- translation-version: v0.99.10 -->
+<!-- translation-version: v0.99.11 -->
 <!-- source-hash: bf8e22ba527b7819737f323b9f2ebad63da32035 -->
 <!-- translation-date: 2026-11-14 -->

@@ -30,6 +30,7 @@ ENV_LINE = re.compile(r"^#?\s*([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)=", re.MULTILINE)
 # Named in an operator action, but deliberately absent from ``.env.example``.
 FORWARD_ALLOWLIST: dict[str, str] = {
     "ENCRYPTION_KEY": "removed single-key variable, named in the rename action",
+    "COMPOSE_FILE": "Docker Compose file list, optional in the .env per the ops runbook; not an app setting",
 }
 BASELINE = "installation baseline: set at first setup per the admin guide, not a release-time action"
 # In ``.env.example`` but not named in any operator action. Remove an entry as soon as

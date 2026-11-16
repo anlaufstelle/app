@@ -99,6 +99,6 @@ accompaniment from the counselling-service package (Zweigstelle Nord).
 | ![Handover mobile](screenshots/uebergabe-mobil-en.webp) | ![Work hub mobile](screenshots/arbeitszentrale-mobil-en.webp) |
 
 <!-- translation-source: docs/screenshots.md -->
-<!-- translation-version: v0.99.10 -->
+<!-- translation-version: v0.99.11 -->
 <!-- translation-date: 2026-11-13 -->
 <!-- source-hash: b44b66a499f5d8b6640416d136edeb25b5c4396f -->

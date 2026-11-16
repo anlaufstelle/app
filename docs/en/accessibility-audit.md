@@ -29,6 +29,6 @@ Calculation: OKLCH → OKLab (`a=C·cos(h)`, `b=C·sin(h)`) → linear sRGB (cha
 These checks do not replace a full WCAG assessment or assistive-technology testing. The demo pre-acceptance runs for staff and assistant as `test_demo_preacceptance.py` in the demo profile. It visits the timeline, contacts (all cards of the first page expanded), the people list, “Log out” (in the “More” menu at 390 px, in the navigation at 1280 px) and the exit button (clicked at 390 px only); the tally’s undo bar and number form follow only if the timeline shows tally tiles. At 1280 and 390 px it checks page overflow, axe violations of the `critical` and `serious` levels and the demo notice (not checked while the number form is open). The target size of at least 44 px is checked at 390 px only, for the visible links, buttons, expandable sections (`summary`), input fields and selects in the main content and for the exit button; for “Log out” only the height is checked. At 1280 px the sizes are recorded, not checked. At 390 px the check exempts only the toggle of the demo notice, 24 px high (WCAG 2.5.8 AA, demo instances only), from the 44 px goal.
 
 <!-- translation-source: docs/accessibility-audit.md (section 2.3 addendum) -->
-<!-- translation-version: v0.99.10 -->
+<!-- translation-version: v0.99.11 -->
 <!-- translation-date: 2026-11-13 -->
 <!-- source-hash: cdf8d4d6ebd39347df5592ca33df2eb7b1bd63a6 -->

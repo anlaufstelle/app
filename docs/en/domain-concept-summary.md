@@ -318,6 +318,12 @@ The largest collective pre-release to date — the configurability milestones M0
 - **Operations signal what they cannot see**: missing backup signals or an unmeasurable disk degrade the health status, audit high-water marks are anchored offsite and checked in the restore drill, host scripts use the host backup path, and compliance warns about unlimited audit retention.
 - **Time and speed**: the nights of the clock change keep their real hours (shift end and event form both explain the doubled or skipped hour), person search uses trigram-friendly matching, and the timeline checks event visibility only within the own facility. The test suite was restructured with identical coverage.
 
+### v0.99.11 (2026-11-16)
+
+- **Operator actions and security hardening**: operators who run their own statistics refresh schedule remove it, operators who use the breach webhook enable its egress through the additional Compose file (failed deliveries fail the scan and are retried until 24 hours after the finding), all operators pull the new PostgreSQL and Caddy digests after a backup, and operators whose facility ban type has no minimum contact stage set one before updating, otherwise the migration stops. The second factor and unlock mail are bound to account and session, the command that could re-seal the audit chain is gone, unhashed audit rows before the chain start count as a break, and logout and quick exit clear stored page snapshots and filters.
+- **Timeline and contacts rebuilt**: the timeline gets one header line, a key-figure row instead of the cockpit, tally tiles with an undo countdown and a popover for number entry, hourly collapsible tally groups and entries in recording order; the contact list gets one filter row with chips, instant filtering and calendar-day headers with full counts.
+- **Facility bans, corrections and accessibility**: a new facility ban always needs a person, and a facility ban type needs a minimum contact stage and applies to event types only; ban details can be hidden in the timeline, and active bans show a badge in the people list. Fixes cover CSV export in local time, statistics charts on slow connections, re-checked deletion approvals, anonymisation during key rotation, offline-submitted forms, 44 px touch targets and focus handling.
+
 ### v0.99.10 (2026-11-11)
 
 - **Operator action: new base image digests**: the digest pins of PostgreSQL, Redis, ClamAV and Caddy in all Compose files move to the current index digests of their tags, so operators take a backup first, then pull the four images and restart the stack as described in the runbook; open upstream findings in the PostgreSQL and Caddy images are exempted only until 2026-12-05, and the application image has no exemption.
@@ -372,6 +378,6 @@ The largest collective pre-release to date — the configurability milestones M0
 - **Quick exit joins the glossary**: a header-bar action (button + keyboard shortcut) on every signed-in page that hides the content, ends the session and opens a neutral page, kept distinct from the separate opt-in privacy screen shown on window or tab switch.
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
-<!-- translation-version: v0.99.10 -->
+<!-- translation-version: v0.99.11 -->
 <!-- source-hash: 643b57638b10d18831c6b8408a1c7a2a043789b1 -->
-<!-- translation-date: 2026-11-12 -->
+<!-- translation-date: 2026-11-16 -->
