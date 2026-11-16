@@ -107,6 +107,10 @@
     // later login. Reads apply in the order they were started (see
     // ``_observeRevocation``).
     let knownRevocation = 0;
+    // Identity of the key database the marker belongs to; ``undefined`` until
+    // the first read. A deleted and recreated database restarts the marker at
+    // zero, so a number alone could name an earlier state again.
+    let knownEpoch;
     let revocationReadSeq = 0;
     let revocationAppliedSeq = 0;
     let initialLoad = null; // Promise<void> that resolves once cachedKey reflects IndexedDB
@@ -174,7 +178,11 @@
             req.onupgradeneeded = function () {
                 const db = req.result;
                 if (!db.objectStoreNames.contains(META_TABLE)) {
-                    db.createObjectStore(META_TABLE, { keyPath: "key" });
+                    db.createObjectStore(META_TABLE, { keyPath: "key" }).put({
+                        key: REVOCATION_KEY,
+                        generation: 0,
+                        epoch: _newEpoch(),
+                    });
                 }
             };
             req.onsuccess = function () {
@@ -221,14 +229,24 @@
     // only raises the value.
     function _observeRevocation(row, order) {
         const current = row ? row.generation : 0;
+        const epoch = _epochOf(row);
         if (!Number.isSafeInteger(current)) return current;
         if (order === undefined) {
-            knownRevocation = Math.max(knownRevocation, current);
+            if (epoch === knownEpoch) knownRevocation = Math.max(knownRevocation, current);
         } else if (order > revocationAppliedSeq) {
             revocationAppliedSeq = order;
             knownRevocation = current;
+            knownEpoch = epoch;
         }
         return current;
+    }
+
+    function _epochOf(row) {
+        return row && typeof row.epoch === "string" ? row.epoch : null;
+    }
+
+    function _newEpoch() {
+        return Date.now().toString(36) + "." + Math.random().toString(36).slice(2);
     }
 
     function _readRevocation() {
@@ -240,32 +258,45 @@
 
     // A page that stays open misses wipes of other tabs and storage clearing.
     // Re-reading the marker when the user returns or interacts keeps the
-    // snapshot of a later login current. An attempt that already started keeps
-    // its own snapshot, so this never revives a derivation.
-    const REVOCATION_REFRESH_THROTTLE_MS = 1000;
-    let lastRevocationRefresh = 0;
+    // snapshot of a later login current. A login waits for a refresh that is
+    // still running (``pendingRevocationRefresh``) before it takes its
+    // snapshot. An attempt that already started keeps its own snapshot, so
+    // this never revives a derivation.
+    let revocationRefresh = null;
 
-    function _refreshRevocationBaseline(force) {
-        const now = Date.now();
-        if (!force && now - lastRevocationRefresh < REVOCATION_REFRESH_THROTTLE_MS) return;
-        lastRevocationRefresh = now;
-        _readRevocation().catch(function () {
-            // ignore — the login start reads the marker again and fails closed
-        });
+    function refreshRevocation() {
+        if (!revocationRefresh) {
+            revocationRefresh = _readRevocation()
+                .catch(function () {
+                    // ignore — the login start reads the marker again and fails closed
+                })
+                .finally(function () {
+                    revocationRefresh = null;
+                });
+        }
+        return revocationRefresh;
+    }
+
+    function pendingRevocationRefresh() {
+        return revocationRefresh;
     }
 
     // Capture before the first async step of login/demo, not after the salt
     // response. The persistent marker also invalidates work in other tabs.
     function beginKeyDerivation() {
         const revocation = knownRevocation;
+        const epoch = knownEpoch;
         const order = ++revocationReadSeq;
         return {
             generation: keyGeneration,
             revocation: _idbGet(REVOCATION_KEY).then(
                 function (row) {
                     const current = _observeRevocation(row, order);
-                    return current === revocation
-                        ? { value: revocation }
+                    // Before the page's first read the epoch is unknown; the
+                    // attempt then binds to the database it finds now.
+                    const sameEpoch = epoch === undefined || _epochOf(row) === epoch;
+                    return current === revocation && sameEpoch
+                        ? { value: revocation, epoch: _epochOf(row) }
                         : { error: _noSessionKeyError() };
                 },
                 function (error) { return { error }; }
@@ -273,7 +304,7 @@
         };
     }
 
-    function _idbPut(record, generation, revocation) {
+    function _idbPut(record, generation, revocation, epoch) {
         return _openDb().then(function (db) {
             if (generation !== undefined && generation !== keyGeneration) {
                 db.close();
@@ -288,7 +319,8 @@
                     const req = store.get(REVOCATION_KEY);
                     req.onsuccess = function () {
                         const current = _observeRevocation(req.result);
-                        if (current !== revocation || generation !== keyGeneration) {
+                        const sameEpoch = _epochOf(req.result) === epoch;
+                        if (current !== revocation || !sameEpoch || generation !== keyGeneration) {
                             failure = _noSessionKeyError();
                             tx.abort();
                             return;
@@ -316,20 +348,23 @@
                 const tx = db.transaction(META_TABLE, "readwrite");
                 const store = tx.objectStore(META_TABLE);
                 let revokedGeneration;
+                let revokedEpoch;
                 store.delete(key);
                 if (revoke) {
                     const req = store.get(REVOCATION_KEY);
                     req.onsuccess = function () {
                         revokedGeneration = (req.result ? req.result.generation : 0) + 1;
+                        revokedEpoch = _epochOf(req.result) || _newEpoch();
                         store.put({
                             key: REVOCATION_KEY,
                             generation: revokedGeneration,
+                            epoch: revokedEpoch,
                         });
                     };
                 }
                 tx.oncomplete = function () {
                     db.close();
-                    if (revoke) _observeRevocation({ generation: revokedGeneration });
+                    if (revoke) _observeRevocation({ generation: revokedGeneration, epoch: revokedEpoch });
                     resolve();
                 };
                 tx.onerror = tx.onabort = function () {
@@ -810,7 +845,6 @@
             "pointerdown",
             function () {
                 _touchActivity(false);
-                _refreshRevocationBaseline(false);
             },
             { passive: true }
         );
@@ -818,12 +852,11 @@
             "keydown",
             function () {
                 _touchActivity(false);
-                _refreshRevocationBaseline(false);
             },
             { passive: true }
         );
         window.addEventListener("focus", function () {
-            _refreshRevocationBaseline(true);
+            refreshRevocation();
         });
         document.addEventListener("visibilitychange", function () {
             if (document.visibilityState === "hidden") {
@@ -831,7 +864,7 @@
                 // a later (possibly offline) re-open starts here.
                 _touchActivity(true);
             } else if (document.visibilityState === "visible") {
-                _refreshRevocationBaseline(true);
+                refreshRevocation();
                 enforceIdleWipe().catch(function () {});
             }
         });
@@ -921,7 +954,7 @@
         const epoch = createdAt.toString(36) + "." + Math.random().toString(36).slice(2);
         const row = { key: KEY_NAME, cryptoKey: key, createdAt, expiresAt, checkedAt: createdAt, epoch };
         try {
-            await _idbPut(row, generation, marker.value);
+            await _idbPut(row, generation, marker.value, marker.epoch);
         } catch (error) {
             if (error.name === "NoSessionKeyError") {
                 cachedKey = null;
@@ -1107,6 +1140,9 @@
     const api = {
         isSupported: isSupported,
         beginKeyDerivation: beginKeyDerivation,
+        // Keep the revocation snapshot of an open login page current.
+        refreshRevocation: refreshRevocation,
+        pendingRevocationRefresh: pendingRevocationRefresh,
         deriveSessionKey: deriveSessionKey,
         clearSessionKey: clearSessionKey,
         // Refs #2136 (R-L3-13): Rueckleseprobe fuer den Loeschnachweis des

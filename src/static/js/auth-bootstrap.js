@@ -195,9 +195,33 @@
         var form = document.getElementById(formId);
         if (!form) return;
         var disarmed = false;
+        // One sign-in per page: a further submit while one runs would post the
+        // token that the accepted sign-in has already rotated.
+        var busy = false;
+        if (!before) {
+            // Re-read the revocation marker while the user interacts, so the
+            // snapshot taken at submit includes wipes since the page loaded.
+            ["focusin", "pointerdown", "keydown"].forEach(function (type) {
+                form.addEventListener(type, function () {
+                    window.crypto_session.refreshRevocation();
+                });
+            });
+        }
         form.addEventListener("submit", function (event) {
             if (disarmed) return; // native fallback path
             event.preventDefault();
+            if (busy) return;
+            busy = true;
+            var refresh = before ? null : window.crypto_session.pendingRevocationRefresh();
+            if (!refresh) return submitByFetch();
+            // Bounded, so a hanging IndexedDB read never blocks the sign-in.
+            var timeout = new Promise(function (resolve) {
+                setTimeout(resolve, 1000);
+            });
+            return Promise.race([refresh, timeout]).then(submitByFetch);
+        });
+
+        function submitByFetch() {
             var formData = new FormData(form);
             var password = formData.get(passwordField);
             // Password change clears its old key before starting the new
@@ -254,11 +278,14 @@
                         return;
                     }
                     // Do not restart a revoked login through native submit.
-                    if (error.name === "NoSessionKeyError") return;
+                    if (error.name === "NoSessionKeyError") {
+                        busy = false;
+                        return;
+                    }
                     disarmed = true;
                     form.submit();
                 });
-        });
+        }
     }
 
     if (demoData) {

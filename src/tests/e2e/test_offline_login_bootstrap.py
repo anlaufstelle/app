@@ -206,3 +206,82 @@ def test_second_user_after_logout_gets_offline_key(browser, base_url):
     )
     assert has_key is True
     context.close()
+
+
+def test_second_submit_during_key_derivation_does_not_repost(browser, base_url):
+    """A second click or Enter while the accepted sign-in derives its key is ignored.
+
+    The accepted login rotated the CSRF token of the page; a further POST from the same
+    page could only end in a 403.
+    """
+    # Block service workers so ``page.route`` applies to the salt request.
+    context = browser.new_context(service_workers="block")
+    page = context.new_page()
+    held = []
+    page.route("**/auth/offline-key-salt/", held.append)
+    login_posts = _track_login_posts(page)
+    page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
+    page.fill("#id_username", "miriam")
+    page.fill("#id_password", SEED_PASSWORD)
+    page.click("#login-form button[type=submit]")
+    for _ in range(200):
+        if held:
+            break
+        page.wait_for_timeout(50)
+    assert held, "the salt request was never sent"
+
+    page.click("#login-form button[type=submit]")
+    page.keyboard.press("Enter")
+    page.wait_for_timeout(500)
+    assert login_posts["count"] == 1, login_posts
+
+    held[0].continue_()
+    page.wait_for_url(re.compile(r"^(?!.*/login/)"), timeout=15000)
+    page.wait_for_function("window.crypto_session && window.offlineStore")
+    assert "403" not in page.title()
+    assert 403 not in login_posts["statuses"], login_posts
+    assert login_posts["count"] == 1, login_posts
+    has_key = page.evaluate(
+        """async () => {
+            await window.crypto_session.ready();
+            return window.crypto_session.hasSessionKey();
+        }"""
+    )
+    assert has_key is True
+    context.close()
+
+
+def test_login_page_open_during_other_logout_gets_offline_key(browser, base_url):
+    """A login page opened before another account logs out in a second tab still derives a key.
+
+    The page is opened while the first account is signed in, so its CSRF token stays
+    valid (Django rotates it on login, not on logout). The logout wipes the key and
+    clears the site data while the page stays open.
+    """
+    context = browser.new_context()
+    first = context.new_page()
+    _do_login(first, base_url, username="admin")
+    waiting = context.new_page()
+    waiting.goto(f"{base_url}/login/", wait_until="domcontentloaded")
+    waiting.wait_for_function("window.crypto_session && window.offlineStore")
+    first.bring_to_front()
+    _do_logout(first)
+
+    waiting.bring_to_front()
+    login_posts = _track_login_posts(waiting)
+    waiting.fill("#id_username", "miriam")
+    waiting.fill("#id_password", SEED_PASSWORD)
+    waiting.click("#login-form button[type=submit]")
+    waiting.wait_for_url(re.compile(r"^(?!.*/login/)"), timeout=15000)
+    waiting.wait_for_function("window.crypto_session && window.offlineStore")
+    assert "403" not in waiting.title()
+    assert 403 not in login_posts["statuses"], login_posts
+    assert login_posts["count"] == 1, login_posts
+    has_key = waiting.evaluate(
+        """async () => {
+            await window.crypto_session.ready();
+            return window.crypto_session.hasSessionKey();
+        }"""
+    )
+    assert has_key is True
+    context.close()
