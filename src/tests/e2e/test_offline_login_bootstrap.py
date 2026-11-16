@@ -157,3 +157,38 @@ def test_login_without_key_lands_on_app_not_csrf_403(browser, base_url):
     )
     assert has_key is False
     context.close()
+
+
+def test_second_user_after_logout_gets_offline_key(browser, base_url):
+    """A second account signing in after another account's logout still gets its key.
+
+    Same browser context throughout: the first account signs in and out, the second
+    account signs in on the login page that follows. The key derivation must succeed
+    and the login form must never be posted a second time with a stale token.
+    """
+    context = browser.new_context()
+    page = context.new_page()
+    login_statuses = []
+    page.on(
+        "response",
+        lambda response: (
+            login_statuses.append(response.status)
+            if response.request.method == "POST" and response.url.endswith("/login/")
+            else None
+        ),
+    )
+    _do_login(page, base_url, username="admin")
+    _do_logout(page)
+    login_statuses.clear()
+
+    _do_login(page, base_url, username="miriam")
+    assert "403" not in page.title()
+    assert 403 not in login_statuses, f"login form was posted with a stale token: {login_statuses}"
+    has_key = page.evaluate(
+        """async () => {
+            await window.crypto_session.ready();
+            return window.crypto_session.hasSessionKey();
+        }"""
+    )
+    assert has_key is True
+    context.close()
