@@ -54,6 +54,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Anmeldung ohne „Sicherheits-Token abgelaufen“** (#2917) — Ist die Anmeldung angenommen, führt weder ein Fehler bei der Vorbereitung des Offline-Schlüssels noch ein zweiter Klick auf „Anmelden“ zur Seite „Sicherheits-Token abgelaufen“. Eine vor oder nach dem Abmelden eines anderen Kontos geöffnete Anmeldeseite legt den Offline-Schlüssel wieder an.
 - **Zeitstrom-Aktualisierung bleibt nicht an einer hängenden Verbindung stehen** (#2853) — Antwortet der Server auf die Hintergrundabfrage des Zeitstroms nicht, bricht die Seite sie nach 30 Sekunden ab und versucht es nach der Wartezeit für Fehlschläge erneut, statt bis zum nächsten Tab-Wechsel stehen zu bleiben.
 - **Geöffnete Strichlisten-Gruppe bleibt bei der Aktualisierung offen** (#2811) — Aktualisiert sich der Zeitstrom im Hintergrund, klappt eine aufgeklappte Stundengruppe der Strichliste nicht mehr zu.
 - **Mobile Abmelde-Fläche und Personenliste** (#2660) — Im „Mehr“-Menü ist „Abmelden“ jetzt 44 px hoch. In der Personenliste und in der Offline-Personenliste liegt der mobile Knopf je Zeile in einer Tabellenzelle, sodass die Zeilen gültige Tabellenzeilen sind (mit axe geprüft); auf Telefonbreite (390 px gemessen) sind offline Knopf, Namenslink, Suche und Filter 44 px groß.
