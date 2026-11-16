@@ -5,6 +5,7 @@ real login form so the fetch-based submit hook in login.html runs.
 """
 
 import re
+from urllib.parse import urlparse
 
 import pytest
 
@@ -41,6 +42,27 @@ def _do_logout(page):
         f"Logout landete nicht auf sauberem /login/, sondern auf {page.url!r} — "
         "die Logout-Weiterleitung wurde abgebrochen (Refs #1951)."
     )
+
+
+def _track_login_posts(page):
+    """Record every POST to ``/login/`` of ``page``: count by request, status by response.
+
+    The scripted login uses ``fetch`` with ``redirect: "manual"``; its opaque redirect
+    is not reported as a ``/login/`` response, so responses alone undercount. The
+    ``request`` event fires for the scripted POST and for a native form submit (a
+    navigation POST) alike, so a re-post after the first one always shows up.
+    """
+    posts = {"count": 0, "statuses": []}
+
+    def is_login_post(request):
+        return request.method == "POST" and urlparse(request.url).path == "/login/"
+
+    page.on("request", lambda request: posts.update(count=posts["count"] + 1) if is_login_post(request) else None)
+    page.on(
+        "response",
+        lambda response: posts["statuses"].append(response.status) if is_login_post(response.request) else None,
+    )
+    return posts
 
 
 def test_login_derives_session_key(browser, base_url):
@@ -131,15 +153,7 @@ def test_login_without_key_lands_on_app_not_csrf_403(browser, base_url):
             body='{"salt": "!!!", "home_url": "/", "offline_key_max_age": 3600}',
         ),
     )
-    login_posts = []
-    page.on(
-        "response",
-        lambda response: (
-            login_posts.append(response.status)
-            if response.request.method == "POST" and response.url.endswith("/login/")
-            else None
-        ),
-    )
+    login_posts = _track_login_posts(page)
     page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
     page.fill("#id_username", "miriam")
     page.fill("#id_password", SEED_PASSWORD)
@@ -147,8 +161,8 @@ def test_login_without_key_lands_on_app_not_csrf_403(browser, base_url):
     page.wait_for_url(re.compile(r"^(?!.*/login/)"), timeout=15000)
     page.wait_for_function("window.crypto_session && window.offlineStore")
     assert "403" not in page.title()
-    assert 403 not in login_posts, f"login form was posted again with a stale token: {login_posts}"
-    assert len(login_posts) == 1, login_posts
+    assert 403 not in login_posts["statuses"], f"login form was posted with a stale token: {login_posts}"
+    assert login_posts["count"] == 1, login_posts
     has_key = page.evaluate(
         """async () => {
             await window.crypto_session.ready();
