@@ -99,10 +99,16 @@
     let cachedKey = null;
     let cachedLifetime = null;
     let keyGeneration = 0; // Invalidates pending key writes and memory hydration on clear (#2528).
-    // A synchronous lower bound: a later marker read may update future attempts
+    // A synchronous snapshot source: a later marker read may update future attempts
     // only. Before initialization, assume no revocation and fail closed if the
     // persisted marker differs; never adopt that newer value for an old attempt.
+    // The value follows the persisted marker, up and down: storage clearing
+    // resets the marker, and a page that kept the old value would reject every
+    // later login. Reads apply in the order they were started (see
+    // ``_observeRevocation``).
     let knownRevocation = 0;
+    let revocationReadSeq = 0;
+    let revocationAppliedSeq = 0;
     let initialLoad = null; // Promise<void> that resolves once cachedKey reflects IndexedDB
     let initialLoadSettled = false;
     let settleInitialLoad = null; // resolves ``initialLoad``
@@ -208,23 +214,56 @@
         if (generation !== keyGeneration) throw _noSessionKeyError();
     }
 
-    function _observeRevocation(row) {
+    // A read passes the ``order`` it took before it started: it replaces the
+    // snapshot source, down as well as up, but a slower, older read never
+    // overwrites the result of a read that started after it. An observation
+    // made inside a write transaction or after a local bump passes no order and
+    // only raises the value.
+    function _observeRevocation(row, order) {
         const current = row ? row.generation : 0;
-        if (Number.isSafeInteger(current)) {
+        if (!Number.isSafeInteger(current)) return current;
+        if (order === undefined) {
             knownRevocation = Math.max(knownRevocation, current);
+        } else if (order > revocationAppliedSeq) {
+            revocationAppliedSeq = order;
+            knownRevocation = current;
         }
         return current;
+    }
+
+    function _readRevocation() {
+        const order = ++revocationReadSeq;
+        return _idbGet(REVOCATION_KEY).then(function (row) {
+            return _observeRevocation(row, order);
+        });
+    }
+
+    // A page that stays open misses wipes of other tabs and storage clearing.
+    // Re-reading the marker when the user returns or interacts keeps the
+    // snapshot of a later login current. An attempt that already started keeps
+    // its own snapshot, so this never revives a derivation.
+    const REVOCATION_REFRESH_THROTTLE_MS = 1000;
+    let lastRevocationRefresh = 0;
+
+    function _refreshRevocationBaseline(force) {
+        const now = Date.now();
+        if (!force && now - lastRevocationRefresh < REVOCATION_REFRESH_THROTTLE_MS) return;
+        lastRevocationRefresh = now;
+        _readRevocation().catch(function () {
+            // ignore — the login start reads the marker again and fails closed
+        });
     }
 
     // Capture before the first async step of login/demo, not after the salt
     // response. The persistent marker also invalidates work in other tabs.
     function beginKeyDerivation() {
         const revocation = knownRevocation;
+        const order = ++revocationReadSeq;
         return {
             generation: keyGeneration,
             revocation: _idbGet(REVOCATION_KEY).then(
                 function (row) {
-                    const current = _observeRevocation(row);
+                    const current = _observeRevocation(row, order);
                     return current === revocation
                         ? { value: revocation }
                         : { error: _noSessionKeyError() };
@@ -503,7 +542,7 @@
     async function _applyKeyCleared() {
         const generation = keyGeneration;
         try {
-            await _idbGet(REVOCATION_KEY).then(_observeRevocation);
+            await _readRevocation();
             const row = await _idbGet(KEY_NAME);
             if (generation !== keyGeneration) return;
             if (row && row.cryptoKey && _keyLifetimeValid(row, Date.now())) {
@@ -675,8 +714,7 @@
     // marker read is handled on its own and fails closed: the hydrated key is
     // not exposed, the next ``_loadKey()`` re-checks IndexedDB.
     async function _hydrate() {
-        const markerRead = _idbGet(REVOCATION_KEY)
-            .then(_observeRevocation)
+        const markerRead = _readRevocation()
             .then(
                 function () {
                     return true;
@@ -772,6 +810,7 @@
             "pointerdown",
             function () {
                 _touchActivity(false);
+                _refreshRevocationBaseline(false);
             },
             { passive: true }
         );
@@ -779,15 +818,20 @@
             "keydown",
             function () {
                 _touchActivity(false);
+                _refreshRevocationBaseline(false);
             },
             { passive: true }
         );
+        window.addEventListener("focus", function () {
+            _refreshRevocationBaseline(true);
+        });
         document.addEventListener("visibilitychange", function () {
             if (document.visibilityState === "hidden") {
                 // Final stamp when the tab goes away — the idle window for
                 // a later (possibly offline) re-open starts here.
                 _touchActivity(true);
             } else if (document.visibilityState === "visible") {
+                _refreshRevocationBaseline(true);
                 enforceIdleWipe().catch(function () {});
             }
         });

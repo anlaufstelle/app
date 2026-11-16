@@ -10,6 +10,12 @@ const bootstrapSource = readFileSync("src/static/js/auth-bootstrap.js", "utf8");
 const PASSWORD = "test password";
 const SALT = "c2FsdHNhbHRzYWx0";
 
+function deferred() {
+    let resolve;
+    const promise = new Promise((done) => { resolve = done; });
+    return { promise, resolve };
+}
+
 // One login page of the shared browser profile, backed by the shared IndexedDB.
 async function loginPage(indexedDB) {
     let submit;
@@ -27,8 +33,10 @@ async function loginPage(indexedDB) {
         importKey: webcrypto.subtle.importKey.bind(webcrypto.subtle),
         deriveKey: webcrypto.subtle.deriveKey.bind(webcrypto.subtle),
     };
+    const listeners = {};
     const window = {
-        crypto: { subtle }, indexedDB, addEventListener() {}, setInterval() {},
+        crypto: { subtle }, indexedDB, setInterval() {},
+        addEventListener: (type, handler) => { (listeners[type] ||= []).push(handler); },
         getCsrfToken: () => "csrf", location: { pathname: "/login/" },
         offlineStore: {
             revalidateCachedFacility: vi.fn().mockResolvedValue(),
@@ -51,8 +59,13 @@ async function loginPage(indexedDB) {
     await window.crypto_session.ready();
     runInContext(bootstrapSource, context);
     return {
-        window, form, session: window.crypto_session,
+        window, form, subtle, session: window.crypto_session,
         signIn: () => submit({ preventDefault() {} }),
+        // The user comes back to this page (tab switch, window focus).
+        async focus() {
+            for (const handler of listeners.focus || []) handler();
+            await new Promise((resolve) => setTimeout(resolve, 20));
+        },
     };
 }
 
@@ -87,35 +100,103 @@ describe("second account after a logout", () => {
         expect(second.form.submit).not.toHaveBeenCalled();
     });
 
-    // Known gap, not fixable in the login script: the revocation baseline is
-    // taken from the page's boot state inside crypto.js. A login page that was
-    // loaded before another tab wiped the key treats that wipe as a revocation
-    // of its own, not-yet-started login.
-    it.fails("derives a key in a login page that was open before the other account logged out", async () => {
+    it("derives a key in a login page that was open before the other account logged out", async () => {
         const db = new IDBFactory();
         const first = await loginPage(db);
         await first.signIn();
         const waiting = await loginPage(db);
         await logOut(first, db, { clearStorage: false });
+        await waiting.focus();
 
         await waiting.signIn();
 
         expect(waiting.session.hasSessionKey()).toBe(true);
+        expect(waiting.form.submit).not.toHaveBeenCalled();
     });
 
-    // Known gap, same cause: the baseline only ever grows, so storage clearing
-    // (marker back to zero) leaves the open page rejecting every login.
-    it.fails("keeps deriving in an open login page after storage was cleared", async () => {
+    it("derives a key in an open login page after storage was cleared", async () => {
         const db = new IDBFactory();
         const first = await loginPage(db);
         await first.signIn();
         await first.session.clearSessionKey(); // e.g. an idle wipe: marker > 0, no storage clearing
         const waiting = await loginPage(db);
         await logOut(first, db, { clearStorage: true });
+        await waiting.focus();
 
-        await waiting.signIn();
         await waiting.signIn();
 
         expect(waiting.session.hasSessionKey()).toBe(true);
+    });
+
+    it("recovers on the next attempt even when the page never saw the clearing", async () => {
+        const db = new IDBFactory();
+        const first = await loginPage(db);
+        await first.signIn();
+        await first.session.clearSessionKey();
+        const waiting = await loginPage(db);
+        await logOut(first, db, { clearStorage: true });
+
+        await waiting.signIn(); // rejected: the clearing happened after the page booted
+        expect(waiting.session.hasSessionKey()).toBe(false);
+        await waiting.signIn();
+
+        expect(waiting.session.hasSessionKey()).toBe(true);
+    });
+});
+
+// The refreshed baseline must never let a derivation survive a wipe that
+// happened after that derivation started.
+describe("revocation stays final", () => {
+    async function heldDerivation(page) {
+        const started = deferred();
+        const resume = deferred();
+        const original = page.subtle.deriveKey;
+        page.subtle.deriveKey = async (...args) => {
+            const key = await original(...args);
+            started.resolve();
+            await resume.promise;
+            return key;
+        };
+        const attempt = page.session.beginKeyDerivation();
+        const result = page.session.deriveSessionKey(PASSWORD, SALT, attempt)
+            .then(() => "derived", (error) => error.name);
+        await started.promise;
+        return { result, resume: () => { page.subtle.deriveKey = original; resume.resolve(); } };
+    }
+
+    it("rejects a derivation begun on a refreshed page when another tab wipes meanwhile", async () => {
+        const db = new IDBFactory();
+        const first = await loginPage(db);
+        await first.signIn();
+        const waiting = await loginPage(db);
+        await logOut(first, db, { clearStorage: false });
+        await waiting.focus(); // baseline now follows the wipe that predates the attempt
+
+        const pending = await heldDerivation(waiting);
+        const other = await loginPage(db);
+        await other.signIn();
+        await other.session.clearSessionKey(); // wipe after the attempt started
+        pending.resume();
+
+        expect(await pending.result).toBe("NoSessionKeyError");
+        expect(waiting.session.hasSessionKey()).toBe(false);
+        expect(await waiting.session.hasPersistedSessionKey()).toBe(false);
+    });
+
+    it("rejects a derivation begun before storage clearing even after the baseline refresh", async () => {
+        const db = new IDBFactory();
+        const first = await loginPage(db);
+        await first.signIn();
+        await first.session.clearSessionKey(); // marker 1
+        const waiting = await loginPage(db); // boots with marker 1
+
+        const pending = await heldDerivation(waiting);
+        await logOut(first, db, { clearStorage: true }); // marker back to 0
+        await waiting.focus(); // baseline drops to 0, the running attempt keeps 1
+        pending.resume();
+
+        expect(await pending.result).toBe("NoSessionKeyError");
+        expect(waiting.session.hasSessionKey()).toBe(false);
+        expect(await waiting.session.hasPersistedSessionKey()).toBe(false);
     });
 });
