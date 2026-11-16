@@ -1,139 +1,8 @@
 // Sign-in, logout and key revocation across pages of one browser profile.
-import { readFileSync } from "node:fs";
-import { webcrypto } from "node:crypto";
-import { createContext, runInContext } from "node:vm";
-import { IDBFactory } from "fake-indexeddb";
 import { describe, expect, it, vi } from "vitest";
-
-const cryptoSource = readFileSync("src/static/js/crypto.js", "utf8");
-const bootstrapSource = readFileSync("src/static/js/auth-bootstrap.js", "utf8");
-const PASSWORD = "test password";
-const SALT = "c2FsdHNhbHRzYWx0";
-
-function deferred() {
-    let resolve;
-    const promise = new Promise((done) => { resolve = done; });
-    return { promise, resolve };
-}
-
-// The server side of one browser profile: a successful login rotates the CSRF
-// secret, so a page rendered before it posts a stale token and gets a 403.
-function newBrowser() {
-    return { indexedDB: new IDBFactory(), secret: 1, salt: null };
-}
-
-// IndexedDB whose opens can be issued late, standing in for a busy browser:
-// the read then sees whatever happened in the meantime.
-function slowIndexedDB(indexedDB) {
-    const control = { delayMs: 0 };
-    control.factory = {
-        open(...args) {
-            if (!control.delayMs) return indexedDB.open(...args);
-            const request = {};
-            setTimeout(() => {
-                const real = indexedDB.open(...args);
-                const forward = (name) => (event) => {
-                    request.result = real.result;
-                    request.error = real.error;
-                    if (request[name]) request[name](event);
-                };
-                real.onupgradeneeded = forward("onupgradeneeded");
-                real.onsuccess = forward("onsuccess");
-                real.onerror = forward("onerror");
-            }, control.delayMs);
-            return request;
-        },
-        deleteDatabase: (...args) => indexedDB.deleteDatabase(...args),
-    };
-    return control;
-}
-
-// One login page of the profile, rendered with the CSRF secret of its load time.
-async function loginPage(browser, indexedDB = browser.indexedDB) {
-    const formListeners = {};
-    const documentListeners = {};
-    const windowListeners = {};
-    const form = {
-        action: "/login/", submit: vi.fn(),
-        addEventListener: (type, handler) => { (formListeners[type] ||= []).push(handler); },
-    };
-    const document = {
-        body: { dataset: { sessionAge: "7200" } },
-        querySelectorAll: () => [], readyState: "complete",
-        addEventListener: (type, handler) => { (documentListeners[type] ||= []).push(handler); },
-        getElementById: (id) => (id === "login-form" ? form : null),
-        querySelector: () => null,
-    };
-    const subtle = {
-        importKey: webcrypto.subtle.importKey.bind(webcrypto.subtle),
-        deriveKey: webcrypto.subtle.deriveKey.bind(webcrypto.subtle),
-    };
-    const window = {
-        crypto: { subtle }, indexedDB, setInterval() {},
-        addEventListener: (type, handler) => { (windowListeners[type] ||= []).push(handler); },
-        getCsrfToken: () => "csrf", location: { pathname: "/login/" },
-        offlineStore: {
-            revalidateCachedFacility: vi.fn().mockResolvedValue(),
-            purgeAll: vi.fn().mockResolvedValue(),
-            hasUnsyncedData: vi.fn().mockResolvedValue(false),
-        },
-    };
-    const pageToken = browser.secret;
-    const loginPosts = [];
-    const fetch = vi.fn(async (url, options = {}) => {
-        if (options.method === "POST" && String(url).includes("/auth/offline-key-salt/")) {
-            if (browser.salt) await browser.salt.promise;
-            return { ok: true, json: async () => ({ salt: SALT, home_url: "/", offline_key_max_age: 3600 }) };
-        }
-        if (options.method === "POST") {
-            const status = pageToken === browser.secret ? 302 : 403;
-            loginPosts.push(status);
-            if (status === 403) return { status, type: "basic", ok: false };
-            browser.secret += 1;
-            return { status, type: "opaqueredirect", ok: false };
-        }
-        return { ok: true, text: async () => `<meta name="csrf-token" content="${browser.secret}">` };
-    });
-    const context = createContext({
-        window, document, indexedDB, TextEncoder, TextDecoder, atob, btoa, console, fetch, setTimeout,
-        FormData: class { get() { return PASSWORD; } },
-    });
-    runInContext(cryptoSource, context);
-    await window.crypto_session.ready();
-    runInContext(bootstrapSource, context);
-    const fire = (listeners, type) => (listeners[type] || []).forEach((handler) => handler({ type }));
-    return {
-        window, form, subtle, loginPosts, session: window.crypto_session,
-        // One submit event (click on "Anmelden" or Enter); returns the handler result.
-        signIn: () => (formListeners.submit || []).map((handler) => handler({ preventDefault() {} })).at(-1),
-        // The user comes back to this page (tab switch, window focus).
-        focus: () => fire(windowListeners, "focus"),
-        // A key press inside the form, e.g. Enter right before the submit.
-        keydown() {
-            fire(formListeners, "keydown");
-            fire(documentListeners, "keydown");
-        },
-    };
-}
-
-// Logout as the page does it: wipe the offline state, then the response's
-// storage clearing removes the key database.
-async function logOut(page, indexedDB, { clearStorage }) {
-    await page.session.wipeOfflineState();
-    if (clearStorage) await clearSiteData(indexedDB);
-}
-
-function clearSiteData(indexedDB) {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.deleteDatabase("anlaufstelle-crypto");
-        request.onsuccess = resolve;
-        request.onerror = () => reject(request.error);
-    });
-}
-
-async function settled(page) {
-    await vi.waitFor(() => expect(page.window.location.href).toBe("/"));
-}
+import {
+    PASSWORD, SALT, clearSiteData, deferred, logOut, loginPage, newBrowser, settled, slowIndexedDB,
+} from "./_login_page_harness.mjs";
 
 describe("second account after a logout", () => {
     it.each([false, true])("derives a key on the next login page (storage cleared: %s)", async (clearStorage) => {
@@ -186,7 +55,7 @@ describe("second account after a logout", () => {
         const slow = slowIndexedDB(browser.indexedDB);
         const first = await loginPage(browser);
         await first.signIn();
-        const waiting = await loginPage(browser, slow.factory);
+        const waiting = await loginPage(browser, { indexedDB: slow.factory });
         await logOut(first, browser.indexedDB, { clearStorage: false });
         slow.delayMs = 30;
 
@@ -242,7 +111,7 @@ describe("one sign-in per login page", () => {
 describe("revocation stays final", () => {
     async function heldDerivation(page) {
         // Start like a login does: after a refresh that is still running.
-        const refreshing = page.session.pendingRevocationRefresh && page.session.pendingRevocationRefresh();
+        const refreshing = page.session.prepareKeyDerivation && page.session.prepareKeyDerivation();
         if (refreshing) await refreshing;
         const started = deferred();
         const resume = deferred();
@@ -320,7 +189,7 @@ describe("revocation stays final", () => {
         const slow = slowIndexedDB(browser.indexedDB);
         const first = await loginPage(browser);
         await first.signIn();
-        const waiting = await loginPage(browser, slow.factory); // marker 0 of the first database
+        const waiting = await loginPage(browser, { indexedDB: slow.factory }); // marker 0 of the first database
 
         slow.delayMs = 100;
         const result = waiting.session.deriveSessionKey(PASSWORD, SALT)

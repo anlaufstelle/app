@@ -109,7 +109,8 @@
     let knownRevocation = 0;
     // Identity of the key database the marker belongs to; ``undefined`` until
     // the first read. A deleted and recreated database restarts the marker at
-    // zero, so a number alone could name an earlier state again.
+    // zero, so a number alone could name an earlier state again. Only a known
+    // epoch (a string) lets a derivation write its key.
     let knownEpoch;
     let revocationReadSeq = 0;
     let revocationAppliedSeq = 0;
@@ -226,7 +227,7 @@
     // snapshot source, down as well as up, but a slower, older read never
     // overwrites the result of a read that started after it. An observation
     // made inside a write transaction or after a local bump passes no order and
-    // only raises the value.
+    // only raises the value of the same epoch.
     function _observeRevocation(row, order) {
         const current = row ? row.generation : 0;
         const epoch = _epochOf(row);
@@ -251,17 +252,44 @@
 
     function _readRevocation() {
         const order = ++revocationReadSeq;
-        return _idbGet(REVOCATION_KEY).then(function (row) {
+        return _ensureEpoch().then(function (row) {
             return _observeRevocation(row, order);
+        });
+    }
+
+    // Reads the marker and gives a database of an earlier release (no epoch)
+    // one in the same transaction, so every later attempt can bind to it.
+    function _ensureEpoch() {
+        return _openDb().then(function (db) {
+            return new Promise(function (resolve, reject) {
+                const tx = db.transaction(META_TABLE, "readwrite");
+                const store = tx.objectStore(META_TABLE);
+                const req = store.get(REVOCATION_KEY);
+                let row = null;
+                req.onsuccess = function () {
+                    row = req.result || null;
+                    if (_epochOf(row)) return;
+                    row = { key: REVOCATION_KEY, generation: row ? row.generation : 0, epoch: _newEpoch() };
+                    store.put(row);
+                };
+                tx.oncomplete = function () {
+                    db.close();
+                    resolve(row);
+                };
+                req.onerror = tx.onerror = tx.onabort = function () {
+                    db.close();
+                    reject(tx.error || req.error || new Error("RevocationReadAborted"));
+                };
+            });
         });
     }
 
     // A page that stays open misses wipes of other tabs and storage clearing.
     // Re-reading the marker when the user returns or interacts keeps the
-    // snapshot of a later login current. A login waits for a refresh that is
-    // still running (``pendingRevocationRefresh``) before it takes its
-    // snapshot. An attempt that already started keeps its own snapshot, so
-    // this never revives a derivation.
+    // snapshot of a later login current. A login waits for
+    // ``prepareKeyDerivation`` before it takes its snapshot. An attempt that
+    // already started keeps its own snapshot, so this never revives a
+    // derivation.
     let revocationRefresh = null;
 
     function refreshRevocation() {
@@ -277,13 +305,17 @@
         return revocationRefresh;
     }
 
-    function pendingRevocationRefresh() {
-        return revocationRefresh;
+    // What a login waits for before it begins: a running refresh, or the first
+    // read of the marker while the page has no epoch. ``null`` when ready.
+    function prepareKeyDerivation() {
+        if (revocationRefresh) return revocationRefresh;
+        return typeof knownEpoch === "string" ? null : refreshRevocation();
     }
 
     // Capture before the first async step of login/demo, not after the salt
     // response. The persistent marker also invalidates work in other tabs.
-    function beginKeyDerivation() {
+    function beginKeyDerivation(options) {
+        const bindFirstRead = !!(options && options.bindFirstRead);
         const revocation = knownRevocation;
         const epoch = knownEpoch;
         const order = ++revocationReadSeq;
@@ -292,11 +324,13 @@
             revocation: _idbGet(REVOCATION_KEY).then(
                 function (row) {
                     const current = _observeRevocation(row, order);
-                    // Before the page's first read the epoch is unknown; the
-                    // attempt then binds to the database it finds now.
-                    const sameEpoch = epoch === undefined || _epochOf(row) === epoch;
-                    return current === revocation && sameEpoch
-                        ? { value: revocation, epoch: _epochOf(row) }
+                    // An attempt needs the epoch the page knew when it began.
+                    // Only the demo start, which begins while the page loads,
+                    // binds to the epoch of this first read instead.
+                    const found = _epochOf(row);
+                    const bound = typeof epoch === "string" ? epoch : bindFirstRead ? found : null;
+                    return current === revocation && bound !== null && found === bound
+                        ? { value: revocation, epoch: bound }
                         : { error: _noSessionKeyError() };
                 },
                 function (error) { return { error }; }
@@ -319,7 +353,7 @@
                     const req = store.get(REVOCATION_KEY);
                     req.onsuccess = function () {
                         const current = _observeRevocation(req.result);
-                        const sameEpoch = _epochOf(req.result) === epoch;
+                        const sameEpoch = typeof epoch === "string" && _epochOf(req.result) === epoch;
                         if (current !== revocation || !sameEpoch || generation !== keyGeneration) {
                             failure = _noSessionKeyError();
                             tx.abort();
@@ -909,7 +943,9 @@
     }
 
     async function deriveSessionKey(password, saltB64Url, derivation) {
-        const attempt = derivation || beginKeyDerivation();
+        // Without an attempt (direct calls, not used by the pages) bind like the
+        // demo start; every page flow passes its own attempt.
+        const attempt = derivation || beginKeyDerivation({ bindFirstRead: true });
         const generation = attempt.generation;
         if (!isSupported()) {
             throw new Error("WebCrypto not supported");
@@ -1142,7 +1178,7 @@
         beginKeyDerivation: beginKeyDerivation,
         // Keep the revocation snapshot of an open login page current.
         refreshRevocation: refreshRevocation,
-        pendingRevocationRefresh: pendingRevocationRefresh,
+        prepareKeyDerivation: prepareKeyDerivation,
         deriveSessionKey: deriveSessionKey,
         clearSessionKey: clearSessionKey,
         // Refs #2136 (R-L3-13): Rueckleseprobe fuer den Loeschnachweis des

@@ -212,11 +212,13 @@
             event.preventDefault();
             if (busy) return;
             busy = true;
-            var refresh = before ? null : window.crypto_session.pendingRevocationRefresh();
+            // The derivation begins only once the page knows the current
+            // revocation marker. Bounded: when storage hangs, the sign-in still
+            // goes out and ends without an offline key (never a second POST).
+            var refresh = before ? null : window.crypto_session.prepareKeyDerivation();
             if (!refresh) return submitByFetch();
-            // Bounded, so a hanging IndexedDB read never blocks the sign-in.
             var timeout = new Promise(function (resolve) {
-                setTimeout(resolve, 1000);
+                setTimeout(resolve, 3000);
             });
             return Promise.race([refresh, timeout]).then(submitByFetch);
         });
@@ -277,7 +279,9 @@
                         window.location.href = "/";
                         return;
                     }
-                    // Do not restart a revoked login through native submit.
+                    // Do not restart a revoked login through native submit. Before
+                    // acceptance only the request itself can fail, so this branch
+                    // is a safeguard; it keeps the form usable.
                     if (error.name === "NoSessionKeyError") {
                         busy = false;
                         return;
@@ -292,7 +296,8 @@
         // Consume rendered data locally as well, preventing a second derivation.
         var demoPassword = demoData.getAttribute("data-demo-offline-password");
         demoData.removeAttribute("data-demo-offline-password");
-        var demoDerivation = window.crypto_session.beginKeyDerivation();
+        // Begins while the page loads; binds to the first marker read (see crypto.js).
+        var demoDerivation = window.crypto_session.beginKeyDerivation({ bindFirstRead: true });
         window.crypto_session.ready()
             .then(async function () {
                 if (!window.crypto_session.hasSessionKey()) {
