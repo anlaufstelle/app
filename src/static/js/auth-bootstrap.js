@@ -296,7 +296,8 @@
         // Consume rendered data locally as well, preventing a second derivation.
         var demoPassword = demoData.getAttribute("data-demo-offline-password");
         demoData.removeAttribute("data-demo-offline-password");
-        // Begins while the page loads; binds to the first marker read (see crypto.js).
+        // Begins while the page loads and binds to the epoch of its own first
+        // read (see crypto.js); the salt request below follows ready().
         var demoDerivation = window.crypto_session.beginKeyDerivation({ bindFirstRead: true });
         window.crypto_session.ready()
             .then(async function () {

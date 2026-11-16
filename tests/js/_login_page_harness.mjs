@@ -62,8 +62,13 @@ export function slowIndexedDB(indexedDB) {
 }
 
 // One page of the profile, rendered with the CSRF secret of its load time.
-// ``cold`` skips waiting for the boot hydration; ``formId`` picks the form.
-export async function loginPage(browser, { indexedDB = browser.indexedDB, cold = false, formId = "login-form" } = {}) {
+// ``cold`` skips waiting for the boot hydration; ``formId`` picks the form;
+// ``demo`` renders the demo start page with its password data instead.
+export async function loginPage(
+    browser, { indexedDB = browser.indexedDB, cold = false, formId = "login-form", demo = false } = {},
+) {
+    const demoNode = { getAttribute: () => PASSWORD, removeAttribute() {} };
+    const errorNode = { hidden: true };
     const formListeners = {};
     const documentListeners = {};
     const windowListeners = {};
@@ -82,11 +87,15 @@ export async function loginPage(browser, { indexedDB = browser.indexedDB, cold =
         },
     };
     const document = {
-        body: { dataset: { sessionAge: "7200" } },
+        body: { dataset: demo ? { sessionAge: "7200", userId: "1" } : { sessionAge: "7200" } },
         querySelectorAll: () => [], readyState: "complete",
         addEventListener: (type, handler) => { (documentListeners[type] ||= []).push(handler); },
-        getElementById: (id) => (id === formId ? form : null),
-        querySelector: () => null,
+        getElementById: (id) => (!demo && id === formId ? form : null),
+        querySelector(selector) {
+            if (!demo) return null;
+            if (selector === "[data-demo-offline-password]") return demoNode;
+            return selector === "[data-demo-offline-error]" ? errorNode : null;
+        },
     };
     const subtle = {
         importKey: webcrypto.subtle.importKey.bind(webcrypto.subtle),
@@ -108,6 +117,7 @@ export async function loginPage(browser, { indexedDB = browser.indexedDB, cold =
     const pageToken = browser.secret;
     const loginPosts = [];
     const fetch = vi.fn(async (url, options = {}) => {
+        if (String(url).includes("/demo/offline-key-ready/")) return { ok: true };
         if (options.method === "POST" && String(url).includes("/auth/offline-key-salt/")) {
             if (browser.salt) await browser.salt.promise;
             return { ok: true, json: async () => ({ salt: SALT, home_url: "/", offline_key_max_age: 3600 }) };
@@ -130,7 +140,7 @@ export async function loginPage(browser, { indexedDB = browser.indexedDB, cold =
     runInContext(bootstrapSource, context);
     const fire = (listeners, type) => (listeners[type] || []).forEach((handler) => handler({ type }));
     return {
-        window, form, subtle, loginPosts, session: window.crypto_session,
+        window, form, subtle, loginPosts, errorNode, fetch, session: window.crypto_session,
         // One submit event (click on "Anmelden" or Enter); returns the handler result.
         signIn: () => (formListeners.submit || []).map((handler) => handler({ preventDefault() {} })).at(-1),
         // The user comes back to this page (tab switch, window focus).

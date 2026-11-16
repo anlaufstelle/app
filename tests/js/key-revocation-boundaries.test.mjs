@@ -159,3 +159,38 @@ describe("databases of earlier releases", () => {
         expect(await keyState(page)).toEqual({ memory: true, persisted: true });
     });
 });
+
+describe("demo start, which begins while its page loads", () => {
+    async function demoOutcome(page) {
+        await vi.waitFor(() => {
+            expect(!page.errorNode.hidden || page.fetch.mock.calls.some(([url]) => String(url).includes("offline-key-ready"))).toBe(true);
+        });
+        return { error: !page.errorNode.hidden, ...(await keyState(page)) };
+    }
+
+    it("prepares a key on a fresh profile", async () => {
+        const browser = newBrowser();
+        const page = await loginPage(browser, { cold: true, demo: true });
+
+        expect(await demoOutcome(page)).toEqual({ error: false, memory: true, persisted: true });
+    });
+
+    it("prepares a key on a database of an earlier release", async () => {
+        const browser = newBrowser();
+        await legacyDatabase(browser.indexedDB);
+        const page = await loginPage(browser, { cold: true, demo: true });
+
+        expect(await demoOutcome(page)).toEqual({ error: false, memory: true, persisted: true });
+    });
+
+    it("rejects the start when the key database is deleted after the page loaded", async () => {
+        const browser = newBrowser();
+        const owner = await loginPage(browser);
+        await owner.signIn();
+        const page = await loginPage(browser, { cold: true, demo: true });
+
+        await clearSiteData(browser.indexedDB);
+
+        expect(await demoOutcome(page)).toEqual({ error: true, memory: false, persisted: false });
+    });
+});

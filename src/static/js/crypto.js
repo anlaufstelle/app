@@ -315,21 +315,23 @@
     // Capture before the first async step of login/demo, not after the salt
     // response. The persistent marker also invalidates work in other tabs.
     function beginKeyDerivation(options) {
-        const bindFirstRead = !!(options && options.bindFirstRead);
+        // The demo start and a direct call may begin before the page has read
+        // the marker. They bind to the epoch of their own first read, issued
+        // right now (before any later deletion); that read gives a database of
+        // an earlier release its epoch first.
+        const firstRead = !!(options && options.bindFirstRead) && typeof knownEpoch !== "string";
         const revocation = knownRevocation;
         const epoch = knownEpoch;
         const order = ++revocationReadSeq;
         return {
             generation: keyGeneration,
-            revocation: _idbGet(REVOCATION_KEY).then(
+            revocation: (firstRead ? _ensureEpoch() : _idbGet(REVOCATION_KEY)).then(
                 function (row) {
                     const current = _observeRevocation(row, order);
-                    // An attempt needs the epoch the page knew when it began.
-                    // Only the demo start, which begins while the page loads,
-                    // binds to the epoch of this first read instead.
-                    const found = _epochOf(row);
-                    const bound = typeof epoch === "string" ? epoch : bindFirstRead ? found : null;
-                    return current === revocation && bound !== null && found === bound
+                    // Login and password change need the epoch the page knew
+                    // when they began; without one they are rejected.
+                    const bound = typeof epoch === "string" ? epoch : firstRead ? _epochOf(row) : null;
+                    return current === revocation && typeof bound === "string" && _epochOf(row) === bound
                         ? { value: revocation, epoch: bound }
                         : { error: _noSessionKeyError() };
                 },
