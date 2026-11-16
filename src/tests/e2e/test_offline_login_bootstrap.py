@@ -111,3 +111,49 @@ def test_login_falls_back_when_subtle_crypto_unavailable(browser, base_url):
     )
     assert has_key in (False, None)
     context.close()
+
+
+def test_login_without_key_lands_on_app_not_csrf_403(browser, base_url):
+    """A failed key derivation after an accepted sign-in must not re-post the login form.
+
+    The server rotates the CSRF token on a successful login, so a native re-submit of
+    the stale form can only end in a 403. The user lands on the app without a key instead.
+    """
+    # Block service workers so ``page.route`` applies to the salt request.
+    context = browser.new_context(service_workers="block")
+    page = context.new_page()
+    # An undecodable salt makes the real key derivation throw after the login succeeded.
+    page.route(
+        "**/auth/offline-key-salt/",
+        lambda route: route.fulfill(
+            status=200,
+            content_type="application/json",
+            body='{"salt": "!!!", "home_url": "/", "offline_key_max_age": 3600}',
+        ),
+    )
+    login_posts = []
+    page.on(
+        "response",
+        lambda response: (
+            login_posts.append(response.status)
+            if response.request.method == "POST" and response.url.endswith("/login/")
+            else None
+        ),
+    )
+    page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
+    page.fill("#id_username", "miriam")
+    page.fill("#id_password", SEED_PASSWORD)
+    page.click("#login-form button[type=submit]")
+    page.wait_for_url(re.compile(r"^(?!.*/login/)"), timeout=15000)
+    page.wait_for_function("window.crypto_session && window.offlineStore")
+    assert "403" not in page.title()
+    assert 403 not in login_posts, f"login form was posted again with a stale token: {login_posts}"
+    assert len(login_posts) == 1, login_posts
+    has_key = page.evaluate(
+        """async () => {
+            await window.crypto_session.ready();
+            return window.crypto_session.hasSessionKey();
+        }"""
+    )
+    assert has_key is False
+    context.close()

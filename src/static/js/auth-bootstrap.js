@@ -203,6 +203,10 @@
             // Password change clears its old key before starting the new
             // derivation; login captures before its first request (#2528).
             var derivation = before ? null : window.crypto_session.beginKeyDerivation();
+            // Set once the server accepted the form (redirect). From then on
+            // the CSRF token in this form is rotated (login) or the form is
+            // spent (password change): a native re-submit can only fail.
+            var accepted = false;
             return fetch(form.action || window.location.pathname, {
                 method: "POST",
                 body: formData,
@@ -221,6 +225,7 @@
                         form.submit();
                         return null;
                     }
+                    accepted = true;
                     // Refs #867: Location-Header ist bei
                     // ``redirect: "manual"`` nicht auslesbar (opaqueredirect).
                     // Server-seitige Bestimmung kommt zurueck via salt-Endpoint
@@ -240,6 +245,14 @@
                     if (location) window.location.href = location;
                 })
                 .catch(function (error) {
+                    if (accepted) {
+                        // Signed in but no offline key: never re-post the spent
+                        // form, leave the stale page. The app reports the
+                        // missing key where it is needed.
+                        if (window.console) console.warn("[offline] key derivation after sign-in failed", error);
+                        window.location.href = "/";
+                        return;
+                    }
                     // Do not restart a revoked login through native submit.
                     if (error.name === "NoSessionKeyError") return;
                     disarmed = true;

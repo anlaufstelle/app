@@ -174,7 +174,8 @@ describe("revocation snapshot before database initialization", () => {
         expect(await clearing.session.hasPersistedSessionKey()).toBe(false);
         expect(tab.window.offlineStore.revalidateCachedFacility).not.toHaveBeenCalled();
         expect(tab.form.submit).not.toHaveBeenCalled();
-        expect(tab.window.location.href).toBeUndefined();
+        // An accepted sign-in leaves the spent form (rotated CSRF token) for the app.
+        expect(tab.window.location.href).toBe(mode === "login" ? "/" : undefined);
         if (mode === "demo") expect(tab.errorNode.hidden).toBe(false);
         // Only a new deliberate attempt may use the newly observed revocation.
         await tab.session.deriveSessionKey(PASSWORD, SALT);
@@ -246,7 +247,8 @@ describe("bootstrap revocation before derivation starts", () => {
         expect(tab.session.hasSessionKey()).toBe(false);
         await assertCleared(tab);
         expect(tab.window.offlineStore.revalidateCachedFacility).not.toHaveBeenCalled();
-        expect(tab.window.location.href).toBeUndefined();
+        // An accepted sign-in leaves the spent form (rotated CSRF token) for the app.
+        expect(tab.window.location.href).toBe(mode === "login" ? "/" : undefined);
         expect(tab.form.submit).not.toHaveBeenCalled();
     });
 });
