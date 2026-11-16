@@ -100,6 +100,24 @@ class TestErrorReporting:
             "Ein Systemtyp ist nur für Dokumentationstypen mit Entitätstyp „Ereignis“ zulässig."
         ]
 
+    def test_any_system_type_on_a_non_event_type_is_refused_by_the_form(self, facility):
+        """Pins xǁDocumentTypeFormǁclean__mutmut_3, …_4, …_5, …_6, …_7, …_8, …_9 and …_10.
+
+        The model backstop only knows the ban rule, so for every other system
+        type the form is the only guard: a crisis type on a person entity is
+        refused at the system type field.
+        """
+        form = DocumentTypeForm(
+            _data(system_type=DocumentType.SystemType.CRISIS, entity_type=DocumentType.EntityType.CLIENT),
+            facility=facility,
+        )
+
+        assert not form.is_valid()
+        assert list(form.errors) == ["system_type"]
+        assert form.errors["system_type"] == [
+            "Ein Systemtyp ist nur für Dokumentationstypen mit Entitätstyp „Ereignis“ zulässig."
+        ]
+
     def test_distinct_messages_of_one_field_are_all_kept(self, facility):
         """Pins xǁDocumentTypeFormǁfull_clean__mutmut_11.
 

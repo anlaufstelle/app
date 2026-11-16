@@ -1,6 +1,6 @@
 """Mutation regression pins for ``core.services.zeitstrom_watch`` and one feed helper.
 
-Source: targeted mutation delta "final" (end state ``b8f08a4d2``), batch
+Source: targeted mutation delta "final" (end state ``b8f08a4d2``), module
 ``zeitstrom_watch`` plus the ``activity_person_label`` survivor of
 ``core.services.events.feed``.
 Refs #2717

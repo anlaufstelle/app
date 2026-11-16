@@ -1,6 +1,6 @@
 """Mutation regression pins for the ban services.
 
-Source: targeted mutation delta "final" (end state ``b8f08a4d2``), batches
+Source: targeted mutation delta "final" (end state ``b8f08a4d2``), modules
 ``core.services.system.bans`` and ``core.services.system.ban_details``.
 Refs #2717
 

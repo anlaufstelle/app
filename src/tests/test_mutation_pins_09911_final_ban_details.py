@@ -44,7 +44,7 @@ def test_empty_list_has_the_empty_fingerprint(staff_user, facility):
 
 def test_fingerprint_of_a_ban_with_a_person_is_the_keyed_hash_of_the_shown_values(staff_user, facility):
     """Pins core.services.system.ban_details.x_ban_list_fingerprint__mutmut_4, …_5, …_6, …_7, …_13,
-    …_16, …_18, …_19, …_21, …_23, …_35, …_37, …_38, …_39, …_40 and …_41.
+    …_16, …_18, …_19, …_21, …_23, …_35, …_37, …_38, …_39 and …_40.
 
     Event, person (id and pseudonym), the shortened reason and the expiry date
     enter the payload, as compact JSON that keeps non-ASCII characters.
