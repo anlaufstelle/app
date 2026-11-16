@@ -8,7 +8,6 @@ import re
 from urllib.parse import urlparse
 
 import pytest
-from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from ._helpers import SEED_PASSWORD
 from ._helpers import wait_for_active_service_worker as _ensure_service_worker_controls
@@ -339,7 +338,9 @@ def test_login_on_logout_landing_page_gets_offline_key(browser, base_url, gestur
     """The next account signs in on the very login page the logout redirect landed on.
 
     No new navigation: this page loads while the logout response clears the site
-    data. The service worker stays active, input is typed like a person would.
+    data. Service workers are not blocked (the first account signs in under a
+    controlling worker; the logout clears its registration with the site data),
+    input is typed like a person would.
     """
     context = browser.new_context()
     page = context.new_page()
@@ -373,18 +374,33 @@ def test_login_on_logout_landing_page_with_second_tab_gets_offline_key(browser, 
 
 
 def test_second_click_on_logout_landing_page_does_not_repost(browser, base_url):
-    """A second click while the accepted sign-in derives its key never re-posts the form."""
+    """A second click while the accepted sign-in derives its key never re-posts the form.
+
+    The salt response is held, so the second click lands for certain after the server
+    accepted the login and before the key is ready.
+    """
     context = browser.new_context()
     page = context.new_page()
     _do_login(page, base_url, username="admin")
     _log_out_to_landing_page(page)
+    held = []
 
+    def hold(route):
+        held.append(route)
+
+    page.route("**/auth/offline-key-salt/", hold)
     login_posts = _track_login_posts(page)
-    with page.expect_request(lambda request: "/auth/offline-key-salt/" in request.url, timeout=15000):
-        _sign_in_like_a_person(page, "miriam", "click")
-    try:
-        page.locator("#login-form button[type=submit]").click(timeout=2000, no_wait_after=True)
-    except PlaywrightTimeoutError:
-        pass  # the first sign-in already navigated away: no second click possible
+    _sign_in_like_a_person(page, "miriam", "click")
+    for _ in range(200):
+        if held:
+            break
+        page.wait_for_timeout(50)
+    assert held, "the salt request was never sent"
+
+    page.click("#login-form button[type=submit]")
+    page.wait_for_timeout(500)
+    assert login_posts["count"] == 1, login_posts
+
+    held[0].continue_()
     _assert_signed_in_with_key(page, login_posts)
     context.close()
